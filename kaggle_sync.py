@@ -21,12 +21,22 @@
 **CPU 數**：Kaggle 的免費 CPU-only notebook 通常只給 4 顆虛擬核心
 （比本機的 8 顆少），所以 `--args` 裡的 `--procs` 建議傳 4，不要照抄本機的 8。
 
-**用法**：
-    python kaggle_sync.py push --script profile_lowmass.py --args "--procs 4 --repeats 5" --username <你的帳號>
-    python kaggle_sync.py status --kernel <帳號>/m45-imf-run-<腳本名>
-    python kaggle_sync.py pull --kernel <帳號>/m45-imf-run-<腳本名>
+**多帳號（2026-08-09 新增）**：`--account <名稱>` 對應 `kaggle_accounts.json`
+裡的一個帳號，用它的 token 認證，不必自己管 KAGGLE_USERNAME/KAGGLE_KEY。
+不同帳號可以同時各自 push/poll，因為每次呼叫都用獨立的工作目錄
+（`--work-dir`，預設用帳號名稱自動分開）與獨立的環境變數，互不干擾。
 
-**必要條件**：`~/.kaggle/kaggle.json`（在 kaggle.com/settings 產生的 API token）。
+**用法**：
+    python kaggle_sync.py push --script profile_lowmass.py --args "--procs 4 --repeats 5" --account helmetalbert
+    python kaggle_sync.py status --kernel <帳號>/m45-imf-run-<腳本名> --account helmetalbert
+    python kaggle_sync.py pull --kernel <帳號>/m45-imf-run-<腳本名> --account helmetalbert
+
+**必要條件**：`kaggle_accounts.json`（見 `kaggle_accounts.json.example`），
+或單人使用時退回讀 `~/.kaggle/access_token`（`kaggle_accounts.py` 處理）。
+
+**只有 kaggle.json（帳號+key）不夠**（2026-08-09 實測驗證，不是道聽塗說）：
+上傳操作（`datasets create`／`kernels push`）一定要 token，CLI 自己的錯誤
+訊息也是這樣講。所以每個帳號只登記一個 token，不需要 username+key 那一套。
 """
 from __future__ import annotations
 
@@ -38,9 +48,9 @@ import sys
 import time
 from pathlib import Path
 
+import kaggle_accounts
+
 HERE = Path(__file__).resolve().parent
-KAGGLE_DIR = HERE / "kaggle_work"
-KAGGLE_JSON = Path.home() / ".kaggle" / "kaggle.json"
 
 # 這些是跑計算腳本需要、但不必每次都重新展開的靜態資料。
 # isochrones/ 只挑目前實際用到的那幾個網格檔，不要整個資料夾都上傳
@@ -55,12 +65,21 @@ NEEDED_DATA_FILES = [
 ]
 
 
-def check_auth():
-    if not KAGGLE_JSON.exists():
-        print(f"找不到 {KAGGLE_JSON}。")
-        print("請到 https://www.kaggle.com/settings 的 API 區塊按 "
-              "Create New Token，下載 kaggle.json 後放到這個路徑。")
+def resolve_account(name: str | None) -> tuple[str, dict, dict]:
+    """回傳 (實際解析到的帳號名稱, 帳號資訊, 給 subprocess 用的環境變數字典)。
+
+    name 為 None 時取登記檔裡的第一個帳號（單人使用的預設行為）——
+    回傳實際名稱是為了讓呼叫端能在訊息裡準確講「用的是哪個帳號」，
+    不必自己重複一次「None 時取第一個」的邏輯。
+    """
+    accounts = kaggle_accounts.load_accounts()
+    if name is None:
+        name = next(iter(accounts))
+    if name not in accounts:
+        print(f"找不到帳號 {name!r}，登記檔裡有：{list(accounts)}")
         sys.exit(1)
+    acc = accounts[name]
+    return name, acc, kaggle_accounts.env_for(acc)
 
 
 def run(cmd, **kw):
@@ -68,64 +87,71 @@ def run(cmd, **kw):
     return subprocess.run(cmd, check=True, **kw)
 
 
-def build_payload(script: str, extra_files: list[str], minimal: bool = False):
+def build_payload(script: str, extra_files: list[str], work_dir: Path,
+                  minimal: bool = False):
     """組出要上傳的檔案集合。只帶跑得動這支腳本需要的最小集合。
 
     minimal=True 跳過 pipeline/、data/、isochrones/ —— 給不依賴這些的輕量腳本
     （例如連線測試、純 numpy 的小工作）用，避免每次驗證都上傳上百 MB。
-    """
-    if KAGGLE_DIR.exists():
-        shutil.rmtree(KAGGLE_DIR)
-    KAGGLE_DIR.mkdir(parents=True)
 
-    shutil.copy(HERE / script, KAGGLE_DIR / script)
+    **work_dir 必須是呼叫端專屬的資料夾**（2026-08-09 多帳號並行時新增
+    這個參數）：原本固定用同一個 kaggle_work/，多個帳號同時 push 會搶著
+    寫同一批檔案，內容互相覆蓋。改成每次呼叫傳入不同路徑
+    （kaggle_queue.py 用帳號名稱區分），彼此才不會互相干擾。
+    """
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True)
+
+    shutil.copy(HERE / script, work_dir / script)
     for f in extra_files:
         src = HERE / f
         if src.exists():
-            shutil.copy(src, KAGGLE_DIR / Path(f).name)
+            shutil.copy(src, work_dir / Path(f).name)
         else:
             print(f"  警告：找不到 {src}，略過（若這支腳本不需要它可忽略）")
 
     if not minimal:
         # 整個 pipeline/ 套件
-        shutil.copytree(HERE / "pipeline", KAGGLE_DIR / "pipeline")
+        shutil.copytree(HERE / "pipeline", work_dir / "pipeline")
         # config.toml 在專案根目錄、不在 data/ 底下，所以不會被下面那圈
         # NEEDED_DATA_FILES 帶到。漏掉它的症狀是 pipeline/config.py 的
         # load() 拋錯，而且 Kaggle log 的中文亂碼會讓錯誤訊息看不出原因
         # （2026-08-09 實測踩到，浪費一次 push-run-pull 循環）。
-        shutil.copy(HERE / "config.toml", KAGGLE_DIR / "config.toml")
-        (KAGGLE_DIR / "data").mkdir()
+        shutil.copy(HERE / "config.toml", work_dir / "config.toml")
+        (work_dir / "data").mkdir()
         for f in NEEDED_DATA_FILES:
             src = HERE / "data" / f
             if src.exists():
-                shutil.copy(src, KAGGLE_DIR / "data" / f)
-        (KAGGLE_DIR / "isochrones").mkdir()
+                shutil.copy(src, work_dir / "data" / f)
+        (work_dir / "isochrones").mkdir()
         for pat in NEEDED_ISOCHRONE_GLOBS:
             src = HERE / "isochrones" / pat
             if src.exists():
-                shutil.copy(src, KAGGLE_DIR / "isochrones" / pat)
+                shutil.copy(src, work_dir / "isochrones" / pat)
             else:
                 print(f"  警告：找不到 isochrone 網格 {pat}")
 
-    size_mb = sum(f.stat().st_size for f in KAGGLE_DIR.rglob("*") if f.is_file())
+    size_mb = sum(f.stat().st_size for f in work_dir.rglob("*") if f.is_file())
     size_mb /= 1024 * 1024
-    print(f"打包完成：{KAGGLE_DIR}（{size_mb:.1f} MB）")
+    print(f"打包完成：{work_dir}（{size_mb:.1f} MB）")
     return size_mb
 
 
-def make_dataset_metadata(slug: str, username: str):
+def make_dataset_metadata(slug: str, username: str, work_dir: Path):
     meta = {
         "title": f"m45-imf-{slug}",
         "id": f"{username}/m45-imf-{slug}",
         "licenses": [{"name": "CC0-1.0"}],
     }
-    (KAGGLE_DIR / "dataset-metadata.json").write_text(
+    (work_dir / "dataset-metadata.json").write_text(
         json.dumps(meta, indent=2), encoding="utf-8")
     return meta["id"]
 
 
 def make_kernel(script: str, args: str, dataset_id: str, username: str,
-                slug: str, extra_files: list[str], minimal: bool = False):
+                slug: str, extra_files: list[str], work_dir: Path,
+                minimal: bool = False):
     """建一個對應的 notebook：安裝依賴、掛上資料、跑腳本、印出結果。"""
     base = "/kaggle/input/m45-imf-" + slug + "/"
     copy_lines = [f"shutil.copy('{base}{script}', '{script}')\n"]
@@ -192,7 +218,7 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
         },
         "nbformat": 4, "nbformat_minor": 5,
     }
-    (KAGGLE_DIR / f"{slug}.ipynb").write_text(json.dumps(nb), encoding="utf-8")
+    (work_dir / f"{slug}.ipynb").write_text(json.dumps(nb), encoding="utf-8")
     kmeta = {
         "id": f"{username}/m45-imf-run-{slug}",
         "title": f"m45-imf-run-{slug}",
@@ -203,12 +229,12 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
         "dataset_sources": [dataset_id],
         "competition_sources": [], "kernel_sources": [],
     }
-    (KAGGLE_DIR / "kernel-metadata.json").write_text(
+    (work_dir / "kernel-metadata.json").write_text(
         json.dumps(kmeta, indent=2), encoding="utf-8")
     return kmeta["id"]
 
 
-def wait_dataset_ready(dataset_id: str, timeout_s: int = 180,
+def wait_dataset_ready(dataset_id: str, env: dict, timeout_s: int = 180,
                        interval_s: int = 15, confirm_s: int = 30):
     """等 dataset 從「正在處理」變成 ready 才能推 kernel。
 
@@ -230,7 +256,7 @@ def wait_dataset_ready(dataset_id: str, timeout_s: int = 180,
     while time.time() - t0 < timeout_s:
         r = subprocess.run(["kaggle", "datasets", "status", dataset_id],
                            capture_output=True, text=True,
-                           encoding="utf-8", errors="replace")
+                           encoding="utf-8", errors="replace", env=env)
         status = (r.stdout + r.stderr).strip()
         is_ready = "ready" in status.lower()
         if is_ready:
@@ -249,47 +275,48 @@ def wait_dataset_ready(dataset_id: str, timeout_s: int = 180,
 
 
 def cmd_push(a):
-    check_auth()
+    account_name, acc, env = resolve_account(a.account)
+    username = acc["username"]
     slug = a.slug or Path(a.script).stem.replace("_", "-")
+    # work_dir 預設用帳號名稱區分（不是固定的 kaggle_work/）——
+    # 這樣不同帳號同時 push 才不會搶著寫同一批檔案。
+    work_dir = Path(a.work_dir) if a.work_dir else \
+        HERE / "kaggle_work" / account_name
     extra_files = a.extra.split(",") if a.extra else []
-    build_payload(a.script, extra_files, minimal=a.minimal)
+    build_payload(a.script, extra_files, work_dir, minimal=a.minimal)
 
-    username = a.username
-    if not username:
-        print("需要 --username（你的 Kaggle 帳號名稱，在 kaggle.com/<這裡>）")
-        sys.exit(1)
-
-    dataset_id = make_dataset_metadata(slug, username)
+    dataset_id = make_dataset_metadata(slug, username, work_dir)
     # 先建/更新 dataset
     exists = subprocess.run(
         ["kaggle", "datasets", "status", dataset_id],
-        capture_output=True, text=True)
+        capture_output=True, text=True, env=env)
     if exists.returncode == 0:
-        run(["kaggle", "datasets", "version", "-p", str(KAGGLE_DIR),
-             "-m", "update", "-r", "zip"])
+        run(["kaggle", "datasets", "version", "-p", str(work_dir),
+             "-m", "update", "-r", "zip"], env=env)
     else:
-        run(["kaggle", "datasets", "create", "-p", str(KAGGLE_DIR),
-             "-r", "zip"])
-    wait_dataset_ready(dataset_id)
+        run(["kaggle", "datasets", "create", "-p", str(work_dir),
+             "-r", "zip"], env=env)
+    wait_dataset_ready(dataset_id, env)
 
     kernel_id = make_kernel(a.script, a.args, dataset_id, username, slug,
-                            extra_files, minimal=a.minimal)
-    run(["kaggle", "kernels", "push", "-p", str(KAGGLE_DIR)])
+                            extra_files, work_dir, minimal=a.minimal)
+    run(["kaggle", "kernels", "push", "-p", str(work_dir)], env=env)
     print(f"\nKERNEL_ID={kernel_id}", flush=True)
     print(f"追蹤：https://www.kaggle.com/code/{kernel_id.split('/')[-1]}")
-    print(f"查狀態：python kaggle_sync.py status --kernel {kernel_id}")
+    print(f"查狀態：python kaggle_sync.py status --kernel {kernel_id} "
+          f"--account {account_name}")
 
 
 def cmd_status(a):
-    check_auth()
-    run(["kaggle", "kernels", "status", a.kernel])
+    _, _, env = resolve_account(a.account)
+    run(["kaggle", "kernels", "status", a.kernel], env=env)
 
 
 def cmd_pull(a):
-    check_auth()
+    _, _, env = resolve_account(a.account)
     out = HERE / "kaggle_results" / Path(a.kernel).name
     out.mkdir(parents=True, exist_ok=True)
-    run(["kaggle", "kernels", "output", a.kernel, "-p", str(out)])
+    run(["kaggle", "kernels", "output", a.kernel, "-p", str(out)], env=env)
     print(f"結果存到 {out}")
 
 
@@ -302,7 +329,12 @@ def main():
     p1.add_argument("--args", default="")
     p1.add_argument("--extra", default="",
                     help="逗號分隔，這支腳本 import 的其他同層 .py 檔")
-    p1.add_argument("--username", default="")
+    p1.add_argument("--account", default=None,
+                    help="kaggle_accounts.json 裡的帳號名稱，"
+                         "省略則用登記檔裡的第一個帳號")
+    p1.add_argument("--work-dir", default=None,
+                    help="打包用的暫存資料夾，省略則用 "
+                         "kaggle_work/<帳號名稱>（多帳號並行靠這個互不干擾）")
     p1.add_argument("--minimal", action="store_true",
                     help="不帶 pipeline/data/isochrones，給輕量腳本用")
     p1.add_argument("--slug", default="",
@@ -313,10 +345,12 @@ def main():
 
     p2 = sub.add_parser("status")
     p2.add_argument("--kernel", required=True)
+    p2.add_argument("--account", default=None)
     p2.set_defaults(func=cmd_status)
 
     p3 = sub.add_parser("pull")
     p3.add_argument("--kernel", required=True)
+    p3.add_argument("--account", default=None)
     p3.set_defaults(func=cmd_pull)
 
     a = ap.parse_args()

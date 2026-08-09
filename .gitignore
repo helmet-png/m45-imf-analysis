@@ -38,6 +38,9 @@ certs/
 *.pem
 kaggle.json
 access_token
+# 多帳號憑證登記檔（每位成員一個 token），只有範本 kaggle_accounts.json.example
+# 進版控，真檔案含機敏 token 絕不進版控。
+kaggle_accounts.json
 
 # ============================================================
 # 第三方原始碼：用 clone 取得，不納入本 repo

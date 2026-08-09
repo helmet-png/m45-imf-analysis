@@ -1,24 +1,33 @@
 # -*- coding: utf-8 -*-
-"""Kaggle 版的 run_queue.py：依序 push -> 等執行完 -> pull，讓 Kaggle 也能像
-本機一樣連續排多個工作。
+"""Kaggle 版的 run_queue.py，2026-08-09 改版：多帳號同時派工。
 
-**跟本機佇列的本質差異**：本機一次只有一組 8 核心可搶，所以循序執行是必要的；
-Kaggle 這邊循序執行單純是為了先求穩（一次只追蹤一個 kernel 的狀態，
-避免同時開多個 kernel 時搞混哪個對應哪個結果），不是資源上的硬限制——
-若之後要真正併發（同時掛多個 kernel），把 push 那段改成不等待、批次全部推出去，
-再各自輪詢即可，架構不用大改。
+**跟第一版的差異**：第一版一次只追蹤一個 kernel（省事但循序），
+現在有多個成員的帳號，各自的 CPU 額度互不相干，所以改成「有幾個帳號就有
+幾個同時在跑的槽位」——佇列裡的待辦工作會盡量塞滿所有閒置的帳號，
+而不是一個一個排隊等。
 
-格式（每行一個工作，`|` 分隔，跟本機 queue.txt 同精神但欄位不同）：
+**運作方式**：每個帳號是一個槽位。每輪迴圈：
+  1. 把還沒開始的工作，指派給目前閒置的帳號（可在 queue 檔用第六欄位
+     指定「這項工作一定要用哪個帳號」，留白就是誰有空給誰）。
+  2. 對每個忙碌中的槽位查一次狀態（不是本來就阻塞等它跑完，而是每輪
+     檢查一次就繼續看別的槽位）——這樣才能真正併發，不會被其中一個
+     卡住的工作拖住其他帳號。
+  3. 完成或失敗的槽位釋放出來，可以接下一項待辦。
 
-    標籤|腳本.py|接在腳本後的參數|逗號分隔的額外依賴檔|minimal(true/false，可省略)
+格式（每行一個工作，`|` 分隔）：
+
+    標籤|腳本.py|接在腳本後的參數|逗號分隔的額外依賴檔|minimal(true/false)|指定帳號(可留空)
 
 例：
-    lowmass-ext|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --slopes 0.6,0.7,1.9,2.0|injection_recovery.py,measure_overconfidence.py|false
+    lowmass-ext|profile_lowmass.py|--procs 4 --n-syn 40000|inject.py,inj2.py|false|teammate1
 
 已完成的標籤記在 logs/kaggle_queue_done.txt，重新啟動不會重跑；
-某一步失敗（push 失敗、kernel ERROR、逾時）會記下狀態、繼續下一步，
+某一步失敗（push 失敗、kernel ERROR、逾時）會記下狀態、釋放槽位接下一項，
 不會卡住整條佇列。**執行中可以把新工作追加到 kaggle_queue.txt 末端**，
 本執行器每輪都會重新讀檔。
+
+**帳號登記**：見 kaggle_accounts.py / kaggle_accounts.json.example。
+找不到 kaggle_accounts.json 時退回單一帳號（原本的行為，不影響舊用法）。
 
 用法：
     python kaggle_queue.py            # 前景跑，會一直印進度直到佇列清空
@@ -32,14 +41,18 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import kaggle_accounts
+
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "kaggle_queue.txt"
 DONE = HERE / "logs" / "kaggle_queue_done.txt"
-USERNAME = "helmetalbert"
-POLL_SECS = 90
+POLL_SECS = 60
 # 免費 CPU notebook 的執行時間上限一般約 9-12 小時，留一點餘裕就中止輪詢
 # （不強制砍 kernel，只是本地停止等待，之後可以再手動 pull）。
 MAX_WAIT_HOURS = 11
+# dataset 掛載時序不穩，偵測到那個特定失敗模式就重推 kernel，
+# 間隔遞增（不是猜一個固定等待時長，見 is_mount_race_failure 的說明）。
+BACKOFFS = [60, 120, 240, 480]
 
 
 def read_queue() -> list[dict]:
@@ -50,12 +63,13 @@ def read_queue() -> list[dict]:
         line = line.strip()
         if not line or line.startswith("#") or "|" not in line:
             continue
-        parts = (line.split("|") + ["", "", ""])[:5]
-        label, script, args, extra, minimal = parts
+        parts = (line.split("|") + [""] * 6)[:6]
+        label, script, args, extra, minimal, account = parts
         out.append({
             "label": label.strip(), "script": script.strip(),
             "args": args.strip(), "extra": extra.strip(),
             "minimal": minimal.strip().lower() in ("1", "true", "yes"),
+            "account": account.strip() or None,
         })
     return out
 
@@ -67,32 +81,30 @@ def read_done() -> set[str]:
             DONE.read_text(encoding="utf-8").splitlines() if l.strip()}
 
 
-def mark_done(label: str, status: str, secs: float) -> None:
+def mark_done(label: str, status: str, secs: float, account: str) -> None:
     DONE.parent.mkdir(exist_ok=True)
     with open(DONE, "a", encoding="utf-8") as f:
-        f.write(f"{label}\t{status}\t{secs:.0f}s\t"
+        f.write(f"{label}\t{status}\t{secs:.0f}s\t{account}\t"
                 f"{datetime.now():%Y-%m-%d %H:%M:%S}\n")
 
 
-def kernel_id(label: str) -> str:
-    slug = label.replace("_", "-")
-    return f"{USERNAME}/m45-imf-run-{slug}"
-
-
-def run(cmd: list[str]) -> subprocess.CompletedProcess:
+def run(cmd: list[str], env: dict | None = None) -> subprocess.CompletedProcess:
     print("$ " + " ".join(cmd), flush=True)
     return subprocess.run(cmd, cwd=str(HERE), capture_output=True,
-                          text=True, encoding="utf-8", errors="replace")
+                          text=True, encoding="utf-8", errors="replace",
+                          env=env)
 
 
-def push(item: dict) -> bool:
-    """呼叫 kaggle_sync.py push。用獨立行程而非直接 import，
-    這樣就算 push 邏輯本身出例外也不會拖垮這支常駐執行器。
+def push(item: dict, account_name: str) -> tuple[bool, str, Path]:
+    """呼叫 kaggle_sync.py push（用獨立行程，出例外不會拖垮這支常駐執行器）。
+
+    回傳 (是否成功, kernel id, work_dir)。kid 用跟 kaggle_sync.py 相同的
+    公式算出來，而不是解析它印出的文字 —— 少一層字串解析就少一種脆弱點。
     """
+    slug = item["label"].replace("_", "-")
     cmd = [sys.executable, "kaggle_sync.py", "push",
            "--script", item["script"], "--args", item["args"],
-           "--username", USERNAME,
-           "--slug", item["label"].replace("_", "-")]
+           "--account", account_name, "--slug", slug]
     if item["extra"]:
         cmd += ["--extra", item["extra"]]
     if item["minimal"]:
@@ -102,38 +114,37 @@ def push(item: dict) -> bool:
     if r.returncode != 0:
         print("--- push 失敗 stderr ---", flush=True)
         print(r.stderr[-3000:], flush=True)
-    return r.returncode == 0
+    accounts = kaggle_accounts.load_accounts()
+    username = accounts[account_name]["username"]
+    kid = f"{username}/m45-imf-run-{slug}"
+    work_dir = HERE / "kaggle_work" / account_name
+    return r.returncode == 0, kid, work_dir
 
 
-def poll_until_done(kid: str) -> str:
-    deadline = time.time() + MAX_WAIT_HOURS * 3600
-    while time.time() < deadline:
-        r = run(["kaggle", "kernels", "status", kid])
-        status = (r.stdout + r.stderr).strip()
-        print(f"  [{datetime.now():%H:%M:%S}] {status}", flush=True)
-        if "COMPLETE" in status:
-            return "ok"
-        if "ERROR" in status:
-            return "error"
-        if "CANCEL" in status:
-            return "cancelled"
-        time.sleep(POLL_SECS)
-    return "timeout"
+def check_status_once(kid: str, env: dict) -> str | None:
+    """查一次狀態，不阻塞等待。回傳 "ok"/"error"/"cancelled"（終止狀態）
+    或 None（還在排隊或執行中，下一輪再查）。
+    """
+    r = run(["kaggle", "kernels", "status", kid], env=env)
+    status = (r.stdout + r.stderr).strip()
+    if "COMPLETE" in status:
+        return "ok"
+    if "ERROR" in status:
+        return "error"
+    if "CANCEL" in status:
+        return "cancelled"
+    return None
 
 
 def is_mount_race_failure(label: str) -> bool:
     """判斷剛才的 ERROR 是不是「dataset 還沒真的掛載好」這種暫時性失敗。
 
-    **實測結論（2026-08-09）**：靠估計時間去等 dataset 就緒不可靠——
-    連續三次新建 dataset+kernel，就算等到 138 秒、甚至事後手動再等了
-    好幾分鐘重推，仍然拿到一模一樣的 FileNotFoundError（對照組：直接用
-    API 下載該 dataset，內容與路徑都正確）。這代表 Kaggle 內部「dataset
-    metadata 就緒」跟「kernel 執行環境真的掛載到該 dataset」是兩個時間點
-    不同、且延遲不穩定的系統，猜一個等待時長無法可靠涵蓋。
-    **改用偵測 + 重試**：如果失敗的錯誤訊息是這個特定的「檔案在
-    /kaggle/input/ 下找不到」，代表 dataset 這次真的還沒掛好，
-    值得重推 kernel 再試一次；若是別的錯誤（腳本本身的邏輯錯誤、
-    套件裝不起來等），重推沒有意義，直接判定失敗比較省 quota。
+    **實測結論（2026-08-09）**：dataset API 回報 ready 之後，kernel 執行環境
+    真的掛載到該 dataset 還有額外、且不穩定的延遲——曾經連等 138 秒、
+    事後手動再等數分鐘都還是失敗過，猜一個等待時長無法可靠涵蓋。
+    改用偵測 + 重試：錯誤訊息是這個特定的「檔案在 /kaggle/input/ 下
+    找不到」，代表 dataset 這次真的還沒掛好，值得重推；若是別的錯誤
+    （腳本邏輯錯、套件裝不起來），重推沒有意義，直接判定失敗省 quota。
     """
     out = HERE / "kaggle_results" / label
     for f in out.glob("*.log"):
@@ -148,71 +159,106 @@ def is_mount_race_failure(label: str) -> bool:
     return False
 
 
-def push_kernel_only() -> bool:
-    """只重推 kernel，沿用 kaggle_work/ 裡已經上傳過的 dataset。
-
-    build_payload() 只在**開始**新的 push 時清掉 kaggle_work/，跑完不會自動
-    清除，所以這裡可以直接對同一份 kaggle_work/ 再喊一次 kernel push，
-    不必重新打包、重新上傳 dataset（省時間也省頻寬）。
-    """
-    r = run(["kaggle", "kernels", "push", "-p", str(HERE / "kaggle_work")])
+def push_kernel_only(work_dir: Path, env: dict) -> bool:
+    """只重推 kernel，沿用該帳號 work_dir 裡已經上傳過的 dataset。"""
+    r = run(["kaggle", "kernels", "push", "-p", str(work_dir)], env=env)
     print(r.stdout[-1500:], flush=True)
     if r.returncode != 0:
         print(r.stderr[-1500:], flush=True)
     return r.returncode == 0
 
 
-def pull(kid: str, label: str) -> Path:
+def pull(kid: str, label: str, env: dict) -> None:
     out = HERE / "kaggle_results" / label
     out.mkdir(parents=True, exist_ok=True)
-    run(["kaggle", "kernels", "output", kid, "-p", str(out)])
-    return out
+    run(["kaggle", "kernels", "output", kid, "-p", str(out)], env=env)
 
 
 def main() -> None:
-    print(f"Kaggle 佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}",
-          flush=True)
+    accounts = kaggle_accounts.load_accounts()
+    print(f"Kaggle 佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}，"
+          f"{len(accounts)} 個帳號同時派工：{list(accounts)}", flush=True)
+    envs = {name: kaggle_accounts.env_for(info)
+            for name, info in accounts.items()}
+
+    # slots[帳號名] = None（閒置）或一個描述目前工作狀態的 dict
+    slots: dict[str, dict | None] = {name: None for name in accounts}
+
     while True:
         done = read_done()
-        pending = [it for it in read_queue() if it["label"] not in done]
-        if not pending:
+        pending = [it for it in read_queue() if it["label"] not in done
+                   and it["label"] not in
+                   {s["item"]["label"] for s in slots.values() if s}]
+
+        # 1) 把待辦工作塞進閒置的帳號槽位
+        for name in accounts:
+            if slots[name] is not None:
+                continue
+            idx = next((i for i, it in enumerate(pending)
+                       if it["account"] in (None, name)), None)
+            if idx is None:
+                continue
+            item = pending.pop(idx)
+            print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] "
+                  f"帳號 {name} 開始 {item['label']}"
+                  f"\n  {item['script']} {item['args']}\n{'='*70}",
+                  flush=True)
+            ok, kid, work_dir = push(item, name)
+            if ok:
+                slots[name] = {"phase": "running", "item": item, "kid": kid,
+                              "work_dir": work_dir, "t0": time.time(),
+                              "retries": 0}
+            else:
+                mark_done(item["label"], "push_failed", 0, name)
+
+        # 2) 檢查每個忙碌槽位（各只查一次，不阻塞等待，才能真正併發）
+        for name, slot in list(slots.items()):
+            if slot is None:
+                continue
+            if slot["phase"] == "cooldown":
+                if time.time() >= slot["resume_at"]:
+                    ok = push_kernel_only(slot["work_dir"], envs[name])
+                    if ok:
+                        slot["phase"] = "running"
+                    else:
+                        mark_done(slot["item"]["label"], "error",
+                                 time.time() - slot["t0"], name)
+                        slots[name] = None
+                continue
+
+            elapsed_h = (time.time() - slot["t0"]) / 3600
+            if elapsed_h > MAX_WAIT_HOURS:
+                mark_done(slot["item"]["label"], "timeout",
+                         time.time() - slot["t0"], name)
+                slots[name] = None
+                continue
+
+            status = check_status_once(slot["kid"], envs[name])
+            if status is None:
+                continue    # 還在跑，下一輪再看
+
+            pull(slot["kid"], slot["item"]["label"], envs[name])
+            if (status == "error" and is_mount_race_failure(slot["item"]["label"])
+                    and slot["retries"] < len(BACKOFFS)):
+                wait_s = BACKOFFS[slot["retries"]]
+                slot["retries"] += 1
+                slot["phase"] = "cooldown"
+                slot["resume_at"] = time.time() + wait_s
+                print(f"  [{name}] 偵測到 dataset 掛載時序問題（非程式錯誤），"
+                      f"{wait_s}s 後重推 kernel（第 {slot['retries']} 次重試）",
+                      flush=True)
+            else:
+                secs = time.time() - slot["t0"]
+                mark_done(slot["item"]["label"], status, secs, name)
+                print(f"[{datetime.now():%H:%M:%S}] [{name}] "
+                      f"{slot['item']['label']} 結束：{status}"
+                      f"（{secs/60:.1f} 分）\n", flush=True)
+                slots[name] = None
+
+        if not pending and all(s is None for s in slots.values()):
             print("Kaggle 佇列已清空，結束。", flush=True)
             return
-        item = pending[0]
-        label = item["label"]
-        kid = kernel_id(label)
-        print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] 開始 {label}"
-              f"\n  {item['script']} {item['args']}\n  kernel: {kid}"
-              f"\n{'='*70}", flush=True)
-        t0 = time.time()
-        status = "push_failed"
-        if push(item):
-            status = poll_until_done(kid)
-            pull(kid, label)
-            # dataset 掛載時序不穩，偵測到這個特定失敗模式就重推 kernel
-            # （沿用同一份已上傳的 dataset，不重新打包），最多重試 4 次、
-            # 間隔遞增（60/120/240/480 秒）。真正的程式錯誤不會因為重推
-            # 而改變結果，是這個特定失敗模式才值得重試。
-            backoffs = [60, 120, 240, 480]
-            attempt = 0
-            while status == "error" and is_mount_race_failure(label) \
-                    and attempt < len(backoffs):
-                wait_s = backoffs[attempt]
-                attempt += 1
-                print(f"  偵測到 dataset 掛載時序問題（非程式錯誤），"
-                      f"{wait_s}s 後重推 kernel（第 {attempt} 次重試）",
-                      flush=True)
-                time.sleep(wait_s)
-                if push_kernel_only():
-                    status = poll_until_done(kid)
-                    pull(kid, label)
-                else:
-                    status = "error"
-                    break
-        secs = time.time() - t0
-        mark_done(label, status, secs)
-        print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
-              f"（{secs/60:.1f} 分）\n", flush=True)
+        time.sleep(POLL_SECS)
 
 
 if __name__ == "__main__":

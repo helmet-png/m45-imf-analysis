@@ -1,0 +1,15 @@
+{
+  "_說明": "複製這個檔案改名成 kaggle_accounts.json（不進版控），把下面每個帳號的 token 換成真的。key 名稱（如 helmetalbert）只是給人看的識別名，可以隨便取；username 必須是 Kaggle 帳號的真實 handle（個人首頁網址那一段）；token 從 kaggle.com/settings/api 按 Generate New Token 直接複製，不需要下載 kaggle.json、也不需要跑 kaggle auth login。",
+  "helmetalbert": {
+    "username": "helmetalbert",
+    "token": "把 kaggle.com/settings/api 產生的 token 貼在這裡"
+  },
+  "teammate1": {
+    "username": "同學一的 Kaggle 帳號 handle",
+    "token": "同學一的 token"
+  },
+  "teammate2": {
+    "username": "同學二的 Kaggle 帳號 handle",
+    "token": "同學二的 token"
+  }
+}

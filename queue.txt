@@ -77,3 +77,10 @@ p6b2_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 3
 p9a2_fixmh_parsec|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix-mh 0.0 --tag _fixmh_parsec
 p9b2_fixmh_mist|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.8-8.5_feh-0.5-0.5.dat --tag _fixmh_mist
 p6b3_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 3
+
+# p9b 第三次重排：MIST + 鎖 MH 連續撞到 logage 下限（7.90 -> 7.70 都不夠），
+# 這是 P9 要找的訊號本身，已把先驗與網格一併放寬到 7.30 才能看清全貌。
+p9b3_fixmh_mist|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.8-8.5_feh-0.5-0.5.dat --tag _fixmh_mist
+
+# p6b 修好 UnboundLocalError（P_TRUE_LIST scoping bug）後重排
+p6b4_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 3

@@ -190,9 +190,12 @@ def main():
         return
 
     p_recs = np.array(p_recs)
-    P_TRUE_LIST = p_true_ok    # 只用實際成功的真值計算「跨真值的涵蓋範圍」
+    # 用 p_true_ok（實際成功的真值）而不是覆寫 P_TRUE_LIST ——
+    # 在函式裡對一個跟模組層級同名的變數賦值，Python 會把它當成整個函式的
+    # 區域變數，導致函式**開頭**引用模組常數的那行也讀到未賦值的區域變數
+    # （UnboundLocalError，2026-08-09 實測踩到，讓 p6b3 跑 9 秒就死）。
     spread = p_recs.max() - p_recs.min()
-    inj_spread = max(P_TRUE_LIST) - min(P_TRUE_LIST)
+    inj_spread = max(p_true_ok) - min(p_true_ok)
     print(f"\ncriterion 3 (does recovery track truth?):")
     print(f"  injected spread {inj_spread:.2f} -> recovered spread "
           f"{spread:.2f}  (ratio {spread/inj_spread:.2f})")
@@ -200,7 +203,7 @@ def main():
           "(recovers same value regardless of truth)")
 
     np.savez(HERE / "results" / "inject_lowmass.npz",
-             p_true=np.array(P_TRUE_LIST),
+             p_true=np.array(p_true_ok),
              **{f"p{p}": v for p, v in results.items()})
     print("\nwrote results/inject_lowmass.npz")
 

@@ -1,18 +1,6 @@
-# Kaggle 待辦佇列。格式：標籤|腳本.py|參數|逗號分隔的額外依賴檔|minimal(true/false)
-# kaggle_queue.py 每跑完一步會重讀本檔，所以執行中可以在末端追加步驟。
+# Kaggle 待辦佇列。格式：標籤|腳本.py|參數|逗號分隔的額外依賴檔|minimal(true/false)|指定帳號(可留空)
+# kaggle_queue.py 每輪都會重新讀檔，執行中可以在末端追加步驟。
 # 已完成的記在 logs/kaggle_queue_done.txt。
 
-# 驗證佇列機制本身能不能跑通（push -> 等待 -> pull -> 標記完成 -> 接下一項），
-# 用 --minimal 避免上傳 pipeline/data/isochrones，跑幾秒鐘就結束。
-# 用獨立的 slug（queue-smoketest），不影響正在跑的 profile-lowmass kernel。
-queue-smoketest|kaggle_smoketest.py|||true
-
-# 重測：第一次失敗是 dataset 就緒判斷太早，已修（要求連續兩次 ready）
-queue-smoketest2|kaggle_smoketest.py|||true
-
-# 第二次重測：連續兩次 ready 但只等了 26s 仍不夠，代表新建 dataset 的
-# 傳播延遲比想像中長。加大到要求 ready 狀態穩定持續 120 秒才算數。
-queue-smoketest3|kaggle_smoketest.py|||true
-
-# 第三次重測：改成偵測+重試機制而非猜等待時間，這次應該不需要人工介入
-queue-smoketest4|kaggle_smoketest.py|||true
+# 驗證新版並行迴圈在只有 1 個帳號時能不能正常運作（退化成單槽位循序）。
+queue-v2-smoke|kaggle_smoketest.py|||true|
