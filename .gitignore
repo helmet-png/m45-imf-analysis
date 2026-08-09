@@ -12,10 +12,8 @@ isochrones/
 kaggle_work/
 kaggle_results/
 
-# 執行結果的 .npz（63 MB）。科學結論已寫進 PAPER_OUTLINE.md 與
-# LIMITATIONS.md 的表格，原始 .npz 可由對應腳本重跑產生。
-# **例外**：少數最終要進論文的結果檔用 git add -f 個別加入。
-results/
+# results/ 改為版控追蹤（使用者 2026-08-09 指示：每次跑完的結果都推上去）。
+# 不排除。
 
 # Gaia 原始下載檔（大且可重新查詢）
 data/m45_r5_g18_plx4.csv
