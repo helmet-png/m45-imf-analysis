@@ -93,6 +93,21 @@ class JointModel:
         zlo, zhi = self.bounds[4]
         self._age_keys = all_ages[(all_ages >= alo - 0.06) & (all_ages <= ahi + 0.06)]
         self._mh_keys = all_mh[(all_mh >= zlo - 0.06) & (all_mh <= zhi + 0.06)]
+        # 2026-08-10：先驗/搜尋軸曾經比實際下載的網格涵蓋範圍還寬，
+        # _isochrone() 的最近鄰吸附會把任何越界請求悄悄黏到同一個邊界格點，
+        # 形成看起來像「模型想跑到邊界外」的簡併平坦區（MIST logage 7.80
+        # 下限、PARSEC MH +0.336 上限都曾經這樣被誤判成訊號）。與其等人工
+        # 逐檔審查才發現，這裡在載入時就把落差印出來，一眼就能看到。
+        if all_ages.min() > alo + 1e-9 or all_ages.max() < ahi - 1e-9:
+            print(f"警告：logage 搜尋軸 [{alo:.2f}, {ahi:.2f}] 超出網格實際涵蓋 "
+                  f"[{all_ages.min():.2f}, {all_ages.max():.2f}]——越界的請求會"
+                  f"被吸附到邊界格點，argmax 若落在邊界上很可能是網格覆蓋不足"
+                  f"的假象，不是真正的最佳解")
+        if all_mh.min() > zlo + 1e-9 or all_mh.max() < zhi - 1e-9:
+            print(f"警告：MH 搜尋軸 [{zlo:.2f}, {zhi:.2f}] 超出網格實際涵蓋 "
+                  f"[{all_mh.min():.3f}, {all_mh.max():.3f}]——越界的請求會"
+                  f"被吸附到邊界格點，argmax 若落在邊界上很可能是網格覆蓋不足"
+                  f"的假象，不是真正的最佳解")
         ga = np.asarray(iso_grid["logAge"], float)
         gz = np.asarray(iso_grid["MH"], float)
         gm = np.asarray(iso_grid["Mini"], float)
