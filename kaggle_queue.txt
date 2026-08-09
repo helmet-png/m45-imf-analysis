@@ -2,5 +2,12 @@
 # kaggle_queue.py 每輪都會重新讀檔，執行中可以在末端追加步驟。
 # 已完成的記在 logs/kaggle_queue_done.txt。
 
-# 驗證新版並行迴圈在只有 1 個帳號時能不能正常運作（退化成單槽位循序）。
-queue-v2-smoke|kaggle_smoketest.py|||true|
+# 帳號 helmetalbert：P9a（PARSEC 鎖 MH=0.00）目前只有 5 次重複，
+# alpha=2.460 散布 0.233（自由 MH 時只有 0.060，暴增近 4 倍）。
+# 5 次太少不足以確認這個散布本身穩不穩定，拉到 10 次。
+p9a_more_reps|fit_real.py|--procs 4 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_more|injection_recovery.py,measure_overconfidence.py|false|helmetalbert
+
+# 帳號 teammate2（alex981113）：低質量段冪次延伸掃描重跑。
+# 上次用 helmetalbert 帳號跑到一半因 alpha 撞到網格上界 2.90 失敗
+# （COARSE 網格比先驗 3.2 還窄，已修好放寬到 3.20）。
+p6_lowmass_ext_retry|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3 --slopes 0.6,0.7,1.9,2.0|injection_recovery.py,measure_overconfidence.py|false|teammate2

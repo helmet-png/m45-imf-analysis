@@ -164,29 +164,39 @@ def main():
                       f"{np.mean(rms):>9.1f}   {rtag}")
         print()
 
-    # --- 真實資料：兩種變體 × 兩種 isochrone 選擇 ---
+    # --- 真實資料：兩種變體 × 兩種 isochrone 選擇 × 兩種質量範圍 ---
+    #
+    # **P7（2026-08-09）**：原本這段只用 config 的 0.30-2.50，但前向模型的
+    # alpha 只擬合 m>0.5 M☉ 那一段（見檔頭與 LIMITATIONS.md「定義域不一致」）。
+    # 兩者不對齊就不能放進同一張表比較。現在跟假資料那段一樣，
+    # 兩種範圍都跑，"0.50-2.50對齊" 那欄才是能跟前向模型 alpha 直接相減的。
     print("\n真實資料（1,078 顆）：")
-    print(f"{'isochrone':>22}{'變體':>14}{'alpha':>8}{'曲率誤差':>9}"
-          f"{'星數':>7}{'剔除':>6}")
+    print(f"{'isochrone':>22}{'質量範圍':>16}{'變體':>12}{'alpha':>8}"
+          f"{'曲率誤差':>9}{'星數':>7}{'剔除':>6}")
     real = {}
     for la, av, note in ((8.00, 0.20, "step3 舊最佳(8.00,0.20)"),
                          (8.10, 0.30, "C 設定最佳(8.10,0.30)")):
         iso = isomod.isochrone_at(grid, la, 0.0)
-        for remove, tag in ((False, "全當單星"), (True, "CMD剔除")):
-            a, n, n_rm, err = traditional_alpha(
-                color, mag, iso, dm, av, ext, m_lo, m_hi,
-                remove_cmd_binaries=remove)
-            real[(note, tag)] = a
-            print(f"{note:>22}{tag:>14}{a:>8.3f}{err:>9.3f}{n:>7}{n_rm:>6}")
+        for rlo, rhi, rtag in ((m_lo, m_hi, "0.30-2.50原設定"),
+                               (0.50, m_hi, "0.50-2.50對齊")):
+            for remove, tag in ((False, "全當單星"), (True, "CMD剔除")):
+                a, n, n_rm, err = traditional_alpha(
+                    color, mag, iso, dm, av, ext, rlo, rhi,
+                    remove_cmd_binaries=remove)
+                real[(note, rtag, tag)] = a
+                print(f"{note:>22}{rtag:>16}{tag:>12}{a:>8.3f}"
+                      f"{err:>9.3f}{n:>7}{n_rm:>6}")
 
     print("\n判讀：")
     print("  「全當單星」的偏差 = 缺口一的量化（雙星沒接回 MF 的代價）")
     print("  「CMD剔除」剩下的偏差 = 單一偵測法剔除救不回來的部分（缺口二）")
     print("  真實資料兩條 isochrone 的差 = 傳統法對等時線選擇的敏感度")
+    print("  「0.50-2.50對齊」那欄才能跟前向模型的 alpha 直接相減 —— "
+          "前向模型的 alpha 只擬合 m>0.5 M☉")
     np.savez(HERE / "results" / "traditional_accounting.npz",
              **{f"inj::{r}::{fb}::{tag}": v
                 for (r, fb, tag), v in results.items()},
-             **{f"real::{k[0]}::{k[1]}": v for k, v in real.items()})
+             **{f"real::{k[0]}::{k[1]}::{k[2]}": v for k, v in real.items()})
     print("寫入 results/traditional_accounting.npz")
 
 
