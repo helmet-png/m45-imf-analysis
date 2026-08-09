@@ -133,6 +133,34 @@ class JointModel:
         m.n_obs = len(obs_color)
         return m
 
+    def enable_lowmass_fit(self, p_min=0.3, p_max=2.3):
+        """把低質量段冪次（0.08-0.5 Msun）升格為自由參數。
+
+        **為什麼要升格而不是用文獻先驗鎖住**：Kroupa (2001) 給的是
+        alpha1 = 1.3 +- 0.5，而實測 d(alpha)/d(p) = -0.495 +- 0.111，
+        所以那個 +-0.5 會在我們測的 alpha 上造成 0.248 的系統誤差 ——
+        是統計誤差 0.144 的 1.7 倍，也是目前最大的單一誤差來源。
+        用高斯先驗鎖住並不能消除它（先驗的寬度本身就是誤差來源），
+        只有讓資料自己約束才可能縮小。而我們有 641 顆星（59.5%）
+        落在這個質量範圍，理論上是有約束力的。
+
+        **但可辨識性必須先驗證**：dav 的教訓是「參數可以放進模型卻完全
+        不被資料約束，只會貼著先驗邊界跑」。所以升格前要先用注入回收
+        確認它能被回收，不能因為「樣本數多」就假設它可解。
+
+        掃描範圍 0.3-2.3 刻意開得比 Kroupa 的 1.3+-0.5（即 0.8-1.8）寬，
+        才能看出資料偏好的值有沒有超出文獻範圍、以及會不會貼牆。
+        """
+        self.bounds = np.vstack([self.bounds, [[p_min, p_max]]])
+        return self._param_names() + ["p_lowmass"]
+
+    def _param_names(self):
+        """目前實際啟用的參數名稱（依 bounds 的維度決定）。"""
+        names = list(PARAM_NAMES)
+        if len(self.bounds) > 6:
+            names.append("dav")
+        return names
+
     def enable_dav_fit(self, dav_min=0.0, dav_max=0.8):
         """把差異消光升格為第七個自由參數（擴充 bounds）。
 
@@ -165,9 +193,13 @@ class JointModel:
         合成星團而不是兩種概似。
         """
         logage, av, fbin, alpha, mh, qgamma = theta[:6]
-        # 第七個參數（差異消光）是選配的：長度 6 就沿用 self.dav。
-        # 這樣六參數的既有結果與呼叫端完全不受影響。
+        # 第七、八個參數都是選配的，長度不足就沿用物件屬性。
+        # 這樣六參數與七參數的既有結果與呼叫端完全不受影響。
+        #   theta[6] = dav        差異消光的星對星散布
+        #   theta[7] = p_lowmass  低質量段（0.08-0.5 Msun）的冪次
         dav = float(theta[6]) if len(theta) > 6 else self.dav
+        low_mass = (-float(theta[7]) if len(theta) > 7
+                    else getattr(self, "low_mass_slope", -1.3))
         iso = self._isochrone(logage, mh)
         if iso is None:
             return None
@@ -189,8 +221,7 @@ class JointModel:
             # 即時修改（新增了這個屬性），舊模型物件的 __dict__ 裡沒有它，
             # 新版 synthesise 卻無條件讀取，就會撞 AttributeError ——
             # 這正是 2026-08-08 讓 p2_final 中途失敗的原因。
-            # getattr 給預設值可以讓舊 pickle 的物件優雅降級，不會再炸掉。
-            low_mass = getattr(self, "low_mass_slope", -1.3)
+            # low_mass 已在函式開頭決定（可能來自 theta[7] 或物件屬性）。
             IMF_BREAKS["kroupa"] = (orig[0], [orig[1][0], low_mass, -alpha])
             m1 = sample_imf(d["u_mass"][:n], "kroupa", mi.min(), mi.max())
         finally:

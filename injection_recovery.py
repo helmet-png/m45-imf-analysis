@@ -178,7 +178,10 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
 
     比兩階段多一階，是因為這裡的網格開得很寬（為了避免貼牆），
     粗格距因此較大，只精修一次的解析度不夠。
-    extra_axis 用來附加第七維（差異消光）。
+    extra_axis 用來附加額外維度。可以是單一陣列（第七維，差異消光），
+    也可以是陣列的 list/tuple（第七、八維，例如再加低質量段冪次）。
+    寫成兩種都吃，是為了不動到既有呼叫端 —— fit_real.py 與
+    profile_lowmass.py 都傳單一陣列。
 
     **貼牆自動偵測**：搜尋範圍的邊界決定了答案，這件事在本專案已經發生五次
     （金屬量先驗上界 0.25、切半實驗的網格窗、S4 的 A_V 下界、S4 的 dav 上界、
@@ -188,7 +191,13 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
     allow_wall 傳入「已知會貼牆且已理解原因」的維度索引 —— 目前只有 dav，
     它經注入回收證實不可辨識，貼牆是預期行為而非錯誤。
     """
-    cur = list(axes) + ([extra_axis] if extra_axis is not None else [])
+    if extra_axis is None:
+        extras = []
+    elif isinstance(extra_axis, (list, tuple)):
+        extras = list(extra_axis)
+    else:
+        extras = [extra_axis]          # 單一陣列：維持舊呼叫端的行為
+    cur = list(axes) + extras
     bounds = [(a.min(), a.max()) for a in cur]
     best, lp = None, -np.inf
     for r in refines:
