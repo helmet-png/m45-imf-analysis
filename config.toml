@@ -189,8 +189,12 @@ logage_min = 7.70
 logage_max = 8.30
 av_min = 0.0
 av_max = 0.6
+# fbin_max 原本設 0.8，沒有理由註解。f_bin 的物理上限是 1.0（PHYSICAL_LIMITS
+# 字典也這樣定義），2026-08-09 P9（鎖住 MH）第一次讓 f_bin 撞到搜尋網格的
+# 0.75（COARSE 網格沒把先驗涵蓋到底），代表之前沒人測過先驗越界處，
+# 不是「0.8 剛好夠用」。跟 A_V 撞牆時處理方式一致：放到物理上限。
 fbin_min = 0.0
-fbin_max = 0.8
+fbin_max = 1.0
 alpha_min = 1.5
 alpha_max = 3.2
 # 金屬量與質量比分布指數：原本固定，輪廓測試證實固定會嚴重污染 alpha

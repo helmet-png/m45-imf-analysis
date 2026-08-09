@@ -70,3 +70,10 @@ p9b_fixmh_mist|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix
 
 # ===== P6b 重排：第一次因 logage 收窄貼牆被攔下，已改回完整搜尋範圍 =====
 p6b2_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 3
+
+# 三處修好後重排：fbin_max 先驗放寬到 1.0、COARSE 的 f_bin(0.15-0.95)
+# 與 logage(7.70-8.40) 範圍放寬、inject_lowmass.py 改成逐次試驗容錯
+# （不再因單一撞牆丟棄整批已算出的結果）。
+p9a2_fixmh_parsec|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix-mh 0.0 --tag _fixmh_parsec
+p9b2_fixmh_mist|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.8-8.5_feh-0.5-0.5.dat --tag _fixmh_mist
+p6b3_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 3

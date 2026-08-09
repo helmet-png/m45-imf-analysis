@@ -37,8 +37,8 @@ from pipeline import joint_fit, selection as selmod           # noqa: E402
 from pipeline.step3_age import draw_randoms                   # noqa: E402
 from pipeline.table_compat import Table                       # noqa: E402
 from measure_overconfidence import GRID                       # noqa: E402
-from injection_recovery import (COARSE, THETA_TRUE,           # noqa: E402
-                                make_fake, multi_stage_best)
+from injection_recovery import (COARSE, THETA_TRUE, CornerError,  # noqa: E402
+                                WallError, make_fake, multi_stage_best)
 
 # 注入的低質量段冪次真值。涵蓋 Kroupa 1.3+-0.5 的範圍兩端與中心。
 P_TRUE_LIST = [0.9, 1.3, 1.7]
@@ -128,31 +128,69 @@ def main():
             t0 = time.time()
             # q_gamma(5) 與 dav(6) 是已知的 nuisance，貼牆放行；
             # p_lowmass(7) **不放行** —— 它貼牆正是我們要偵測的失敗模式。
-            best, lp, bounds = multi_stage_best(
-                m, coarse, refines, n_proc,
-                extra_axis=[dav_axis, p_axis], allow_wall=(5, 6),
-                names=joint_fit.PARAM_NAMES + ["dav", "p_lowmass"])
+            #
+            # **單一次假資料撞牆不該毀掉整批結果**（2026-08-09 教訓：
+            # 108 分鐘、6 筆已成功算出的試驗，因為第 7 筆撞到 A_V 角落解
+            # 就被一起丟掉，因為例外沒被接住、np.savez 只在全部跑完後
+            # 才執行一次）。跟 run_queue.py 對每個項目容錯是同一個原則，
+            # 只是這裡的「項目」是單一次試驗。
+            try:
+                best, lp, bounds = multi_stage_best(
+                    m, coarse, refines, n_proc,
+                    extra_axis=[dav_axis, p_axis], allow_wall=(5, 6),
+                    names=joint_fit.PARAM_NAMES + ["dav", "p_lowmass"])
+            except (WallError, CornerError) as e:
+                print(f"  p_true={p_true:.1f} trial{t+1} 失敗（跳過，"
+                      f"不影響其餘試驗）：{type(e).__name__}: "
+                      f"{str(e).splitlines()[1] if len(str(e).splitlines()) > 1 else e}",
+                      flush=True)
+                continue
             outs.append(best)
             print(f"  p_true={p_true:.1f} trial{t+1}  "
                   f"p_rec={best[7]:.3f}  alpha={best[3]:.3f}  "
                   f"dav={best[6]:.3f}  lnP={lp:.1f}  "
                   f"({time.time()-t0:.0f}s)", flush=True)
+        if not outs:
+            print(f"  p_true={p_true:.1f} 全部 {args.trials} 次試驗都失敗，"
+                  "略過（見上方各次的失敗原因）", flush=True)
+            continue
+        if len(outs) < args.trials:
+            print(f"  p_true={p_true:.1f}：{len(outs)}/{args.trials} 次成功，"
+                  "其餘見上方失敗紀錄", flush=True)
         results[p_true] = np.array(outs)
+        # 每跑完一個 p_true 就存一次 —— 之後的 p_true 若整批失敗，
+        # 這裡已經算出來的結果不會跟著陪葬。
+        np.savez(HERE / "results" / "inject_lowmass.npz",
+                 p_true=np.array(list(results.keys())),
+                 **{f"p{p}": v for p, v in results.items()})
 
     print(f"\n{'='*70}")
     print("identifiability of low-mass slope")
     print(f"{'='*70}")
     print(f"{'p_true':>8}{'p_recovered':>14}{'bias':>9}"
           f"{'alpha_rec':>11}{'alpha_bias':>11}")
-    p_recs = []
+    p_recs, p_true_ok = [], []
     for p_true in P_TRUE_LIST:
+        if p_true not in results:
+            print(f"{p_true:>8.1f}  (全部試驗失敗，無資料)")
+            continue
         a = results[p_true]
         p_rec, al = a[:, 7].mean(), a[:, 3].mean()
         p_recs.append(p_rec)
+        p_true_ok.append(p_true)
         print(f"{p_true:>8.1f}{p_rec:>14.3f}{p_rec-p_true:>+9.3f}"
               f"{al:>11.3f}{al-THETA_TRUE[3]:>+11.3f}")
 
+    if len(p_recs) < 2:
+        print("\n少於兩個 p_true 有成功資料，無法判斷可辨識性（條件 3 需要"
+              "跨多個真值比較），僅供參考個別數字。")
+        np.savez(HERE / "results" / "inject_lowmass.npz",
+                 p_true=np.array(list(results.keys())),
+                 **{f"p{p}": v for p, v in results.items()})
+        return
+
     p_recs = np.array(p_recs)
+    P_TRUE_LIST = p_true_ok    # 只用實際成功的真值計算「跨真值的涵蓋範圍」
     spread = p_recs.max() - p_recs.min()
     inj_spread = max(P_TRUE_LIST) - min(P_TRUE_LIST)
     print(f"\ncriterion 3 (does recovery track truth?):")
