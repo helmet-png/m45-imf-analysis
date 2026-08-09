@@ -58,6 +58,18 @@ def main():
     # 精修階數。預設單階（格距 1/3）會讓 alpha 只落在 2.1/2.3/2.5 這種粗格點上；
     # 要當最終數字報時用 3,3（格距 1/9 = 0.022）才不會被量化污染。
     ap.add_argument("--refines", default="3")
+    # P9：把金屬量釘死在指定值，判別表 4 的等時線穩健性是真的、
+    # 還是靠 MH 這個自由參數在兩套模型上各自吸收了共同偏差換來的。
+    #
+    # **必須用兩套網格共有的格點**。isochrone 是離散的，_isochrone() 會
+    # 吸附到最近的格點：PARSEC 的 MH 間距 0.05、MIST 只有 0.25，
+    # 若指定光譜值 -0.03，PARSEC 吸附到 -0.05、MIST 吸附到 +0.00，
+    # 憑空造出 0.05 dex 的差異，正好污染這個檢驗要看的東西。
+    # MH=0.00 兩套都有（吸附誤差為零），且距光譜值 -0.03 僅 0.03，
+    # 遠比自由擬合跑到的 +0.18 接近，檢驗邏輯成立。
+    ap.add_argument("--fix-mh", type=float, default=None,
+                    help="把金屬量固定在此值（P9 檢驗用）。"
+                         "務必選 PARSEC 與 MIST 共有的格點，預設建議 0.0")
     args = ap.parse_args()
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
@@ -123,10 +135,17 @@ def main():
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             t0 = time.time()
+            # P9：固定 MH 時，把該維的搜尋軸換成單一值。用替換座標軸而不是
+            # 收窄 bounds 的原因：bounds 只擋先驗，多階段精修仍會在該維
+            # 產生格點；換成單元素陣列才能真正讓它不動，且 multi_stage_best
+            # 對 len(ax) < 2 的維度會直接沿用、不做精修。
+            axes = list(COARSE)
+            if args.fix_mh is not None:
+                axes[4] = np.array([args.fix_mh])
             # dav（索引 6）不可辨識、貼牆是預期行為；其餘維度貼牆直接報錯，
             # 因為這支程式產出的是要寫進論文的數字。
             best, lp, bounds = multi_stage_best(
-                m, COARSE, refines, n_proc, extra_axis=extra, allow_wall=allow)
+                m, axes, refines, n_proc, extra_axis=extra, allow_wall=allow)
             names = joint_fit.PARAM_NAMES + (["dav"] if extra is not None
                                              else [])
             # 放行的維度仍要標示出來，否則「允許」會變成「看不見」

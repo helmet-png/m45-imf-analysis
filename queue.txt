@@ -60,3 +60,13 @@ p2_final2|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines
 # 是目前最大的單一誤差來源。用文獻先驗鎖住無法消除它（先驗寬度本身就是
 # 誤差來源），只能讓資料自己約束 —— 但升格前必須先驗證可辨識性（dav 的教訓）。
 p6b_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 2 --refines 3
+
+# ===== P9：MH 鎖定檢驗（優先，可能推翻表 4 的穩健性主賣點）=====
+# 把 MH 固定在 0.00（PARSEC 與 MIST 共有的格點，吸附誤差為零）重跑 config C。
+# 兩套等時線的 alpha 仍一致 -> 穩健性成立；開始分歧 -> 先前的一致是靠
+# MH 自由調整換來的，表 4 必須改寫。
+p9a_fixmh_parsec|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix-mh 0.0 --tag _fixmh_parsec
+p9b_fixmh_mist|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.8-8.5_feh-0.5-0.5.dat --tag _fixmh_mist
+
+# ===== P6b 重排：第一次因 logage 收窄貼牆被攔下，已改回完整搜尋範圍 =====
+p6b2_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 3
