@@ -1,0 +1,147 @@
+# -*- coding: utf-8 -*-
+"""P6：輪廓測試低質量段冪次（0.08-0.5 Msun，佔樣本 59.5%）。
+
+**動機**：`alpha` 這個自由參數只改 Kroupa 分段冪律裡 m>0.5 Msun 那一段。
+0.08-0.5 Msun 那段固定在 -1.3、從未參與擬合。實測 M45 的 1,078 顆成員星裡
+有 641 顆（59.5%）落在這個固定段。Hess 圖概似是整張圖一起算的，
+這 641 顆星在推動包括 alpha 在內的所有參數 —— 若 1.3 對 M45 不對，
+模型會用其他參數去補償，alpha 可能被系統性拖偏卻看起來很精確。
+
+這與「以 M45 金屬量接近太陽為由固定金屬量」是同一類錯誤，
+那次的輪廓測試顯示代價是 alpha 偏 0.40（統計誤差的 133 倍）。
+低質量段冪次至今沒做過同樣的檢查。
+
+**用修好的模型（config C：選擇函數 + 差異消光），不是舊六參數版** ——
+論文要報的數字來自 C，用舊模型測敏感度答非所問。
+
+**判讀基準**：用注入回收量到的 alpha 統計誤差 0.144（見
+injection_recovery.py 的 S3F，最乾淨的一次）。若固定低質量段冪次
+造成的 alpha 跨度遠大於 0.144，代表它跟金屬量一樣必須升格。
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
+from pipeline import joint_fit, selection as selmod           # noqa: E402
+from pipeline.table_compat import Table                       # noqa: E402
+from measure_overconfidence import GRID                       # noqa: E402
+from injection_recovery import COARSE, multi_stage_best       # noqa: E402
+
+# 統計誤差的比較基準，來自注入回收（S3F，config C 對應的情境）。
+ALPHA_STAT_SIGMA = 0.144
+
+# Kroupa (2001) 原文對 0.08-0.5 Msun 段冪次的估計本身帶不確定度
+# （約 1.3 +- 0.3~0.5，依版本而定）。掃過這個量級的範圍。
+SLOPES = [0.9, 1.1, 1.3, 1.5, 1.7]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--procs", type=int, default=None)
+    ap.add_argument("--n-syn", type=int, default=40000)
+    ap.add_argument("--repeats", type=int, default=3,
+                    help="每個冪次值重複幾次（換模型端共用亂數，量重現性）")
+    ap.add_argument("--refines", default="3",
+                    help="精修階數，逗號分隔。3,3 較精確但貴一倍")
+    ap.add_argument("--dav-max", type=float, default=0.6)
+    ap.add_argument("--slopes", default=None,
+                    help="逗號分隔，覆寫預設的 SLOPES 掃描點。"
+                         "本機已掃過 0.9-1.7，要擴大範圍時用這個而不改本檔，"
+                         "避免正在跑的背景工作看到不一致的模組狀態")
+    args = ap.parse_args()
+    n_proc = args.procs or (os.cpu_count() or 1)
+    refines = [int(x) for x in args.refines.split(",") if x.strip()]
+    slopes = ([float(x) for x in args.slopes.split(",")] if args.slopes
+             else SLOPES)
+
+    cfg = cfgmod.load()
+    c3, cj = cfg.step3_age, cfg.joint_fit
+    clean = Table.read(HERE / "data" / "cmd_members.csv", format="csv")
+    errmodel = dict(np.load(HERE / "data" / "errmodel.npz"))
+    grid = isomod.load_grid(isomod.CACHE / GRID)
+    plx = np.asarray(clean["parallax"], float)
+    dm = 5.0 * np.log10(1000.0 / (np.median(plx) - c3.parallax_zero_point)) - 5.0
+    color = np.asarray(clean["bp_rp"], float)
+    mag = np.asarray(clean["phot_g_mean_mag"], float)
+    ok = np.isfinite(color) & np.isfinite(mag)
+    color, mag = color[ok], mag[ok]
+    n_obs = len(color)
+
+    cfg._data["step3_age"]["n_synthetic"] = args.n_syn
+    cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
+    base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
+    sel = selmod.load(HERE / "data" / "selection.npz")
+    print(f"真實觀測 {n_obs:,} 顆，config C（選擇函數 + 差異消光），"
+          f"n_synthetic {args.n_syn:,}")
+    print(f"掃描低質量段冪次：{slopes}\n")
+
+    from pipeline.step3_age import draw_randoms
+    results = {}
+    for p in slopes:
+        outs = []
+        for rep in range(args.repeats):
+            import copy
+            m = copy.copy(base)
+            m.obs_h = joint_fit.hess(color, mag, base.nb_c, base.nb_m,
+                                     base.crange, base.mrange)
+            m.n_obs = n_obs
+            m.selection = sel
+            m.bounds = base.bounds[:6].copy()
+            m.low_mass_slope = -p
+            if args.repeats > 1:
+                m.draws = draw_randoms(m.n_syn,
+                                       np.random.default_rng(3000 + 13 * rep))
+            extra = np.arange(0.0, args.dav_max + 1e-9, args.dav_max / 4)
+            m.enable_dav_fit(0.0, args.dav_max)
+
+            t0 = time.time()
+            # q_gamma（5）與 dav（6）是已知的 nuisance，貼牆放行；
+            # 其餘任何一維貼牆都要中止 —— 若低質量段冪次的改變讓 alpha
+            # 或 A_V 撞到牆，那本身就是重要的診斷結果。
+            best, lp, bounds = multi_stage_best(
+                m, COARSE, refines, n_proc, extra_axis=extra,
+                allow_wall=(5, 6))
+            outs.append(best)
+            print(f"  p={p:.1f} 第{rep+1}次  alpha={best[3]:.3f}  "
+                  f"A_V={best[1]:.3f}  logage={best[0]:.3f}  "
+                  f"lnP={lp:.1f}  ({time.time()-t0:.0f}s)", flush=True)
+        arr = np.array(outs)
+        results[p] = arr
+        print(f"  -> p={p:.1f} 跨 {args.repeats} 次：alpha 平均 "
+              f"{arr[:,3].mean():.3f}，散布 {arr[:,3].std():.3f}\n",
+              flush=True)
+
+    print(f"{'='*70}\nalpha 對低質量段冪次的敏感度\n{'='*70}")
+    print(f"{'冪次 p':>8}{'alpha 平均':>11}{'散布':>8}")
+    means = []
+    for p in slopes:
+        a = results[p][:, 3]
+        means.append(a.mean())
+        print(f"{p:>8.1f}{a.mean():>11.3f}{a.std():>8.3f}")
+    means = np.array(means)
+    span = float(means.max() - means.min())
+    print(f"\nalpha 跨度（掃過 p={min(slopes)}-{max(slopes)}）= {span:.3f}")
+    print(f"對照注入回收統計誤差 {ALPHA_STAT_SIGMA:.3f} "
+          f"-> {span/ALPHA_STAT_SIGMA:.1f} 倍")
+    print("\n判讀：倍數遠大於 1，代表固定低質量段冪次會系統性污染 alpha，")
+    print("      必須升格為自由參數或至少在論文列為系統誤差項；")
+    print("      倍數接近或小於 1，代表目前的固定值不是主要誤差來源。")
+
+    np.savez(HERE / "results" / "profile_lowmass.npz",
+             slopes=np.array(slopes),
+             **{f"p{p}": v for p, v in results.items()})
+    print("\n寫入 results/profile_lowmass.npz")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,239 @@
+# 星團分析 pipeline 總設定
+#
+# 每個參數的意義、改動後會發生什麼、預設值為何這樣選，都寫在 README.md。
+# 這個檔案只放「值」，理由寫在 README，避免兩邊解釋不一致。
+#
+# 格式為 TOML（Python 3.11+ 內建 tomllib 可讀，不需額外套件）。
+
+[target]
+# 星團名稱，用 CDS Sesame 解析成座標。也可直接指定 ra/dec 覆寫。
+name = "M45"
+# HR23 目錄裡的對應名稱（做交叉驗證用）
+hr23_name = "Melotte_22"
+# 若要跳過名稱解析，把下面兩行取消註解並填入十進位度數
+# ra = 56.60083
+# dec = 24.11389
+
+
+[step1_membership]
+
+# --- 資料範圍 ---
+radius_deg = 5.0          # 錐形搜尋半徑（度）
+g_mag_max = 18.0          # G 星等上限
+parallax_min_mas = 4.0    # 視差下限（mas）；設 0 表示不切
+
+# --- 座標處理 ---
+# 是否扣除星團整體運動造成的透視效應。true 時會用下方 bulk_* 參數。
+deproject = false
+# 星團整體運動。留空則自動從 HR23 目錄查詢。
+# bulk_pmra = 19.955
+# bulk_pmdec = -45.457
+# bulk_parallax = 7.378
+# bulk_rv = 5.343
+
+# --- pyUPMASK 分群參數 ---
+outer_loop_runs = 25      # 外圈輪數，機率由這些輪次平均而得
+inner_loop_runs = 25      # 內圈最大迭代次數
+stars_per_cluster = 25    # 每個統計群的星數
+max_clusters = 1000       # 群數上限
+clustering_method = "MiniBatchKMeans"
+resample_errors = true    # 是否用測量誤差重抽（pyUPMASK 預設是 false，務必開啟）
+independent_resample = false  # true = 三個維度各自獨立抽樣（修正 pyUPMASK 的相關抽樣）
+use_pca = true            # 是否做 PCA 降維
+pca_dims = 2              # 降到幾維
+outlier_method = "stdregion"
+outlier_nsigma = 5.0      # 離群值排除的標準差倍數
+random_seed = 42          # 亂數種子，固定以求可重現
+
+# --- 成員判定門檻 ---
+# 依機率分布的穩定谷地決定，不是對照目錄調參的結果。詳見 README。
+membership_threshold = 0.7
+
+
+[step2_cmd]
+
+# --- 測光品質篩選 ---
+# BP/RP 流量超額因子。M45 泡在反射星雲裡，擁擠與星雲區的 BP/RP 會被汙染，
+# 而顏色錯得最嚴重的正好是星雲裡那些星。設 0 表示不篩。
+bp_rp_excess_sigma = 3.0
+# 測光訊噪比下限（flux/flux_error）
+min_flux_snr_g = 50.0
+min_flux_snr_bp = 20.0
+min_flux_snr_rp = 20.0
+# 亮端飽和界線；比這更亮的星測光不可靠
+g_bright_limit = 4.0
+
+# --- 消光 ---
+# "uniform" = 全星團單一 A_V；"fit" = 交給第三步當自由參數
+extinction_mode = "fit"
+# extinction_mode="uniform" 時使用的值
+extinction_av = 0.15
+# 消光係數（A_G/A_V, A_BP/A_V, A_RP/A_V），Cardelli 消光曲線下的近似值
+ext_coeff_g = 0.83
+ext_coeff_bp = 1.08
+ext_coeff_rp = 0.63
+
+# --- 雙星序檢查 ---
+# 等質量雙星比單星亮 2.5*log10(2) = 0.753 星等
+binary_offset_mag = 0.753
+
+
+[step3_age]
+
+# --- isochrone 模型 ---
+model = "PARSEC"          # 統一流程用 PARSEC；MIST/BHAC15 只在標竿星團跑
+photsys = "gaiaEDR3"      # Gaia DR3 沿用 EDR3 的濾光片定義
+
+# --- isochrone 網格範圍（下載一次後快取）---
+logage_min = 7.0          # log10(年齡/yr) 下限
+logage_max = 9.5          # 上限
+logage_step = 0.05        # 步長
+mh_min = -0.2             # [M/H] 下限
+mh_max = 0.2              # 上限
+mh_step = 0.1             # 步長
+
+# --- 距離 ---
+# "parallax" = 由 Gaia 視差固定；"free" = 當自由參數
+distance_mode = "parallax"
+# Gaia 視差零點修正（mas）。遠方星團必須修正，M45 這麼近影響可忽略。
+parallax_zero_point = -0.017
+
+# --- 金屬量 ---
+# "marginalize" = 在先驗上邊際化（HR23 作法）；"fixed" = 固定值
+metallicity_mode = "fixed"
+metallicity_mh = 0.0      # metallicity_mode="fixed" 時使用
+
+# --- 前向模型（生成合成星團）---
+# 合成星團要生成幾顆星。太少則概似函數雜訊大，太多則變慢。
+n_synthetic = 100000
+# 雙星比例。設為 "free" 交給擬合，或給 0-1 的固定值。
+binary_fraction = 0.35
+# 質量比 q 的分布：f(q) ∝ q^gamma
+binary_q_gamma = 0.0      # 0 = 均勻分布
+binary_q_min = 0.1        # q 下限（低於此的雙星在 CMD 上與單星無異）
+# IMF：生成合成星團用的初始質量函數
+imf = "kroupa"            # kroupa | salpeter | chabrier
+
+# --- 擬合設定 ---
+# 概似函數用的 Hess 圖（CMD 二維直方圖）網格
+hess_color_bins = 40
+hess_mag_bins = 50
+hess_color_range = [-0.5, 4.0]
+hess_mag_range = [2.0, 18.0]
+# 模型端 Hess 圖的高斯平滑（單位為格）。只平滑模型不平滑觀測。
+# **實測不要開**：1 格 = 0.32 星等，跟雙星序的偏移 0.753 星等同量級，
+# 平滑等於把要測的特徵抹掉，會讓 f_bin 被壓到 0（平滑取代了雙星造成的展寬）。
+# 模型 Hess 的空格問題要靠提高 n_synthetic 解決，不是靠事後抹平。
+model_hess_smooth = 0.0
+# 擬合參數的搜尋範圍
+fit_logage_min = 7.5
+fit_logage_max = 8.6
+fit_av_min = 0.0
+fit_av_max = 0.6
+# 網格搜尋的解析度（先用網格確認可行，之後可換 MCMC）
+fit_logage_step = 0.02
+fit_av_step = 0.02
+
+
+[step4_binaries]
+
+# --- 族群層級：把雙星比例升級為自由參數，與年齡、消光一起解 ---
+# 三維網格比第 3 步的二維貴很多，所以年齡與消光的步長放寬。
+# 反正第 3 步已經定出大致位置，這裡只需要在附近精修。
+fit_logage_min = 7.90
+fit_logage_max = 8.20
+fit_logage_step = 0.05
+fit_av_min = 0.05
+fit_av_max = 0.40
+fit_av_step = 0.05
+fit_fbin_min = 0.0
+fit_fbin_max = 0.7
+fit_fbin_step = 0.05
+
+# --- 逐星層級：三種傳統判定法的門檻 ---
+# RUWE 門檻。1.4 是社群慣例，但實測會誤刪 12% 的真成員，
+# 所以這裡只當雙星指標用，絕不拿來當品質切。
+ruwe_threshold = 1.4
+# CMD 偏移法：比同顏色單星序亮超過幾星等就判為雙星。
+# 等質量雙星是 0.753，取其一半可涵蓋質量比中等的組合。
+cmd_offset_threshold = 0.375
+# 判定為雙星的前向模型機率門檻
+forward_prob_threshold = 0.5
+
+
+[step5_imf]
+
+# --- 質量範圍 ---
+# 冪律擬合的質量上下限。下限由星等切決定（G<18 在 135 pc 大約對應到這裡），
+# 上限由主序轉折點決定。超出這個範圍的資料不完整，硬擬合會得到假斜率。
+mass_min = 0.30
+mass_max = 2.50
+
+# --- 方法 B：前向模型的 IMF 斜率搜尋 ---
+# alpha 定義為 dN/dm ∝ m^(-alpha)。Salpeter 是 2.35，Kroupa 高質量端是 2.3。
+fit_alpha_min = 1.5
+fit_alpha_max = 3.2
+fit_alpha_step = 0.05
+
+# --- 質量分層：量 MF 隨半徑的變化 ---
+# 環帶邊界（度）。M45 潮汐半徑 4.71 度。
+radius_bins = [0.0, 1.0, 2.0, 3.0, 5.1]
+
+
+[joint_fit]
+# 四參數聯合擬合（年齡、消光、雙星比例、IMF 斜率一次解）。
+# 存在的理由：第 3/4/5 步的循序擬合會低估誤差，且看不到參數間的相關性。
+
+# 先驗範圍（範圍內為均勻先驗）
+logage_min = 7.70
+logage_max = 8.30
+av_min = 0.0
+av_max = 0.6
+fbin_min = 0.0
+fbin_max = 0.8
+alpha_min = 1.5
+alpha_max = 3.2
+# 金屬量與質量比分布指數：原本固定，輪廓測試證實固定會嚴重污染 alpha
+#（分別造成 0.40 與 0.10 的偏移，是統計誤差 0.003 的 133 倍與 33 倍），
+# 因此升格為自由參數。範圍需與 isochrone 網格檔涵蓋的範圍一致。
+# 上界原本是 0.25（受限於當時的 isochrone 網格只下載到 +0.3）。
+# 六參數擬合的金屬量後驗 95 百分位卻跑到 0.224 —— 走者貼在牆上，
+# 代表報出的值是被這道牆決定的，不是資料決定的。
+# 重下 -0.6 ~ +0.6 的網格後把牆推開，用來檢驗資料到底有沒有約束力。
+mh_min = -0.6
+mh_max = 0.6
+qgamma_min = -1.5
+qgamma_max = 1.5
+
+# 金屬量改用高斯先驗，而非均勻先驗。
+#
+# 理由：均勻先驗的邊界會變成硬牆 —— 先前上界設 0.25 時，後驗 95 百分位跑到
+# 0.224，走者貼牆，報出的 +0.194 是被牆決定的而非資料決定的。把牆推到 ±0.6
+# 後峰值落在 +0.05，證實資料有約束力但也證實了原本的邊界在扭曲結果。
+#
+# 中心與寬度取自 Gaia 自己的光譜測量（與我們的 CMD 擬合機制完全獨立）：
+#   GSP-Spec（RVS 高解析度譜線，153 顆）  中位 -0.020
+#   GSP-Phot（BP/RP 低解析度光譜，1015 顆）中位 -0.061
+#   我們的 CMD 擬合（推開牆後）            峰值 +0.05
+# 三者跨度 0.11 dex，取中心 -0.03、sigma 0.10 涵蓋這個範圍。
+#
+# 這個作法對全銀河可推廣：每個星團都能從 Gaia 天體物理參數表取得金屬量估計，
+# 不必逐一查文獻，因此規則仍然是「資料的函數」而非「對特定天體的認知」。
+# 設 mh_prior_sigma = 0 則退回均勻先驗。
+mh_prior_mean = -0.03
+mh_prior_sigma = 0.10
+
+# MCMC 設定
+# 走者數至少要是參數數的數倍；六參數用 48 個。
+n_walkers = 48
+# 首次跑 1200 步時自相關時間就有 100-128，有效樣本數只有約 200，
+# emcee 直接警告鏈太短。加上多行程平行後才有本錢跑這麼長。
+n_steps = 6000
+n_burn = 2000
+
+# 六參數用的 isochrone 網格檔（金屬量步長 0.05，比通用網格的 0.1 密一倍）。
+# 留空則沿用 step3_age 那組參數推出的檔名。
+grid_file = "parsec_v2.0_gaiaEDR3_logt7.6-8.4s0.05_mh-0.5-0.3s0.05.dat"
+# 為了讓 MCMC 跑得動，合成星數可以比網格搜尋時少一些。
+# 但不能太少，否則概似會被取樣雜訊主導（詳見 README 的數值陷阱）。
+n_synthetic = 40000
