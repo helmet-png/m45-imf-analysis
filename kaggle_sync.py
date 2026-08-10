@@ -160,6 +160,34 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
                 minimal: bool = False):
     """建一個對應的 notebook：安裝依賴、掛上資料、跑腳本、印出結果。"""
     base = "/kaggle/input/m45-imf-" + slug + "/"
+    # **2026-08-10 根本修法：掛載時序問題不該靠外部重推整個 kernel 版本解決，
+    # 該讓 kernel 自己在真正開始跑之前先等資料掛好。**
+    # 先前的作法是 kaggle_queue.py 偵測到 FileNotFoundError 後，重新
+    # push 一個新的 kernel 版本重跑——但實測發現連 push 第 5 次（距離
+    # dataset 建立已經過了快 16 分鐘）都還是在 kernel 執行的頭幾秒內就
+    # FileNotFoundError，代表這個延遲不是「累積等待時間」能解決的，是
+    # 每次 kernel container 重新啟動時，掛載本身要花一小段時間才會就緒，
+    # 跟 dataset 建立多久無關。與其每次都重新起一整個 container（貴、慢、
+    # 而且賭運氣），不如讓同一個正在跑的 container 自己原地等——真正的
+    # 掛載延遲很可能只有幾十秒等級，用短間隔輪詢比整批重推便宜太多。
+    # 外部的重推機制（kaggle_queue.py 的 BACKOFFS）保留當最後防線，
+    # 但這裡先讓大多數情況根本不必走到那一步。
+    # 這裡故意全部印英文（不是隨便，是 2026-08-09 已經查證過的教訓：
+    # Kaggle 的 log 擷取管線會把中文轉成亂碼，跟我們子行程的編碼設定
+    # 無關，不受控制範圍。這段訊息真的印出來時代表逾時失敗，需要能被
+    # 讀懂，所以延續「跑在 Kaggle 上一律印英文」的既有規則）。
+    wait_lines = [
+        "import time\n",
+        "def _wait_input(path, timeout=280, interval=5):\n",
+        "    t0 = time.time()\n",
+        "    while not os.path.exists(path):\n",
+        "        if time.time() - t0 > timeout:\n",
+        "            raise FileNotFoundError(\n",
+        "                f'waited {timeout}s, Kaggle has not mounted dataset at "
+        "{path} yet (platform-side mount delay, not a script bug)')\n",
+        "        time.sleep(interval)\n",
+        f"_wait_input('{base}{'pipeline' if not minimal else script}')\n",
+    ]
     copy_lines = [f"shutil.copy('{base}{script}', '{script}')\n"]
     for f in extra_files:
         name = Path(f).name
@@ -210,7 +238,8 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
             "cell_type": "code", "metadata": {}, "execution_count": None,
             "outputs": [],
             "source": (
-                ["import subprocess, sys, shutil, os\n"] + copy_lines
+                ["import subprocess, sys, shutil, os\n"] + wait_lines
+                + copy_lines
                 + ([pip_line] if pip_line else [])
                 + [env_line,
                    f"subprocess.run([sys.executable, '-u', '{script}'] + "
