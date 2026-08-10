@@ -2,9 +2,12 @@
 # kaggle_queue.py 每輪都會重新讀檔，執行中可以在末端追加步驟。
 # 已完成的記在 logs/kaggle_queue_done.txt。
 
-# ===== 2026-08-10：測試掛載時序問題的根本修法 =====
-# 在 make_kernel() 生成的 notebook 第一格加了 _wait_input()，讓 kernel
-# 自己原地輪詢等 /kaggle/input/ 掛好再動作，不必再靠外部重推整個 kernel
-# 版本賭運氣。用最小的 smoke test 快速驗證這個修法有沒有真的解決問題
-# （比等一個 40 分鐘的正式工作快很多）。
-mount_fix_test|kaggle_smoketest.py|||true|helmetalbert
+# ===== 2026-08-10：暫停派工，等使用者確認帳號手機驗證狀態 =====
+# 用 kaggle_smoketest.py（1KB 單一檔案，minimal 模式）搭配新加的
+# in-kernel 輪詢等待（原地等 280 秒）做過乾淨測試，結果還是
+# FileNotFoundError——排除了「掛載只是延遲，等久一點就好」這個假設。
+# 目前最可能的原因是 helmetalbert／teammate2 兩個帳號都還沒完成手機
+# 驗證（這專案先前已經證實未驗證帳號的 kernel 沒有對外網路，這次的
+# 現象很可能是同一種帳號限制，只是延伸到 dataset 掛載）。
+# 詳細診斷過程見 LIMITATIONS.md「Kaggle 掛載問題根因排查」。
+# 使用者確認/完成手機驗證後再把工作加回這裡。

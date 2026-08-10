@@ -307,6 +307,8 @@ dav 掃描的 A/M 兩欄（本來就已被降級為「品質不足」，不影�
 | P7 | 表 3 用對齊的 0.50–2.50 M☉ 重算傳統法與前向模型 | traditional_accounting + fit_real | 1 hr | 待確認，等 P6b 一起做（同一批重跑） |
 | **P8** | **傳統法基準驗證**：找 1–2 篇具代表性的傳統法疏散星團 IMF 論文（候選：Li+2020 NGC 3532），核對他們的質量範圍定義、誤差棒算法；可能的話用我們的傳統法實作套用到他們的星團資料，看能不能重現他們的數字，藉此驗證 `traditional_accounting.py` 本身沒有 bug | 需先查文獻，非計算 | 查文獻 2–3 hr + 驗證跑 1 hr | **新增（使用者 2026-08-09 提出）**，P1/P7 的結果要靠它才站得住腳 |
 | P5 | 論文圖（圖 2、3、4 重畫成投稿品質） | plots | 2 hr | 待確認，等 P2/P7 數字定案後才畫 |
+| **P11** | **殘留場星污染比例 outlier_frac 敏感度**：寫死 0.01，從未測過敏感度，`CLAUDE.md` 待辦分類體檢後判定為「現役假設」必須量出代價 | profile_outlierfrac.py | ~30 min | **新增（08-10）**，`verify_outlierfrac` 已排進本機 `queue.txt` |
+| **P12** | **BP/RP 誤差模型 A/B 驗證**：用 G 查 BP/RP 誤差 vs 用星體自己的 BP/RP 星等查，同樣是體檢後判定的現役假設。已加 `--native-bprp-err` 旗標與 `e_bp_native`/`e_rp_native`，A/B 兩次擬合比較 alpha | fit_real.py --native-bprp-err | ~50 min（兩次） | **新增（08-10）**，`verify_bprperr_off`／`verify_bprperr_on` 已排進本機 `queue.txt` |
 
 MCMC 後驗（取代網格 argmax）列為**選配**：若 P2 的 10 次重複給出穩定平均，
 網格版數字即可用（誤差棒來自注入回收而非概似曲率，本來就不依賴 MCMC 收斂）。

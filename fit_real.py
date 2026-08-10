@@ -70,6 +70,13 @@ def main():
     ap.add_argument("--fix-mh", type=float, default=None,
                     help="把金屬量固定在此值（P9 檢驗用）。"
                          "務必選 PARSEC 與 MIST 共有的格點，預設建議 0.0")
+    # 驗證排程項目（2026-08-10，LIMITATIONS.md 待辦分類標準訂定後）：
+    # 用 G 查 BP/RP 誤差會低估紅星誤差，這是每次擬合都在用的現役假設，
+    # 從未驗證過代價。開這個旗標改用星體自己的 BP/RP 星等查各自波段
+    # 的誤差曲線，A/B 跑兩次比較 alpha 有沒有變。
+    ap.add_argument("--native-bprp-err", action="store_true",
+                    help="改用星體自己的 BP/RP 星等查測光誤差（而非用 G）。"
+                         "需要 errmodel.npz 含 e_bp_native/e_rp_native 鍵")
     args = ap.parse_args()
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
@@ -90,6 +97,11 @@ def main():
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0   # 先看概似本身要什麼
 
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
+    base.use_native_bprp_err = args.native_bprp_err
+    if args.native_bprp_err and "e_bp_native" not in errmodel:
+        print("錯誤：--native-bprp-err 需要 errmodel.npz 含 e_bp_native/"
+              "e_rp_native 鍵，目前載入的檔案沒有，先重建 errmodel.npz")
+        sys.exit(1)
     sel = selmod.load(HERE / "data" / "selection.npz")
     print(f"真實觀測 {len(color):,} 顆，距離模數 {dm:.4f}，"
           f"n_synthetic {args.n_syn:,}")

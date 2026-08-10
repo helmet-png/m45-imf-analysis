@@ -90,6 +90,13 @@
   狀態是「已知現役缺陷，優先度未定，需要先做一次量級估計（例如比較
   用/不用這個誤差模型時 alpha 變動多少）才能決定要不要提前處理」，
   不是安靜地待在「尚未建模」清單裡等排隊。
+  **已排進驗證排程（2026-08-10）**：`pipeline/step2_cmd.photometric_error_model()`
+  新增了用星體自己的 BP/RP 星等分箱的版本（`e_bp_native`/`e_rp_native`），
+  `pipeline/joint_fit.JointModel` 新增 `use_native_bprp_err` 旗標（預設
+  `False`，行為不變），`fit_real.py --native-bprp-err` 可以打開它。
+  `queue.txt` 已排入 `verify_bprperr_off`／`verify_bprperr_on` 這對
+  A/B 比較（本機佇列，config C，5 次重複，其餘設定完全相同），跑完就能
+  量出 alpha 差多少，不再只是方向推論。
 - **isochrone 取最近格點，不內插**（刻意的：演化快速階段線性內插會造出假特徵）。
   代價是 `logage_step = 0.05` 就是年齡解析度的天花板，`fit_logage_step` 設更小沒用。
 - **殘留場星汙染**只用 1% 的均勻離群成分描述，而那個 1% 是猜的常數，沒有量過。
@@ -101,6 +108,11 @@
   急迫程度，但不該再單純標成跟敏感度測試排隊的「待辦」——正確狀態是
   「已知現役假設，有初步量級佐證但未做敏感度測試，觸發條件：若之後
   改成 0.5%／2% 時 alpha 明顯跳動，要立刻升級處理，不能繼續排隊」。
+  **已排進驗證排程（2026-08-10）**：`pipeline/joint_fit.JointModel` 新增
+  `outlier_frac` 屬性（預設 0.01，行為不變），新腳本 `profile_outlierfrac.py`
+  掃 0.005/0.01/0.02/0.03 四點，`queue.txt` 已排入 `verify_outlierfrac`
+  （本機佇列，config C，3 次重複），跑完就能算出 alpha 跨度對統計誤差
+  0.144 的倍數，判準同 P6 的低質量段冪次輪廓測試。
 - **把 Hess 圖各格當成互相獨立的 Poisson 是一個近似。** 嚴格來說各格的聯合分布是
   多項分布（總星數固定 1,078，格與格之間有負相關），多項分布等價於
   「一組獨立 Poisson 在總數已知的條件下」。當獨立 Poisson 等於多算一個自由度。
@@ -286,6 +298,41 @@ p2_final2/p6_lowmass/inject_s3f 等全部安全落在 8.0–8.1，離邊界還�
 p6b4 是第一次讓某個中間結果貼到邊界）。核心「可辨識」結論由另外 7 筆
 撐起，方向不受動搖，但這一筆本身不可信，正式定案前應該再補測一次
 `p_true=1.3` 排除疑慮。完整表格見 `PAPER_OUTLINE.md` 的審查表。
+
+### 2026-08-10：Kaggle 掛載問題根因排查（不是科學結果，是基礎設施診斷）
+
+`p9a_redo`／`p9c_mist_redo` 兩次派工都在 Kaggle 上以同一種
+`FileNotFoundError: /kaggle/input/.../pipeline` 失敗，且是連續第 4、5 次
+了（先前 `p9a_more_reps`、`p6_lowmass_ext_retry` 也是同一個錯誤）。
+使用者追問「為什麼會一直遇到」，這次沒有停在「已知限制、重試就好」，
+做了一次控制實驗查根因：
+
+**做的事**：在 `make_kernel()` 生成的 notebook 第一格加入 `_wait_input()`
+——kernel 自己原地輪詢 `os.path.exists()` 最多等 280 秒才放棄，取代
+「外部整批重推一個新 kernel 版本」的舊重試方式（重開一個全新 container
+既貴又不保證比較快）。用 `kaggle_smoketest.py`（1KB 單一檔案、無目錄、
+排除 zip 解壓縮這個變因）當最小測試案例。
+
+**結果：280 秒的原地等待完全沒有等到掛載出現**（`kaggle_results/
+mount_fix_test/*.log` 可查，時間戳顯示真的等滿了 280 秒才 raise）。
+這排除了「純粹是時序競態，等久一點就好」這個先前的假設——1KB 的
+單一檔案沒有理由需要等超過 280 秒才能掛載，除非掛載根本不會發生。
+
+**目前最可能的原因（尚未確認，需要使用者操作才能查證）**：
+`helmetalbert`／`teammate2` 兩個帳號都**還沒確認完成手機驗證**。這個
+專案先前已經證實**未完成手機驗證的帳號 kernel 沒有對外網路**
+（`pip install` 會重試 5 次後失敗），查了 Kaggle 官方討論區也有帳號
+未驗證會限制 dataset／GPU 存取的相關討論。很可能是同一種帳號限制
+延伸到「私有 dataset 掛載到 kernel」，先前一直被誤判成單純的時序問題。
+
+**待辦**：使用者需要到 kaggle.com 個別確認 `helmetalbert`／`teammate2`
+兩個帳號的手機驗證狀態，完成驗證後再重新派工測試。**在確認之前不要
+再花時間調整重試參數**——如果根因真的是帳號驗證，調再久的等待或再多次
+的重推都不會有用。`_wait_input()` 這個改動本身保留（不會有負面影響，
+且如果之後真的只是時序問題也用得上），但外部的 backoff 重推機制
+（60/120/240/480 秒）目前看來在解決錯的問題，`kaggle_queue.txt` 已清空
+暫停派工，本機算力（`p9a_redo_local`／`p9c_mist_redo_local`）不受影響
+持續執行。跨專案通用寫法已同步更新在 `~/.claude/kaggle-compute-howto.md`。
 
 ### 低質量段冪次被固定，而它佔了六成的樣本（2026-08-07 新增，嚴重）
 

@@ -61,6 +61,19 @@ class JointModel:
         # 預設 -1.3 與 IMF_BREAKS["kroupa"] 的原始值一致，行為不變；
         # profile_lowmass.py 會覆寫它來測敏感度。
         self.low_mass_slope = -1.3
+        # 殘留場星污染的均勻離群成分比例（見 poisson_loglike 的說明）。
+        # **這是猜的常數，從未做過敏感度測試**（2026-08-10，LIMITATIONS.md
+        # 重新分類為「現役假設」後排進待驗證清單）。與 HR23 的真正判定分歧
+        # 20/1078=1.9% 量級相符，但沒驗證過改變它會不會動到 alpha。
+        # 預設 0.01 與 poisson_loglike() 原本的預設值一致，行為不變；
+        # profile_outlierfrac.py 會覆寫它來測敏感度。
+        self.outlier_frac = 0.01
+        # 用星體自己的 BP/RP 星等查誤差，而不是用 G 查（見 synthesise()
+        # 裡的說明）。**這是猜的簡化，從未驗證過代價**（2026-08-10，
+        # LIMITATIONS.md 重新分類為「現役假設」後排進待驗證清單）。
+        # 預設 False 與原本行為一致；build_verify_bprperr.py 會把它
+        # 打開來跟舊行為 A/B 比較 alpha 有沒有變。
+        self.use_native_bprp_err = False
         # 共用亂數：整條 MCMC 鏈共用同一批，概似才是參數的確定性函數
         self.draws = draw_randoms(
             self.n_syn, np.random.default_rng(cfg.step1_membership.random_seed))
@@ -282,8 +295,27 @@ class JointModel:
         bp += self.dm + self.ext.bp * av_i
         rp += self.dm + self.ext.rp * av_i
         g += d["z_g"][:n] * _interp_err(g, self.errmodel, "e_g")
-        bp += d["z_bp"][:n] * _interp_err(g, self.errmodel, "e_bp")
-        rp += d["z_rp"][:n] * _interp_err(g, self.errmodel, "e_rp")
+        # **已知現役缺陷**：用 G 查 BP/RP 的誤差。同一個 G 之下紅星的 BP
+        # 暗得多，用 G 查等於用一個比真實 BP 星等亮的值去查，會低估紅星
+        # 的 BP 誤差。`self.use_native_bprp_err=True` 時改用星體自己的
+        # （加消光後、加誤差前的）BP/RP 星等去查各自波段的誤差曲線，
+        # 需要 errmodel 裡有 `pipeline.step2_cmd.photometric_error_model()`
+        # 2026-08-10 新增的 "bp"/"e_bp_native"/"rp"/"e_rp_native" 鍵，
+        # 沒有就自動退回舊行為（舊快取的 errmodel.npz 不會炸掉）。
+        if (getattr(self, "use_native_bprp_err", False)
+                and "e_bp_native" in self.errmodel):
+            em = self.errmodel
+            e_bp_val = np.interp(bp, em["bp"], em["e_bp_native"],
+                                 left=em["e_bp_native"][0],
+                                 right=em["e_bp_native"][-1])
+            e_rp_val = np.interp(rp, em["rp"], em["e_rp_native"],
+                                 left=em["e_rp_native"][0],
+                                 right=em["e_rp_native"][-1])
+            bp += d["z_bp"][:n] * e_bp_val
+            rp += d["z_rp"][:n] * e_rp_val
+        else:
+            bp += d["z_bp"][:n] * _interp_err(g, self.errmodel, "e_bp")
+            rp += d["z_rp"][:n] * _interp_err(g, self.errmodel, "e_rp")
 
         keep = (g <= self.g_faint) & (g >= self.g_bright)
         # 測光品質篩選：第 2 步把 1,297 顆砍到 1,078，而且**不是隨機砍的** ——
@@ -305,7 +337,8 @@ class JointModel:
         mod_h = hess(syn[0], syn[1], self.nb_c, self.nb_m,
                      self.crange, self.mrange,
                      smooth=self.c3.model_hess_smooth)
-        return poisson_loglike(self.obs_h, mod_h, self.n_obs)
+        return poisson_loglike(self.obs_h, mod_h, self.n_obs,
+                               outlier_frac=getattr(self, "outlier_frac", 0.01))
 
     def log_posterior(self, theta):
         lp = self.log_prior(theta)

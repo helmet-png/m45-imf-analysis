@@ -98,29 +98,50 @@ def deredden(t: Table, av: float, cfg) -> tuple[np.ndarray, np.ndarray]:
     return g0, c0
 
 
+def _bin_by(x: np.ndarray, y: np.ndarray, ok: np.ndarray, n_bins: int):
+    edges = np.linspace(np.nanmin(x[ok]), np.nanmax(x[ok]), n_bins + 1)
+    centres, vals = [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = ok & (x >= lo) & (x < hi)
+        if m.sum() < 3:
+            continue
+        centres.append(0.5 * (lo + hi))
+        vals.append(float(np.median(y[m])))
+    return np.array(centres), np.array(vals)
+
+
 def photometric_error_model(t: Table, n_bins: int = 20) -> dict:
     """量出「星等 → 測光誤差」的關係，供前向模型生成合成星時使用。
 
     回傳分箱後的中位數誤差；合成星團的每顆星會依其星等內插出對應的誤差。
+
+    **2026-08-10 新增 e_bp/e_rp 各自波段的版本（"待辦逐項體檢" 發現的
+    現役缺陷）**：`e_bp`/`e_rp`（用 G 分箱）保留給舊呼叫端相容，新增
+    `bp`/`e_bp_native`、`rp`/`e_rp_native`（改用星體自己的 BP/RP 星等
+    分箱）。同一顆星在給定 G 之下，紅星的 BP 比藍星暗得多——用 G 查
+    BP 誤差等於用一個比真實 BP 星等亮的值去查，會低估紅星的 BP 誤差。
+    這裡先把兩種都算出來、寫進同一個 errmodel，讓
+    `pipeline/step3_age.synth_populations()` 可以在有 native 版本時
+    優先使用，同時不破壞任何舊快取的 `errmodel.npz`（沒有這兩個鍵的
+    舊檔案會自動退回舊行為，不會炸掉）。
     """
     g = np.asarray(t["phot_g_mean_mag"], float)
+    bp = np.asarray(t["phot_bp_mean_mag"], float)
+    rp = np.asarray(t["phot_rp_mean_mag"], float)
     e_g = mag_error(t["phot_g_mean_flux_over_error"])
     e_bp = mag_error(t["phot_bp_mean_flux_over_error"])
     e_rp = mag_error(t["phot_rp_mean_flux_over_error"])
 
-    ok = np.isfinite(g) & np.isfinite(e_g) & np.isfinite(e_bp) & np.isfinite(e_rp)
-    edges = np.linspace(np.nanmin(g[ok]), np.nanmax(g[ok]), n_bins + 1)
-    centres, sg, sbp, srp = [], [], [], []
-    for lo, hi in zip(edges[:-1], edges[1:]):
-        m = ok & (g >= lo) & (g < hi)
-        if m.sum() < 3:
-            continue
-        centres.append(0.5 * (lo + hi))
-        sg.append(float(np.median(e_g[m])))
-        sbp.append(float(np.median(e_bp[m])))
-        srp.append(float(np.median(e_rp[m])))
-    return {"g": np.array(centres), "e_g": np.array(sg),
-            "e_bp": np.array(sbp), "e_rp": np.array(srp)}
+    ok = (np.isfinite(g) & np.isfinite(bp) & np.isfinite(rp) &
+          np.isfinite(e_g) & np.isfinite(e_bp) & np.isfinite(e_rp))
+    g_c, sg = _bin_by(g, e_g, ok, n_bins)
+    _, sbp_by_g = _bin_by(g, e_bp, ok, n_bins)
+    _, srp_by_g = _bin_by(g, e_rp, ok, n_bins)
+    bp_c, sbp_native = _bin_by(bp, e_bp, ok, n_bins)
+    rp_c, srp_native = _bin_by(rp, e_rp, ok, n_bins)
+    return {"g": g_c, "e_g": sg, "e_bp": sbp_by_g, "e_rp": srp_by_g,
+            "bp": bp_c, "e_bp_native": sbp_native,
+            "rp": rp_c, "e_rp_native": srp_native}
 
 
 def run(cfg, members: Table) -> tuple[Table, dict]:

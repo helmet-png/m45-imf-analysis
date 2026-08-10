@@ -93,3 +93,16 @@ p9a_redo_local|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fi
 
 # 用今天重下的 MIST 網格（涵蓋 7.30-8.50，完整蓋住 COARSE 搜尋軸）
 p9c_mist_redo_local|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo
+
+# ===== 2026-08-10：把「原本被錯誤歸類成待辦的現役缺陷」排進驗證排程
+# （使用者要求，見 CLAUDE.md 的待辦分類標準）=====
+
+# 驗證一：殘留場星污染比例 outlier_frac（寫死 0.01，從未做過敏感度測試）。
+# 掃 0.005/0.01/0.02/0.03 四點，用注入回收統計誤差 0.144 當比較尺度。
+verify_outlierfrac|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3
+
+# 驗證二：BP/RP 誤差模型用 G 查誤差 vs 用星體自己的 BP/RP 星等查
+# （已在 pipeline/joint_fit.py 加 use_native_bprp_err 旗標、errmodel.npz
+# 已補上 e_bp_native/e_rp_native，這裡跑 A/B 一對，其餘設定完全相同）。
+verify_bprperr_off|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --tag _bprperr_off
+verify_bprperr_on|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --tag _bprperr_on
