@@ -84,3 +84,12 @@ p9b3_fixmh_mist|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --fi
 
 # p6b 修好 UnboundLocalError（P_TRUE_LIST scoping bug）後重排
 p6b4_inject_lowmass|inject_lowmass.py --procs 8 --n-syn 40000 --trials 3
+
+# ===== 2026-08-10：Kaggle 的 p9a_redo/p9c_mist_redo 兩次都因掛載時序
+# 問題失敗（4 次重試都沒等到，累計約 16 分鐘），改在本機跑——p6b4 剛跑完，
+# 8 核已經空出來，且 p9a2（5 次重複）本機只花 1427s，用本機比繼續跟
+# Kaggle 的掛載競態奮戰可靠、也更快 =====
+p9a_redo_local|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_redo
+
+# 用今天重下的 MIST 網格（涵蓋 7.30-8.50，完整蓋住 COARSE 搜尋軸）
+p9c_mist_redo_local|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo

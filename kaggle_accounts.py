@@ -28,6 +28,19 @@ HERE = Path(__file__).resolve().parent
 ACCOUNTS_FILE = HERE / "kaggle_accounts.json"
 EXAMPLE_FILE = HERE / "kaggle_accounts.json.example"
 
+# kaggle CLI 只裝在 ARM64 版 Python 底下（這台機器是 Snapdragon X，`py`
+# 預設常解析到 x64 模擬版）。**這裡必須直接改當前行程的 os.environ**，
+# 不能只在傳給 subprocess 的 env 字典裡加 PATH——2026-08-10 實測發現
+# Windows 的 subprocess.run(["kaggle", ...], env=...) 找執行檔用的是
+# 呼叫端行程（也就是這支腳本自己）當下的 PATH，不是要傳給子行程的 env
+# 參數；env 字典裡的 PATH 只決定子行程「自己」看到的環境，不影響
+# CreateProcess 怎麼找 kaggle.exe 本身。改這裡一次，kaggle_sync.py／
+# kaggle_queue.py 裡所有 subprocess.run(["kaggle", ...]) 都會受益。
+_ARM64_SCRIPTS = (Path.home() / "AppData" / "Local" / "Python" /
+                  "pythoncore-3.14-arm64" / "Scripts")
+if _ARM64_SCRIPTS.exists() and str(_ARM64_SCRIPTS) not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = f"{_ARM64_SCRIPTS}{os.pathsep}{os.environ.get('PATH', '')}"
+
 
 def load_accounts() -> dict[str, dict[str, str]]:
     """回傳 {識別名: {"username":..., "token":...}}。
@@ -84,6 +97,16 @@ def env_for(account: dict[str, str]) -> dict[str, str]:
     # KAGGLE_API_TOKEN 的優先權最高，但清乾淨比較保險。
     env.pop("KAGGLE_USERNAME", None)
     env.pop("KAGGLE_KEY", None)
+    # kaggle CLI 只裝在 ARM64 版 Python 底下（這台機器是 Snapdragon X，
+    # `py` 預設可能解析到 x64 模擬版），呼叫端的 PATH 不一定含這個
+    # Scripts 目錄——尤其是用 Start-Process 這種脫離互動 shell 的方式
+    # 啟動時（2026-08-10 實測：detached 背景執行時 subprocess.run(["kaggle",
+    # ...]) 直接 FileNotFoundError，兩個帳號的 push 都還沒上傳就失敗）。
+    # 這裡把它的 Scripts 目錄補進 PATH，不依賴呼叫端當下的 shell 環境。
+    arm64_scripts = (Path.home() / "AppData" / "Local" / "Python" /
+                     "pythoncore-3.14-arm64" / "Scripts")
+    if arm64_scripts.exists():
+        env["PATH"] = f"{arm64_scripts}{os.pathsep}{env.get('PATH', '')}"
     return env
 
 

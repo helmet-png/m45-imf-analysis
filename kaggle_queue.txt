@@ -2,12 +2,15 @@
 # kaggle_queue.py 每輪都會重新讀檔，執行中可以在末端追加步驟。
 # 已完成的記在 logs/kaggle_queue_done.txt。
 
-# 帳號 helmetalbert：P9a（PARSEC 鎖 MH=0.00）目前只有 5 次重複，
-# alpha=2.460 散布 0.233（自由 MH 時只有 0.060，暴增近 4 倍）。
-# 5 次太少不足以確認這個散布本身穩不穩定，拉到 10 次。
-p9a_more_reps|fit_real.py|--procs 4 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_more|injection_recovery.py,measure_overconfidence.py|false|helmetalbert
+# ===== 2026-08-10 第二輪派工：P9a-redo + P9c，取代作廢的 p9a2/p9b 系列 =====
 
-# 帳號 teammate2（alex981113）：低質量段冪次延伸掃描重跑。
-# 上次用 helmetalbert 帳號跑到一半因 alpha 撞到網格上界 2.90 失敗
-# （COARSE 網格比先驗 3.2 還窄，已修好放寬到 3.20）。
-p6_lowmass_ext_retry|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3 --slopes 0.6,0.7,1.9,2.0|injection_recovery.py,measure_overconfidence.py|false|teammate2
+# 帳號 helmetalbert：P9a-redo。用已修好的 f_bin 範圍（0.15-0.95，
+# 舊上界 0.750 已放寬）重跑 PARSEC 鎖 MH=0.00，取代作廢的 p9a2
+# （5 次裡 2 次精確撞在舊上界，α=2.460±0.233 不可信）。10 次重複。
+p9a_redo|fit_real.py|--procs 4 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_redo|injection_recovery.py,measure_overconfidence.py|false|helmetalbert
+
+# 帳號 teammate2：P9c。今天重下了涵蓋 logAge 7.30-8.50 的 MIST 網格
+# （mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat，完整涵蓋 COARSE 的
+# 7.30-8.40 搜尋軸，不會再落入舊網格 7.80 下限造成的簡併平坦區），
+# 用它重跑 MIST 鎖 MH=0.00，取代全部作廢的 p9b/p9b2/p9b3。10 次重複。
+p9c_mist_redo|fit_real.py|--procs 4 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo|injection_recovery.py,measure_overconfidence.py|false|teammate2

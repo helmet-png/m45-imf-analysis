@@ -59,6 +59,12 @@ HERE = Path(__file__).resolve().parent
 NEEDED_ISOCHRONE_GLOBS = [
     "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
     "mist_v1.2_gaiaDR2_logt7.8-8.5_feh-0.5-0.5.dat",
+    # 2026-08-10：P9c 用的新版 MIST 網格（涵蓋 7.30-8.50，取代舊版
+    # 7.80-8.50 造成的簡併平坦區問題）。差點忘記加進這張白名單——
+    # 加了新網格檔卻沒加進這裡，Kaggle 上會悄悄打包到舊版、重蹈覆轍
+    # 卻不會報錯，是同一種「檔案清單沒跟著更新」的坑（config.toml
+    # 那次已經踩過一次）。
+    "mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat",
 ]
 NEEDED_DATA_FILES = [
     "cmd_members.csv", "errmodel.npz", "selection.npz",
