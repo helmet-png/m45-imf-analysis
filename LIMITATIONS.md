@@ -325,14 +325,25 @@ mount_fix_test/*.log` 可查，時間戳顯示真的等滿了 280 秒才 raise�
 未驗證會限制 dataset／GPU 存取的相關討論。很可能是同一種帳號限制
 延伸到「私有 dataset 掛載到 kernel」，先前一直被誤判成單純的時序問題。
 
-**待辦**：使用者需要到 kaggle.com 個別確認 `helmetalbert`／`teammate2`
-兩個帳號的手機驗證狀態，完成驗證後再重新派工測試。**在確認之前不要
-再花時間調整重試參數**——如果根因真的是帳號驗證，調再久的等待或再多次
-的重推都不會有用。`_wait_input()` 這個改動本身保留（不會有負面影響，
-且如果之後真的只是時序問題也用得上），但外部的 backoff 重推機制
-（60/120/240/480 秒）目前看來在解決錯的問題，`kaggle_queue.txt` 已清空
-暫停派工，本機算力（`p9a_redo_local`／`p9c_mist_redo_local`）不受影響
-持續執行。跨專案通用寫法已同步更新在 `~/.claude/kaggle-compute-howto.md`。
+**「手機驗證」這個假設已經被排除，不是原因（2026-08-10 補充）**：
+使用者確認 `helmetalbert` 已完成手機驗證，用它單獨重測（`mount_fix_retest`，
+同樣的 1KB smoke test），**結果跟未驗證時完全一樣**：5 次 kernel push
+（含每次 in-kernel 原地等 280 秒）全部失敗，累計 43.3 分鐘，同一個
+`FileNotFoundError`。這代表手機驗證不是（唯一）根因，或者驗證生效本身有
+延遲（剛驗證完，Kaggle 後端的權限快取可能還沒更新——這點無法從外部確認）。
+
+**已排除的假設**：純時序競態（280 秒原地等待排除）、帳號未驗證
+（用已驗證帳號重測排除）。**還沒排除、下一步該查的**：這是 Kaggle
+API push 流程本身的問題（vs 網頁手動操作正常），還是帳號本身仍有其他
+未知限制。**需要使用者操作才能繼續查**：用 `helmetalbert` 登入
+kaggle.com 網頁，手動開一個 Notebook、手動用「Add Input」掛上
+`helmetalbert/m45-imf-mount-fix-retest` 這個測試用 dataset，看網頁上
+執行 `os.listdir('/kaggle/input')` 找不找得到檔案——如果網頁手動也不行，
+問題在帳號本身；如果網頁正常，問題在我們的 API push 流程，需要換掉
+現在的 push 方式（可能要研究 kaggle-api 底層用的端點跟網頁版是否一致）。
+在查清楚之前，`kaggle_queue.txt` 保持清空、暫停繼續派工，本機算力
+（`p9a_redo_local`／`p9c_mist_redo_local`）不受影響持續執行。
+跨專案通用寫法已同步更新在 `~/.claude/kaggle-compute-howto.md`。
 
 ### 低質量段冪次被固定，而它佔了六成的樣本（2026-08-07 新增，嚴重）
 

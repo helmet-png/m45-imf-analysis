@@ -2,12 +2,7 @@
 # kaggle_queue.py 每輪都會重新讀檔，執行中可以在末端追加步驟。
 # 已完成的記在 logs/kaggle_queue_done.txt。
 
-# ===== 2026-08-10：暫停派工，等使用者確認帳號手機驗證狀態 =====
-# 用 kaggle_smoketest.py（1KB 單一檔案，minimal 模式）搭配新加的
-# in-kernel 輪詢等待（原地等 280 秒）做過乾淨測試，結果還是
-# FileNotFoundError——排除了「掛載只是延遲，等久一點就好」這個假設。
-# 目前最可能的原因是 helmetalbert／teammate2 兩個帳號都還沒完成手機
-# 驗證（這專案先前已經證實未驗證帳號的 kernel 沒有對外網路，這次的
-# 現象很可能是同一種帳號限制，只是延伸到 dataset 掛載）。
-# 詳細診斷過程見 LIMITATIONS.md「Kaggle 掛載問題根因排查」。
-# 使用者確認/完成手機驗證後再把工作加回這裡。
+# ===== 2026-08-10：helmetalbert 已完成手機驗證，teammate2 還沒 =====
+# 只派 helmetalbert，驗證「掛載失敗＝帳號未驗證」這個假設對不對。
+# 先用小的 smoke test 快速驗證，通過了才派正式工作。
+mount_fix_retest|kaggle_smoketest.py|||true|helmetalbert
