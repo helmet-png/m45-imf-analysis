@@ -213,6 +213,24 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
     allow_wall 傳入「已知會貼牆且已理解原因」的維度索引 —— 目前只有 dav，
     它經注入回收證實不可辨識，貼牆是預期行為而非錯誤。
     """
+    # **2026-08-11 修正的嚴重 bug**：原本的迴圈把「粗網格搜尋」跟「第一次
+    # 精修」搞成同一輪——`for r in refines: best,lp = grid_best_parallel(cur)`
+    # 用的 `cur` 在第一輪迭代時還是原始粗網格，算完精修軸 `nxt` 卻只有在
+    # 迴圈還有下一個 `r` 時才會真的拿去搜尋。傳 `refines=[3]`（單一值，
+    # 這個專案裡 `fit_real.py`/`profile_lowmass.py`/`inject_lowmass.py`/
+    # `profile_outlierfrac.py` 全部預設如此）代表迴圈只跑一輪，回傳的
+    # `best` 是**純粗網格 argmax，完全沒有精修過**——alpha 只可能落在
+    # COARSE 的 0.20 間距格點上，logage/A_V/f_bin 同理落在各自的粗網格
+    # 間距上，這正是 P11（`profile_outlierfrac`）12 次執行 alpha 精確等於
+    # 2.500、散布 0.000 的成因，而且不只 P11 中招——`fit_real.py` 沒帶
+    # `--refines 3,3` 的每一次呼叫都受影響。完整波及範圍記在
+    # `LIMITATIONS.md`。
+    #
+    # 修正：粗網格搜尋永遠先做一次（迴圈外），`refines` 裡的每個值代表
+    # 一輪真正的精修（迴圈內，搜尋剛算出來的精修軸）。`refines=[3]` 現在
+    # 代表「粗網格 + 一次精修」，`refines=[3,3]` 代表「粗網格 + 兩次精修」，
+    # 跟函式文件字面上寫的「多階段」定義一致，也是這個專案本來就以為在
+    # 發生的行為。
     if extra_axis is None:
         extras = []
     elif isinstance(extra_axis, (list, tuple)):
@@ -221,9 +239,8 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
         extras = [extra_axis]          # 單一陣列：維持舊呼叫端的行為
     cur = list(axes) + extras
     bounds = [(a.min(), a.max()) for a in cur]
-    best, lp = None, -np.inf
+    best, lp = grid_best_parallel(model, cur, n_proc)
     for r in refines:
-        best, lp = grid_best_parallel(model, cur, n_proc)
         nxt = []
         for i, ax in enumerate(cur):
             if len(ax) < 2:
@@ -234,6 +251,7 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
             hi = min(best[i] + step, bounds[i][1])
             nxt.append(np.arange(lo, hi + 1e-9, step / r))
         cur = nxt
+        best, lp = grid_best_parallel(model, cur, n_proc)
 
     hits = check_walls(best, bounds, names or NAMES + ["dav"], allow_wall)
     if hits:
