@@ -25,6 +25,7 @@ Tier 1 先用太陽值當近似——跟 M45 的傳統法一樣，這是刻意�
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 import types
@@ -45,10 +46,11 @@ _a.table = _t
 sys.modules.setdefault("astropy", _a)
 sys.modules.setdefault("astropy.table", _t)
 
-from pipeline import isochrones as isomod                     # noqa: E402
+from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
 from pipeline.step3_age import _Ext                            # noqa: E402
 from traditional_accounting import (                           # noqa: E402
     traditional_alpha, bootstrap_alpha_err, INJ_VARIANTS, REAL_ONLY_VARIANTS)
+from pipeline.step5_imf import main_sequence_mass_luminosity    # noqa: E402
 
 VIZIER = "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync"
 
@@ -81,6 +83,51 @@ def fetch_members(name: str, prob_min: float) -> dict:
     return arr
 
 
+def local_paths(name: str) -> tuple[Path, Path]:
+    """Return the checked-in HR23 cache files for a cluster."""
+    return (HERE / "data" / f"hr23_{name}_params.json",
+            HERE / "data" / f"hr23_{name}_members.csv")
+
+
+def load_local(name: str, prob_min: float) -> tuple[dict, dict] | None:
+    """Load the checked-in HR23 snapshot instead of requiring live VizieR.
+
+    The original Tier-1 entry point always queried VizieR even though the exact
+    inputs were already committed.  That made a reproduced run depend on the
+    network and, in practice, fail on certificate-chain problems.  Prefer the
+    immutable local snapshot; ``--refresh`` remains available for an explicit
+    catalogue refresh.
+    """
+    params_path, members_path = local_paths(name)
+    if not (params_path.exists() and members_path.exists()):
+        return None
+    params = json.loads(params_path.read_text(encoding="utf-8"))
+    rows = []
+    with members_path.open(newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            if float(row["Prob"]) >= prob_min:
+                rows.append(row)
+    cols = ("GaiaDR3", "Prob", "Gmag", "BPmag", "RPmag", "RUWE", "NSS")
+    members = {}
+    for col in cols:
+        if col == "GaiaDR3":
+            members[col] = np.array([row[col] for row in rows], dtype=str)
+        else:
+            members[col] = np.array([
+                float(row[col]) if row[col] not in ("", "null", "NaN") else np.nan
+                for row in rows], dtype=float)
+    return params, members
+
+
+def load_inputs(name: str, prob_min: float, refresh: bool) -> tuple[dict, dict, str]:
+    if not refresh:
+        cached = load_local(name, prob_min)
+        if cached is not None:
+            return cached[0], cached[1], "checked-in HR23 snapshot"
+    return (fetch_cluster_params(name), fetch_members(name, prob_min),
+            "live VizieR query")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hr23-name", required=True,
@@ -92,10 +139,14 @@ def main():
     ap.add_argument("--mass-max", type=float, default=2.50)
     ap.add_argument("--n-boot", type=int, default=1000)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--refresh", action="store_true",
+                    help="ignore checked-in HR23 files and query VizieR again")
     args = ap.parse_args()
 
-    print(f"查詢 HR23 星團參數：{args.hr23_name}")
-    params = fetch_cluster_params(args.hr23_name)
+    print(f"載入 HR23 星團資料：{args.hr23_name}")
+    params, mem, source = load_inputs(args.hr23_name, args.prob_min,
+                                      args.refresh)
+    print(f"  來源：{source}")
     logage = float(params["logAge50"])
     av = float(params["AV50"])
     dm = float(params["MOD50"])
@@ -103,15 +154,14 @@ def main():
     print(f"  logAge50={logage:.4f}（{age_myr:.1f} Myr）  "
           f"AV50={av:.3f}  MOD50={dm:.3f}（dist50={float(params['dist50']):.1f} pc）")
 
-    print(f"\n查詢 HR23 成員表：Prob >= {args.prob_min}")
-    mem = fetch_members(args.hr23_name, args.prob_min)
+    print(f"\n成員表門檻：Prob >= {args.prob_min}")
     n0 = len(mem["GaiaDR3"])
     print(f"  取回 {n0:,} 顆")
 
     color = mem["BPmag"] - mem["RPmag"]
     mag = mem["Gmag"]
     ruwe = mem["RUWE"]
-    nss = mem["NSS"].astype(bool)
+    nss = np.isfinite(mem["NSS"]) & (np.asarray(mem["NSS"], float) != 0)
     ok = np.isfinite(color) & np.isfinite(mag)
     color, mag, ruwe, nss = color[ok], mag[ok], ruwe[ok], nss[ok]
     n_obs = len(color)
@@ -125,18 +175,26 @@ def main():
         print(f"  警告：星團的 logAge={logage:.3f} 超出網格涵蓋範圍，"
               f"argmax/isochrone_at 會吸附到邊界，結果不可信！")
     iso = isomod.isochrone_at(grid, logage, 0.0)
-    ext = _Ext(2.740, 3.374, 2.035)   # 跟 pipeline/step2_cmd.py 的 config 預設一致
+    used_logage = float(np.unique(np.asarray(iso["logAge"], float))[0])
+    c2 = cfgmod.load().step2_cmd
+    ext = _Ext(c2.ext_coeff_g, c2.ext_coeff_bp, c2.ext_coeff_rp)
 
     m_lo, m_hi = args.mass_min, args.mass_max
+    _, ms_mass = main_sequence_mass_luminosity(iso, dm, av, ext)
+    turnoff_mass = float(np.nanmax(ms_mass))
+    turnoff_ok = m_hi <= turnoff_mass
     print(f"\n質量範圍 {m_lo}–{m_hi} M☉，isochrone logAge={logage:.3f} "
           f"A_V={av:.3f}（HR23 自己的估計值，MH 固定 0.00）\n")
+    print(f"  實際採用網格 logAge={used_logage:.3f}；單調主序上限 "
+          f"{turnoff_mass:.3f} M☉："
+          f"{'涵蓋分析上限' if turnoff_ok else '未涵蓋 2.50 M☉，結果不可採用'}\n")
 
     print(f"{'變體':>16}{'alpha':>8}{'誤差':>8}{'誤差核算':>10}{'星數':>7}{'剔除':>6}")
     out = {}
     for variant, tag in INJ_VARIANTS:
         a, n, n_rm, err = traditional_alpha(
             color, mag, iso, dm, av, ext, m_lo, m_hi, variant=variant)
-        out[tag] = (a, err, "曲率")
+        out[tag] = (a, err, "曲率", n, n_rm)
         print(f"{tag:>16}{a:>8.3f}{err:>8.3f}{'曲率':>10}{n:>7}{n_rm:>6}")
     for variant, tag in REAL_ONLY_VARIANTS:
         a, n, n_rm, _ = traditional_alpha(
@@ -145,7 +203,7 @@ def main():
         _, boot_err = bootstrap_alpha_err(
             color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
             ruwe=ruwe, nss=nss, ruwe_threshold=1.4, n_boot=args.n_boot)
-        out[tag] = (a, boot_err, "bootstrap")
+        out[tag] = (a, boot_err, "bootstrap", n, n_rm)
         print(f"{tag:>16}{a:>8.3f}{boot_err:>8.3f}{'bootstrap':>10}{n:>7}{n_rm:>6}")
 
     print("\n**Tier 1 提醒**：這些誤差棒是曲率/bootstrap，不是注入回收——")
@@ -155,9 +213,12 @@ def main():
     tag = args.tag or args.hr23_name
     np.savez(HERE / "results" / f"cluster_tier1_{tag}.npz",
              hr23_name=args.hr23_name, logage=logage, av=av, dm=dm,
-             n_members=n0, n_obs=n_obs,
+             grid_logage=used_logage, turnoff_mass=turnoff_mass,
+             turnoff_ok=turnoff_ok, n_members=n0, n_obs=n_obs,
              **{f"{k}::alpha": v[0] for k, v in out.items()},
-             **{f"{k}::err": v[1] for k, v in out.items()})
+             **{f"{k}::err": v[1] for k, v in out.items()},
+             **{f"{k}::n_fit": v[3] for k, v in out.items()},
+             **{f"{k}::n_removed": v[4] for k, v in out.items()})
     print(f"\n寫入 results/cluster_tier1_{tag}.npz")
 
 

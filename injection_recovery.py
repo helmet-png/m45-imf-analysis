@@ -195,7 +195,8 @@ def wall_message(hits):
 
 
 def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
-                     allow_wall=(), raise_on_wall=True, names=None):
+                     allow_wall=(), raise_on_wall=True, names=None,
+                     no_refine=()):
     """多階段網格搜尋：每一階在上一階的最佳點附近縮小格距重掃。
 
     比兩階段多一階，是因為這裡的網格開得很寬（為了避免貼牆），
@@ -243,6 +244,14 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
     for r in refines:
         nxt = []
         for i, ax in enumerate(cur):
+            # Some parameters select a discrete physical model (for example an
+            # isochrone age or metallicity).  Refining between downloaded grid
+            # values only creates a more precise-looking theta that is silently
+            # snapped back to the same model.  Callers can freeze those axes at
+            # the best actually evaluated grid point after the coarse search.
+            if i in no_refine:
+                nxt.append(np.array([best[i]]))
+                continue
             if len(ax) < 2:
                 nxt.append(ax)
                 continue
