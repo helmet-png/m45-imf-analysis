@@ -77,6 +77,17 @@ def main():
     ap.add_argument("--native-bprp-err", action="store_true",
                     help="改用星體自己的 BP/RP 星等查測光誤差（而非用 G）。"
                          "需要 errmodel.npz 含 e_bp_native/e_rp_native 鍵")
+    # P6b（inject_lowmass.py）已驗證低質量段冪次升格為自由參數是可辨識的
+    # （p_recovered 對 p_true 跟隨比值 0.92），但那個驗證從沒接回這支
+    # 「產出最終數字」的腳本——p2_final2 用的低質量段冪次其實還是寫死
+    # 在 -1.3。這個旗標把它接上：呼叫 JointModel.enable_lowmass_fit()，
+    # 額外一維搜尋軸掃 0.3-2.3（跟 P6b 同範圍）。只在 config C/D（有 dav
+    # 的設定）下有意義——enable_dav_fit() 必須先呼叫，因為
+    # enable_lowmass_fit() 是往當下的 bounds 尾端追加一維，順序反了會把
+    # p_lowmass 這個維度算成 dav。
+    ap.add_argument("--free-lowmass", action="store_true",
+                    help="把低質量段冪次(0.08-0.5 Msun)升格為自由參數，"
+                         "搜尋範圍 0.3-2.3（P6b 驗證過的範圍）")
     args = ap.parse_args()
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
@@ -146,6 +157,13 @@ def main():
                                        np.random.default_rng(2000 + 13 * rep))
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
+            extra_axes = [extra] if extra is not None else []
+            names = joint_fit.PARAM_NAMES + (["dav"] if extra is not None
+                                             else [])
+            if args.free_lowmass:
+                m.enable_lowmass_fit(0.3, 2.3)
+                extra_axes.append(np.arange(0.3, 2.301, 0.4))
+                names = names + ["p_lowmass"]
             t0 = time.time()
             # P9：固定 MH 時，把該維的搜尋軸換成單一值。用替換座標軸而不是
             # 收窄 bounds 的原因：bounds 只擋先驗，多階段精修仍會在該維
@@ -154,12 +172,14 @@ def main():
             axes = list(COARSE)
             if args.fix_mh is not None:
                 axes[4] = np.array([args.fix_mh])
-            # dav（索引 6）不可辨識、貼牆是預期行為；其餘維度貼牆直接報錯，
+            # dav（索引 6）不可辨識、貼牆是預期行為；p_lowmass（索引 7，
+            # 若啟用）**不放行**——它貼牆正是 P6b 要偵測的失敗模式，跟
+            # inject_lowmass.py 用同一個判斷；其餘維度貼牆直接報錯，
             # 因為這支程式產出的是要寫進論文的數字。
             best, lp, bounds = multi_stage_best(
-                m, axes, refines, n_proc, extra_axis=extra, allow_wall=allow)
-            names = joint_fit.PARAM_NAMES + (["dav"] if extra is not None
-                                             else [])
+                m, axes, refines, n_proc,
+                extra_axis=(extra_axes if extra_axes else None),
+                allow_wall=allow)
             # 放行的維度仍要標示出來，否則「允許」會變成「看不見」
             from injection_recovery import check_walls
             noted = check_walls(best, bounds, names)

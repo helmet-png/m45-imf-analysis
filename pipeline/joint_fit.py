@@ -211,8 +211,15 @@ class JointModel:
             lp += -0.5 * ((theta[4] - self._mh_mean) / self._mh_sigma) ** 2
         return lp
 
-    def synthesise(self, theta):
-        """由參數生成合成星團，回傳套用選擇函數後的 (顏色, 星等)。
+    def synthesise(self, theta, return_binary_flag=False):
+        """由參數生成合成星團，回傳套用選擇函數後的 (顏色, 星等[, 是否雙星])。
+
+        `return_binary_flag=True` 時多回傳一個布林陣列，標出每顆合成星
+        是不是雙星——預設 `False`，行為與加入這個參數前完全相同，現有
+        呼叫端不用改。2026-08-11 加入，為了讓 CMD／前向模型的逐星雙星
+        判準能對答案（精確率／召回率），之前 `make_fake()` 只回傳
+        color/mag，沒辦法驗證這幾種判準本身準不準，只能驗證下游 alpha
+        準不準。
 
         從 log_likelihood 拆出來的，因為「生成合成星團」與「拿它跟觀測比對」
         是兩件獨立的事：同一批合成星可以餵給不同的概似函數
@@ -327,6 +334,8 @@ class JointModel:
                                         d["z_snr"][:n], d["u_sel"][:n])
         if keep.sum() < 50:
             return None
+        if return_binary_flag:
+            return (bp - rp)[keep], g[keep], is_bin[keep]
         return (bp - rp)[keep], g[keep]
 
     def log_likelihood(self, theta):

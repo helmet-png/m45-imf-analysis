@@ -38,3 +38,4 @@
 | 2026-08-10 | Claude session | `inject_lowmass.py --trials 3`（p6b4） | ab574d6 | `inject_lowmass.npz` | 低質量段冪次可辨識性驗證：p_recovered 對 p_true 跟隨比值 0.92（可辨識），但 1/8 筆（p_true=1.3）logage 撞到 PARSEC 網格邊界，該筆標記可疑 |
 | 2026-08-10/11 | Claude session | `traditional_accounting.py`（五變體擴充版） | 64412cc | `traditional_accounting_v2.npz` | 五種傳統雙星修正變體真實資料全部落在 2.37–2.42，文獻解析修正法幾乎無偏（+0.003） |
 | 2026-08-11 | Claude session | `profile_outlierfrac.py --repeats 3`（P11） | 4fd8c67 | `profile_outlierfrac.npz` | **結果可疑，尚未驗證通過**：12 次執行 alpha 全部精確等於 2.500（散布 0.000），懷疑精修機制沒對 alpha 生效，不能當「已驗證安全」，見 LIMITATIONS.md |
+| 2026-08-11 | Claude session | `verify_binary_detection.py --n-obs 1078 --n-ref 200000 --trials 5` | 同本次 commit | `verify_binary_detection.npz` | CMD 偏移法精確率高召回率低（~0.97／~0.08），前向模型後驗機率精確率稍低但召回率高很多（~0.87／~0.72）——CMD 系統性過矯正的機制解釋：只抓到一小群質量比高的雙星 |

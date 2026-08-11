@@ -53,11 +53,14 @@ NAMES = joint_fit.PARAM_NAMES
 
 
 def make_fake(model, theta, n_stars, seed, dav=0.0, selection=None,
-              n_gen=400_000):
+              n_gen=400_000, return_binary_flag=False):
     """生成一批假觀測。
 
     先用獨立的亂數生成 n_gen 顆，套用選擇函數後再隨機抽出 n_stars 顆 ——
     這個抽樣步驟很重要，它才是真觀測「只有 1,078 顆」帶來的統計雜訊來源。
+
+    `return_binary_flag=True` 時多回傳每顆抽中的星是不是雙星的真值，
+    預設 `False`、行為不變（見 `JointModel.synthesise()` 的說明）。
     """
     import copy
     gen = copy.copy(model)
@@ -65,14 +68,19 @@ def make_fake(model, theta, n_stars, seed, dav=0.0, selection=None,
     gen.draws = draw_randoms(n_gen, np.random.default_rng(seed))
     gen.dav = dav
     gen.selection = selection
-    out = gen.synthesise(theta)
+    out = gen.synthesise(theta, return_binary_flag=return_binary_flag)
     if out is None:
         raise RuntimeError("生成失敗：檢查 theta 是否在 isochrone 網格範圍內")
-    color, mag = out
+    if return_binary_flag:
+        color, mag, is_bin = out
+    else:
+        color, mag = out
     if len(color) < n_stars:
         raise RuntimeError(f"通過選擇函數的只有 {len(color)} 顆，不足 {n_stars}")
     pick = np.random.default_rng(seed + 99).choice(len(color), n_stars,
                                                    replace=False)
+    if return_binary_flag:
+        return color[pick], mag[pick], is_bin[pick]
     return color[pick], mag[pick]
 
 
