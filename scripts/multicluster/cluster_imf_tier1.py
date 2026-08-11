@@ -128,6 +128,24 @@ def load_inputs(name: str, prob_min: float, refresh: bool) -> tuple[dict, dict, 
             "live VizieR query")
 
 
+def load_prepared(name: str) -> dict:
+    """Load the cluster-specific G<=18 and photometric-quality sample."""
+    path = HERE / "data" / f"cluster_{name}_cmd_members.csv"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path.name} not found; run prepare_cluster_tier2.py first")
+    table = _CompatTable.read(path, format="csv")
+    return {
+        "GaiaDR3": np.asarray(table["source_id"]),
+        "Prob": np.asarray(table["membership_probability"], float),
+        "Gmag": np.asarray(table["phot_g_mean_mag"], float),
+        "BPmag": np.asarray(table["phot_bp_mean_mag"], float),
+        "RPmag": np.asarray(table["phot_rp_mean_mag"], float),
+        "RUWE": np.asarray(table["ruwe"], float),
+        "NSS": np.asarray(table["hr23_nss"], float),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hr23-name", required=True,
@@ -141,11 +159,16 @@ def main():
     ap.add_argument("--tag", default="")
     ap.add_argument("--refresh", action="store_true",
                     help="ignore checked-in HR23 files and query VizieR again")
+    ap.add_argument("--prepared", action="store_true",
+                    help="use the cluster-specific G<=18 quality-cut sample")
     args = ap.parse_args()
 
     print(f"載入 HR23 星團資料：{args.hr23_name}")
     params, mem, source = load_inputs(args.hr23_name, args.prob_min,
                                       args.refresh)
+    if args.prepared:
+        mem = load_prepared(args.hr23_name)
+        source = "cluster-specific G<=18 quality-cut sample"
     print(f"  來源：{source}")
     logage = float(params["logAge50"])
     av = float(params["AV50"])
@@ -210,7 +233,7 @@ def main():
     print("跟 M45 的表 3 數字不是同一把尺，只能看方法間的相對方向跟量級，")
     print("不能直接拿來跟 M45 的 alpha 相減比較「大小」。")
 
-    tag = args.tag or args.hr23_name
+    tag = args.tag or (args.hr23_name + ("_clean" if args.prepared else ""))
     np.savez(HERE / "results" / f"cluster_tier1_{tag}.npz",
              hr23_name=args.hr23_name, logage=logage, av=av, dm=dm,
              grid_logage=used_logage, turnoff_mass=turnoff_mass,

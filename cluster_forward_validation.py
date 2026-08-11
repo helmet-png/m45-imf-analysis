@@ -109,9 +109,10 @@ def fit_once(base, axes, selection, seed: int, refines, n_proc: int):
     started = time.time()
     best, lp, bounds = multi_stage_best(
         model, [np.asarray(x) for x in axes], refines, n_proc,
-        allow_wall=tuple(range(6)), no_refine=(0, 4))
+        allow_wall=tuple(range(len(axes))), no_refine=(0, 4))
+    names = joint_fit.PARAM_NAMES + (["dav"] if len(best) > 6 else [])
     walls = [text for _, text in check_walls(
-        best, bounds, joint_fit.PARAM_NAMES)]
+        best, bounds, names)]
     return model, best, float(lp), bounds, walls, time.time() - started
 
 
@@ -142,6 +143,12 @@ def main():
     ap.add_argument("--fit-mh", action="store_true")
     ap.add_argument("--mh-min", type=float, default=-0.3)
     ap.add_argument("--mh-max", type=float, default=0.4)
+    ap.add_argument("--tag", default="",
+                    help="optional output suffix, e.g. _age_extended")
+    ap.add_argument("--fit-dav", action="store_true",
+                    help="fit differential-extinction scatter as a seventh parameter")
+    ap.add_argument("--dav-max", type=float, default=0.6)
+    ap.add_argument("--dav-step", type=float, default=0.15)
     args = ap.parse_args()
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
@@ -176,6 +183,9 @@ def main():
     dm = float(params["MOD50"])
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
     base.use_native_bprp_err = True
+    if args.fit_dav:
+        base.enable_dav_fit(0.0, args.dav_max)
+        axes.append(_axis(0.0, args.dav_max, args.dav_step))
     print(f"{tag}：觀測 {len(clean):,} 顆，Hess 範圍內 {len(color):,} 顆；"
           f"DM={dm:.3f}，n_synthetic={args.n_syn:,}")
     print(f"HR23 logAge={float(params['logAge50']):.4f}，最近網格 "
@@ -200,10 +210,12 @@ def main():
             rows.append(best)
             diagnostics[key].append({"log_posterior": lp, "walls": walls,
                                      "elapsed_s": elapsed})
-            print(f"第 {repeat+1} 次：alpha={best[3]:.3f}，"
-                  f"f_bin={best[2]:.3f}，q_gamma={best[5]:.3f}，"
-                  f"logAge={best[0]:.3f}，A_V={best[1]:.3f}，"
-                  f"{elapsed:.1f}s", flush=True)
+            line = (f"第 {repeat+1} 次：alpha={best[3]:.3f}，"
+                    f"f_bin={best[2]:.3f}，q_gamma={best[5]:.3f}，"
+                    f"logAge={best[0]:.3f}，A_V={best[1]:.3f}，")
+            if len(best) > 6:
+                line += f"dav={best[6]:.3f}，"
+            print(line + f"{elapsed:.1f}s", flush=True)
             if walls:
                 print("  邊界：" + "；".join(walls), flush=True)
         fitted[key] = np.asarray(rows)
@@ -219,6 +231,7 @@ def main():
             gen.selection = selection
             fake_color, fake_mag = make_fake(
                 gen, truth, len(color), 9300 + trial,
+                dav=(float(truth[6]) if len(truth) > 6 else 0.0),
                 selection=selection, n_gen=max(100000, len(color) * 250))
             fake_base = base.with_observations(fake_color, fake_mag)
             _, got, lp, bounds, walls, elapsed = fit_once(
@@ -232,12 +245,15 @@ def main():
         print(f"注入回收 alpha 偏差 {np.mean(injection[:,3]-truth[3]):+.3f}，"
               f"散布 {np.std(injection[:,3]-truth[3]):.3f}")
     else:
-        truth = np.full(6, np.nan)
-        injection = np.empty((0, 6))
+        truth = np.full(len(axes), np.nan)
+        injection = np.empty((0, len(axes)))
 
     mode = "free_age_av" if args.fit_age_av else "fixed_age_av"
     if args.fit_mh:
         mode += "_free_mh"
+    if args.fit_dav:
+        mode += "_free_dav"
+    mode += args.tag
     npz_path = HERE / "results" / f"cluster_forward_{tag}_{mode}.npz"
     json_path = HERE / "results" / f"cluster_forward_{tag}_{mode}.json"
     np.savez(npz_path, A=fitted["A"], B=fitted["B"], truth=truth,
