@@ -106,3 +106,11 @@ verify_outlierfrac|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 # 已補上 e_bp_native/e_rp_native，這裡跑 A/B 一對，其餘設定完全相同）。
 verify_bprperr_off|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --tag _bprperr_off
 verify_bprperr_on|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --tag _bprperr_on
+
+# ===== 2026-08-11：把 P6b 驗證過的低質量段冪次自由參數接回生產數字
+# （使用者要求排程）。P6b（inject_lowmass.py）已證實可辨識（ratio 0.92），
+# 但 fit_real.py 從沒真的用它——p2_final2 用的低質量段冪次還是寫死 -1.3。
+# 這是第一次真的用自由的低質量段冪次跑出 config C 的 alpha，用來跟
+# p2_final2（固定 -1.3）比較，看升格後 alpha 有沒有系統性移動。
+# 跟 P10（MH 高斯先驗）分開跑，一次只動一個變因，才知道是哪個造成的差異。
+p2_free_lowmass|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass
