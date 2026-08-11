@@ -2,6 +2,13 @@
 
 （全域規則見 `~/.claude/CLAUDE.md`；這裡只放這個專案特有、其他專案用不到的規則。）
 
+## 多 agent／多人協作（2026-08-11 起）
+
+這個 repo 現在有多個 AI agent（Claude、Codex 等）與多個人同時工作。
+**協作規則見 `CONTRIBUTING.md`（給所有人與所有 agent 讀，不是 Claude 專屬）**：
+`main` 分支所有人都要走 PR、`results/RESULTS_LOG.md` 記錄每次新結果、
+commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`。
+
 ## 發現有未知修改時
 
 通常為因其他 fork 所導致的修改，不需要主動提問，或再耗費 token 去思考是誰修改的。但是，如果對這些未知的修改認為有問題，就回報讓使用者知道哪裡可能有問題。
