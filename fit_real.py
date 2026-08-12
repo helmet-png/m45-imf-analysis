@@ -88,6 +88,20 @@ def main():
     ap.add_argument("--free-lowmass", action="store_true",
                     help="把低質量段冪次(0.08-0.5 Msun)升格為自由參數，"
                          "搜尋範圍 0.3-2.3（P6b 驗證過的範圍）")
+    # --- 徑向切片（2026-08-12 新增，PDMF -> IMF 這條線的第一個診斷）---
+    # step5_imf.mass_function_by_radius() 已經用傳統法量過 alpha(r)：
+    # 0-1度 1.77 -> 3-5.1度 2.29，核心到外圍差 0.515，是統計誤差 0.144 的
+    # 3.6 倍、也比目前最大的單一系統誤差 0.248 還大。但那是傳統法量的，
+    # 帶著未解析雙星造成的偏平偏差，而 Torres+2025 (ApJL 982, L34) 發現
+    # Pleiades 的雙星比例隨半徑是雙峰的、不是常數 —— 所以那個梯度裡有
+    # 多少是真的質量分層、多少是雙星比例隨半徑變化造成的假象，分不出來。
+    # 這個旗標讓前向模型（會把雙星建模掉）在指定半徑範圍內重跑，
+    # 梯度若存活就是真分層，若塌掉就代表原本那 0.515 有相當部分是雙星假象。
+    # 距離模數 dm 刻意仍用全樣本算（星團只有一個距離，只讓「徑向選樣」
+    # 這一個變因動）。
+    ap.add_argument("--radius-range", default=None, metavar="LO,HI",
+                    help="只用距星團中心 LO<=r<HI 度的成員擬合（例如 0,2）。"
+                         "累積式用 0,r；環帶式用 lo,hi")
     args = ap.parse_args()
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
@@ -102,6 +116,20 @@ def main():
     color = np.asarray(clean["bp_rp"], float)
     mag = np.asarray(clean["phot_g_mean_mag"], float)
     ok = np.isfinite(color) & np.isfinite(mag)
+    if args.radius_range:
+        # 中心與角距離的算法跟 run_pipeline.py 第 5 步完全一致（樣本中位
+        # ra/dec + 球面角距），兩邊的 alpha(r) 才比得起來。
+        r_lo, r_hi = [float(x) for x in args.radius_range.split(",")]
+        ra = np.radians(np.asarray(clean["ra"], float))
+        dec = np.radians(np.asarray(clean["dec"], float))
+        ra0, dec0 = np.radians(np.median(np.degrees(ra))), np.radians(
+            np.median(np.degrees(dec)))
+        cosr = (np.sin(dec0) * np.sin(dec)
+                + np.cos(dec0) * np.cos(dec) * np.cos(ra - ra0))
+        rdeg = np.degrees(np.arccos(np.clip(cosr, -1, 1)))
+        ok &= (rdeg >= r_lo) & (rdeg < r_hi)
+        print(f"徑向切片 {r_lo:.2f} <= r < {r_hi:.2f} 度："
+              f"{int(ok.sum()):,} / {len(rdeg):,} 顆", flush=True)
     color, mag = color[ok], mag[ok]
 
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn

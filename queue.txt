@@ -124,3 +124,18 @@ p2_free_lowmass|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --refines 3,3 -
 # P9c/P6b/P12）先記在 LIMITATIONS.md，優先度較低，之後再排。=====
 p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
+# ===== 2026-08-12：PDMF -> IMF 這條線的第一個診斷（見 PDMF_TO_IMF_PLAN.md）=====
+# 傳統法量到核心(0-1度) alpha=1.77、外圍(3-5.1度) 2.29，差 0.515 ——
+# 是統計誤差 0.144 的 3.6 倍、比目前最大單一系統誤差 0.248 還大，
+# 但那是傳統法量的，帶著未解析雙星的偏平偏差，而 Torres+2025 發現
+# Pleiades 的雙星比例隨半徑是雙峰的、不是常數。以下用**前向模型**
+# （會把雙星建模掉）在累積半徑切片上重跑，回答兩件事：
+#   (1) 扣掉雙星效應後梯度還剩多少（真分層 vs 雙星假象）
+#   (2) alpha(<r) 到潮汐半徑(4.71度)有沒有收斂（我們的 r=5 度夠不夠）
+# 四個全部同設定、只有半徑範圍不同，一次只動一個變因才比得起來。
+# radial_rall 是同設定的全樣本對照組，不要拿 p2_final2 代替（設定不同）。
+radial_r1|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --radius-range 0,1 --tag _radial_r1
+radial_r2|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --radius-range 0,2 --tag _radial_r2
+radial_r3|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --radius-range 0,3 --tag _radial_r3
+radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _radial_rall
