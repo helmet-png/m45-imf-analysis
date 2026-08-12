@@ -65,7 +65,7 @@ alpha(r) = 1.732 + 0.155·r      斜率 5.5 sigma，chi2/dof = 0.21
 
 上面四個 α 是**傳統法**（`pipeline/step5_imf.py` 的 `mle_powerlaw`）算的，
 帶著未解析雙星造成的偏平偏差。而
-[Torres et al. 2025, ApJL](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60)
+[Liu, Shao & Li (2025), ApJL](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60)
 發現 **Pleiades 的雙星比例隨半徑是雙峰的**（核心與最外圍高、半質量半徑
 附近低），低質量端隨半徑單調上升、高質量端隨半徑下降。我們的前向模型
 假設**全域單一 f_bin**。
