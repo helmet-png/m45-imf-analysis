@@ -159,7 +159,15 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
                 slug: str, extra_files: list[str], work_dir: Path,
                 minimal: bool = False):
     """建一個對應的 notebook：安裝依賴、掛上資料、跑腳本、印出結果。"""
-    base = "/kaggle/input/m45-imf-" + slug + "/"
+    # **2026-08-12 修正真正的根因**：Kaggle 現在把 dataset 掛載在
+    # /kaggle/input/datasets/<擁有者帳號>/<dataset-slug>/，比這裡原本假設的
+    # /kaggle/input/<dataset-slug>/ 多兩層（`datasets/` 與擁有者帳號）。
+    # 這是用真人登入網頁手動建 dataset、手動 Add Input、印
+    # os.walk('/kaggle/input') 的完整路徑實測confirmed的（不是猜的），
+    # 之前所有「時序問題」「帳號未驗證」「平台異常」的假設都排錯方向——
+    # 是這裡的路徑字串寫死成舊格式，280 秒的等待永遠等不到，因為根本
+    # 檢查錯地方，不是 dataset 真的沒掛上。
+    base = "/kaggle/input/datasets/" + username + "/m45-imf-" + slug + "/"
     # **2026-08-10 根本修法：掛載時序問題不該靠外部重推整個 kernel 版本解決，
     # 該讓 kernel 自己在真正開始跑之前先等資料掛好。**
     # 先前的作法是 kaggle_queue.py 偵測到 FileNotFoundError 後，重新
