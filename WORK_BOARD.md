@@ -65,17 +65,18 @@ commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 
 **2026-08-12（新機器，x64，Yu Tung Lan）優先度覆核**：使用者要求把
 PDMF→IMF 這條線的優先度調到非 A/B 類項目之前（見 `LIMITATIONS.md`
-開頭的嚴重度分類）。查核結果：`queue.txt` 裡目前真正待跑的項目
-（`p2_free_lowmass`、`radial_r1/r2/r3/rall`、`p6_lowmass_v2`、
-`p11_outlierfrac_v2`）已經全部屬於 A 類（對應 A3／A5）或 B 類
-（對應 B2），沒有非 A/B 類項目排在中間——**`queue.txt` 已經符合
-要求，不需要調整順序**。以下加一欄「優先度」，把第 3、5 步標成
-「可立刻開始」（不需要等第 2 步結果，只是環境準備／方法建置，跟
-第 2 步平行不衝突），第 4 步維持「等第 2 步結果」：
+開頭的嚴重度分類）。查核範圍是 `queue.txt` 裡**全部**目前真正待跑的
+項目（依檔案順序）：`verify_bprperr_on`（B1）、`p2_free_lowmass`
+（對應 A3）、`radial_r1/r2/r3/rall`（對應 A5）、`p6_lowmass_v2`
+（對應 A3）、`p11_outlierfrac_v2`（對應 B2）——**全部屬於 A 類或
+B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，不需要
+調整順序**。以下加一欄「優先度」，把第 3、5 步標成「可立刻開始」
+（不需要等第 2 步結果，只是環境準備／方法建置，跟第 2 步平行不
+衝突），第 4 步維持「等第 2 步結果」：
 
 | 步驟 | 任務 | 優先度 | 起手式 | 驗收標準 | 為什麼 |
 |---|---|---|---|---|---|
-| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數 | **可立刻開始**（環境準備不用等第 2 步；ARM64 已知會壞，這台 x64 機器要先自己測一次，不能假設同樣的 scipy 版本問題 | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題（ARM64 機器上）**：scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始（這台 x64 機器的 scipy 版本不一定一樣，需要先測）。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
+| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數 | **可立刻開始**（環境準備不用等第 2 步；ARM64 已知會壞，這台 x64 機器要先自己測一次，不能假設同樣的 scipy 版本問題） | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題（ARM64 機器上）**：scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始（這台 x64 機器的 scipy 版本不一定一樣，需要先測）。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
 | 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數 | **等第 2 步結果**（維持原判斷） | **先等第 2 步（radial 診斷）結果出來再決定要不要投入**——如果 α(<r) 在 r=5° 內已經收斂，這步的急迫性大幅下降。真的要做時起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
 | 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線） | **可立刻開始**（環境準備／編譯測試不用等第 2 步結果，**只有 x64／WSL 機器能做這步**，是本機 ARM64 佇列做不到、需要另一台機器接手的項目） | 需要 x64 或 WSL 機器（ARM64 編譯是本專案已知的坑）。建議先試 [PeTar](https://github.com/lwang-astro/PeTar)（`sample/star_cluster_bse.sh` 有現成範例，Li+2026 也是用這套），初始條件參考 Converse & Stahler 2010：N≈1200–1500 systems、初始雙星比例 ~95%、embedded cluster + 氣體驅離、積分到 125 Myr。如果 PeTar 編譯卡住，可以試 [AMUSE](https://github.com/amusecode/amuse) 框架（pip 裝得起來，包了多套積分器，門檻可能較低） | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
 
