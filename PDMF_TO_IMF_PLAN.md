@@ -178,3 +178,39 @@ limepy` 裝到的是 PyPI 上一個**同名但完全無關**的 LimeSurvey 問�
 `dopri5._solout() takes 3 positional arguments but 4 were given`）。
 這個環境問題目前沒解決，需要在獨立 venv 裡釘住較舊的 scipy 版本，
 或是等上游套件更新到用 `scipy.integrate.solve_ivp`。
+
+**第 5 步（N-body）環境已在 x64 機器上裝好並驗證（2026-08-12，新協作者
+機器，Yu Tung Lan）**：原本以為需要 WSL（見上方第五節「需要 x64 或 WSL
+機器（ARM64 編譯是本專案已知的坑）」），但透過 MSYS2/MinGW-w64（`winget
+install MSYS2.MSYS2` 裝，再用 `pacman` 裝
+`mingw-w64-x86_64-toolchain`／`mingw-w64-x86_64-gcc-fortran`／
+`mingw-w64-x86_64-cmake`／`mingw-w64-x86_64-gsl`／`autoconf`／
+`automake`／`libtool`）**不需要重開機、不需要 WSL 就編出完整可用的
+PeTar（含 SSE/BSE 恆星演化）與 mcluster**，且已驗證整條鏈
+`mcluster_sse` → `petar.init` → `petar` 端到端可跑（100 顆星的測試
+案例，含 25 組聯星、BSE 恆星演化，能量/角動量守恆誤差都在合理範圍）。
+
+踩到兩個真的 Windows 可攜性問題，都已解決：
+
+1. **PeTar 的 `configure` 其實本來就有 Windows 支援**（`case` 分支
+   `Cygwin*|Mingw*) build_windows=yes`），但 MSYS2 的 `uname` 回傳
+   `MINGW64_NT-...`（全大寫），只匹配到大小寫混合的 `Mingw*`，直接被
+   `configure` 判定成不支援的作業系統而中止。修法是把 `configure`
+   （已由 autoconf 產生的那份，不是 `configure.ac`）第 3025 行的
+   case pattern 從 `Cygwin*|Mingw*` 改成
+   `Cygwin*|Mingw*|MINGW*|MSYS*`。改完 `./configure --with-mpi=no`
+   （之後要加恆星演化再補 `--with-interrupt=bse`）跟 `make` 都一次過，
+   只有一堆無害的 warning。
+2. **mcluster（`github.com/lwang-astro/mcluster`）用了三個 MinGW-w64
+   runtime 沒有的 glibc/POSIX 擴充函式**：`srand48`／`drand48`
+   （48-bit rand48 亂數產生器）跟 `feenableexcept`（浮點例外
+   trap，僅除錯用，跳過不影響結果正確性）。寫了一個
+   `mingw_compat.c`／`.h`（標準 rand48 LCG 演算法：
+   `X_{n+1}=(0x5DEECE66D*X_n+0xB) mod 2^48`，`drand48()=X/2^48`；
+   `feenableexcept` 給空實作），在 `main.c` 加一行
+   `#include "mingw_compat.h"`，編譯時把 `mingw_compat.o` 一起連結
+   進去（`make mcluster_sse CFLAGS='mingw_compat.o -lgfortran'`）。
+
+這兩個修正都是本機（`nbody/` 工作目錄，跟這個 repo 平行、不進版控）
+裡對外部工具原始碼的修改，不是這個 repo 的程式碼，所以沒有對應的 PR，
+記在這裡讓下一個要在 Windows 機器上重做這件事的人不用重踩一次。
