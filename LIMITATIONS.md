@@ -40,20 +40,11 @@ MIST 年齡不合理，粗網格 logage 間距 0.10 不足以翻轉），精確�
 
 ### A2 `fit_real.py` 寫死關閉金屬量高斯先驗
 
-**問題**：`config.toml` 宣告 MH 高斯先驗（中心 −0.03、σ 0.10，取自 Gaia
-GSP-Spec／GSP-Phot），但 `fit_real.py:136` 寫死
-`cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0`，退回均勻先驗。
-
-**已修好**（PR #22，2026-08-12）：`fit_real.py` 那行覆寫已刪除，改回讓
-`JointModel` 直接讀 config——已實測確認 `cfg.joint_fit.mh_prior_sigma == 0.10`。
-其餘六支診斷腳本（`final_imf.py`／`inject_lowmass.py`／`injection_recovery.py`／
-`measure_overconfidence.py`／`profile_lowmass.py`／`traditional_accounting.py`）
-維持均勻先驗，不用改——先驗會污染那些測試想看的東西。
-
-**後果**：`p2_final2`（α=2.387±0.060）與所有先前的 `fit_real.py` 產出的數字，
-用的都是均勻先驗，不是文件記載的方法論，不能當最終值。程式碼已修好，但
+**問題**：
 **既有數字尚未用修好後的程式碼重跑**，重跑清單見 `WORK_BOARD.md` 的
 `p2_final2_v3`（會一併套用 A1 精修 bug 的修正，不用分兩次重跑）。
+
+**後果**:不準
 
 ### A3 低質量段冪次被固定，該段佔 59.5% 樣本
 
@@ -85,7 +76,7 @@ Moraux+2003 對 Pleiades 本身量到的等效冪次是 0.84（文獻間分歧 0
 在吸收 PARSEC 低質量前主序段的偏差，不能用「兩套等時線互相驗證」佐證
 α=2.387。表 4 必須改寫。（數字本身受 A1 影響，待重跑確認。）
 
-### A5 測到的是 PDMF，不是 IMF
+### A5 測到的是 PDMF，不是 IMF(正在處理)
 
 **問題**：質量分層與動力學演化完全沒有建模，且樣本取自有限半徑（5° 錐，
 11.87 pc）。動力學年齡 τ = t/t_rh = 1.11（t_rh = 113 Myr），質量分層必定
@@ -97,10 +88,6 @@ Moraux+2003 對 Pleiades 本身量到的等效冪次是 0.84（文獻間分歧 0
 全域單一 f_bin）尚未分開。
 
 **後果**：測到的是現時質量函數（PDMF），且必然偏平，不能宣稱測到 IMF。
-**這條已經在處理中，不是純粹待辦**：完整方法調查、四條修正路線比較、
-執行順序見 `PDMF_TO_IMF_PLAN.md`；第一批 radial 診斷（`radial_r1/r2/r3/rall`）
-已排進 `queue.txt`，用來分離真分層與雙星假象兩種成因。
-
 ---
 
 ## B 類
