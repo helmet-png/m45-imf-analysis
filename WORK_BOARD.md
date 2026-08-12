@@ -63,18 +63,31 @@ commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 另一台 x64 機器，本機跑不了）。這三個不是「跑一行指令」等級的任務，
 起手式跟驗收標準寫在下面，實際做法留給認領的人判斷。
 
-| 步驟 | 任務 | 起手式 | 驗收標準 | 為什麼 |
-|---|---|---|---|---|
-| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數 | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題**：這台機器的 scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
-| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數 | **先等第 2 步（radial 診斷）結果出來再決定要不要投入**——如果 α(<r) 在 r=5° 內已經收斂，這步的急迫性大幅下降。真的要做時起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
-| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線） | 需要 x64 或 WSL 機器（ARM64 編譯是本專案已知的坑）。建議先試 [PeTar](https://github.com/lwang-astro/PeTar)（`sample/star_cluster_bse.sh` 有現成範例，Li+2026 也是用這套），初始條件參考 Converse & Stahler 2010：N≈1200–1500 systems、初始雙星比例 ~95%、embedded cluster + 氣體驅離、積分到 125 Myr。如果 PeTar 編譯卡住，可以試 [AMUSE](https://github.com/amusecode/amuse) 框架（pip 裝得起來，包了多套積分器，門檻可能較低） | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
+**2026-08-12（新機器，x64，Yu Tung Lan）優先度覆核**：使用者要求把
+PDMF→IMF 這條線的優先度調到非 A/B 類項目之前（見 `LIMITATIONS.md`
+開頭的嚴重度分類）。查核範圍是 `queue.txt` 裡**全部**目前真正待跑的
+項目（依檔案順序）：`verify_bprperr_on`（B1）、`p2_free_lowmass`
+（對應 A3）、`radial_r1/r2/r3/rall`（對應 A5）、`p6_lowmass_v2`
+（對應 A3）、`p11_outlierfrac_v2`（對應 B2）——**全部屬於 A 類或
+B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，不需要
+調整順序**。以下加一欄「優先度」，把第 3、5 步標成「可立刻開始」
+（不需要等第 2 步結果，只是環境準備／方法建置，跟第 2 步平行不
+衝突），第 4 步維持「等第 2 步結果」：
+
+| 步驟 | 任務 | 優先度 | 起手式 | 驗收標準 | 為什麼 |
+|---|---|---|---|---|---|
+| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數 | **可立刻開始**（環境準備不用等第 2 步；ARM64 已知會壞，這台 x64 機器要先自己測一次，不能假設同樣的 scipy 版本問題） | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題（ARM64 機器上）**：scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始（這台 x64 機器的 scipy 版本不一定一樣，需要先測）。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
+| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數 | **等第 2 步結果**（維持原判斷） | **先等第 2 步（radial 診斷）結果出來再決定要不要投入**——如果 α(<r) 在 r=5° 內已經收斂，這步的急迫性大幅下降。真的要做時起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
+| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線） | **可立刻開始**（環境準備／編譯測試不用等第 2 步結果，**只有 x64／WSL 機器能做這步**，是本機 ARM64 佇列做不到、需要另一台機器接手的項目） | 需要 x64 或 WSL 機器（ARM64 編譯是本專案已知的坑）。建議先試 [PeTar](https://github.com/lwang-astro/PeTar)（`sample/star_cluster_bse.sh` 有現成範例，Li+2026 也是用這套），初始條件參考 Converse & Stahler 2010：N≈1200–1500 systems、初始雙星比例 ~95%、embedded cluster + 氣體驅離、積分到 125 Myr。如果 PeTar 編譯卡住，可以試 [AMUSE](https://github.com/amusecode/amuse) 框架（pip 裝得起來，包了多套積分器，門檻可能較低） | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
 
 ## 目前已知的固定分工（不用每次都查表）
 
 - **本機 8 核運算佇列**（`queue.txt` / `run_queue.py`，Windows ARM64 這台機器）
   只有這台機器能跑，其他人／agent 不會撞到，不需要在此認領。目前跑到
   `verify_bprperr_off`，後面排 `verify_bprperr_on`、`p2_free_lowmass`、
-  `p6_lowmass_v2`、`p11_outlierfrac_v2`。
+  `radial_r1`、`radial_r2`、`radial_r3`、`radial_rall`（PDMF→IMF 第 2 步，
+  2026-08-12 已插入且已標為優先，**2026-08-12 這條筆記原本漏列這四項，
+  已補回**）、`p6_lowmass_v2`、`p11_outlierfrac_v2`。
 - 若要在別的機器（Kaggle、同學的電腦、Codex 的環境）重跑本機佇列裡
   同一個腳本、同一組參數，**先在這裡加一行認領**，避免兩邊各自跑一次
   浪費算力、之後也不知道該採哪一份結果。
@@ -86,3 +99,4 @@ commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 | 2026-08-12 | Claude session（新協作者機器，x64，Yu Tung Lan） | 新機器環境驗證：完整跑一次 pipeline 第 0–5 步（fetch_gaia → prep → pyUPMASK 第1步 → 第2–5步），跟既有 `results/baseline.dat` 與文件記錄的頭條數字比對，不是新的科學結果 | 進行中 | 先跑到獨立檔名（不直接覆寫 `results/baseline.dat`）比對，一致才決定要不要正式取代；分支 `yutunglan/x64-pipeline-verify` | 這台是 x64（非 ARM64），跟本機 8 核佇列那台不是同一台，不會搶 `queue.txt`。環境建置與 `fetch_gaia.py` 可攜性 bug 已在 PR #15 修好並合併。跟這台機器上同時在跑的 Kaggle 掛載排查（見上面那行）沒有檔案重疊，只是提醒：這台電腦目前有多個 session 同時操作同一個 working directory，git 分支切換偶爾會互相干擾，commit 前務必先確認當下分支 |
 | 2026-08-12 | Claude session（新協作者機器，x64，Yu Tung Lan） | 新機器環境驗證：完整跑一次 pipeline 第 0–5 步 | **完成，數字與既有結果一致，未覆寫任何 tracked 結果檔** | 無（`data/`、`results/` 的重跑輸出已 `git checkout --` 復原成 repo 原版） | 逐星比對：兩次跑（同 `random_seed=42`）的 6,956 顆星星集合完全相同，`probs_final` 相關係數 0.9992，P≥0.7 成員數 1,298 vs repo 記錄的 1,297（差 1 顆，落在專案自己記錄的「同種子仍有殘餘隨機性」量級內，pyUPMASK 平行處理沒有被單一種子完全鎖死）。第 2–5 步頭條數字：f_bin=0.45（一致）、四法標記 415/100/58/24（vs 414/100/58/24）、alpha_naive=1.978±0.069（vs 1.980±0.069）、alpha_forward=2.350（一致）、質量分層 α(r) 1.77/2.02/2.12/2.31（vs 1.77/2.01/2.15/2.29）。**結論：pipeline 在獨立的 x64 機器上完全可攜、可重現**，順便在 `prep.py` 修了跟 PR #15 同一種寫死 `gaia-export` 路徑的 bug（`fetch_gaia.py` 那次漏改了這支）。沒有覆寫任何 `results/` 或 `data/` tracked 檔案，這次驗證不影響任何既有結論或數字，所以沒有加 `RESULTS_LOG.md` 條目 |
 | 2026-08-12 | Claude session（本機，ARM64 8核） | **PDMF → IMF 這條線**：方法調查、動力學年齡計算、α(r) 梯度實驗、四路線規劃 | 第 1、2 步進行中（第 3–5 步開放認領） | 新增 `PDMF_TO_IMF_PLAN.md`；`fit_real.py` 加 `--radius-range`；`queue.txt` 加 4 個 radial 診斷；分支 `claude/pdmf-to-imf` | 使用者確認「IMF 本來就是專案目標」、四條路線都要做、照合理順序來。**完整計畫與文獻調查見 `PDMF_TO_IMF_PLAN.md`**。關鍵發現：核心-外圍 α 差 0.515，是統計誤差 0.144 的 3.6 倍、比最大系統誤差 0.248 還大，但可能有一部分是雙星比例隨半徑變化的假象（Liu+2025），第 2 步的 radial_r1/r2/r3/rall 就是要分辨這件事。**第 3 步（LIMEPY 多質量平衡模型，純 Python、ARM64 無痛）跟第 5 步（N-body，需要 x64 機器編譯）都還沒人做，跟本機佇列不衝突，歡迎認領** |
+| 2026-08-12 | Claude session（新協作者機器，x64，Yu Tung Lan） | PDMF → IMF 優先度覆核（使用者要求：確認清單完整、把相關項目優先度調到非 A/B 類項目之前） | **完成** | `WORK_BOARD.md`（下面「待認領工作：PDMF → IMF」表新增優先度欄）；`queue.txt` 未變更 | 使用者確認第 13（C21）、14（C22）兩個背景關聯條目**不用一起處理**。逐一核對 `LIMITATIONS.md`（A/B/C/D 分類）、`WORK_BOARD.md`、`queue.txt`、`PDMF_TO_IMF_PLAN.md`、`教學_PDMF轉IMF.md` 後列出完整清單給使用者確認（涵蓋已完成/已排隊/開放認領/背景關聯四類，共 15 項）。**查核結果：`queue.txt` 已經符合「PDMF 相關項目排在非 A/B 類前面」的要求，目前待跑的 `radial_r1/r2/r3/rall` 已經在 A/B 類重跑（`p6_lowmass_v2`／`p11_outlierfrac_v2`）之前，中間沒有非 A/B 類項目，不需要調整順序**。改在「待認領工作：PDMF → IMF」表加優先度欄：第 3 步（LIMEPY）與第 5 步（N-body）標為「可立刻開始」（環境準備／編譯測試不需要等第 2 步結果），第 4 步維持「等第 2 步結果」不變。已確認 `multi_stage_best()` 精修 bug 修復（2026-08-11）確實在目前 `injection_recovery.py` 程式碼中，`queue.txt` 的 radial 診斷都帶 `--refines 3,3`。下一步：向使用者確認要不要開始第 5 步（N-body，這台 x64 機器能做、ARM64 佇列做不到）的環境準備 |
