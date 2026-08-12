@@ -468,6 +468,30 @@ Kaggle 官方追查到是 notebook 編輯器背後用的 **Google Firebase 服�
 底下的全域參考文件，不在這個 repo 裡，其他機器上的 agent 讀不到，
 需要另外建置或參考本節內容重建**）。
 
+**2026-08-12（新機器接手，第 1 點部分排除）**：另一台機器的 Claude
+session 接手這個交接，但**沒有可用的 Kaggle 帳號**（AI agent 本身不能
+建立帳號，這是明確的操作限制），所以只能先做不需要登入的第 1 點。
+用瀏覽器工具匿名開了兩個現成 public notebook（`kaggle.com/code` 列表
+裡隨機挑的，非固定 URL）：`/code` 列表頁、單一 notebook 的檢視頁
+（`tonyashrafmounir/students-performance`，Notebook/Input/Output/Logs/
+Comments 五個分頁、側欄、TOC 錨點都正常渲染，Logs 分頁顯示上一次
+執行「32.9 second run - successful」）——**沒有出現「Editor loading」
+卡死的畫面，前端渲染與互動都正常**。
+
+**這只能算部分排除第 1 點，不是完全排除**：匿名檢視的是唯讀頁面，
+不是使用者先前卡住的那個已登入、可編輯的 Notebook Editor（`Copy & Edit`
+按鈕本身就會導去登入頁，無法在匿名狀態下測試）。但至少證實 Kaggle
+的前端服務與這個唯讀 notebook 渲染路徑（很可能與編輯器共用底層
+基礎設施）**現在（2026-08-12）沒有明顯異常**，跟先前「Firebase
+服務出問題」的猜測不衝突（那類問題通常會隨時間自行恢復）。
+
+**第 2、3 點仍卡在需要真實 Kaggle 帳號才能繼續**：這兩點都要登入、
+手動操作網頁版 Notebook（Add Input／檢查 `/kaggle/input`），或用
+API token 跑 `kaggle_queue.py` 這類自動化，AI agent 都做不到（不能
+建帳號、不能持有登入密碼）。需要使用者提供一個新帳號的 API token
+（走現有的 `kaggle_accounts.json` 模式，不是登入網頁），或使用者
+自己動手做第 2 點的網頁手動測試再回報結果。
+
 ### 低質量段冪次被固定，而它佔了六成的樣本（2026-08-07 新增，嚴重）
 
 前向模型的 `alpha` **只是 Kroupa 分段冪律裡 m > 0.5 M☉ 那一段的冪次**。
