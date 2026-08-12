@@ -140,6 +140,35 @@ python petar_pdmf_ensemble.py "results/m45_*_pdmf.json" \
 報告 survival selection、恆星演化、有限視野與總修正的 median、16–84% 區間
 及標準差；priority=1 的三個中央 seed 會另外報隨機散布。
 
+### 對齊 component 與 unresolved-system 定義
+
+raw snapshot 的 `status` 只描述 PeTar 當下的積分器子系統，不是完整的物理聯星
+目錄；不能拿它重建所有 primordial binaries。每個正式 run 應先用
+`petar.data.process` 產生同一快照的 single/binary/triple/quadruple 目錄，再轉成
+標準 system catalog（沒有某種多重度時省略對應參數）：
+
+```bash
+python petar_system_catalog.py \
+  --single data.0.single --binary data.0.binary \
+  --triple data.0.triple --quadruple data.0.quadruple \
+  --time-myr 0 --confirm-complete --output results/m45_ref_s101_t0_systems.npz
+
+python petar_system_catalog.py \
+  --single data.25.single --binary data.25.binary \
+  --triple data.25.triple --quadruple data.25.quadruple \
+  --time-myr 125 --confirm-complete --output results/m45_ref_s101_t125_systems.npz
+
+python pdmf_system_definition_bridge.py \
+  --initial results/m45_ref_s101_t0_systems.npz \
+  --final results/m45_ref_s101_t125_systems.npz \
+  --output results/m45_ref_s101_definition_bridge.json
+```
+
+橋接器同時量 component、primary、system-total 與
+`L ∝ M^beta`（beta=2,3,4）的 photometric-equivalent alpha。這個專案的前向模型
+從 `m1` 抽 IMF，因此接 `primary` 動力修正；傳統單星質光反推則以 photometric
+系列做敏感度。不可把 component 修正直接加在 unresolved-system PDMF 上。
+
 `petar_pdmf_analysis.py` 直接讀 raw snapshot 時會依 PeTar 官方
 `ArtificialParticleInformation` 規則處理粒子：`status > 0` 的質心與取樣粒子
 會移除；`status < 0, mass_bk > 0` 的真實子系統成員會保留，並以 `mass_bk`
@@ -159,6 +188,9 @@ python petar_pdmf_ensemble.py "results/m45_*_pdmf.json" \
 4. 32 個均勻視線方向的 alpha spread 有記錄；
 5. 保存初始與末態快照、`data.status`、完整 command/log、PeTar/SDAR/FDPS commit；
 6. 結果記入 `results/RESULTS_LOG.md`，不可只貼終端截圖。
+7. system catalog metadata 已確認 single/binary/triple/quadruple 目錄完整；同一
+   run 的 component、primary 與 photometric 修正皆已輸出，論文採用值的定義
+   必須與觀測方法一致。
 
 ## 合成驗證已通過
 
@@ -177,7 +209,7 @@ fail closed。物理方向測試刻意讓低質量星較易逃逸、重星更集
 
 ## 尚未解決
 
-- component-star 動力修正如何與前向模型的 unresolved-system 定義合併；
+- 用正式 PeTar processed catalogs 取代 system-definition bridge 的合成自測；
 - Galactic tide 對照（需 PeTar+Galpy）；
 - 觀測選擇函數、Gaia 亮度/品質/成員機率的 mock observation；
 - 以觀測 alpha(r) 與聯星徑向分布校準初始 S/profile；
