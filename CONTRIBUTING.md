@@ -9,6 +9,18 @@ Claude，先讀 `CLAUDE.md`；這份是通用規則，兩者都要遵守。
 
 ---
 
+## 零、開始新工作前——先查 `WORK_BOARD.md`
+
+**2026-08-12 起新增**：起因是 Codex 接續了 Claude 稍早卡住的多星團驗證
+工作，兩邊動到同一個檔案，事後才發現是接續、不是重工，但這種事本來
+應該一開始就能避免。任何預期會花超過一次對話、或會碰共用檔案
+（`pipeline/`、`injection_recovery.py`、`LIMITATIONS.md`、
+`PAPER_OUTLINE.md`、`queue.txt`）的工作，**開始前先讀
+`WORK_BOARD.md`，確認沒有人已經在做同一件事**；開始時在裡面認領一行。
+看不出算不算重複就直接編輯那份文件寫清楚疑點，不要用猜的。
+
+---
+
 ## 一、分支與 Pull Request——所有人都要走 PR，沒有例外
 
 `main` 分支設了保護規則：**任何人（含 repo 擁有者）都不能直接 push 到
