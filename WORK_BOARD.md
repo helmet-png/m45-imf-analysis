@@ -41,3 +41,9 @@
 - 若要在別的機器（Kaggle、同學的電腦、Codex 的環境）重跑本機佇列裡
   同一個腳本、同一組參數，**先在這裡加一行認領**，避免兩邊各自跑一次
   浪費算力、之後也不知道該採哪一份結果。
+
+## 紀錄（續）
+
+| 日期 | 執行者 | 任務名稱 | 狀態 | 涉及檔案／分支 | 備註 |
+|---|---|---|---|---|---|
+| 2026-08-12 | Claude session（新協作者機器，x64，Yu Tung Lan） | 新機器環境驗證：完整跑一次 pipeline 第 0–5 步（fetch_gaia → prep → pyUPMASK 第1步 → 第2–5步），跟既有 `results/baseline.dat` 與文件記錄的頭條數字比對，不是新的科學結果 | 進行中 | 先跑到獨立檔名（不直接覆寫 `results/baseline.dat`）比對，一致才決定要不要正式取代；分支 `yutunglan/x64-pipeline-verify` | 這台是 x64（非 ARM64），跟本機 8 核佇列那台不是同一台，不會搶 `queue.txt`。環境建置與 `fetch_gaia.py` 可攜性 bug 已在 PR #15 修好並合併。跟這台機器上同時在跑的 Kaggle 掛載排查（見上面那行）沒有檔案重疊，只是提醒：這台電腦目前有多個 session 同時操作同一個 working directory，git 分支切換偶爾會互相干擾，commit 前務必先確認當下分支 |
