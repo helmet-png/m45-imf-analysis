@@ -5,14 +5,30 @@ TAP 那層直接沿用 gaia-export 專案的 server.py（含 sync→async fallba
 不另外實作一套。
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
-GAIA_EXPORT = Path(r"C:\Users\Alber\Claude\gaia-export")
+HERE = Path(__file__).parent
+
+# gaia-export 是姊妹專案（github.com/helmet-png/gaia-dr3-export），不同機器
+# clone 的位置不一樣，依序試：環境變數 > 跟這個 repo 同一層的常見資料夾名稱 >
+# 原作者機器上的寫死路徑（相容舊設定）。
+_CANDIDATES = [os.environ.get("GAIA_EXPORT_PATH")] + [
+    HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
+] + [Path(r"C:\Users\Alber\Claude\gaia-export")]
+for _c in _CANDIDATES:
+    if _c and Path(_c).is_dir():
+        GAIA_EXPORT = Path(_c)
+        break
+else:
+    raise FileNotFoundError(
+        "找不到 gaia-export 專案（server.py 所在目錄）。"
+        "設定環境變數 GAIA_EXPORT_PATH 指向它，或把它 clone 到跟本 repo 同一層"
+        "（github.com/helmet-png/gaia-dr3-export）。"
+    )
 sys.path.insert(0, str(GAIA_EXPORT))
 import server  # noqa: E402
-
-HERE = Path(__file__).parent
 DATA = HERE / "data"
 
 # 分群要用的三個量＋其誤差；光度與品質欄位供第 2、3 步用，不參與分群。
