@@ -6,6 +6,7 @@ RA 一度只有約 0.91 天球度，直接餵會讓天區橫向拉伸，pyUPMASK
 檢定空間集中度時會受影響。投影後 x、y 都是真正的角度。
 """
 import argparse
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -20,19 +21,34 @@ def _load_server():
     """找到 gaia-export 姊妹專案並匯入它的 server.py，回傳該模組。
 
     跟 fetch_gaia.py 的 _load_server() 同一套邏輯（見該檔說明），延後到
-    main() 才呼叫，避免 import prep 或跑 --help 時就因為找不到 gaia-export
-    而炸掉。
+    緊臨第一次用到 server 之前才呼叫，不要在參數驗證前就可能因為找不到
+    gaia-export 而炸掉、蓋掉更該優先顯示的參數錯誤。
+
+    只認環境變數與跟本 repo 同層的候選目錄，不 fallback 到任何機器特定的
+    寫死路徑——這種路徑只要剛好存在（哪怕內容是別的、過期的 checkout），
+    就會被靜默接受，跑出錯的結果卻不報錯。
+
+    `import server` 用的是全域模組名稱，若同一個 process 已經從別的路徑
+    載入過 `server`（例如呼叫端同時載入 fetch_gaia 與 prep 兩個 loader），
+    `sys.modules` 快取可能讓這次拿到錯的 checkout。載入後驗證
+    `server.__file__` 是否真的對到這次選中的路徑，不對就繞過快取重新載入。
     """
     candidates = [os.environ.get("GAIA_EXPORT_PATH")] + [
         HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
-    ] + [r"C:\Users\Alber\Claude\gaia-export"]
+    ]
     for c in candidates:
         if not c:
             continue
         c = Path(c)
-        if c.is_dir() and (c / "server.py").is_file():
+        server_py = c / "server.py"
+        if c.is_dir() and server_py.is_file():
             sys.path.insert(0, str(c))
             import server
+            if Path(server.__file__).resolve() != server_py.resolve():
+                spec = importlib.util.spec_from_file_location("server", server_py)
+                server = importlib.util.module_from_spec(spec)
+                sys.modules["server"] = server
+                spec.loader.exec_module(server)
             return server
     raise FileNotFoundError(
         "找不到 gaia-export 專案（含 server.py 的目錄）。"
@@ -104,7 +120,8 @@ def main():
     ap.add_argument("--bulk", nargs=4, type=float, metavar=("PMRA", "PMDE", "PLX", "RV"),
                     help="星團整體 pmRA* pmDE 視差 徑向速度，供 --deproject 使用")
     a = ap.parse_args()
-    server = _load_server()
+    if a.deproject and not a.bulk:
+        ap.error("--deproject 需要一併給 --bulk PMRA PMDE PLX RV")
 
     src = Path(a.csv)
     if not src.is_absolute():
@@ -125,6 +142,7 @@ def main():
     t = t[good]
     print(f"讀入 {n0:,} 列，丟掉缺值 {n0 - len(t):,} 列，剩 {len(t):,} 列")
 
+    server = _load_server()
     ra0, dec0 = server.resolve_name(a.target)
     x, y = tangent_plane(np.asarray(t["ra"], float), np.asarray(t["dec"], float),
                          ra0, dec0)
@@ -133,8 +151,6 @@ def main():
           f"x 範圍 {x.min():.2f}~{x.max():.2f}，y 範圍 {y.min():.2f}~{y.max():.2f} 度")
 
     if a.deproject:
-        if not a.bulk:
-            ap.error("--deproject 需要一併給 --bulk PMRA PMDE PLX RV")
         pmra0, pmde0, plx0, rv0 = a.bulk
         exp_ra, exp_de = expected_pm(np.asarray(t["ra"], float),
                                      np.asarray(t["dec"], float),

@@ -5,6 +5,7 @@ TAP 那層直接沿用 gaia-export 專案的 server.py（含 sync→async fallba
 不另外實作一套。
 """
 import argparse
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -17,23 +18,35 @@ def _load_server():
     """找到 gaia-export 姊妹專案並匯入它的 server.py，回傳該模組。
 
     gaia-export（github.com/helmet-png/gaia-dr3-export）不同機器 clone
-    的位置不一樣，依序試：環境變數 > 跟這個 repo 同一層的常見資料夾名稱 >
-    原作者機器上的寫死路徑（相容舊設定）。只認有 server.py 的目錄，避免
-    誤選到同名但不對的資料夾。
+    的位置不一樣，依序試：環境變數 > 跟這個 repo 同一層的常見資料夾名稱。
+    只認有 server.py 的目錄，避免誤選到同名但不對的資料夾；不 fallback
+    到任何機器特定的寫死路徑——那種路徑只要剛好存在（哪怕是別的、過期的
+    checkout），就會被靜默接受，跑出錯的結果卻不報錯。
 
     延後到這裡才做（不是 module 頂層），這樣 --help 或單純 import 這個
     檔案不會因為找不到 gaia-export 就整個炸掉。
+
+    `import server` 用的是全域模組名稱，若同一個 process 已經從別的路徑
+    載入過 `server`，`sys.modules` 快取可能讓這次拿到錯的 checkout。
+    載入後驗證 `server.__file__` 是否真的對到這次選中的路徑，不對就繞過
+    快取重新載入。
     """
     candidates = [os.environ.get("GAIA_EXPORT_PATH")] + [
         HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
-    ] + [r"C:\Users\Alber\Claude\gaia-export"]
+    ]
     for c in candidates:
         if not c:
             continue
         c = Path(c)
-        if c.is_dir() and (c / "server.py").is_file():
+        server_py = c / "server.py"
+        if c.is_dir() and server_py.is_file():
             sys.path.insert(0, str(c))
             import server
+            if Path(server.__file__).resolve() != server_py.resolve():
+                spec = importlib.util.spec_from_file_location("server", server_py)
+                server = importlib.util.module_from_spec(spec)
+                sys.modules["server"] = server
+                spec.loader.exec_module(server)
             return server
     raise FileNotFoundError(
         "找不到 gaia-export 專案（含 server.py 的目錄）。"
