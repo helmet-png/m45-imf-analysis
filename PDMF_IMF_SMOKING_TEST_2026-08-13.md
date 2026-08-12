@@ -210,3 +210,15 @@ python -m venv .venv-pdmf
 - `results/nbody_pdmf_ensemble_largeN.json`
 - `results/nbody_pdmf_ensemble_largeN_runs.csv`
 - `results/nbody_pdmf_ensemble_largeN_summary.csv`
+
+## 正式 PeTar 接續已準備
+
+`PETAR_M45_EXPERIMENT.md` 已把正式 125 Myr 實驗轉成 10-run screening grid，
+並加入 `petar_pdmf_analysis.py` 逐 ID 分解 survival selection、恆星演化與
+12.09 pc 視野修正。合成 sign test 已通過，但本工作區沒有協作者已編譯的
+PeTar binary，因此尚無 M45 的正式 PeTar 數字。
+
+文獻重讀後亦修正一個重要敘述：Converse & Stahler (2010) 是從氣體已經驅散
+後開始，不應把第一批測試寫成 embedded gas-expulsion simulation；其 1,215
+也是系統數，95% 系統聯星比例對應中央值 2,369 顆 component stars 與 1,154
+組聯星，不能直接當成 `mcluster -N 1215`。

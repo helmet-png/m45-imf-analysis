@@ -1,0 +1,11 @@
+run_id,n_systems,binary_system_fraction,n_stars,n_binaries,profile,mcluster_S,half_mass_radius_pc,seed,galactic_tide,priority,status
+m45_ref_s101,1215,0.95,2369,1154,2,0.30,3.10,101,false,1,ready
+m45_ref_s202,1215,0.95,2369,1154,2,0.30,3.10,202,false,1,ready
+m45_ref_s303,1215,0.95,2369,1154,2,0.30,3.10,303,false,1,ready
+m45_rh_low_s101,1215,0.95,2369,1154,2,0.30,2.40,101,false,2,ready
+m45_rh_high_s101,1215,0.95,2369,1154,2,0.30,3.80,101,false,2,ready
+m45_seg_low_s101,1215,0.95,2369,1154,2,0.00,3.10,101,false,2,ready
+m45_seg_high_s101,1215,0.95,2369,1154,2,0.49,3.10,101,false,2,ready
+m45_bin_low_s101,1215,0.87,2272,1057,2,0.30,3.10,101,false,2,ready
+m45_bin_high_s101,1215,0.99,2418,1203,2,0.30,3.10,101,false,2,ready
+m45_plummer_s101,1215,0.95,2369,1154,0,0.00,3.10,101,false,2,ready
