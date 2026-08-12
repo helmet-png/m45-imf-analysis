@@ -10,26 +10,36 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
+DATA = HERE / "data"
 
-# gaia-export 是姊妹專案（github.com/helmet-png/gaia-dr3-export），不同機器
-# clone 的位置不一樣，依序試：環境變數 > 跟這個 repo 同一層的常見資料夾名稱 >
-# 原作者機器上的寫死路徑（相容舊設定）。
-_CANDIDATES = [os.environ.get("GAIA_EXPORT_PATH")] + [
-    HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
-] + [Path(r"C:\Users\Alber\Claude\gaia-export")]
-for _c in _CANDIDATES:
-    if _c and Path(_c).is_dir():
-        GAIA_EXPORT = Path(_c)
-        break
-else:
+
+def _load_server():
+    """找到 gaia-export 姊妹專案並匯入它的 server.py，回傳該模組。
+
+    gaia-export（github.com/helmet-png/gaia-dr3-export）不同機器 clone
+    的位置不一樣，依序試：環境變數 > 跟這個 repo 同一層的常見資料夾名稱 >
+    原作者機器上的寫死路徑（相容舊設定）。只認有 server.py 的目錄，避免
+    誤選到同名但不對的資料夾。
+
+    延後到這裡才做（不是 module 頂層），這樣 --help 或單純 import 這個
+    檔案不會因為找不到 gaia-export 就整個炸掉。
+    """
+    candidates = [os.environ.get("GAIA_EXPORT_PATH")] + [
+        HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
+    ] + [r"C:\Users\Alber\Claude\gaia-export"]
+    for c in candidates:
+        if not c:
+            continue
+        c = Path(c)
+        if c.is_dir() and (c / "server.py").is_file():
+            sys.path.insert(0, str(c))
+            import server
+            return server
     raise FileNotFoundError(
-        "找不到 gaia-export 專案（server.py 所在目錄）。"
+        "找不到 gaia-export 專案（含 server.py 的目錄）。"
         "設定環境變數 GAIA_EXPORT_PATH 指向它，或把它 clone 到跟本 repo 同一層"
         "（github.com/helmet-png/gaia-dr3-export）。"
     )
-sys.path.insert(0, str(GAIA_EXPORT))
-import server  # noqa: E402
-DATA = HERE / "data"
 
 # 分群要用的三個量＋其誤差；光度與品質欄位供第 2、3 步用，不參與分群。
 # flux_over_error 是必要的：前向模型要生成合成星團時，得知道真實觀測的測光
@@ -58,6 +68,7 @@ def main():
                     help="視差下限（mas）；給 0 表示不切，對照跑用")
     ap.add_argument("--force", action="store_true", help="已有檔案也重抓")
     a = ap.parse_args()
+    server = _load_server()
 
     DATA.mkdir(exist_ok=True)
     tag = a.target.lower().replace(" ", "")
