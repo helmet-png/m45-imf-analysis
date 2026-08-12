@@ -6,17 +6,39 @@ RA 一度只有約 0.91 天球度，直接餵會讓天區橫向拉伸，pyUPMASK
 檢定空間集中度時會受影響。投影後 x、y 都是真正的角度。
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
 import numpy as np
 from astropy.table import Table
 
-GAIA_EXPORT = Path(r"C:\Users\Alber\Claude\gaia-export")
-sys.path.insert(0, str(GAIA_EXPORT))
-import server  # noqa: E402
-
 HERE = Path(__file__).parent
+
+
+def _load_server():
+    """找到 gaia-export 姊妹專案並匯入它的 server.py，回傳該模組。
+
+    跟 fetch_gaia.py 的 _load_server() 同一套邏輯（見該檔說明），延後到
+    main() 才呼叫，避免 import prep 或跑 --help 時就因為找不到 gaia-export
+    而炸掉。
+    """
+    candidates = [os.environ.get("GAIA_EXPORT_PATH")] + [
+        HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
+    ] + [r"C:\Users\Alber\Claude\gaia-export"]
+    for c in candidates:
+        if not c:
+            continue
+        c = Path(c)
+        if c.is_dir() and (c / "server.py").is_file():
+            sys.path.insert(0, str(c))
+            import server
+            return server
+    raise FileNotFoundError(
+        "找不到 gaia-export 專案（含 server.py 的目錄）。"
+        "設定環境變數 GAIA_EXPORT_PATH 指向它，或把它 clone 到跟本 repo 同一層"
+        "（github.com/helmet-png/gaia-dr3-export）。"
+    )
 # 產到 prepared/，由 run_variant.py 挑一個複製進 pyUPMASK/input/
 # （pyUPMASK 會把 input/ 底下每個檔案都跑一遍，不能同時放多份）
 INPUT_DIR = HERE / "prepared"
@@ -82,6 +104,7 @@ def main():
     ap.add_argument("--bulk", nargs=4, type=float, metavar=("PMRA", "PMDE", "PLX", "RV"),
                     help="星團整體 pmRA* pmDE 視差 徑向速度，供 --deproject 使用")
     a = ap.parse_args()
+    server = _load_server()
 
     src = Path(a.csv)
     if not src.is_absolute():
