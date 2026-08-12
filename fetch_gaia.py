@@ -43,10 +43,18 @@ def _load_server():
             sys.path.insert(0, str(c))
             import server
             if Path(server.__file__).resolve() != server_py.resolve():
+                previous = sys.modules.get("server")
                 spec = importlib.util.spec_from_file_location("server", server_py)
                 server = importlib.util.module_from_spec(spec)
                 sys.modules["server"] = server
-                spec.loader.exec_module(server)
+                try:
+                    spec.loader.exec_module(server)
+                except Exception:
+                    if previous is None:
+                        sys.modules.pop("server", None)
+                    else:
+                        sys.modules["server"] = previous
+                    raise
             return server
     raise FileNotFoundError(
         "找不到 gaia-export 專案（含 server.py 的目錄）。"
