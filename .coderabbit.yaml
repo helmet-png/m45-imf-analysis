@@ -1,0 +1,42 @@
+# CodeRabbit 設定（免費方案，公開 repo 自動適用）。
+# 安裝步驟見 PR 說明／README——這份檔案只負責「裝好之後怎麼審」，
+# 不含任何金鑰，安裝本身要用你自己的 GitHub 帳號在 coderabbit.ai 授權。
+language: "zh-TW"
+
+reviews:
+  profile: "chill"
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    # 結果檔案（.npz/.csv/.json）跟快取的等時線網格不是給人看 diff 的，
+    # 審這些只會製造噪音，排除掉。
+    - "!results/**"
+    - "!data/**"
+    - "!isochrones/**"
+    - "!logs/**"
+    - "!kaggle_work/**"
+  path_instructions:
+    - path: "injection_recovery.py"
+      instructions: >
+        multi_stage_best() 是這個專案共用的網格精修核心，被 fit_real.py／
+        profile_lowmass.py／profile_outlierfrac.py／inject_lowmass.py 等
+        生產腳本呼叫。2026-08-11 這裡曾經有過「refines 只給單一值時完全
+        沒精修」的 bug（已修好）。任何改動這個函式的 PR，優先檢查：
+        (1) 新參數的預設值是否讓既有呼叫者行為完全不變；
+        (2) 精修迴圈是否每一階都真的重新呼叫 grid_best_parallel。
+    - path: "pipeline/**"
+      instructions: >
+        這是 M45 前向模型的核心套件，被多個生產腳本共用。任何新增的
+        cluster-specific 腳本（cluster_*.py）如果需要類似邏輯，優先檢查
+        是否該在這裡加通用參數，而不是在呼叫端重新實作一份。
+    - path: "LIMITATIONS.md"
+      instructions: >
+        這份檔案有明確的待辦分類標準（見 CLAUDE.md）：會影響已產出結果、
+        或改變論文結論方向的問題要標成「現役缺陷」並附優先度，不能跟一般
+        待辦敏感度測試混在一起排隊。審查時確認新增內容有沒有誤判成低優先。
+
+chat:
+  auto_reply: true
