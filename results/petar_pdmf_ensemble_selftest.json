@@ -1,0 +1,48 @@
+{
+  "status": "synthetic_validation_only",
+  "n_runs": 1,
+  "mass_range_msun": [
+    0.3,
+    2.5
+  ],
+  "delta_alpha": {
+    "survival_selection": {
+      "n": 1,
+      "median": -0.2200000000000002,
+      "q16": -0.2200000000000002,
+      "q84": -0.2200000000000002,
+      "sd": 0.0
+    },
+    "stellar_evolution_after_survival": {
+      "n": 1,
+      "median": 0.0,
+      "q16": 0.0,
+      "q84": 0.0,
+      "sd": 0.0
+    },
+    "finite_aperture": {
+      "n": 1,
+      "median": -0.06300000000000017,
+      "q16": -0.06300000000000017,
+      "q84": -0.06300000000000017,
+      "sd": 0.0
+    },
+    "total_pdmf_minus_imf": {
+      "n": 1,
+      "median": -0.28300000000000036,
+      "q16": -0.28300000000000036,
+      "q84": -0.28300000000000036,
+      "sd": 0.0
+    },
+    "correction_to_add_to_pdmf_for_imf": {
+      "n": 1,
+      "median": 0.28300000000000036,
+      "q16": 0.28300000000000036,
+      "q84": 0.28300000000000036,
+      "sd": 0.0
+    }
+  },
+  "priority_1_seed_scatter": null,
+  "rejected_inputs": [],
+  "interpretation": "Add correction_to_add_to_pdmf_for_imf to the matched PDMF alpha; do not combine with unresolved-binary corrections until sample definitions match."
+}

@@ -128,6 +128,18 @@ python petar_pdmf_analysis.py \
 
 若實際快照編號不是 25，以 header time=125 Myr 的檔案為準。
 
+中央三個 seed 完成後先彙整；其餘 run 可陸續加進同一指令：
+
+```bash
+python petar_pdmf_ensemble.py "results/m45_*_pdmf.json" \
+  --grid petar_m45_grid.csv \
+  --output-prefix results/petar_pdmf_ensemble
+```
+
+彙整器會拒絕 synthetic self-test、重複 run ID 與不一致的質量範圍，並分別
+報告 survival selection、恆星演化、有限視野與總修正的 median、16–84% 區間
+及標準差；priority=1 的三個中央 seed 會另外報隨機散布。
+
 ## 驗收門檻
 
 單一 run 只有同時滿足下列條件才進入科學彙整：
