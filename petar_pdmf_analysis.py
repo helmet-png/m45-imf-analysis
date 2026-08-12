@@ -39,6 +39,69 @@ class Snapshot:
     position: np.ndarray
     time_myr: float
     source: str
+    raw_particle_count: int | None = None
+    artificial_removed: int = 0
+    unused_removed: int = 0
+    member_masses_restored: int = 0
+
+
+def _physical_petar_particles(particle_id, mass, position, status, mass_backup):
+    """Return physical stars using PeTar's ArtificialParticleInformation rules.
+
+    PeTar raw snapshots include algorithmic particles.  In the upstream C++
+    implementation, singles have ``status == mass_backup == 0``, subsystem
+    members have ``status < 0`` and a positive backup mass, and artificial
+    particles (including centres of mass) have ``status > 0``.  A member's
+    physical mass is its backup mass while it is represented by a subsystem.
+    Unknown combinations are rejected instead of silently biasing the MF.
+    """
+    particle_id = np.asarray(particle_id)
+    mass = np.asarray(mass, float)
+    position = np.asarray(position, float)
+    status = np.asarray(status, float)
+    mass_backup = np.asarray(mass_backup, float)
+    expected = (len(mass),)
+    if any(array.shape != expected for array in (status, mass_backup)):
+        raise ValueError("PeTar status and mass_bk must each have shape (N,)")
+    if not np.all(np.isfinite(status)) or not np.all(np.isfinite(mass_backup)):
+        raise ValueError("PeTar status and mass_bk must be finite")
+
+    single = (status == 0.0) & (mass_backup == 0.0)
+    member = (status < 0.0) & (mass_backup > 0.0)
+    unused = (status < 0.0) & (mass_backup < 0.0)
+    artificial = status > 0.0
+    recognized = single | member | unused | artificial
+    if not np.all(recognized):
+        bad = np.flatnonzero(~recognized)
+        preview = [
+            {
+                "index": int(index),
+                "status": float(status[index]),
+                "mass_bk": float(mass_backup[index]),
+            }
+            for index in bad[:5]
+        ]
+        raise ValueError(
+            f"Unrecognized PeTar artificial-particle state for {len(bad)} rows: "
+            f"{preview}"
+        )
+
+    physical = single | member
+    physical_mass = mass[physical].copy()
+    physical_mass[member[physical]] = mass_backup[member]
+    accounting = {
+        "raw_particle_count": int(len(mass)),
+        "physical_particle_count": int(np.count_nonzero(physical)),
+        "artificial_removed": int(np.count_nonzero(artificial)),
+        "unused_removed": int(np.count_nonzero(unused)),
+        "member_masses_restored": int(np.count_nonzero(member)),
+    }
+    return (
+        particle_id[physical],
+        physical_mass,
+        position[physical],
+        accounting,
+    )
 
 
 def mle_powerlaw(masses, mass_min: float, mass_max: float) -> dict:
@@ -94,6 +157,13 @@ def _validate_snapshot(snapshot: Snapshot) -> Snapshot:
         position=position,
         time_myr=float(snapshot.time_myr),
         source=snapshot.source,
+        raw_particle_count=(
+            len(mass) if snapshot.raw_particle_count is None
+            else int(snapshot.raw_particle_count)
+        ),
+        artificial_removed=int(snapshot.artificial_removed),
+        unused_removed=int(snapshot.unused_removed),
+        member_masses_restored=int(snapshot.member_masses_restored),
     )
 
 
@@ -104,12 +174,34 @@ def load_npz(path: Path) -> Snapshot:
             raise ValueError(f"{path} is missing NPZ fields: {sorted(missing)}")
         time_myr = float(np.asarray(data["time_myr"]).reshape(-1)[0]) \
             if "time_myr" in data.files else math.nan
+        particle_id = np.asarray(data["id"])
+        mass = np.asarray(data["mass"], float)
+        position = np.asarray(data["pos"], float)
+        accounting = {}
+        has_status = "status" in data.files
+        has_mass_backup = "mass_bk" in data.files
+        if has_status != has_mass_backup:
+            raise ValueError(
+                f"{path} must provide both status and mass_bk, or neither"
+            )
+        if has_status:
+            particle_id, mass, position, accounting = _physical_petar_particles(
+                particle_id,
+                mass,
+                position,
+                data["status"],
+                data["mass_bk"],
+            )
         snapshot = Snapshot(
-            particle_id=np.asarray(data["id"]),
-            mass=np.asarray(data["mass"], float),
-            position=np.asarray(data["pos"], float),
+            particle_id=particle_id,
+            mass=mass,
+            position=position,
             time_myr=time_myr,
             source=str(path),
+            raw_particle_count=accounting.get("raw_particle_count", len(mass)),
+            artificial_removed=accounting.get("artificial_removed", 0),
+            unused_removed=accounting.get("unused_removed", 0),
+            member_masses_restored=accounting.get("member_masses_restored", 0),
         )
     return _validate_snapshot(snapshot)
 
@@ -151,12 +243,28 @@ def load_petar(
             f"PeTar header N={header.n} but reader returned {particle.size}; "
             "check --interrupt-mode, --external-mode and --snapshot-format"
         )
+    if not hasattr(particle, "status") or not hasattr(particle, "mass_bk"):
+        raise ValueError(
+            "PeTar reader did not expose status and mass_bk; refusing to treat "
+            "raw snapshot rows as physical stars"
+        )
+    particle_id, mass, position, accounting = _physical_petar_particles(
+        particle.id,
+        particle.mass,
+        particle.pos,
+        particle.status,
+        particle.mass_bk,
+    )
     snapshot = Snapshot(
-        particle_id=np.asarray(particle.id),
-        mass=np.asarray(particle.mass, float),
-        position=np.asarray(particle.pos, float),
+        particle_id=particle_id,
+        mass=mass,
+        position=position,
         time_myr=float(header.time),
         source=str(path),
+        raw_particle_count=accounting["raw_particle_count"],
+        artificial_removed=accounting["artificial_removed"],
+        unused_removed=accounting["unused_removed"],
+        member_masses_restored=accounting["member_masses_restored"],
     )
     return _validate_snapshot(snapshot)
 
@@ -386,6 +494,30 @@ def analyze(initial, final, mass_min, mass_max, radii_pc, n_projections=32):
                 "n_final_not_in_initial",
             )
         },
+        "reader_accounting": {
+            "initial": {
+                "raw_particle_count": (
+                    len(initial.mass)
+                    if initial.raw_particle_count is None
+                    else initial.raw_particle_count
+                ),
+                "physical_particle_count": len(initial.mass),
+                "artificial_removed": initial.artificial_removed,
+                "unused_removed": initial.unused_removed,
+                "member_masses_restored": initial.member_masses_restored,
+            },
+            "final": {
+                "raw_particle_count": (
+                    len(final.mass)
+                    if final.raw_particle_count is None
+                    else final.raw_particle_count
+                ),
+                "physical_particle_count": len(final.mass),
+                "artificial_removed": final.artificial_removed,
+                "unused_removed": final.unused_removed,
+                "member_masses_restored": final.member_masses_restored,
+            },
+        },
         "center": {
             "method": "shrinking_sphere_mass_weighted",
             "position_pc": center.tolist(),
@@ -466,6 +598,30 @@ def synthetic_snapshots(seed=20260813, n=12000):
 
 
 def run_self_test(output_prefix: Path):
+    test_id = np.arange(1, 6)
+    test_mass = np.array([1.0, 0.0, 3.0, 0.0, 0.0])
+    test_position = np.zeros((5, 3))
+    test_status = np.array([0.0, -12.0, 2.0, 3.0, -1.0e30])
+    test_mass_backup = np.array([0.0, 0.7, 3.0, 0.0, -1.0e30])
+    clean_id, clean_mass, _, reader_check = _physical_petar_particles(
+        test_id,
+        test_mass,
+        test_position,
+        test_status,
+        test_mass_backup,
+    )
+    unknown_state_rejected = False
+    try:
+        _physical_petar_particles(
+            np.array([1]),
+            np.array([1.0]),
+            np.zeros((1, 3)),
+            np.array([0.0]),
+            np.array([1.0]),
+        )
+    except ValueError:
+        unknown_state_rejected = True
+
     initial, final = synthetic_snapshots()
     summary, rows = analyze(
         initial,
@@ -480,6 +636,14 @@ def run_self_test(output_prefix: Path):
         "survival_selection_flattens": delta["survival_selection"] < -0.05,
         "finite_aperture_flattens": delta["finite_aperture"] < -0.05,
         "all_final_ids_match": summary["particle_accounting"]["n_final_not_in_initial"] == 0,
+        "artificial_particles_removed": (
+            clean_id.tolist() == [1, 2]
+            and np.allclose(clean_mass, [1.0, 0.7])
+            and reader_check["artificial_removed"] == 2
+            and reader_check["unused_removed"] == 1
+            and reader_check["member_masses_restored"] == 1
+        ),
+        "unknown_particle_state_rejected": unknown_state_rejected,
     }
     summary["self_test"] = checks
     summary["status"] = "synthetic_validation_only"

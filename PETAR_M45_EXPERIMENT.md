@@ -140,12 +140,21 @@ python petar_pdmf_ensemble.py "results/m45_*_pdmf.json" \
 報告 survival selection、恆星演化、有限視野與總修正的 median、16–84% 區間
 及標準差；priority=1 的三個中央 seed 會另外報隨機散布。
 
+`petar_pdmf_analysis.py` 直接讀 raw snapshot 時會依 PeTar 官方
+`ArtificialParticleInformation` 規則處理粒子：`status > 0` 的質心與取樣粒子
+會移除；`status < 0, mass_bk > 0` 的真實子系統成員會保留，並以 `mass_bk`
+還原當下物理質量；unused 粒子會移除。任何未被官方規則涵蓋的組合都會讓
+分析中止，不會猜測。JSON 的 `reader_accounting` 必須保留 raw/physical 數量、
+移除人工粒子數與還原成員質量數，供每個 run 稽核。
+
 ## 驗收門檻
 
 單一 run 只有同時滿足下列條件才進入科學彙整：
 
 1. 初始/末態 ID 唯一，末態沒有來源不明的新 ID；
-2. `data.status` 無 NaN、無未解釋的能量跳變；
+2. `data.status` 無 NaN、無未解釋的能量跳變；分析輸出的
+   `reader_accounting` 與 PeTar status log 的 `N_real`/`N_all` 相容，且沒有
+   未辨識的 `status`/`mass_bk` 組合；
 3. 0.3–2.5 Msun 至少 100 顆留在 12.09 pc 投影孔徑內；
 4. 32 個均勻視線方向的 alpha spread 有記錄；
 5. 保存初始與末態快照、`data.status`、完整 command/log、PeTar/SDAR/FDPS commit；
@@ -154,7 +163,9 @@ python petar_pdmf_ensemble.py "results/m45_*_pdmf.json" \
 ## 合成驗證已通過
 
 本機無協作者那套 PeTar binary，因此先用 12,000 顆合成星驗證分析器的方向與
-ID accounting。測試刻意讓低質量星較易逃逸、重星更集中，得到：
+ID accounting。另以含單星、子系統成員、質心、取樣粒子與 unused 粒子的
+混合小快照驗證：人工列會排除、成員質量會從 `mass_bk` 還原，未知狀態會
+fail closed。物理方向測試刻意讓低質量星較易逃逸、重星更集中，得到：
 
 - birth IMF alpha = 2.321；
 - survival selection 後 survivor birth-mass alpha = 2.101（delta=-0.220）；

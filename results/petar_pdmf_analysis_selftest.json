@@ -14,6 +14,22 @@
     "n_lost_from_initial": 2306,
     "n_final_not_in_initial": 0
   },
+  "reader_accounting": {
+    "initial": {
+      "raw_particle_count": 12000,
+      "physical_particle_count": 12000,
+      "artificial_removed": 0,
+      "unused_removed": 0,
+      "member_masses_restored": 0
+    },
+    "final": {
+      "raw_particle_count": 9694,
+      "physical_particle_count": 9694,
+      "artificial_removed": 0,
+      "unused_removed": 0,
+      "member_masses_restored": 0
+    }
+  },
   "center": {
     "method": "shrinking_sphere_mass_weighted",
     "position_pc": [
@@ -82,6 +98,8 @@
   "self_test": {
     "survival_selection_flattens": true,
     "finite_aperture_flattens": true,
-    "all_final_ids_match": true
+    "all_final_ids_match": true,
+    "artificial_particles_removed": true,
+    "unknown_particle_state_rejected": true
   }
 }
