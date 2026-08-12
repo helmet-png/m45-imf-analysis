@@ -1,0 +1,55 @@
+{
+  "status": "preflight_not_production_cluster_model",
+  "environment": {
+    "rebound_version": "5.1.1",
+    "integrator": "leapfrog",
+    "gravity": "basic"
+  },
+  "parameters": {
+    "n_stars": 256,
+    "input_alpha": 2.3,
+    "mass_min_msun": 0.3,
+    "mass_max_msun": 2.5,
+    "softening_rh": 0.01,
+    "time_end_crossing": 10.0,
+    "dt_crossing": 0.001,
+    "seed": 20260813
+  },
+  "initial": {
+    "time_crossing": 0.0,
+    "relative_energy_error": 0.0,
+    "median_radius_all": 1.0257796464380293,
+    "median_radius_low_mass": 1.035425431826034,
+    "median_radius_high_mass": 1.0189938340365647,
+    "radius_ratio_low_to_high": 1.0161253162095971,
+    "alpha_global": 2.157,
+    "alpha_inner_half": 2.0629999999999997,
+    "alpha_outer_half": 2.254,
+    "n_inner": 128,
+    "n_outer": 128
+  },
+  "final": {
+    "time_crossing": 10.0,
+    "relative_energy_error": -0.0004442813657332669,
+    "median_radius_all": 1.2232883965244556,
+    "median_radius_low_mass": 1.257524467712105,
+    "median_radius_high_mass": 1.135633762475253,
+    "radius_ratio_low_to_high": 1.1073327592613802,
+    "alpha_global": 2.157,
+    "alpha_inner_half": 1.999,
+    "alpha_outer_half": 2.327,
+    "n_inner": 128,
+    "n_outer": 128
+  },
+  "checks": {
+    "energy_error_below_1e_3": true,
+    "global_alpha_unchanged_by_dynamics": true,
+    "mass_segregation_direction_detected": true
+  },
+  "caveats": [
+    "Dimensionless isolated Plummer model; one time unit is approximately one initial crossing time.",
+    "No Galactic tide, stellar evolution, primordial binaries, membership selection, or Gaia errors.",
+    "Gravitational softening suppresses hard encounters; PeTar is required for production collisional runs.",
+    "A single stochastic realization cannot calibrate the M45 IMF correction."
+  ]
+}

@@ -29,6 +29,10 @@ figs/
 __pycache__/
 *.pyc
 prepared/
+.venv*/
+.pdmf-packages/
+.pdmf-local/
+.nbody-local/
 
 # ============================================================
 # 憑證與機敏檔案：絕不進版控
