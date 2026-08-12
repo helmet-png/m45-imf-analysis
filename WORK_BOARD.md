@@ -56,6 +56,19 @@ commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 <https://github.com/helmet-png/m45-imf-analysis/pull/11#issuecomment-5264701703>——
 這也是待認領工作，適合 PR 作者（Codex）或任何人接手修。
 
+## 待認領工作：PDMF → IMF（2026-08-12，見 `PDMF_TO_IMF_PLAN.md` 完整背景）
+
+第 1、2 步（文獻基準線、前向模型徑向診斷）已在做，見上面的「紀錄」。
+以下第 3–5 步都還沒人認領，且都跟本機佇列不衝突（第 5 步甚至需要
+另一台 x64 機器，本機跑不了）。這三個不是「跑一行指令」等級的任務，
+起手式跟驗收標準寫在下面，實際做法留給認領的人判斷。
+
+| 步驟 | 任務 | 起手式 | 驗收標準 | 為什麼 |
+|---|---|---|---|---|
+| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數 | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題**：這台機器的 scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
+| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數 | **先等第 2 步（radial 診斷）結果出來再決定要不要投入**——如果 α(<r) 在 r=5° 內已經收斂，這步的急迫性大幅下降。真的要做時起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
+| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線） | 需要 x64 或 WSL 機器（ARM64 編譯是本專案已知的坑）。建議先試 [PeTar](https://github.com/lwang-astro/PeTar)（`sample/star_cluster_bse.sh` 有現成範例，Li+2026 也是用這套），初始條件參考 Converse & Stahler 2010：N≈1200–1500 systems、初始雙星比例 ~95%、embedded cluster + 氣體驅離、積分到 125 Myr。如果 PeTar 編譯卡住，可以試 [AMUSE](https://github.com/amusecode/amuse) 框架（pip 裝得起來，包了多套積分器，門檻可能較低） | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
+
 ## 目前已知的固定分工（不用每次都查表）
 
 - **本機 8 核運算佇列**（`queue.txt` / `run_queue.py`，Windows ARM64 這台機器）
