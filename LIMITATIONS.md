@@ -44,10 +44,16 @@ MIST 年齡不合理，粗網格 logage 間距 0.10 不足以翻轉），精確�
 GSP-Spec／GSP-Phot），但 `fit_real.py:136` 寫死
 `cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0`，退回均勻先驗。
 
-**後果**：`p2_final2`（α=2.387±0.060）與所有 `fit_real.py` 產出的數字用的都是
-均勻先驗，不是文件記載的方法論。移除該行重跑比對前，這些數字不能當最終值。
-（PR #22 已修好這行程式碼，重跑尚未完成——PR 合併後這條要改成「已修好，
-待重跑」。）
+**已修好**（PR #22，2026-08-12）：`fit_real.py` 那行覆寫已刪除，改回讓
+`JointModel` 直接讀 config——已實測確認 `cfg.joint_fit.mh_prior_sigma == 0.10`。
+其餘六支診斷腳本（`final_imf.py`／`inject_lowmass.py`／`injection_recovery.py`／
+`measure_overconfidence.py`／`profile_lowmass.py`／`traditional_accounting.py`）
+維持均勻先驗，不用改——先驗會污染那些測試想看的東西。
+
+**後果**：`p2_final2`（α=2.387±0.060）與所有先前的 `fit_real.py` 產出的數字，
+用的都是均勻先驗，不是文件記載的方法論，不能當最終值。程式碼已修好，但
+**既有數字尚未用修好後的程式碼重跑**，重跑清單見 `WORK_BOARD.md` 的
+`p2_final2_v3`（會一併套用 A1 精修 bug 的修正，不用分兩次重跑）。
 
 ### A3 低質量段冪次被固定，該段佔 59.5% 樣本
 

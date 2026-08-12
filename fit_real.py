@@ -133,7 +133,13 @@ def main():
     color, mag = color[ok], mag[ok]
 
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
-    cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0   # 先看概似本身要什麼
+    # P10（2026-08-10 使用者質問後查證，見 LIMITATIONS.md）：這裡曾經寫死
+    # mh_prior_sigma=0.0，把 config.toml 宣告的高斯金屬量先驗（中心 -0.03、
+    # sigma 0.10，取自 Gaia GSP-Spec/GSP-Phot 交叉驗證）關掉，退回均勻先驗。
+    # 對 profile_lowmass.py/injection_recovery.py 這類純診斷腳本，關掉先驗
+    # 是對的——先驗會污染那些測試想看的東西。但 fit_real.py 的角色是產出
+    # 要寫進論文的最終數字，這裡沒有同等理由關掉，是從診斷腳本複製設定時
+    # 沒有重新檢視。移除覆寫，改回讀 config 宣告的高斯先驗。
 
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
     base.use_native_bprp_err = args.native_bprp_err
