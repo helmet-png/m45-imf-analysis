@@ -43,7 +43,7 @@ commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 
 | 優先度 | 任務 | 指令 | 為什麼 |
 |---|---|---|---|
-| **高** | `p2_final2` 重跑（headline 數字！） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3` | 目前引用的 headline α=2.387±0.060 是在 bug 修好**之前**跑的，精修只做到原意的一半（`--refines 3,3` 在舊 bug 下只等於一階真精修）。這是整個專案最重要的數字，應該最先重跑確認 |
+| **高** | `p2_final2` 重跑（headline 數字！） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3` | 目前引用的 headline α=2.387±0.060 疊了兩個問題：(1) 精修只做到原意的一半（`--refines 3,3` 在舊 bug 下只等於一階真精修）；(2) 用均勻先驗而非 config 宣告的高斯金屬量先驗（P10，見 `LIMITATIONS.md`）。**兩個問題的程式碼都已於 2026-08-12 修好**，這行指令跑起來會自動套用兩邊的修正（不用額外加旗標），一次重跑同時解決兩個問題，不用分兩次 |
 | 中 | P9a-redo v2（MH 鎖定检验，PARSEC） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_redo_v2 --refines 3,3` | 舊結果 α=2.440±0.180 完全沒精修（純粗網格 argmax）。這是表 4 穩健性主張的一半，另一半是下面 P9c |
 | 中 | P9c v2（MH 鎖定检验，MIST） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo_v2 --refines 3,3` | 舊結果 α=2.180±0.098 同樣完全沒精修 |
 | 中 | P6b v2（低質量段冪次可辨識性） | `python inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3` | 舊結果（ratio 0.92）完全沒精修；這個數字決定要不要把低質量段冪次升格成自由參數（`p2_free_lowmass` 已經在跑了，但可辨識性本身的精確度也該補） |
