@@ -468,6 +468,50 @@ Kaggle 官方追查到是 notebook 編輯器背後用的 **Google Firebase 服�
 底下的全域參考文件，不在這個 repo 裡，其他機器上的 agent 讀不到，
 需要另外建置或參考本節內容重建**）。
 
+**2026-08-12（新機器接手交接，第 1 點部分排除 + 第 3 點三帳號交叉驗證）**：
+另一台機器的 Claude session 接手交接，帶來兩項新進展。
+
+*第 1 點（Kaggle 平台本身是否異常）——部分排除*：AI agent 本身不能建立
+帳號或持有登入密碼，一開始沒有可用帳號，先做了不需要登入的檢查——用
+瀏覽器工具匿名開了兩個現成 public notebook（`kaggle.com/code` 列表頁、
+單一 notebook 檢視頁 `tonyashrafmounir/students-performance`）：
+Notebook/Input/Output/Logs/Comments 五個分頁、側欄、TOC 錨點都正常渲染，
+Logs 分頁顯示上次執行「32.9 second run - successful」，**沒有出現
+「Editor loading」卡死**。但這只能算部分排除：測的是匿名唯讀頁面，
+不是使用者先前卡住的那個已登入、可編輯的 Notebook Editor（`Copy & Edit`
+按鈕會導去登入頁，匿名測不到）。
+
+*第 3 點（帳號層級限制）——使用者提供第三個帳號後，證據更強地指向
+不是帳號問題*：使用者提供了 `justinlan11`（API token，走
+`kaggle_accounts.json` 模式），這是完全獨立於 `helmetalbert`／
+`teammate2` 的**第三個帳號**、在**第三台機器**上首次使用。用
+`kaggle_sync.py push --script kaggle_smoketest.py --minimal --account
+justinlan11` 推了同一支最小 smoke test：
+
+- dataset 建立成功並確認穩定（`justinlan11/m45-imf-mount-fix-newmachine`）
+- kernel push 成功（`justinlan11/m45-imf-run-mount-fix-newmachine`）
+- 狀態從 RUNNING 變 ERROR，耗時約 260–280 秒（跟 in-kernel 280 秒等待
+  上限吻合）
+- 下載的 log 顯示**一模一樣的錯誤**：
+  `FileNotFoundError: waited 280s, Kaggle has not mounted dataset at
+  /kaggle/input/m45-imf-mount-fix-newmachine/kaggle_smoketest.py yet`
+
+**額外檢查了本機產生的設定檔，排除「我們自己的 metadata 寫錯」這個
+可能性**：`dataset-metadata.json` 的 `id` 是
+`justinlan11/m45-imf-mount-fix-newmachine`，`kernel-metadata.json` 的
+`dataset_sources` 正確指到同一個 id，掛載路徑
+`/kaggle/input/m45-imf-mount-fix-newmachine/...` 跟 dataset slug 一致
+——**本機端產生的設定檔沒有問題，不是這裡的 bug**。
+
+**目前判讀**：三個完全獨立的帳號（不同信譽、不同建立時間、不同驗證
+狀態）在三台不同機器上，用同一套（已確認設定正確的）程式碼，撞到
+一模一樣的失敗模式。這讓「帳號本身有限制」的可能性又降低了一截，
+「Kaggle 平台性問題」或「API push 這條路徑本身有 Kaggle 端的系統性
+問題（vs 網頁手動操作）」變成僅剩的、解釋力較強的兩個方向——但**第
+2 點（網頁手動 Add Input 測試）仍然是唯一能分辨這兩者的判準，且仍然
+需要真人登入操作**（AI agent 沒有帳號密碼，不能登入網頁），這點尚未
+被任何人做過，是目前唯一還沒排除、下一步該做的事。
+
 ### 低質量段冪次被固定，而它佔了六成的樣本（2026-08-07 新增，嚴重）
 
 前向模型的 `alpha` **只是 Kroupa 分段冪律裡 m > 0.5 M☉ 那一段的冪次**。
