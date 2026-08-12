@@ -2,7 +2,8 @@
 # kaggle_queue.py 每輪都會重新讀檔，執行中可以在末端追加步驟。
 # 已完成的記在 logs/kaggle_queue_done.txt。
 
-# ===== 2026-08-10：helmetalbert 已完成手機驗證，teammate2 還沒 =====
-# 只派 helmetalbert，驗證「掛載失敗＝帳號未驗證」這個假設對不對。
-# 先用小的 smoke test 快速驗證，通過了才派正式工作。
-mount_fix_retest|kaggle_smoketest.py|||true|helmetalbert
+# ===== 2026-08-10 起暫停：Kaggle 掛載問題根因未明，見 LIMITATIONS.md
+# 「Kaggle 掛載問題根因排查」一節。用不同帳號/不同機器測試時，把下面
+# 這行的帳號名稱換成你在 kaggle_accounts.json 裡登記的名稱即可用。
+# label 用你自己的識別名，避免跟其他人跑過的 label 撞名。
+# mount_fix_probe|kaggle_smoketest.py|||true|你的帳號名稱
