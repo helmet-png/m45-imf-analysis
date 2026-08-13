@@ -52,7 +52,11 @@ def main():
     ap.add_argument("--trials", type=int, default=2)
     ap.add_argument("--refines", default="3")
     ap.add_argument("--dav-max", type=float, default=0.6)
+    ap.add_argument("--tag", default="", help="輸出檔名後綴，避免覆蓋前一次跑的"
+                     "完整參數向量（見 LIMITATIONS.md D6：p6b/p6b2/p6b3 的中間"
+                     "結果曾經因為固定檔名被後續跑覆寫，永久遺失）")
     args = ap.parse_args()
+    out_path = HERE / "results" / f"inject_lowmass{args.tag}.npz"
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
 
@@ -160,7 +164,7 @@ def main():
         results[p_true] = np.array(outs)
         # 每跑完一個 p_true 就存一次 —— 之後的 p_true 若整批失敗，
         # 這裡已經算出來的結果不會跟著陪葬。
-        np.savez(HERE / "results" / "inject_lowmass.npz",
+        np.savez(out_path,
                  p_true=np.array(list(results.keys())),
                  **{f"p{p}": v for p, v in results.items()})
 
@@ -184,7 +188,7 @@ def main():
     if len(p_recs) < 2:
         print("\n少於兩個 p_true 有成功資料，無法判斷可辨識性（條件 3 需要"
               "跨多個真值比較），僅供參考個別數字。")
-        np.savez(HERE / "results" / "inject_lowmass.npz",
+        np.savez(out_path,
                  p_true=np.array(list(results.keys())),
                  **{f"p{p}": v for p, v in results.items()})
         return
@@ -205,7 +209,7 @@ def main():
     np.savez(HERE / "results" / "inject_lowmass.npz",
              p_true=np.array(p_true_ok),
              **{f"p{p}": v for p, v in results.items()})
-    print("\nwrote results/inject_lowmass.npz")
+    print(f"\nwrote {out_path.relative_to(HERE)}")
 
 
 if __name__ == "__main__":
