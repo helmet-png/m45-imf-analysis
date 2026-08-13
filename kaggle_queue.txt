@@ -7,3 +7,27 @@
 # 這行的帳號名稱換成你在 kaggle_accounts.json 裡登記的名稱即可用。
 # label 用你自己的識別名，避免跟其他人跑過的 label 撞名。
 # mount_fix_probe|kaggle_smoketest.py|||true|你的帳號名稱
+
+# ===== 2026-08-13：掛載路徑 bug 已修好（見 KAGGLE_DIAGNOSIS.md），
+# 三個帳號（justinlan11／teammate2／helmetalbert）都已用 smoke test
+# 驗證過，重新啟用派工。以下四項是 WORK_BOARD.md「待認領工作」清單裡
+# 優先度最高的重跑（multi_stage_best() 精修 bug 修好後，之前的結果
+# 精確值都不可信，見 LIMITATIONS.md）。--procs 用 4（Kaggle 免費
+# CPU-only notebook 只有 4 顆虛擬核心，不是本機 ARM64 佇列的 8 顆）。
+# 帳號欄留空，讓 kaggle_queue.py 自動指派給閒置帳號。
+# extra 欄位帶 measure_overconfidence.py,injection_recovery.py——
+# fit_real.py／inject_lowmass.py 都直接 import 這兩支頂層模組，不在
+# pipeline/ 底下，不手動列出來 push 上去 Kaggle 端會 ImportError。
+
+# 高優先：p2_final2 headline 數字重跑（同時套用精修 bug 修正 +
+# P10 金屬量高斯先驗修正，不用額外加旗標）
+p2_final2_v3|fit_real.py|--procs 4 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3|measure_overconfidence.py,injection_recovery.py|false|
+
+# 中優先：P9a-redo v2（MH 鎖定檢驗，PARSEC 版，表 4 穩健性主張的一半）
+p9a_redo_v2|fit_real.py|--procs 4 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_redo_v2 --refines 3,3|measure_overconfidence.py,injection_recovery.py|false|
+
+# 中優先：P9c v2（MH 鎖定檢驗，MIST 版，表 4 穩健性主張的另一半）
+p9c_redo_v2|fit_real.py|--procs 4 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo_v2 --refines 3,3|measure_overconfidence.py,injection_recovery.py|false|
+
+# 中優先：P6b v2（低質量段冪次可辨識性，決定要不要升格為自由參數）
+p6b_inject_lowmass_v2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3|measure_overconfidence.py,injection_recovery.py|false|
