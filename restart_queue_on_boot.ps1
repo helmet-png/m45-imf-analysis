@@ -1,4 +1,4 @@
-﻿# 開機／登入自動重啟本機運算佇列（2026-08-13 新增）
+﻿# 開機／登入自動重啟本機運算佇列（2026-08-13 新增，2026-08-13 CodeRabbit review 後修正）
 #
 # 起因：2026-08-12 21:54 這台機器重開機，直接砍掉了 detached 的
 # run_queue.py 整棵行程樹（p2_free_lowmass 正在跑到一半），一路閒置到
@@ -10,8 +10,11 @@
 # 因為 run_queue.py 需要正常的使用者 PATH（Python Manager 裝的
 # python.exe）才能跑得起來，用 SYSTEM 層級開機觸發器可能拿不到。
 #
-# 防重複啟動：如果 run_queue.py 已經在跑（例如使用者自己手動重啟過），
-# 這支腳本什麼都不做，不會產生兩個佇列執行器互搶佇列。
+# 這支腳本的「先查行程再啟動」只是快速路徑、不是防重複的最後防線——
+# 兩個觸發可能都通過檢查、各自啟動一個 runner。真正防止兩個
+# run_queue.py 同時搶佇列的單例鎖在 run_queue.py 自己身上
+# （acquire_lock()，PID 檔案 + tasklist 探測），這支腳本只是避免
+# 沒必要地一直呼叫 Start-Process。
 #
 # queue.txt 本身的設計已經保證安全：任務只有整批跑完才會被
 # mark_done()，中途被砍掉的任務不會被誤判成已完成，重啟後會從頭
@@ -26,29 +29,39 @@
 # 2. 原本把「偵測到已在跑，略過」的訊息也寫進 logs\queue_runner8.log，
 #    但那個檔案這時正被 cmd.exe 的 >> 重導向獨占寫入中，Add-Content
 #    會撞鎖噴 IOException。改寫進獨立的 logs\autorestart.log。
-# 3. 用 Start-ScheduledTask 手動觸發測試時，LastTaskResult 回報
-#    0xC000013A（STATUS_CONTROL_C_EXIT），且 autorestart.log 完全沒有
-#    新的一行——代表腳本在寫入第一行 log 之前就已經整個中止，不是
-#    邏輯錯誤。原因未完全查清（懷疑是工作排程器的服務層級 session 對
-#    Get-CimInstance/WMI 呼叫的限制或逾時），所以把整個主體包進
-#    try/catch，任何例外都先落地寫進 log 再說，不要讓錯誤憑空消失。
+# 3. 用 Start-ScheduledTask 手動觸發測試時，行程會卡住不執行到底，
+#    懷疑是這個工具執行環境本身的 session 限制，沒能實測到真正的
+#    開機/登入觸發是否成功——這件事本身就是 CodeRabbit review 指出的
+#    「失敗路徑可能被靜默吞掉」風險的活生生案例，所以這次補上
+#    -ErrorAction Stop + exit 1，讓失敗至少能被工作排程器看到。
 
-$repo = "C:\Users\Alber\Claude\m45_membership"
-$queueLog = Join-Path $repo "logs\queue_runner8.log"
+$repo = Split-Path -Parent $MyInvocation.MyCommand.Path
 $selfLog = Join-Path $repo "logs\autorestart.log"
+$scriptPath = Join-Path $repo "run_queue.py"
 
-function Write-SelfLog($msg) {
+function Write-SelfLog {
+    param([string]$Message)
     $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    Add-Content -Path $selfLog -Value "[$stamp] $msg"
+    try {
+        Add-Content -Path $selfLog -Value "[$stamp] $Message" -ErrorAction Stop
+    } catch {
+        # log 本身寫失敗不該讓腳本連帶被視為失敗——這是輔助訊息，
+        # 不是核心邏輯（CodeRabbit review：logger 要 best-effort）。
+    }
 }
 
-Write-SelfLog "腳本開始執行（診斷用：確認腳本至少有被觸發到）"
+Write-SelfLog "腳本開始執行"
 
 try {
-    Set-Location $repo
+    Set-Location -Path $repo -ErrorAction Stop
 
-    $existing = Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-        Where-Object { $_.CommandLine -match "run_queue\.py" }
+    # 只比對這個 repo 自己的 run_queue.py 完整路徑，不是裸的
+    # "run_queue.py" 片段——避免別的 checkout、備份檔
+    # （run_queue.py.bak）之類的命令列片段誤判成「已經在跑」，
+    # 導致該重啟的時候被誤判成略過（CodeRabbit review 指出的問題）。
+    $escapedPath = [regex]::Escape($scriptPath)
+    $existing = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction Stop |
+        Where-Object { $_.CommandLine -match $escapedPath }
 
     if ($existing) {
         $pids = ($existing | Select-Object -ExpandProperty ProcessId) -join ","
@@ -57,9 +70,10 @@ try {
     }
 
     Write-SelfLog "偵測到佇列執行器沒在跑，自動重啟"
-    Start-Process -FilePath "cmd.exe" -ArgumentList '/c python -u run_queue.py >> logs\queue_runner8.log 2>&1' -WorkingDirectory $repo -WindowStyle Hidden
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c python -u `"$scriptPath`" >> logs\queue_runner8.log 2>&1" -WorkingDirectory $repo -WindowStyle Hidden -ErrorAction Stop
     Write-SelfLog "已呼叫 Start-Process 重啟 run_queue.py"
 }
 catch {
-    Write-SelfLog "例外：$($_.Exception.Message)"
+    Write-SelfLog "例外，重啟失敗：$($_.Exception.Message)"
+    exit 1
 }
