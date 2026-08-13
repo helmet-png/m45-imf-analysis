@@ -17,6 +17,9 @@
    衝突就不寫：直接在表格加一行「疑義」狀態並寫清楚困惑點，讓開這個
    任務的人或使用者看到後決定怎麼分工。這比「先做了再說」風險小。
 4. 誰都可以編輯這份文件（人類協作者、Claude、Codex、其他 agent）。
+5. **任務名稱後面要標對應的 `LIMITATIONS.md` 條目**（例如 `(A1)`），跟
+   `LIMITATIONS.md` 互相參照，完整規則見 `CONTRIBUTING.md` 五之一。
+   跟限制清單無關的工作（環境設定、文件整理）不用標。
 
 ## 欄位
 
@@ -43,16 +46,16 @@
 機器都可以認領的重跑**——認領時在上面「紀錄」表加一行，跑完把結果
 commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 
-| 優先度 | 任務 | 指令 | 為什麼 |
+| 優先度 | 任務（括號＝對應 `LIMITATIONS.md` 條目） | 指令 | 為什麼 |
 |---|---|---|---|
-| **高** | `p2_final2` 重跑（headline 數字！） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3` | 目前引用的 headline α=2.387±0.060 疊了兩個問題：(1) 精修只做到原意的一半（`--refines 3,3` 在舊 bug 下只等於一階真精修）；(2) 用均勻先驗而非 config 宣告的高斯金屬量先驗（P10，見 `LIMITATIONS.md`）。**兩個問題的程式碼都已於 2026-08-12 修好**，這行指令跑起來會自動套用兩邊的修正（不用額外加旗標），一次重跑同時解決兩個問題，不用分兩次 |
-| 中 | P9a-redo v2（MH 鎖定检验，PARSEC） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_redo_v2 --refines 3,3` | 舊結果 α=2.440±0.180 完全沒精修（純粗網格 argmax）。這是表 4 穩健性主張的一半，另一半是下面 P9c |
-| 中 | P9c v2（MH 鎖定检验，MIST） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo_v2 --refines 3,3` | 舊結果 α=2.180±0.098 同樣完全沒精修 |
-| 中 | P6b v2（低質量段冪次可辨識性） | `python inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3` | 舊結果（ratio 0.92）完全沒精修；這個數字決定要不要把低質量段冪次升格成自由參數（`p2_free_lowmass` 已經在跑了，但可辨識性本身的精確度也該補） |
-| 低 | `verify_bprperr_off`／`on` 值得懷疑就重跑一次確認 | （同 `queue.txt` 裡的參數，加 `--refines 3,3`） | 這兩個已經在 bug 修好**之後**才跑的（時間戳對得上），大機率沒事，但因為背景長跑程序曾經在其他項目上遇過「模組被即時修改」的競態，還沒 100% 排除，列在這裡給有餘力的人做確認，不急 |
+| **高** | `p2_final2` 重跑（headline 數字！）（A1、A2） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3` | 目前引用的 headline α=2.387±0.060 疊了兩個問題：(1) 精修只做到原意的一半（`--refines 3,3` 在舊 bug 下只等於一階真精修）；(2) 用均勻先驗而非 config 宣告的高斯金屬量先驗（P10，見 `LIMITATIONS.md`）。**兩個問題的程式碼都已於 2026-08-12 修好**，這行指令跑起來會自動套用兩邊的修正（不用額外加旗標），一次重跑同時解決兩個問題，不用分兩次 |
+| 中 | P9a-redo v2（MH 鎖定检验，PARSEC）（A1、A4） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_redo_v2 --refines 3,3` | 舊結果 α=2.440±0.180 完全沒精修（純粗網格 argmax）。這是表 4 穩健性主張的一半，另一半是下面 P9c |
+| 中 | P9c v2（MH 鎖定检验，MIST）（A1、A4） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo_v2 --refines 3,3` | 舊結果 α=2.180±0.098 同樣完全沒精修 |
+| 中 | P6b v2（低質量段冪次可辨識性）（A1） | `python inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3` | 舊結果（ratio 0.92）完全沒精修；這個數字決定要不要把低質量段冪次升格成自由參數（`p2_free_lowmass` 已經在跑了，但可辨識性本身的精確度也該補） |
+| 低 | `verify_bprperr_off`／`on` 值得懷疑就重跑一次確認（B1） | （同 `queue.txt` 裡的參數，加 `--refines 3,3`） | 這兩個已經在 bug 修好**之後**才跑的（時間戳對得上），大機率沒事，但因為背景長跑程序曾經在其他項目上遇過「模組被即時修改」的競態，還沒 100% 排除，列在這裡給有餘力的人做確認，不急 |
 
 **另外**：PR #11（多星團驗證）已經留言列出 4 個正確性問題（貼牆偵測
-被關掉、選擇函數驗證漏掉紅藍分色檢查等），見
+被關掉、選擇函數驗證漏掉紅藍分色檢查等）（D8、C22），見
 <https://github.com/helmet-png/m45-imf-analysis/pull/11#issuecomment-5264701703>——
 這也是待認領工作，適合 PR 作者（Codex）或任何人接手修。
 
@@ -74,11 +77,11 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 （不需要等第 2 步結果，只是環境準備／方法建置，跟第 2 步平行不
 衝突），第 4 步維持「等第 2 步結果」：
 
-| 步驟 | 任務 | 優先度 | 起手式 | 驗收標準 | 為什麼 |
+| 步驟 | 任務（括號＝對應 `LIMITATIONS.md` 條目，全部是 A5） | 優先度 | 起手式 | 驗收標準 | 為什麼 |
 |---|---|---|---|---|---|
-| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數 | **可立刻開始**（環境準備不用等第 2 步；ARM64 已知會壞，這台 x64 機器要先自己測一次，不能假設同樣的 scipy 版本問題） | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題（ARM64 機器上）**：scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始（這台 x64 機器的 scipy 版本不一定一樣，需要先測）。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
-| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數 | **等第 2 步結果**（維持原判斷） | **先等第 2 步（radial 診斷）結果出來再決定要不要投入**——如果 α(<r) 在 r=5° 內已經收斂，這步的急迫性大幅下降。真的要做時起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
-| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線） | **第一個 pilot 跑完，有初步 α(r)；正式校準版仍等第 2 步的觀測基準線** | 編譯與工具鏈已裝好並驗證（見 `nbody_setup/`）。**2026-08-13 已跑第一個 pilot**（400 顆星、270 系統、65% 聯星、Kroupa IMF、質量分層度 0.5、virial 平衡起始、含 BSE 恆星演化，積分 125 Myr，用 `nbody_setup/analyze_alpha_r.py` 分析）：**alpha(r) 從核心 0.879 升到外圍 1.316**，跟 M45 觀測的質量分層方向（核心 1.77 → 外圍 2.29，核心較平）**定性一致**，但這只是**單次、小 N、未校準的示範跑**——用 Kroupa IMF 不是文獻的 lognormal-Salpeter、270 個系統少於文獻最佳擬合的~400 個系統（這個文獻數字本身還沒查證到 Table 1 精度）、沒有潮汐場、只跑一次不是文獻的 25 次平均，數值不能直接引用或跟觀測數字比大小，只能看方向。正式版要等第 2 步基準線出來後才能定初始條件、且要多次重複跑統計誤差。完整記錄見 `PDMF_TO_IMF_PLAN.md` 第七節、`nbody_setup/` | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
+| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數（A5） | **可立刻開始**（環境準備不用等第 2 步；ARM64 已知會壞，這台 x64 機器要先自己測一次，不能假設同樣的 scipy 版本問題） | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題（ARM64 機器上）**：scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始（這台 x64 機器的 scipy 版本不一定一樣，需要先測）。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
+| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數（A5） | **等第 2 步結果**（維持原判斷） | **先等第 2 步（radial 診斷）結果出來再決定要不要投入**——如果 α(<r) 在 r=5° 內已經收斂，這步的急迫性大幅下降。真的要做時起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
+| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線）（A5） | **第一個 pilot 跑完，有初步 α(r)；正式校準版仍等第 2 步的觀測基準線** | 編譯與工具鏈已裝好並驗證（見 `nbody_setup/`）。**2026-08-13 已跑第一個 pilot**（400 顆星、270 系統、65% 聯星、Kroupa IMF、質量分層度 0.5、virial 平衡起始、含 BSE 恆星演化，積分 125 Myr，用 `nbody_setup/analyze_alpha_r.py` 分析）：**alpha(r) 從核心 0.879 升到外圍 1.316**，跟 M45 觀測的質量分層方向（核心 1.77 → 外圍 2.29，核心較平）**定性一致**，但這只是**單次、小 N、未校準的示範跑**——用 Kroupa IMF 不是文獻的 lognormal-Salpeter、270 個系統少於文獻最佳擬合的~400 個系統（這個文獻數字本身還沒查證到 Table 1 精度）、沒有潮汐場、只跑一次不是文獻的 25 次平均，數值不能直接引用或跟觀測數字比大小，只能看方向。正式版要等第 2 步基準線出來後才能定初始條件、且要多次重複跑統計誤差。完整記錄見 `PDMF_TO_IMF_PLAN.md` 第七節、`nbody_setup/` | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
 
 ## 目前已知的固定分工（不用每次都查表）
 
