@@ -15,7 +15,7 @@ Claude，先讀 `CLAUDE.md`；這份是通用規則，兩者都要遵守。
 工作，兩邊動到同一個檔案，事後才發現是接續、不是重工，但這種事本來
 應該一開始就能避免。任何預期會花超過一次對話、或會碰共用檔案
 （`pipeline/`、`injection_recovery.py`、`LIMITATIONS.md`、
-`docs/planning/PAPER_OUTLINE.md`、`queue.txt`）的工作，**開始前先讀
+`PAPER_OUTLINE.md`、`queue.txt`）的工作，**開始前先讀
 `WORK_BOARD.md`，確認沒有人已經在做同一件事**；開始時在裡面認領一行。
 看不出算不算重複就直接編輯那份文件寫清楚疑點，不要用猜的。
 
@@ -65,7 +65,7 @@ git 會標出 `<<<<<<< / ======= / >>>>>>>`，逐段決定留哪邊，
 
 **靜默語意衝突**（改到不同行，git 自動合併不報錯，但內容互相矛盾）——
 **這是這個專案最容易踩到的坑，必須額外注意**：任何 PR 只要碰到
-`LIMITATIONS.md` 或 `docs/planning/PAPER_OUTLINE.md`，合併前一定要重新讀一次 main
+`LIMITATIONS.md` 或 `PAPER_OUTLINE.md`，合併前一定要重新讀一次 main
 上這兩份文件**目前的完整版本**（不是只看自己這次的 diff），確認自己
 新加的結論沒有跟其他人剛合併進去的東西矛盾。這兩份文件本來就有「推翻
 舊說法要回頭標記原處，不能只在新處新增」的維護規則，同一個道理套用在
@@ -256,7 +256,7 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
 - [ ] 分支名稱有標明是誰／哪個 agent
 - [ ] 新結果檔案已經在 `results/RESULTS_LOG.md` 加了一行
 - [ ] commit message 有正確的身分標示
-- [ ] 若碰到 `LIMITATIONS.md`／`docs/planning/PAPER_OUTLINE.md`：已經重讀過 main
+- [ ] 若碰到 `LIMITATIONS.md`／`PAPER_OUTLINE.md`：已經重讀過 main
       上的完整版本，確認沒有跟別人的新增內容矛盾
 - [ ] 若編輯 `LIMITATIONS.md`：新增／修改的條目照第五節的格式與分級
 - [ ] 若編輯 `WORK_BOARD.md`：任務名稱有標對應的 `LIMITATIONS.md` 條目

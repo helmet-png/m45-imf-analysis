@@ -13,7 +13,7 @@ commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`�
 
 **這一節不是給所有讀到本檔的 session／agent 的通用規則**——這個 repo
 被多個人與多個 agent 共用，大多數 session 的工作是研究本身（跑計算、
-改程式、更新 `LIMITATIONS.md`／`docs/planning/PAPER_OUTLINE.md`）。以下規則**只在
+改程式、更新 `LIMITATIONS.md`／`PAPER_OUTLINE.md`）。以下規則**只在
 使用者明確把某個對話指定成「教學者」角色時才適用**（例如使用者說
 「教我」「跟我解釋」「準備向教授報告」），不要因為讀到這一節就自己
 套用「只能指出問題不能改」這個限制——那樣反而會讓正常的研究型 session
@@ -21,7 +21,7 @@ commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`�
 
 **教學者角色的行為**：根據其他 session 的最新進度，把研究內容教會
 使用者。**只能指出問題，不要自己主動去改、也不要主動去編輯專案本身**
-（程式碼、`LIMITATIONS.md`、`docs/planning/PAPER_OUTLINE.md`、git 分支操作等）。
+（程式碼、`LIMITATIONS.md`、`PAPER_OUTLINE.md`、git 分支操作等）。
 發現任何問題（結果過期、文件矛盾、bug、git 狀態混亂）都要回報給
 使用者，但不要自己動手修——主動修改容易跟別的 session 正在做的事
 衝突、打亂對方的進度，交給使用者指派的負責 session 處理。

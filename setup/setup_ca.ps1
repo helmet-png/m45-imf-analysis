@@ -7,14 +7,15 @@
 # does not, so Python fails with CERTIFICATE_VERIFY_FAILED. Capturing the chain
 # here keeps certificate verification ON in the pipeline instead of disabling it.
 #
-# Usage:  powershell -ExecutionPolicy Bypass -File .\setup_ca.ps1
+# Usage (from repo root):  powershell -ExecutionPolicy Bypass -File .\setup\setup_ca.ps1
 #
 # NOTE: keep this file pure ASCII. PowerShell 5.1 reads .ps1 as ANSI when there
 # is no BOM, so non-ASCII comments corrupt the parse.
 
 $ErrorActionPreference = "Stop"
 $targetHost = "stev.oapd.inaf.it"
-$outFile = Join-Path $PSScriptRoot "certs\parsec_chain.pem"
+$repoRoot = Split-Path $PSScriptRoot -Parent
+$outFile = Join-Path $repoRoot "certs\parsec_chain.pem"
 New-Item -ItemType Directory -Force (Split-Path $outFile) | Out-Null
 
 Write-Host "Connecting to $targetHost ..."

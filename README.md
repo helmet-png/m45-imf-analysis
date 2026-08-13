@@ -63,7 +63,7 @@ pyUPMASK 可以用兩種方式給出成員機率，由 `KDEP_flag` 切換。兩�
 
 ```bash
 # 一次性：修復 PARSEC 服務的憑證鏈問題（見下方說明）
-powershell -ExecutionPolicy Bypass -File setup_ca.ps1
+powershell -ExecutionPolicy Bypass -File setup\setup_ca.ps1
 
 # 抓資料
 python scripts/data_prep/fetch_gaia.py --target M45 --radius 5 --gmax 18 --plxmin 4
@@ -571,13 +571,13 @@ A_V 報出 ±0.001 的誤差棒是明顯警訊 —— 網格搜尋在不同設�
 
 ---
 
-## PARSEC 憑證問題（為什麼需要 `setup_ca.ps1`）
+## PARSEC 憑證問題（為什麼需要 `setup/setup_ca.ps1`）
 
 `stev.oapd.inaf.it` 沒有送出中繼憑證。Windows 的 schannel 會自動下載缺少的
 中繼憑證（AIA chasing），所以瀏覽器與 PowerShell 連得上；OpenSSL（Python 用的）
 不會，於是 Python 報 `CERTIFICATE_VERIFY_FAILED`。
 
-`setup_ca.ps1` 用 Windows 建立完整憑證鏈，存成 `certs/parsec_chain.pem`，
+`setup/setup_ca.ps1` 用 Windows 建立完整憑證鏈，存成 `certs/parsec_chain.pem`，
 再與 certifi 的根憑證合併成 bundle 給 Python 用。**這是為了讓憑證驗證能通過，
 不是關掉驗證。** 只需執行一次。
 
@@ -603,7 +603,10 @@ scripts/
   plotting/
     plots.py                    第 1 步六格驗證圖
     plot_step3.py                第 3 步年齡擬合圖
-setup_ca.ps1                    一次性憑證修復
+setup/
+  setup_ca.ps1                  一次性憑證修復
+  setup_arm64.bat                ARM64 原生 Python 安裝與效能比較
+PAPER_OUTLINE.md                論文範圍凍結文件
 docs/reference/METHODS.md      完整的方法與修正記錄
 docs/reference/COMPARISON.md   與前人方法的逐項對照、完整參數表
 ```

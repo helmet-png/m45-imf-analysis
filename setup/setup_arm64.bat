@@ -11,7 +11,7 @@ REM   Keep this file pure ASCII. Batch files with non-ASCII text
 REM   break under the OEM codepage.
 REM ============================================================
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo.
 echo === Current Python (x64, emulated) ===
