@@ -21,6 +21,7 @@ Usage:
 """
 import os
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -82,7 +83,7 @@ def bin_mask(i, lo, hi, x):
 # claimed by exactly one bin -- this is the boundary double-counting bug
 # CodeRabbit flagged on PR #29's second review pass. The final edge must
 # land in the last (closed) bin.
-_edges_list = list(enumerate(zip(edges[:-1], edges[1:])))
+_edges_list = list(enumerate(pairwise(edges)))
 for boundary in edges[1:-1]:
     owners = [i for i, (lo, hi) in _edges_list if bin_mask(i, lo, hi, boundary)]
     assert len(owners) == 1, f"boundary {boundary} claimed by bins {owners}"

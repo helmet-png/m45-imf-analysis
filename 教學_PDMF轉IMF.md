@@ -594,7 +594,7 @@ n_bins = len(edges) - 1
 def bin_mask(i, lo, hi, x):
     return (x >= lo) & (x < hi) if i < n_bins - 1 else (x >= lo) & (x <= hi)
 
-for i, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
+for i, (lo, hi) in enumerate(pairwise(edges)):
     sel = bin_mask(i, lo, hi, r_b)
     fit = mle_powerlaw(mass_b[sel], mass_min, mass_max)
 ```
