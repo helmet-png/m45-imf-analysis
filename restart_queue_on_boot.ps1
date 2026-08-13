@@ -35,8 +35,9 @@
 #    「失敗路徑可能被靜默吞掉」風險的活生生案例，所以這次補上
 #    -ErrorAction Stop + exit 1，讓失敗至少能被工作排程器看到。
 
-$repo = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repo = $PSScriptRoot
 $selfLog = Join-Path $repo "logs\autorestart.log"
+$queueLog = Join-Path $repo "logs\queue_runner8.log"
 $scriptPath = Join-Path $repo "run_queue.py"
 
 function Write-SelfLog {
@@ -70,7 +71,8 @@ try {
     }
 
     Write-SelfLog "偵測到佇列執行器沒在跑，自動重啟"
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c python -u `"$scriptPath`" >> logs\queue_runner8.log 2>&1" -WorkingDirectory $repo -WindowStyle Hidden -ErrorAction Stop
+    $command = '/c python -u "{0}" >> "{1}" 2>&1' -f $scriptPath, $queueLog
+    Start-Process -FilePath "cmd.exe" -ArgumentList $command -WorkingDirectory $repo -WindowStyle Hidden -ErrorAction Stop
     Write-SelfLog "已呼叫 Start-Process 重啟 run_queue.py"
 }
 catch {
