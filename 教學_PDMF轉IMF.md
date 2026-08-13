@@ -578,10 +578,13 @@ def mle_powerlaw(masses, m_lo, m_hi):
 
 ```python
 # nbody_setup/analyze_alpha_r.py — 徑向分箱：把 t=125 Myr 快照的星
-# 依到密度中心的距離切三等分（三分位數），各自丟進 mle_powerlaw()
+# 依到密度中心的距離切三等分（三分位數），各自丟進 mle_powerlaw()。
+# 除最後一箱外用右開區間，避免剛好卡在百分位邊界的星被兩箱重複計數
+# （跟 pipeline/step5_imf.py:mass_function_by_radius() 用同一個慣例）
 edges = np.percentile(r_b, [0, 33, 66, 100])
-for lo, hi in zip(edges[:-1], edges[1:]):
-    sel = (r_b >= lo) & (r_b <= hi)
+n_bins = len(edges) - 1
+for i, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
+    sel = (r_b >= lo) & (r_b < hi) if i < n_bins - 1 else (r_b >= lo) & (r_b <= hi)
     fit = mle_powerlaw(mass_b[sel], mass_min, mass_max)
 ```
 
@@ -593,6 +596,15 @@ for lo, hi in zip(edges[:-1], edges[1:]):
 證實檔案本身就已經是中心化座標，不是核心的絕對座標。修好後重跑，
 α(r) 的方向與量級結論不變，只有精確數字從 0.81/0.98/1.37 微調成
 0.879/0.934/1.316（現在表格裡的版本）。
+
+CodeRabbit 第二輪 review 又抓到分箱寫法的潛在問題：原本每一箱都用
+`>=`／`<=` 雙閉區間，理論上會讓剛好落在百分位邊界上的星被相鄰兩箱
+重複計數。查了 pinned commit 版本的 mcluster 原始碼後（順便訂正了
+「130 組聯星=65%」這句容易誤解的寫法——65% 是「星處於聯星的比例」，
+不是系統數的比例），重新驗證這次跑的資料沒有星剛好卡在邊界（修正
+前後數字不變），但已經改成除最後一箱外都用右開區間（跟
+`pipeline/step5_imf.py:mass_function_by_radius()` 的既有寫法一致），
+避免下次真的踩到。
 
 ### 9.2 已排進佇列，還沒有結果（待重跑確認）
 

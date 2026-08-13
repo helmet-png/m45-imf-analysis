@@ -71,8 +71,14 @@ print(f"\nRadius bin edges (tertiles of bound sample, pc): {edges}")
 
 print("\nalpha(r):")
 print("r_lo   r_hi     n   alpha  alpha_err  median_mass")
-for lo, hi in zip(edges[:-1], edges[1:]):
-    sel = (r_b >= lo) & (r_b <= hi)
+n_bins = len(edges) - 1
+for i, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
+    # right-open except the last bin, so a star sitting exactly on a
+    # percentile boundary isn't double-counted in both neighbors
+    if i == n_bins - 1:
+        sel = (r_b >= lo) & (r_b <= hi)
+    else:
+        sel = (r_b >= lo) & (r_b < hi)
     fit = mle_powerlaw(mass_b[sel], mass_min, mass_max)
     in_range = mass_b[sel][(mass_b[sel] >= mass_min) & (mass_b[sel] <= mass_max)]
     med_m = np.median(in_range) if len(in_range) else float("nan")
