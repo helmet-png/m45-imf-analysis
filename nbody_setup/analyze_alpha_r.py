@@ -2,12 +2,18 @@
 reusing the M45 project's own mle_powerlaw() (pipeline/step5_imf.py) for a
 like-for-like comparison against the observational alpha(r).
 
-Run from the directory containing the PeTar output (data.core, and
-data.<N>.single/.binary produced by `petar.data.process`). Needs two paths
-that vary by machine:
+Run from the directory containing the PeTar output (data.<N>.single/.binary
+produced by `petar.data.process`, using `tools/data_process.py` -- the
+`Particle`/`Binary` loader already returns positions in the density-center
+frame via `correctCenter()`, so do NOT subtract data.core's center again;
+that was a real bug in an earlier version of this script, caught by
+CodeRabbit review on PR #29 and confirmed by checking that the median
+position in a .single file is ~(0,0,0), not the core position). Needs one
+path that varies by machine:
   NBODY_INSTALL_PATH   PeTar install prefix (contains include/petar/), see
-                       nbody_setup/README.md. Default: ../install relative
-                       to this repo's parent directory.
+                       nbody_setup/README.md. Default: sibling nbody/install
+                       next to this repo (i.e. ../../nbody/install from
+                       this file).
   (this repo's own path is found automatically via this file's location)
 
 Usage:
@@ -37,9 +43,10 @@ binary.loadtxt(prefix + ".binary")
 mass = np.concatenate([single.mass, binary.mass])
 pos = np.concatenate([single.pos, binary.pos], axis=0)
 
-core = np.loadtxt("data.core")
-center = core[1:4] if core.ndim == 1 else core[-1, 1:4]
-r = np.sqrt(np.sum((pos - center) ** 2, axis=1))
+# pos is already in the density-center frame (petar.data.process calls
+# correctCenter() internally before saving .single/.binary) -- do not
+# subtract data.core's center again, that would double-subtract it.
+r = np.sqrt(np.sum(pos ** 2, axis=1))
 
 print(f"N bodies (singles + binary COMs): {len(mass)}")
 print(f"Total mass: {mass.sum():.2f} Msun")
