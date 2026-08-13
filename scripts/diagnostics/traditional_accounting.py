@@ -116,13 +116,19 @@ def ms_colour_to_g(iso, dist_mod, av, ext):
 
 def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
                       variant="ignore", cmd_thresh=0.375,
-                      ruwe=None, nss=None, ruwe_threshold=1.4):
+                      ruwe=None, nss=None, ruwe_threshold=1.4,
+                      color_check=False):
     """跑一次完整的傳統流程，回傳 (alpha, 使用星數, 剔除數, alpha_err)。
 
     variant: "ignore"（全當單星）/ "cmd_offset"（CMD剔除）/
              "ruwe"（RUWE剔除，需傳 ruwe 陣列）/
              "nss"（GaiaNSS剔除，需傳 nss 陣列）/
              "analytic_correct"（不剔除，對 ignore 的結果套文獻修正量）
+
+    `color_check=True` 時把 `color` 一併傳給 `assign_masses()` 做顏色一致性
+    檢查（見 `LIMITATIONS.md` A6），只用在真實資料段——注入回收段用的是
+    合成 `color`/`mag`（`make_fake()` 產生），維持舊行為不動，避免動到
+    已經驗證過的注入回收數字。
     """
     color = np.asarray(color, float)
     mag = np.asarray(mag, float)
@@ -148,7 +154,8 @@ def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
     elif variant not in ("ignore", "analytic_correct"):
         raise ValueError(f"未知的 variant：{variant!r}")
 
-    masses = assign_masses(mag, iso, dm, av, ext)
+    masses = assign_masses(mag, iso, dm, av, ext,
+                           obs_color=(color if color_check else None))
     fit = mle_powerlaw(masses, m_lo, m_hi)
     alpha = fit["alpha"]
     if variant == "analytic_correct" and np.isfinite(alpha):
@@ -158,7 +165,7 @@ def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
 
 def bootstrap_alpha_err(color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
                         ruwe=None, nss=None, ruwe_threshold=1.4,
-                        n_boot=1000, seed=7000):
+                        n_boot=1000, seed=7000, color_check=False):
     """對真實資料做 with-replacement 重抽，量「對這 1,078 顆星本身的敏感度」。
 
     **這跟注入回收量的不是同一個量**：注入回收量的是「對真實但未知的
@@ -178,7 +185,7 @@ def bootstrap_alpha_err(color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
             variant=variant,
             ruwe=(np.asarray(ruwe)[idx] if ruwe is not None else None),
             nss=(np.asarray(nss)[idx] if nss is not None else None),
-            ruwe_threshold=ruwe_threshold)
+            ruwe_threshold=ruwe_threshold, color_check=color_check)
         if np.isfinite(a):
             outs.append(a)
     outs = np.array(outs)
@@ -286,18 +293,20 @@ def main():
         for rlo, rhi, rtag in ranges:
             for variant, tag in INJ_VARIANTS:
                 a, n, n_rm, err = traditional_alpha(
-                    color, mag, iso, dm, av, ext, rlo, rhi, variant=variant)
+                    color, mag, iso, dm, av, ext, rlo, rhi, variant=variant,
+                    color_check=True)
                 real[(note, rtag, tag)] = (a, err, "曲率")
                 print(f"{note:>26}{rtag:>16}{tag:>16}{a:>8.3f}"
                       f"{err:>8.3f}{'曲率':>10}{n:>7}{n_rm:>6}")
             for variant, tag in REAL_ONLY_VARIANTS:
                 a, n, n_rm, _ = traditional_alpha(
                     color, mag, iso, dm, av, ext, rlo, rhi, variant=variant,
-                    ruwe=ruwe_all, nss=nss_all, ruwe_threshold=ruwe_thr)
+                    ruwe=ruwe_all, nss=nss_all, ruwe_threshold=ruwe_thr,
+                    color_check=True)
                 _, boot_err = bootstrap_alpha_err(
                     color, mag, iso, dm, av, ext, rlo, rhi, variant,
                     ruwe=ruwe_all, nss=nss_all, ruwe_threshold=ruwe_thr,
-                    n_boot=args.n_boot)
+                    n_boot=args.n_boot, color_check=True)
                 real[(note, rtag, tag)] = (a, boot_err, "bootstrap")
                 print(f"{note:>26}{rtag:>16}{tag:>16}{a:>8.3f}"
                       f"{boot_err:>8.3f}{'bootstrap':>10}{n:>7}{n_rm:>6}")
@@ -309,7 +318,7 @@ def main():
     for variant, tag in INJ_VARIANTS[:2]:   # analytic_correct 沒有獨立剔除，不必比
         boot_mean, boot_err = bootstrap_alpha_err(
             color, mag, iso_c, dm, CURRENT_AV, ext, 0.50, m_hi, variant,
-            n_boot=args.n_boot)
+            n_boot=args.n_boot, color_check=True)
         print(f"  {tag:<12} bootstrap: alpha={boot_mean:.3f} 散布={boot_err:.3f}")
 
     print("\n判讀：")
