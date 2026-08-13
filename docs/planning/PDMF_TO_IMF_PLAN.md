@@ -82,7 +82,7 @@ alpha(r) = 1.732 + 0.155·r      斜率 5.5 sigma，chi2/dof = 0.21
 | **A 觀測全域**：把樣本半徑放大到涵蓋暈與潮汐尾 | [Gaia EDR3 潮汐尾搜尋](https://arxiv.org/abs/2209.08259) | 低（診斷版）／高（完整版） | 用現有工具鏈；直接消滅最大誤差來源 | 大半徑污染暴增、pyUPMASK 成員判定變難、選擇函數要重建 |
 | **B 經驗校準**：套文獻的 α(age) 關係 | [Li+2026](https://arxiv.org/html/2606.05762)、[93 星團](https://arxiv.org/abs/2403.08850) | 極低 | 現成公式 | 是別的星團的平均、不是 M45 專屬；之後跟這些文獻比較會循環論證 |
 | **C 自己跑 N-body**：重建初始狀態 | [Converse & Stahler 2010](https://academic.oup.com/mnras/article/405/1/666/1025437)（**訂正見下方「Converse & Stahler 2010 實際初始條件」一節，先前這裡寫的 N=1215／95% 雙星不準確**） | 中 | **與專案的前向模型哲學一致**（合成→比對，延伸到時間軸）；能同時預測 α(r) 與雙星徑向分布 | 要編譯（ARM64 是坑，已在 x64 協作機解決，見第七節）；初始條件有簡併 |
-| **D 多質量平衡模型**：用徑向密度剖面反推全域 MF | LIMEPY（Gieles & Zocchi 2015） | 低—中 | 不用跑時間演化，ARM64 裝得起來 | 假設動力學平衡，對正在被剝離的外圍不成立；**目前這台機器的 scipy 1.17.1 讓套件跑不起來，見第七節**，需要先排除環境問題才能真的開始用 |
+| **D 多質量平衡模型**：用徑向密度剖面反推全域 MF | LIMEPY（Gieles & Zocchi 2015） | 低—中 | 不用跑時間演化，ARM64 裝得起來 | 假設動力學平衡，對正在被剝離的外圍不成立；**scipy 版本相容性問題已在 x64 協作機解決（獨立 venv 釘 scipy==1.16.3），第一次擬合已跑完，見第七節與 `LIMITATIONS.md` D9**——初步結果，擬合品質待改進，還沒有第 2 步結果可交叉驗證 |
 
 ### Converse & Stahler (2010) 實際初始條件（2026-08-12 訂正，準備正式模擬前查證）
 
@@ -208,6 +208,30 @@ limepy` 裝到的是 PyPI 上一個**同名但完全無關**的 LimeSurvey 問�
 `dopri5._solout() takes 3 positional arguments but 4 were given`）。
 這個環境問題目前沒解決，需要在獨立 venv 裡釘住較舊的 scipy 版本，
 或是等上游套件更新到用 `scipy.integrate.solve_ivp`。
+
+**2026-08-13（新協作者機器，x64，Yu Tung Lan）環境問題解決、第一次擬合跑完**：
+這台機器的 scipy 是 1.18.0，一樣壞，但錯法跟 ARM64 的 1.17.1 略有不同
+（`nsteps` 型別問題修好後一樣撞到 `dopri5._solout()` 呼叫慣例改變）。
+Python 3.14 目前沒有任何舊版 scipy 的 cp314 wheel（要編譯器才能裝，這台
+機器沒裝），沒辦法直接在主環境或用 pip 裝舊版解決。**解法**：獨立 venv
+（`.venv_limepy/`，不進版控）釘 `scipy==1.16.3`——這是唯一測過能正常
+建構 LIMEPY 模型的版本，King(g=1)／Woolley(g=0)／Wilson(g=2) 三種模型
+形狀都驗證過收斂。完整重現步驟與已知限制見
+`scripts/diagnostics/limepy_multimass.py` 開頭的說明。
+
+用 `results/step5_imf.npz` 裡既有的 `masses`（`assign_masses()` 算出的，
+跟第 5 步同一套）配上 `data/cmd_members.csv` 的 ra/dec（跟
+`run_pipeline.py` 第 5 步同一個大圓角距離公式，M45 距離取 136 pc，跟
+`dynamics_estimate.py` 預設一致），依質量切 3 個區間，各自算投影半徑的
+環帶數密度剖面，對 King(g=1) 模型的 (phi0, r0, M) 做卡方擬合：
+phi0=3.52、r0=2.49 pc、M=534.9 M_sun，reduced chi^2=8.90（**不算好**，
+見 `LIMITATIONS.md` D9 的完整已知限制）。模型潮汐半徑 r_t=20.16 pc，
+預測目前 Gaia 樣本邊緣（11.70 pc）到 r_t 之間還有 21.2 M_sun（模型
+總質量的 4.0%）。**明確保留態度**：這是初步、方向性的估計，質量區間
+之間的比例直接沿用觀測 PDMF（可能已被蒸發／分層扭曲），且還沒有第 2 步
+的 α(<r) 觀測結果可以交叉驗證（`radial_r1/r2/r3/rall` 還在 `queue.txt`
+排隊）。結果存在 `results/limepy_multimass.npz`，見
+`results/RESULTS_LOG.md`。
 
 **第 5 步（N-body）環境已在 x64 機器上裝好並驗證（2026-08-12，新協作者
 機器，Yu Tung Lan）**：原本以為需要 WSL（見上方第五節「需要 x64 或 WSL
