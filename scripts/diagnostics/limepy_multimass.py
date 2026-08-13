@@ -9,8 +9,11 @@ PAPER_OUTLINE.md 與 WORK_BOARD.md「待認領工作：PDMF → IMF」表第 3 �
 方法：把成員星依質量切成 N_MASS_BINS 個區間，各自算投影半徑的環帶數密度
 剖面（觀測值），再用 LIMEPY 生成模型剖面，對 (phi0, r0, M) 三個參數做
 卡方擬合（mj／Mj 用觀測到的各質量區間平均質量／總質量比例固定，只讓整體
-形狀與尺度自由）。King(g=1)／Woolley(g=0)／Wilson(g=2) 三種模型形狀測過，
-擬合出的 phi0/r0/M 幾乎一樣，用最常見的 King(g=1)。
+形狀與尺度自由）。King(g=1)／Woolley(g=0)／Wilson(g=2) 三種模型形狀都
+測過：reduced chi^2 分別是 0.75／1.50／0.52，**Wilson 實際上擬合最好**，
+但三者都在合理範圍內、phi0/r0/M 也在同一量級（r0 2.10–2.67 pc、M
+440–476 M_sun），這裡固定用天文文獻裡最常見的 King(g=1)，不是因為它
+擬合最好，只是慣例選擇——想比較模型形狀敏感度可以自己改 MODEL_G 重跑。
 
 **環境需求（重要，先讀）**：astro-limepy 依賴 `scipy.integrate.ode`
 這支已棄用的舊 API，在 scipy 1.17.1（ARM64 機器，見 LIMITATIONS.md
@@ -29,11 +32,12 @@ PAPER_OUTLINE.md 與 WORK_BOARD.md「待認領工作：PDMF → IMF」表第 3 �
 腳本。這支腳本只需要 numpy/scipy/astropy/limepy 四個套件，不需要專案
 其他重依賴（pipeline/ 都不用 import）。
 
-**已知限制（誠實記錄，見 LIMITATIONS.md）**：
-1. 這是單一各向同性模型擬合三個質量區間的投影數密度剖面，reduced
-   chi^2 約 9（不算好，King/Woolley/Wilson 三種形狀給出幾乎一樣的結果，
-   代表限制不在模型形狀選擇，可能是徑向分箱統計量不足或真實剖面有
-   模型未捕捉到的結構），數字方向可信、精確值不宜過度解讀。
+**已知限制（誠實記錄，見 LIMITATIONS.md B5）**：
+1. 這是單一各向同性模型擬合三個質量區間的投影數密度剖面。King(g=1)
+   reduced chi^2=0.75（擬合品質好），但 Wilson(g=2) 擬合更好
+   （reduced chi^2=0.52）——用 King 是天文文獻的慣例選擇，不是因為
+   它擬合最好，數字方向可信，但換模型形狀會讓 M／r_t 等精確值跟著動
+   （量級不變，見上方三種形狀的比較）。
 2. 質量區間之間的相對總質量比例（Mj）直接固定成觀測值，只有整體
    normalization（M）自由——如果 PDMF 本身因為蒸發已經扭曲，這個比例
    會把扭曲也帶進模型，這正是 A5 想解決的問題，屬於已知的方法論簡化。
@@ -116,7 +120,11 @@ def fit(mj, Mj_frac, obs_R, obs_Sigma, obs_err, g=MODEL_G):
             return 1e12
         total = 0.0
         for j in range(len(mj)):
-            pred = np.interp(obs_R[j], model.R, model.Sigmaj[j],
+            # model.Sigmaj 是質量面密度（M_sun/pc^2），obs_Sigma 是星數
+            # 面密度（顆/pc^2）——兩者單位不同，除以 mj[j]（該區間平均
+            # 星質量）換成星數面密度才能跟觀測值比較（CodeRabbit 抓到
+            # 這個真的 unit mismatch bug，2026-08-13 修正）
+            pred = np.interp(obs_R[j], model.R, model.Sigmaj[j] / mj[j],
                              left=np.nan, right=0.0)
             good = np.isfinite(pred)
             total += np.sum(((obs_Sigma[j][good] - pred[good])
@@ -127,6 +135,11 @@ def fit(mj, Mj_frac, obs_R, obs_Sigma, obs_err, g=MODEL_G):
                    method="Nelder-Mead",
                    options={"xatol": 1e-3, "fatol": 1e-3, "maxiter": 500})
     phi0, log_r0, log_M = res.x
+    if (not res.success or not np.all(np.isfinite(res.x))
+            or not np.isfinite(res.fun) or res.fun >= 1e12):
+        raise RuntimeError(
+            f"LIMEPY 擬合沒有收斂到有效解（success={res.success}, "
+            f"fun={res.fun}）——不要用這個結果")
     return phi0, 10 ** log_r0, 10 ** log_M, res.fun
 
 
@@ -169,6 +182,8 @@ def main():
 
     model = limepy.limepy(phi0, MODEL_G, mj=list(mj), Mj=list(Mj_frac),
                           r0=r0, M=M_fit, project=True)
+    if not model.converged:
+        raise RuntimeError("最終模型沒有收斂，不寫入結果檔")
     print(f"\n  r_t (模型潮汐半徑，phi=0 處) = {model.rt:.2f} pc")
     print(f"  r_h (半質量半徑) = {model.rh:.2f} pc")
     print(f"  （注意：這是模型內部量，不等於銀河潮汐力算出的 Jacobi 半徑"
