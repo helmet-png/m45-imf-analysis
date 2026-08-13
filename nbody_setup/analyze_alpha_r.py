@@ -21,6 +21,7 @@ Usage:
 """
 import os
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -69,10 +70,30 @@ mass_min, mass_max = 0.1, 2.0
 edges = np.percentile(r_b, [0, 33, 66, 100])
 print(f"\nRadius bin edges (tertiles of bound sample, pc): {edges}")
 
+n_bins = len(edges) - 1
+
+
+def bin_mask(i, lo, hi, x):
+    # right-open except the last bin, so a star sitting exactly on a
+    # percentile boundary isn't double-counted in both neighbors
+    return (x >= lo) & (x < hi) if i < n_bins - 1 else (x >= lo) & (x <= hi)
+
+
+# regression check: a point sitting exactly on an interior edge must be
+# claimed by exactly one bin -- this is the boundary double-counting bug
+# CodeRabbit flagged on PR #29's second review pass. The final edge must
+# land in the last (closed) bin.
+_edges_list = list(enumerate(pairwise(edges)))
+for boundary in edges[1:-1]:
+    owners = [i for i, (lo, hi) in _edges_list if bin_mask(i, lo, hi, boundary)]
+    assert len(owners) == 1, f"boundary {boundary} claimed by bins {owners}"
+last_i, (last_lo, last_hi) = _edges_list[-1]
+assert bin_mask(last_i, last_lo, last_hi, edges[-1])
+
 print("\nalpha(r):")
 print("r_lo   r_hi     n   alpha  alpha_err  median_mass")
-for lo, hi in zip(edges[:-1], edges[1:]):
-    sel = (r_b >= lo) & (r_b <= hi)
+for i, (lo, hi) in _edges_list:
+    sel = bin_mask(i, lo, hi, r_b)
     fit = mle_powerlaw(mass_b[sel], mass_min, mass_max)
     in_range = mass_b[sel][(mass_b[sel] >= mass_min) & (mass_b[sel] <= mass_max)]
     med_m = np.median(in_range) if len(in_range) else float("nan")
