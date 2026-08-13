@@ -50,11 +50,52 @@ def main_sequence_mass_luminosity(iso: Table, dist_mod: float, av: float,
     return g[idx], m[idx]
 
 
+def main_sequence_color(iso: Table, dist_mod: float, av: float,
+                        ext) -> tuple[np.ndarray, np.ndarray]:
+    """從 isochrone 取出單調主序段，回傳 (視星等 G, BP-RP 顏色)。
+
+    跟 `main_sequence_mass_luminosity()` 用同一個「保留 G 持續變亮」的
+    單調篩選，確保兩者定義的是同一段主序，查出來的質量與顏色可以對同一顆
+    觀測星互相對照。
+    """
+    m = np.asarray(iso["Mini"], float)
+    g = np.asarray(iso[COL_G], float) + dist_mod + ext.g * av
+    c = (np.asarray(iso[COL_BP], float) - np.asarray(iso[COL_RP], float)
+         + (ext.bp - ext.rp) * av)
+    order = np.argsort(m)
+    g, c = g[order], c[order]
+    keep = np.ones(len(m), bool)
+    gmin = np.inf
+    for i in range(len(g)):
+        if g[i] < gmin:
+            gmin = g[i]
+        else:
+            keep[i] = False
+    g, c = g[keep], c[keep]
+    idx = np.argsort(g)
+    return g[idx], c[idx]
+
+
 def assign_masses(obs_mag, iso: Table, dist_mod: float, av: float,
-                  ext) -> np.ndarray:
-    """方法 A：把每顆星當單星，由 G 星等查出質量。"""
+                  ext, obs_color=None, color_tol: float = 0.4) -> np.ndarray:
+    """方法 A：把每顆星當單星，由 G 星等查出質量。
+
+    `obs_color`（BP-RP）給定時，額外做顏色一致性檢查：算出該 G 星等對應
+    的主序顏色，觀測顏色偏離超過 `color_tol` 星等就回傳 NaN，跟現有處理
+    範圍外星等的機制一致。門檻抓 0.4：已知混入 `cmd_members.csv` 的白矮星
+    （source_id=66697547870378368）bp_rp=-0.403，同一 G 星等的主序顏色
+    偏離達 1 星等以上，遠超過未解析主序雙星的典型顏色偏移（通常 <0.2
+    星等），0.4 足以擋下非主序天體、不會誤殺正常雙星（見 `LIMITATIONS.md`
+    A6）。不給 `obs_color` 時完全不做這項檢查，行為與修正前一致。
+    """
     g_ms, m_ms = main_sequence_mass_luminosity(iso, dist_mod, av, ext)
-    return np.interp(obs_mag, g_ms, m_ms, left=np.nan, right=np.nan)
+    masses = np.interp(obs_mag, g_ms, m_ms, left=np.nan, right=np.nan)
+    if obs_color is not None:
+        g_c, c_ms = main_sequence_color(iso, dist_mod, av, ext)
+        pred_color = np.interp(obs_mag, g_c, c_ms, left=np.nan, right=np.nan)
+        bad = np.abs(np.asarray(obs_color, float) - pred_color) > color_tol
+        masses = np.where(bad, np.nan, masses)
+    return masses
 
 
 def mle_powerlaw(masses: np.ndarray, m_lo: float, m_hi: float) -> dict:

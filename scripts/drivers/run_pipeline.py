@@ -195,7 +195,8 @@ def main():
         c5 = cfg.step5_imf
 
         print("方法 A：把每顆星當單星指派質量，再做 MLE 冪律擬合")
-        masses = step5_imf.assign_masses(mag[ok], one, dm, av, ext)
+        masses = step5_imf.assign_masses(mag[ok], one, dm, av, ext,
+                                         obs_color=color[ok])
         fitA = step5_imf.mle_powerlaw(masses, c5.mass_min, c5.mass_max)
         print(f"  alpha = {fitA['alpha']:.3f} +/- {fitA['alpha_err']:.3f}"
               f"  (n={fitA['n']:,}，質量 {c5.mass_min}-{c5.mass_max} M_sun)")
