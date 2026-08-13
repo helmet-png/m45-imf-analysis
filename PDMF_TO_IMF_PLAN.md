@@ -81,8 +81,38 @@ alpha(r) = 1.732 + 0.155·r      斜率 5.5 sigma，chi2/dof = 0.21
 |---|---|---|---|---|
 | **A 觀測全域**：把樣本半徑放大到涵蓋暈與潮汐尾 | [Gaia EDR3 潮汐尾搜尋](https://arxiv.org/abs/2209.08259) | 低（診斷版）／高（完整版） | 用現有工具鏈；直接消滅最大誤差來源 | 大半徑污染暴增、pyUPMASK 成員判定變難、選擇函數要重建 |
 | **B 經驗校準**：套文獻的 α(age) 關係 | [Li+2026](https://arxiv.org/html/2606.05762)、[93 星團](https://arxiv.org/abs/2403.08850) | 極低 | 現成公式 | 是別的星團的平均、不是 M45 專屬；之後跟這些文獻比較會循環論證 |
-| **C 自己跑 N-body**：重建初始狀態 | [Converse & Stahler 2010](https://academic.oup.com/mnras/article/405/1/666/1025437)（N=1215、初始 95% 雙星） | 中 | **與專案的前向模型哲學一致**（合成→比對，延伸到時間軸）；能同時預測 α(r) 與雙星徑向分布 | 要編譯（ARM64 是坑，可能得用 x64 協作機）；初始條件有簡併 |
+| **C 自己跑 N-body**：重建初始狀態 | [Converse & Stahler 2010](https://academic.oup.com/mnras/article/405/1/666/1025437)（**訂正見下方「Converse & Stahler 2010 實際初始條件」一節，先前這裡寫的 N=1215／95% 雙星不準確**） | 中 | **與專案的前向模型哲學一致**（合成→比對，延伸到時間軸）；能同時預測 α(r) 與雙星徑向分布 | 要編譯（ARM64 是坑，已在 x64 協作機解決，見第七節）；初始條件有簡併 |
 | **D 多質量平衡模型**：用徑向密度剖面反推全域 MF | LIMEPY（Gieles & Zocchi 2015） | 低—中 | 不用跑時間演化，ARM64 裝得起來 | 假設動力學平衡，對正在被剝離的外圍不成立；**目前這台機器的 scipy 1.17.1 讓套件跑不起來，見第七節**，需要先排除環境問題才能真的開始用 |
+
+### Converse & Stahler (2010) 實際初始條件（2026-08-12 訂正，準備正式模擬前查證）
+
+之前這份文件與 `WORK_BOARD.md` 都寫「N≈1200–1500 systems、初始雙星比例
+~95%、embedded cluster + 氣體驅離」，**這句話不準確，是沒有查證原文就
+寫下的**。透過 WebFetch 讀取 MNRAS 論文頁面的 methods 摘要後，實際設定是：
+
+- **起始狀態是氣體驅離後、已達 virial 平衡**（n=3 多方球，virial 半徑
+  ~4 pc），**不含胚胎星團／氣體動力學階段本身**——論文原文說這段留給
+  未來工作，之前的「embedded cluster + 氣體驅離」寫法把兩件事混為一談。
+- **恆星系統數（星＋聯星當一個系統算）最佳擬合值約 400**，不是
+  1200–1500。
+- **原初聯星比例的先驗範圍是「接近 1」，但最佳擬合值約 0.65–0.68**，
+  不是 95%（95% 可能是先驗範圍的上限或另一篇文獻的數字被誤植過來）。
+- **IMF 用 lognormal-Salpeter 混合分布**（質量範圍 0.08–10 M☉），不是
+  這份文件其他地方常提到的 Kroupa (2001)。
+- **初始就帶有顯著的質量分層**（分層程度參數 ~0.5），不是白手起家、
+  純靠 125 Myr 動力學演化產生分層——這點對本專案的路線 C 特別重要：
+  若要重現該文獻的結果，初始條件本身就要塞入質量分層，不能只等它
+  自然發生。
+- 積分到 125 Myr，用 starlab 這套 N-body code（不是這裡準備用的
+  PeTar），25 次模擬取平均。
+
+**這份訂正的可信度聲明**：以上數字來自 WebFetch 讀取論文頁面 methods
+段落的摘要，**沒有比對過論文正式的 Table 1**，N≈400、雙星比例
+0.65–0.68 這些是「摘要讀到的最佳擬合值」，精確到小數點的版本要另外
+查證。用 PeTar 重跑這個路線時，**不是照抄 400/0.65 這兩個數字去配
+starlab 的結果，是拿它們當起點，讓資料（本專案第 2 步的 α(<r) 觀測
+基準線）自己決定要不要調整**——跟本專案「分支規則是資料的函數，不是
+對特定天體既有認知的函數」的原則一致（見 `CLAUDE.md`）。
 
 ### 文獻對 M45 意外地有利
 
@@ -178,3 +208,39 @@ limepy` 裝到的是 PyPI 上一個**同名但完全無關**的 LimeSurvey 問�
 `dopri5._solout() takes 3 positional arguments but 4 were given`）。
 這個環境問題目前沒解決，需要在獨立 venv 裡釘住較舊的 scipy 版本，
 或是等上游套件更新到用 `scipy.integrate.solve_ivp`。
+
+**第 5 步（N-body）環境已在 x64 機器上裝好並驗證（2026-08-12，新協作者
+機器，Yu Tung Lan）**：原本以為需要 WSL（見上方第五節「需要 x64 或 WSL
+機器（ARM64 編譯是本專案已知的坑）」），但透過 MSYS2/MinGW-w64（`winget
+install MSYS2.MSYS2` 裝，再用 `pacman` 裝
+`mingw-w64-x86_64-toolchain`／`mingw-w64-x86_64-gcc-fortran`／
+`mingw-w64-x86_64-cmake`／`mingw-w64-x86_64-gsl`／`autoconf`／
+`automake`／`libtool`）**不需要重開機、不需要 WSL 就編出完整可用的
+PeTar（含 SSE/BSE 恆星演化）與 mcluster**，且已驗證整條鏈
+`mcluster_sse` → `petar.init` → `petar` 端到端可跑（100 顆星的測試
+案例，含 25 組聯星、BSE 恆星演化，能量/角動量守恆誤差都在合理範圍）。
+
+踩到兩個真的 Windows 可攜性問題，都已解決：
+
+1. **PeTar 的 `configure` 其實本來就有 Windows 支援**（`case` 分支
+   `Cygwin*|Mingw*) build_windows=yes`），但 MSYS2 的 `uname` 回傳
+   `MINGW64_NT-...`（全大寫），只匹配到大小寫混合的 `Mingw*`，直接被
+   `configure` 判定成不支援的作業系統而中止。修法是把 `configure`
+   （已由 autoconf 產生的那份，不是 `configure.ac`）第 3025 行的
+   case pattern 從 `Cygwin*|Mingw*` 改成
+   `Cygwin*|Mingw*|MINGW*|MSYS*`。改完 `./configure --with-mpi=no`
+   （之後要加恆星演化再補 `--with-interrupt=bse`）跟 `make` 都一次過，
+   只有一堆無害的 warning。
+2. **mcluster（`github.com/lwang-astro/mcluster`）用了三個 MinGW-w64
+   runtime 沒有的 glibc/POSIX 擴充函式**：`srand48`／`drand48`
+   （48-bit rand48 亂數產生器）跟 `feenableexcept`（浮點例外
+   trap，僅除錯用，跳過不影響結果正確性）。寫了一個
+   `mingw_compat.c`／`.h`（標準 rand48 LCG 演算法：
+   `X_{n+1}=(0x5DEECE66D*X_n+0xB) mod 2^48`，`drand48()=X/2^48`；
+   `feenableexcept` 給空實作），在 `main.c` 加一行
+   `#include "mingw_compat.h"`，編譯時把 `mingw_compat.o` 一起連結
+   進去（`make mcluster_sse CFLAGS='mingw_compat.o -lgfortran'`）。
+
+這兩個修正都是本機（`nbody/` 工作目錄，跟這個 repo 平行、不進版控）
+裡對外部工具原始碼的修改，不是這個 repo 的程式碼，所以沒有對應的 PR，
+記在這裡讓下一個要在 Windows 機器上重做這件事的人不用重踩一次。

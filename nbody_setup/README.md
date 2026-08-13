@@ -1,0 +1,69 @@
+# N-body（PeTar + mcluster）Windows 原生編譯設定
+
+PDMF→IMF 第 5 步（N-body 重建 M45 初始狀態）的環境設定，記錄如何在
+**沒有 WSL** 的 Windows 機器上用 MSYS2/MinGW-w64 編譯 PeTar（含 BSE 恆星
+演化）與 mcluster。背景見 `PDMF_TO_IMF_PLAN.md` 第七節。
+
+PeTar、FDPS、SDAR、mcluster 本身都是外部專案，不進這個 repo 的版控
+（跟 `pyUPMASK/`、gaia-export 姊妹專案是同一個道理）。這個資料夾只放
+**讓別人重現這次編譯所需要的東西**：外部專案的釘選 commit、對它們原始碼
+的修改（patch）、以及重跑一次的腳本。
+
+## 釘選的 commit（2026-08-12 驗證過可用）
+
+| 專案 | commit |
+|---|---|
+| [FDPS](https://github.com/FDPS/FDPS)（pin 到 v7.0，PeTar 文件建議，v7.1 有已知 bug） | `6fedb4b8bd7a504598e83a4189a7a83c533a0848` |
+| [SDAR](https://github.com/lwang-astro/SDAR) | `f64f11801f494bdceda9f4c93dad71dd64c57278` |
+| [PeTar](https://github.com/lwang-astro/PeTar) | `84b81a8c339c49291de53f7a72829dd80e188182` |
+| [mcluster](https://github.com/lwang-astro/mcluster) | `a147bb5f1c0186a2d2d5b513ed112992929dd12a` |
+
+## 兩個修正
+
+1. **`petar_configure_mingw.patch`**：PeTar 的 `configure`（已由 autoconf
+   產生的那份，不是 `configure.ac`）第 3022 行附近的 `case` 判斷式
+   `Cygwin*|Mingw*` 只匹配大小寫混合的 `Mingw*`，但 MSYS2 的 `uname`
+   回傳全大寫的 `MINGW64_NT-...`，導致 `configure` 誤判成不支援的
+   作業系統而中止。改成 `Cygwin*|Mingw*|MINGW*|MSYS*` 後
+   `./configure`／`make` 都一次過。
+
+2. **`mcluster_main_mingw.patch` + `mingw_compat.c`/`.h`**：mcluster 的
+   `main.c` 用了三個 MinGW-w64 runtime 沒有的 glibc/POSIX 擴充函式：
+   `srand48`／`drand48`（48-bit rand48 亂數產生器）跟 `feenableexcept`
+   （浮點例外 trap，僅除錯用）。`mingw_compat.c`/`.h` 實作標準 rand48
+   演算法（`X_{n+1}=(0x5DEECE66D·X_n+0xB) mod 2^48`）跟一個空的
+   `feenableexcept`（不影響結果正確性，只是少了除錯用的 FP 例外中斷）。
+
+## 重現步驟
+
+```bash
+# 1. 裝 MSYS2（若尚未安裝）
+winget install --id MSYS2.MSYS2 --silent --accept-package-agreements --accept-source-agreements
+
+# 2. 更新核心並裝工具鏈（第一次 pacman -Syu 可能要求重啟 MSYS2 終端機，重跑一次即可）
+/c/msys64/usr/bin/bash.exe -lc "pacman -Syu --noconfirm"
+/c/msys64/usr/bin/bash.exe -lc "echo '' | pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-gsl mingw-w64-x86_64-gcc-fortran make autoconf automake libtool"
+
+# 3. 跑這個資料夾的 setup_windows_nbody.sh（clone 到 ~/../nbody，跟本 repo 平行、不進版控）
+bash nbody_setup/setup_windows_nbody.sh
+```
+
+## 驗證（2026-08-12 已跑過，結果正常）
+
+- `petar.omp.avx2.bse -h`：正常印出說明並結束（exit 0）
+- 1000 顆星 Plummer 模型測試（`petar -n 1000 -t 1 __Plummer`）：能量守恆
+  誤差 ~2.5e-5、角動量守恆誤差 ~1e-10
+- 全鏈 `mcluster_sse` → `petar.init` → `petar`（100 顆星、25 組聯星、
+  BSE 恆星演化）：exit 0
+
+## 環境已就緒 ≠ 正式模擬可以跑
+
+**這個資料夾只解決「能不能編譯、能不能跑」的問題。** 要跑真正對應
+Converse & Stahler (2010) 的正式模擬，還需要：
+
+- 正確的初始條件參數（該文獻的設定是**氣體驅離後、已達 virial 平衡**的
+  星團狀態，不含胚胎星團／氣體動力學階段本身——後者該論文明講留給
+  未來工作，不要把兩者混為一談，見 `PDMF_TO_IMF_PLAN.md` 對這篇文獻的
+  說明）
+- 第 2 步（`radial_r1/r2/r3/rall`）的觀測基準線結果，用來校準/比對
+  模擬輸出的 α(r)，這部分還沒跑完（見 `WORK_BOARD.md`）
