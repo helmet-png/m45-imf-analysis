@@ -13,7 +13,7 @@ import sys
 import time
 from pathlib import Path
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent.parent
 PY = HERE / "pyUPMASK"
 PREPARED = HERE / "prepared"
 RESULTS = HERE / "results"

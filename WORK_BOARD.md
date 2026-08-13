@@ -7,7 +7,7 @@
 ## 規則
 
 1. **開始任何預期要花超過一次對話（或會碰共用檔案：`pipeline/`、
-   `injection_recovery.py`、`LIMITATIONS.md`、`PAPER_OUTLINE.md`、
+   `injection_recovery.py`、`LIMITATIONS.md`、`docs/planning/PAPER_OUTLINE.md`、
    `queue.txt`）的工作之前**，先讀完下面的表格，確認沒有人已經在做
    同一件事或高度重疊的事。
 2. 開始工作時，在表格**尾端加一行**，狀態填「進行中」。做完、暫停、

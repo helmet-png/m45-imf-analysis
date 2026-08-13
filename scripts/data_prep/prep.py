@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 from astropy.table import Table
 
-HERE = Path(__file__).parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _load_server():
@@ -34,7 +34,7 @@ def _load_server():
     `server.__file__` 是否真的對到這次選中的路徑，不對就繞過快取重新載入。
     """
     candidates = [os.environ.get("GAIA_EXPORT_PATH")] + [
-        HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
+        REPO_ROOT.parent / name for name in ("gaia-dr3-export", "gaia-export")
     ]
     for c in candidates:
         if not c:
@@ -65,7 +65,7 @@ def _load_server():
     )
 # 產到 prepared/，由 run_variant.py 挑一個複製進 pyUPMASK/input/
 # （pyUPMASK 會把 input/ 底下每個檔案都跑一遍，不能同時放多份）
-INPUT_DIR = HERE / "prepared"
+INPUT_DIR = REPO_ROOT / "prepared"
 
 # Gaia 欄名 -> pyUPMASK params.ini 用的欄名
 RENAME = {
@@ -133,7 +133,7 @@ def main():
 
     src = Path(a.csv)
     if not src.is_absolute():
-        src = HERE / src
+        src = REPO_ROOT / src
     t = Table.read(src, format="csv")
     n0 = len(t)
 

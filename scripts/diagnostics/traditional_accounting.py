@@ -56,7 +56,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
 
 # step5_imf 開頭 import astropy，ARM64 上裝不起來；墊一個 table_compat 的替身。

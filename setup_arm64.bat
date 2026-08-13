@@ -15,7 +15,7 @@ cd /d "%~dp0"
 
 echo.
 echo === Current Python (x64, emulated) ===
-python benchmark_arch.py
+python _archive\B_verification_diagnostics\benchmark_arch.py
 if errorlevel 1 goto :fail
 echo.
 
@@ -50,14 +50,14 @@ if errorlevel 1 goto :fail
 
 echo.
 echo === Native ARM64 Python ===
-"%ARM_PY%" benchmark_arch.py
+"%ARM_PY%" _archive\B_verification_diagnostics\benchmark_arch.py
 echo.
 echo ============================================================
 echo Compare the two tables above, line by line.
 echo.
 echo If ARM64 is meaningfully faster, run the pipeline with it:
-echo   "%ARM_PY%" run_pipeline.py
-echo   "%ARM_PY%" run_joint.py
+echo   "%ARM_PY%" scripts\drivers\run_pipeline.py
+echo   "%ARM_PY%" scripts\drivers\run_joint.py
 echo ============================================================
 goto :done
 

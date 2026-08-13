@@ -15,7 +15,7 @@ Claude，先讀 `CLAUDE.md`；這份是通用規則，兩者都要遵守。
 工作，兩邊動到同一個檔案，事後才發現是接續、不是重工，但這種事本來
 應該一開始就能避免。任何預期會花超過一次對話、或會碰共用檔案
 （`pipeline/`、`injection_recovery.py`、`LIMITATIONS.md`、
-`PAPER_OUTLINE.md`、`queue.txt`）的工作，**開始前先讀
+`docs/planning/PAPER_OUTLINE.md`、`queue.txt`）的工作，**開始前先讀
 `WORK_BOARD.md`，確認沒有人已經在做同一件事**；開始時在裡面認領一行。
 看不出算不算重複就直接編輯那份文件寫清楚疑點，不要用猜的。
 
@@ -65,7 +65,7 @@ git 會標出 `<<<<<<< / ======= / >>>>>>>`，逐段決定留哪邊，
 
 **靜默語意衝突**（改到不同行，git 自動合併不報錯，但內容互相矛盾）——
 **這是這個專案最容易踩到的坑，必須額外注意**：任何 PR 只要碰到
-`LIMITATIONS.md` 或 `PAPER_OUTLINE.md`，合併前一定要重新讀一次 main
+`LIMITATIONS.md` 或 `docs/planning/PAPER_OUTLINE.md`，合併前一定要重新讀一次 main
 上這兩份文件**目前的完整版本**（不是只看自己這次的 diff），確認自己
 新加的結論沒有跟其他人剛合併進去的東西矛盾。這兩份文件本來就有「推翻
 舊說法要回頭標記原處，不能只在新處新增」的維護規則，同一個道理套用在
@@ -155,7 +155,7 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
 
 **不要寫進 `LIMITATIONS.md` 的東西**：追查過程、修正過程、方法論心得、
 基礎設施故障、已推翻的說法、作廢的數值。分別歸到本檔（心得，見下一節）、
-`REFUTED.md`（推翻與作廢）、`KAGGLE_DIAGNOSIS.md`（派工基礎設施）。
+`docs/reference/REFUTED.md`（推翻與作廢）、`KAGGLE_DIAGNOSIS.md`（派工基礎設施）。
 **問題修好、且對應工作全部跑完確認後，那一條要搬到 `RESOLVED.md`（見
 五之一），不要留在 `LIMITATIONS.md` 裡寫「已修正」，也不要直接刪掉不留
 紀錄**——刪掉會讓下一輪重新踩到同一個問題時查不到「這件事我們做過了」。
@@ -191,7 +191,7 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
    工作都做完了**，這時要重新讀一次 `**問題**`／`**後果**` 兩段，
    確認新結果真的解決了問題（不是「工作跑完了」就自動等於「問題解決
    了」，跑完可能發現問題還在、只是換了個樣子）。確認解決後，把整條
-   從 `LIMITATIONS.md` 搬到 `RESOLVED.md`（新建，格式仿 `REFUTED.md`：
+   從 `LIMITATIONS.md` 搬到 `RESOLVED.md`（新建，格式仿 `docs/reference/REFUTED.md`：
    曾經的問題／怎麼解決的／解決時的結果／日期），不要留在
    `LIMITATIONS.md` 裡。**如果跑完發現問題沒解決或只解決一部分**，
    括號要換成新的工作項目，不能清空後假裝結束。
@@ -256,7 +256,7 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
 - [ ] 分支名稱有標明是誰／哪個 agent
 - [ ] 新結果檔案已經在 `results/RESULTS_LOG.md` 加了一行
 - [ ] commit message 有正確的身分標示
-- [ ] 若碰到 `LIMITATIONS.md`／`PAPER_OUTLINE.md`：已經重讀過 main
+- [ ] 若碰到 `LIMITATIONS.md`／`docs/planning/PAPER_OUTLINE.md`：已經重讀過 main
       上的完整版本，確認沒有跟別人的新增內容矛盾
 - [ ] 若編輯 `LIMITATIONS.md`：新增／修改的條目照第五節的格式與分級
 - [ ] 若編輯 `WORK_BOARD.md`：任務名稱有標對應的 `LIMITATIONS.md` 條目

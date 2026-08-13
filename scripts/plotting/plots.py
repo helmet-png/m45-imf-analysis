@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from astropy.table import Table  # noqa: E402
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent.parent
 DOT = dict(s=3, lw=0, rasterized=True)
 
 

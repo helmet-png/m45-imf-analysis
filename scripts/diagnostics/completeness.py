@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 
 
 # 亮端飽和切（config 的 g_bright_limit）由前向模型自己套用，

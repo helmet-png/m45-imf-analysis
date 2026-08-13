@@ -117,9 +117,9 @@ Salpeter 1955、Kroupa 2001/2002、Pera+2021（pyUPMASK）、A&A 2014 aa23988-14
 - Rosen, A. L. (2026), Confidently Wrong: Why Ignoring Binaries Biases
   IMF Inference at Large Sample Sizes, arXiv:2603.15779（先前只有 arXiv
   編號沒有作者，這裡補上）
-- **訂正**：`教授會談摘要.md` 把 arXiv:2604.20722 歸給「Carraro 等」，
+- **訂正**：`docs/reports/教授會談摘要.md` 把 arXiv:2604.20722 歸給「Carraro 等」，
   正確第一作者是 Mikhnevich（Mikhnevich, Plotnikova, Carraro & Seleznev
-  2026），`教學_傳統法誤差核算.md` 原本就寫對了
+  2026），`docs/teaching/教學_傳統法誤差核算.md` 原本就寫對了
 
 ---
 

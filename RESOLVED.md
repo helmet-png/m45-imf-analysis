@@ -1,7 +1,7 @@
 # 已解決的限制
 
-從 `LIMITATIONS.md` 分出來的一份，格式仿 `REFUTED.md`。**兩者的差別**：
-`REFUTED.md` 記的是「這個說法本來就是錯的」，這裡記的是「這曾經是真的
+從 `LIMITATIONS.md` 分出來的一份，格式仿 `docs/reference/REFUTED.md`。**兩者的差別**：
+`docs/reference/REFUTED.md` 記的是「這個說法本來就是錯的」，這裡記的是「這曾經是真的
 問題，後來修好了」——問題本身在提出當下是對的，不是誤判，只是後來
 透過實際工作解決掉了。
 
