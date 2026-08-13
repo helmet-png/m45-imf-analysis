@@ -32,18 +32,26 @@ DONE = HERE / "logs" / "queue_done.txt"
 LOCK = HERE / "logs" / "run_queue.lock"
 
 
-def _pid_alive(pid: int) -> bool:
-    """Windows 沒有 POSIX 的 os.kill(pid, 0) 探測語意 —— 傳 0 給
-    os.kill() 在 Windows 上會呼叫 TerminateProcess(handle, 0)，也就是
-    真的把行程殺掉，不是安全的存活探測。改用 tasklist 查詢，不會動到
-    目標行程。"""
+def _pid_alive(pid: int) -> bool | None:
+    """回傳 True/False/None —— None 代表探測本身失敗（tasklist 逾時、
+    找不到指令等），不能當成 False。
+
+    Windows 沒有 POSIX 的 os.kill(pid, 0) 探測語意 —— 傳 0 給 os.kill()
+    在 Windows 上會呼叫 TerminateProcess(handle, 0)，也就是真的把行程
+    殺掉，不是安全的存活探測。改用 tasklist 查詢，不會動到目標行程。
+    引數是 list 形式（不是 shell=True 的字串），pid 這裡永遠是
+    int(LOCK.read_text()) 解析出來的整數，不存在 shell injection 的
+    問題——自動掃描工具的 CWE-78 標記是這個模式的通用誤判，不是真的
+    有可控字串被組進 shell 命令。"""
     try:
         out = subprocess.run(
             ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True,
             text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
-        return str(pid) in out.stdout
     except Exception:                                 # noqa: BLE001
-        return False
+        return None
+    if out.returncode != 0:
+        return None
+    return str(pid) in out.stdout
 
 
 def acquire_lock():
@@ -55,20 +63,60 @@ def acquire_lock():
 
     用 PID 檔案而非 OS 級 mutex：這個專案只在 Windows 上跑，不需要
     pywin32 這種額外依賴，PID 檔案配合 tasklist 探測就夠用，且容易讀懂。
+
+    **2026-08-13 第二輪 CodeRabbit review 修正**：第一版是「檢查檔案
+    存不存在 -> 寫入」兩步，兩者之間仍有競態窗口（兩個行程都在檢查後
+    才寫入，會都以為自己拿到鎖）。改用 os.open(..., O_CREAT | O_EXCL)
+    讓「檔案不存在就建立」這件事本身變成單一原子系統呼叫——如果檔案
+    已存在，open() 本身就會丟 FileExistsError，不會有中間窗口。
+    另外，_pid_alive() 探測失敗時（回傳 None）不能當成「死掉了」處理
+    ——原本的寫法在探測失敗時預設 False，等於把「不知道」誤判成
+    「安全」，這正是 CodeRabbit 指出的 fail-open 風險。現在探測失敗一律
+    fail closed：不確定就當作可能還活著，退出不動佇列，寧可誤判成
+    「還在跑」而暫停一次，也不要誤判成「沒在跑」而跑出兩個 runner。
     """
     LOCK.parent.mkdir(exist_ok=True)
-    if LOCK.exists():
+    while True:
         try:
-            old_pid = int(LOCK.read_text().strip())
-        except ValueError:
-            old_pid = None
-        if old_pid is not None and _pid_alive(old_pid):
-            print(f"偵測到另一個 run_queue.py 正在跑（PID {old_pid}），"
-                  f"退出，不搶佇列。", flush=True)
-            sys.exit(1)
-        print(f"鎖檔案殘留（PID {old_pid} 已不存在，視為上次沒清乾淨），"
-              f"視為沒有鎖，繼續。", flush=True)
-    LOCK.write_text(str(os.getpid()), encoding="utf-8")
+            fd = os.open(str(LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                old_pid = int(LOCK.read_text().strip())
+            except (ValueError, OSError):
+                old_pid = None
+            alive = _pid_alive(old_pid) if old_pid is not None else False
+            if alive is None:
+                print(f"無法確認鎖檔案（PID {old_pid}）是否還存活"
+                      f"（tasklist 探測失敗），保守起見當作還活著，"
+                      f"退出，不搶佇列。", flush=True)
+                sys.exit(1)
+            if alive:
+                print(f"偵測到另一個 run_queue.py 正在跑（PID {old_pid}），"
+                      f"退出，不搶佇列。", flush=True)
+                sys.exit(1)
+            # 確定是殘留的死行程鎖檔案：清掉後回到迴圈開頭重試，
+            # O_EXCL 保證下一輪的建立動作依然是原子的。
+            print(f"鎖檔案殘留（PID {old_pid} 已不存在，視為上次沒清"
+                  f"乾淨），清掉重新搶鎖。", flush=True)
+            try:
+                LOCK.unlink()
+            except FileNotFoundError:
+                pass
+            continue
+        else:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(str(os.getpid()))
+            return
+
+
+def release_lock():
+    """只在鎖確實是自己持有時才刪除——避免刪掉別人剛搶到的鎖（例如
+    自己因為某種原因慢了一拍才執行到清理，但鎖早就換人了）。"""
+    try:
+        if int(LOCK.read_text().strip()) == os.getpid():
+            LOCK.unlink()
+    except (FileNotFoundError, ValueError, OSError):
+        pass
 
 
 def read_queue():
@@ -100,31 +148,34 @@ def mark_done(label, status, secs):
 
 def main():
     acquire_lock()
-    print(f"佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
-    while True:
-        done = read_done()
-        pending = [(l, c) for l, c in read_queue() if l not in done]
-        if not pending:
-            print("佇列已清空，結束。", flush=True)
-            return
-        label, cmd = pending[0]
-        log = HERE / "logs" / f"{label}.log"
-        print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] 開始 {label}\n"
-              f"  python {cmd}\n  輸出 -> {log.name}\n{'='*70}", flush=True)
-        t0 = time.time()
-        try:
-            with open(log, "w", encoding="utf-8") as fh:
-                p = subprocess.run([sys.executable, "-u"] + cmd.split(),
-                                   cwd=str(HERE), stdout=fh,
-                                   stderr=subprocess.STDOUT)
-            status = "ok" if p.returncode == 0 else f"exit{p.returncode}"
-        except Exception as e:                      # noqa: BLE001
-            status = f"error:{type(e).__name__}"
-            print(f"  例外：{e}", flush=True)
-        secs = time.time() - t0
-        mark_done(label, status, secs)
-        print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
-              f"（{secs/60:.1f} 分）", flush=True)
+    try:
+        print(f"佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
+        while True:
+            done = read_done()
+            pending = [(l, c) for l, c in read_queue() if l not in done]
+            if not pending:
+                print("佇列已清空，結束。", flush=True)
+                return
+            label, cmd = pending[0]
+            log = HERE / "logs" / f"{label}.log"
+            print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] 開始 {label}\n"
+                  f"  python {cmd}\n  輸出 -> {log.name}\n{'='*70}", flush=True)
+            t0 = time.time()
+            try:
+                with open(log, "w", encoding="utf-8") as fh:
+                    p = subprocess.run([sys.executable, "-u"] + cmd.split(),
+                                       cwd=str(HERE), stdout=fh,
+                                       stderr=subprocess.STDOUT)
+                status = "ok" if p.returncode == 0 else f"exit{p.returncode}"
+            except Exception as e:                      # noqa: BLE001
+                status = f"error:{type(e).__name__}"
+                print(f"  例外：{e}", flush=True)
+            secs = time.time() - t0
+            mark_done(label, status, secs)
+            print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
+                  f"（{secs/60:.1f} 分）", flush=True)
+    finally:
+        release_lock()
 
 
 if __name__ == "__main__":

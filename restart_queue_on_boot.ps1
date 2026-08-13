@@ -60,9 +60,13 @@ try {
     # "run_queue.py" 片段——避免別的 checkout、備份檔
     # （run_queue.py.bak）之類的命令列片段誤判成「已經在跑」，
     # 導致該重啟的時候被誤判成略過（CodeRabbit review 指出的問題）。
-    $escapedPath = [regex]::Escape($scriptPath)
+    # 光是比對完整路徑還不夠：路徑本身也只是子字串，"run_queue.py.bak"
+    # 一樣會匹配到 "run_queue.py" 這個前綴。加邊界要求——前面不能接
+    # 非空白字元（排除更長檔名的一部分），後面要接空白或字串結尾，
+    # 且允許路徑前後可能有的雙引號（Start-Process 組出的命令行會加）。
+    $scriptArgumentPattern = '(?<!\S)"?' + [regex]::Escape($scriptPath) + '"?(?=\s|$)'
     $existing = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction Stop |
-        Where-Object { $_.CommandLine -match $escapedPath }
+        Where-Object { $_.CommandLine -match $scriptArgumentPattern }
 
     if ($existing) {
         $pids = ($existing | Select-Object -ExpandProperty ProcessId) -join ","
