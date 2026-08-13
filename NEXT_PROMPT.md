@@ -104,7 +104,8 @@ alex981113）。`kaggle_queue.py` 支援多帳號同時派工（每輪迴圈對�
   再決定要放寬搜尋軸還是要重下網格**——這是上一輪犯的核心錯誤，
   兩者是不同的問題、不同的修法
 - 每次改動都要回報做了什麼、為什麼；每次算出新結果都要主動同步寫進
-  `docs/planning/PAPER_OUTLINE.md`／`LIMITATIONS.md`，不必等我要求
+  `docs/planning/PAPER_OUTLINE.md`／`LIMITATIONS.md`／
+  `results/RESULTS_LOG.md`，不必等我要求
 - 每次跑完計算都要 commit + push 到 GitHub，不必等我要求
 - 可量化的問題先算出數字再下結論，不要用感覺；抽查範圍要說清楚查了
   什麼、沒查什麼，不要用兩筆樣本就推廣到全部
