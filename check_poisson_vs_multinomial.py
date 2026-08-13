@@ -30,12 +30,24 @@
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from pipeline.step3_age import hess  # noqa: E402 —— 故意真的 import，見下方 main()
 
 
 def poisson_loglike(obs_h, mod_h, n_obs, outlier_frac=0.01):
-    """逐字抄自 pipeline/step3_age.py，故意不 import——保持這支驗證腳本
-    獨立於主程式碼，改動主程式碼時不會悄悄跟著變而讓驗證失去意義。"""
+    """概似公式本身逐字抄自 pipeline/step3_age.py，故意不 import——這是要
+    驗證的對象，保持獨立才不會改動主程式碼時悄悄跟著變、讓驗證失去意義。
+    但 `mod_h`／`obs_h` 的來源（`hess()` 的正規化行為）**有真的 import**，
+    見 main()，不能連這個關鍵前提都用手刻的假設取代（2026-08-13
+    CodeRabbit review 指出手刻 `mod_raw/mod_raw.sum()` 沒有真的驗證
+    `hess()` 的契約，`hess()` 改動也不會讓這支腳本失敗）。"""
     n_bins = mod_h.size
     mix = (1.0 - outlier_frac) * mod_h + outlier_frac / n_bins
     expect = mix * n_obs
@@ -52,24 +64,47 @@ def multinomial_loglike(obs_h, mod_h, n_obs, outlier_frac=0.01):
 
 def main():
     rng = np.random.default_rng(0)
-    n_bins, n_obs = 2000, 1078  # 2000 = 40*50，跟 config.toml 的 hess_color_bins*hess_mag_bins 一致
-    obs_raw = rng.integers(0, 20, n_bins).astype(float)
-    obs_h = obs_raw / obs_raw.sum()
+    # cbins/mbins/crange/mrange 跟 config.toml 的 hess_color_bins／
+    # hess_mag_bins／hess_color_range／hess_mag_range 一致。
+    cbins, mbins = 40, 50
+    crange, mrange = (-0.5, 4.0), (2.0, 18.0)
+    n_bins = cbins * mbins
+    n_obs = 1078
+
+    # 觀測 Hess 圖也用真正的 hess()（不是隨機數，用固定分布模擬觀測樣本），
+    # 這樣 obs_h 的正規化也走跟合成星團同一條路徑，不是另外假設。
+    obs_color = rng.normal(1.0, 0.5, n_obs).clip(*crange)
+    obs_mag = rng.uniform(*mrange, n_obs)
+    obs_h = hess(obs_color, obs_mag, cbins, mbins, crange, mrange)
+    if abs(obs_h.sum() - 1.0) >= 1e-9:
+        print(f"hess() 沒有把觀測 Hess 圖正規化到總和=1（實際={obs_h.sum()}），"
+              f"契約已改變，下面的推導不再成立。", file=sys.stderr)
+        raise SystemExit(1)
 
     theoretical_const = n_obs * np.log(n_obs) - n_obs
     diffs = []
-    for _ in range(20):
-        # 模擬「換一個 theta」：合成星團的 Hess 圖形狀隨機變化，
-        # 但一定經過 hess() 那樣的正規化（總和=1）。
-        mod_raw = rng.random(n_bins)
-        mod_h = mod_raw / mod_raw.sum()
+    for i in range(20):
+        # 模擬「換一個 theta」：每次用不同的合成星數量與分布形狀生成 CMD，
+        # 再用**真正的** hess()（不是手刻的 mod_raw/mod_raw.sum()）轉成
+        # Hess 圖——這樣才是在驗證 hess() 實際的正規化契約，不是驗證我們
+        # 自己對這個契約的假設。
+        n_syn = rng.integers(5000, 50000)
+        mod_color = rng.normal(rng.uniform(0.5, 1.5), rng.uniform(0.3, 0.8),
+                               n_syn).clip(*crange)
+        mod_mag = rng.uniform(*mrange, n_syn)
+        mod_h = hess(mod_color, mod_mag, cbins, mbins, crange, mrange)
+        if abs(mod_h.sum() - 1.0) >= 1e-9:
+            print(f"第 {i} 次試驗：hess() 沒有把模型 Hess 圖正規化到總和=1"
+                  f"（實際={mod_h.sum()}），契約已改變，下面的推導不再成立。",
+                  file=sys.stderr)
+            raise SystemExit(1)
         llp = poisson_loglike(obs_h, mod_h, n_obs)
         llm = multinomial_loglike(obs_h, mod_h, n_obs)
         diffs.append(llp - llm)
 
     diffs = np.array(diffs)
     spread = diffs.max() - diffs.min()
-    print(f"20 個隨機 theta 下 LL_poisson - LL_multinomial 的差：")
+    print("20 個隨機 theta 下 LL_poisson - LL_multinomial 的差：")
     print(f"  平均 = {diffs.mean():.6f}")
     print(f"  理論常數 n_obs*log(n_obs) - n_obs = {theoretical_const:.6f}")
     print(f"  20 次之間的變化幅度 = {spread:.2e}（應該只是浮點誤差，不是"

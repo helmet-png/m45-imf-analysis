@@ -56,6 +56,10 @@ def main():
                      "完整參數向量（見 LIMITATIONS.md D6：p6b/p6b2/p6b3 的中間"
                      "結果曾經因為固定檔名被後續跑覆寫，永久遺失）")
     args = ap.parse_args()
+    # --tag 只能是檔名後綴，不能是路徑（CodeRabbit 2026-08-13 抓到：不擋的話
+    # --tag "/../../tmp/x" 能把輸出導到 results/ 之外，覆寫任意 .npz）。
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
     out_path = HERE / "results" / f"inject_lowmass{args.tag}.npz"
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
@@ -206,7 +210,7 @@ def main():
     print("  ratio near 1 = identifiable; near 0 = unconstrained "
           "(recovers same value regardless of truth)")
 
-    np.savez(HERE / "results" / "inject_lowmass.npz",
+    np.savez(out_path,
              p_true=np.array(p_true_ok),
              **{f"p{p}": v for p, v in results.items()})
     print(f"\nwrote {out_path.relative_to(HERE)}")
