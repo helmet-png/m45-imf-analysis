@@ -7,7 +7,7 @@
 # does not, so Python fails with CERTIFICATE_VERIFY_FAILED. Capturing the chain
 # here keeps certificate verification ON in the pipeline instead of disabling it.
 #
-# Usage:  powershell -ExecutionPolicy Bypass -File .\setup_ca.ps1
+# Usage (from repo root):  powershell -ExecutionPolicy Bypass -File .\setup\setup_ca.ps1
 #
 # NOTE: keep this file pure ASCII. PowerShell 5.1 reads .ps1 as ANSI when there
 # is no BOM, so non-ASCII comments corrupt the parse.
