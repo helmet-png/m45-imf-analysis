@@ -21,6 +21,25 @@ Claude，先讀 `CLAUDE.md`；這份是通用規則，兩者都要遵守。
 
 ---
 
+## 零之一、自動 PR 審查——CodeRabbit（免費，公開 repo 自動適用）
+
+**2026-08-12 起**：repo 公開後，[CodeRabbit](https://coderabbit.ai) 對公開
+repo 免費。裝好之後，**任何人開 PR 都會自動觸發一次審查留言**，不需要
+另外呼叫誰。設定檔在 `.coderabbit.yaml`（審查語言、排除 `results/`／
+`data/` 這類資料檔、對 `injection_recovery.py`／`pipeline/` 等共用核心
+給的審查提示）。
+
+**啟用需要 repo 擁有者做一次性的手動步驟**（Claude／agent 無法代勞，
+這是帳號授權操作）：到 https://github.com/apps/coderabbitai 或
+https://coderabbit.ai 用 GitHub 帳號登入，安裝 App 並選這個 repo。
+裝好後不需要金鑰、不需要額外設定，`.coderabbit.yaml` 會自動生效。
+
+CodeRabbit 的審查是**輔助**，不是取代 `WORK_BOARD.md`／PR review 流程——
+它抓程式面的問題（bug、重複實作、效率），跑不動這個專案的實際計算，
+數字對不對還是要靠 `results/RESULTS_LOG.md` 跟人／其他 agent 交叉核對。
+
+---
+
 ## 一、分支與 Pull Request——所有人都要走 PR，沒有例外
 
 `main` 分支設了保護規則：**任何人（含 repo 擁有者）都不能直接 push 到
