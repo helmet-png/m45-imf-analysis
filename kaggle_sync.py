@@ -196,7 +196,14 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
         "        time.sleep(interval)\n",
         f"_wait_input('{base}{'pipeline' if not minimal else script}')\n",
     ]
-    copy_lines = [f"shutil.copy('{base}{script}', '{script}')\n"]
+    # **2026-08-13 修正**：本機的 results/ 是 git 版控目錄，本來就存在，
+    # 所有分析腳本（fit_real.py、inject_lowmass.py、profile_lowmass.py 等）
+    # 都直接假設它存在、從沒自己 mkdir。Kaggle 是全新環境，沒有人事先建這個
+    # 資料夾，於是計算跑完、最後 np.savez 存檔那一步才 FileNotFoundError——
+    # 實測 p9a_redo_v2 跑了 10.5 小時才在這裡炸掉，等於全部白算。統一在這裡
+    # 補一行建立 results/，不逐一修每支分析腳本（單點修正，以後新腳本也受益）。
+    copy_lines = ["os.makedirs('results', exist_ok=True)\n",
+                 f"shutil.copy('{base}{script}', '{script}')\n"]
     for f in extra_files:
         name = Path(f).name
         copy_lines.append(f"shutil.copy('{base}{name}', '{name}')\n")
