@@ -45,6 +45,30 @@ P_TRUE_LIST = [0.9, 1.3, 1.7]
 P_MIN, P_MAX = 0.3, 2.3
 
 
+def atomic_savez(out_path: Path, **arrays):
+    """np.savez 不是原子操作——寫到一半被中斷（斷電、被砍行程）會留下
+    截斷或空的檔案，蓋掉前一次跑成功的 checkpoint（2026-08-13 CodeRabbit
+    review 指出：這支腳本每跑完一個 p_true 就存一次，是刻意設計成「前面
+    跑完的不該陪葬」，但直接 np.savez(out_path,...) 寫入中斷時反而會
+    毀掉這個保證本身）。改成寫到同目錄的暫存檔，成功才用 os.replace()
+    原子性地換過去；`os.replace()` 在 POSIX 與 Windows 都保證是單一
+    系統呼叫等級的原子操作，不會有「新檔案寫一半、舊檔案已經被砍」的
+    中間狀態。寫入中途失敗時清掉暫存檔，不留半成品在 results/ 底下。"""
+    # 檔名一定要用 .npz 結尾——np.savez() 對不是以 .npz 結尾的路徑會自動
+    # 補一個 .npz 副檔名（實測過：傳 "x.npz.tmp" 會真的寫成
+    # "x.npz.tmp.npz"），沒注意到這個行為的話 os.replace() 會找錯檔案。
+    tmp_path = out_path.with_name(out_path.stem + ".tmp.npz")
+    try:
+        np.savez(tmp_path, **arrays)
+        os.replace(tmp_path, out_path)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--procs", type=int, default=None)
@@ -168,9 +192,9 @@ def main():
         results[p_true] = np.array(outs)
         # 每跑完一個 p_true 就存一次 —— 之後的 p_true 若整批失敗，
         # 這裡已經算出來的結果不會跟著陪葬。
-        np.savez(out_path,
-                 p_true=np.array(list(results.keys())),
-                 **{f"p{p}": v for p, v in results.items()})
+        atomic_savez(out_path,
+                     p_true=np.array(list(results.keys())),
+                     **{f"p{p}": v for p, v in results.items()})
 
     print(f"\n{'='*70}")
     print("identifiability of low-mass slope")
@@ -192,9 +216,9 @@ def main():
     if len(p_recs) < 2:
         print("\n少於兩個 p_true 有成功資料，無法判斷可辨識性（條件 3 需要"
               "跨多個真值比較），僅供參考個別數字。")
-        np.savez(out_path,
-                 p_true=np.array(list(results.keys())),
-                 **{f"p{p}": v for p, v in results.items()})
+        atomic_savez(out_path,
+                     p_true=np.array(list(results.keys())),
+                     **{f"p{p}": v for p, v in results.items()})
         return
 
     p_recs = np.array(p_recs)
@@ -210,9 +234,9 @@ def main():
     print("  ratio near 1 = identifiable; near 0 = unconstrained "
           "(recovers same value regardless of truth)")
 
-    np.savez(out_path,
-             p_true=np.array(p_true_ok),
-             **{f"p{p}": v for p, v in results.items()})
+    atomic_savez(out_path,
+                 p_true=np.array(p_true_ok),
+                 **{f"p{p}": v for p, v in results.items()})
     print(f"\nwrote {out_path.relative_to(HERE)}")
 
 
