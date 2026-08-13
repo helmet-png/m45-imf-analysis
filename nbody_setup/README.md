@@ -2,7 +2,7 @@
 
 PDMF→IMF 第 5 步（N-body 重建 M45 初始狀態）的環境設定，記錄如何在
 **沒有 WSL** 的 Windows 機器上用 MSYS2/MinGW-w64 編譯 PeTar（含 BSE 恆星
-演化）與 mcluster。背景見 `PDMF_TO_IMF_PLAN.md` 第七節。
+演化）與 mcluster。背景見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節。
 
 PeTar、FDPS、SDAR、mcluster 本身都是外部專案，不進這個 repo 的版控
 （跟 `pyUPMASK/`、gaia-export 姊妹專案是同一個道理）。這個資料夾只放
@@ -63,7 +63,7 @@ Converse & Stahler (2010) 的正式模擬，還需要：
 
 - 正確的初始條件參數（該文獻的設定是**氣體驅離後、已達 virial 平衡**的
   星團狀態，不含胚胎星團／氣體動力學階段本身——後者該論文明講留給
-  未來工作，不要把兩者混為一談，見 `PDMF_TO_IMF_PLAN.md` 對這篇文獻的
+  未來工作，不要把兩者混為一談，見 `docs/planning/PDMF_TO_IMF_PLAN.md` 對這篇文獻的
   說明）
 - 第 2 步（`radial_r1/r2/r3/rall`）的觀測基準線結果，用來校準/比對
   模擬輸出的 α(r)，這部分還沒跑完（見 `WORK_BOARD.md`）

@@ -10,8 +10,8 @@ import os
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).parent
-DATA = HERE / "data"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA = REPO_ROOT / "data"
 
 
 def _load_server():
@@ -32,7 +32,7 @@ def _load_server():
     快取重新載入。
     """
     candidates = [os.environ.get("GAIA_EXPORT_PATH")] + [
-        HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
+        REPO_ROOT.parent / name for name in ("gaia-dr3-export", "gaia-export")
     ]
     for c in candidates:
         if not c:

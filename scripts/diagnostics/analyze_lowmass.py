@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 
 # 文獻值。**注意符號慣例**：本專案與 Kroupa 2001 都用
 #   dN/dm 正比於 m^(-alpha)

@@ -189,7 +189,7 @@ M45 的總質量與半質量半徑沒有 Gaia DR3 官方值，用文獻估計範
 N ≈ 1200 個系統）：
 
 ```
-py dynamics_estimate.py --sweep
+py scripts/diagnostics/dynamics_estimate.py --sweep
 ```
 
 ```
@@ -439,7 +439,7 @@ N-body 低很多個量級——**但這裡有一個查證不足導致的錯誤�
 的問卷調查資料下載工具，不是 Gieles & Zocchi (2015) 的星團動力學套件；
 真正的套件叫 **`astro-limepy`**，且已知在這台機器目前的 scipy 版本上
 會因為呼叫舊版 `scipy.integrate.ode` API 而壞掉（細節與排查記錄見
-`PDMF_TO_IMF_PLAN.md` 第七節）。這個錯路留著提醒自己：驗證一個套件
+`docs/planning/PDMF_TO_IMF_PLAN.md` 第七節）。這個錯路留著提醒自己：驗證一個套件
 「裝得起來」時，要確認匯入的模組內容真的對應到想要的東西，不能只看
 `pip download` 有沒有跑出 wheel 檔就下結論。
 
@@ -738,7 +738,7 @@ pyUPMASK 成員判定與測光品質篩選有沒有間接排除掉它們（例�
 | α(r) 線性擬合斜率 | 0.155 ± 0.028/度（5.5σ） | 本文件對 `step5_mf_radial.csv` 的加權回歸 |
 | 核心-外圍 α 差 | 0.515 | 同上，第五節 |
 | Li+2026 公式估計的 Δα | 0.076 ⚠ 文獻公式代入值，非本專案實測 | 第六節 |
-| 路線 C（N-body）第一個 pilot：α(r) | 核心 0.879±0.158（r<6.5pc）→ 外圍 1.316±0.157（r 11–20pc），跟觀測同方向（核心較平） | `nbody_setup/analyze_alpha_r.py`，2026-08-13，**單次、N=400（270 系統）、Kroupa IMF、無潮汐場的示範跑，數值不可引用，只看方向**，完整記錄見 `PDMF_TO_IMF_PLAN.md` 第七節與 `WORK_BOARD.md` |
+| 路線 C（N-body）第一個 pilot：α(r) | 核心 0.879±0.158（r<6.5pc）→ 外圍 1.316±0.157（r 11–20pc），跟觀測同方向（核心較平） | `nbody_setup/analyze_alpha_r.py`，2026-08-13，**單次、N=400（270 系統）、Kroupa IMF、無潮汐場的示範跑，數值不可引用，只看方向**，完整記錄見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節與 `WORK_BOARD.md` |
 
 #### 9.1.1 這個 α(r) 是怎麼算出來的
 
@@ -788,7 +788,7 @@ for lo, hi in zip(edges[:-1], edges[1:]):
 
 四個前向模型徑向診斷（`radial_r1`/`r2`/`r3`/`rall`，`fit_real.py
 --radius-range`），要回答「扣掉雙星建模後，α(<r) 的梯度還剩多少、有沒有
-收斂」。見 `PDMF_TO_IMF_PLAN.md` 與 `WORK_BOARD.md` 的待認領工作表，
+收斂」。見 `docs/planning/PDMF_TO_IMF_PLAN.md` 與 `WORK_BOARD.md` 的待認領工作表，
 本機佇列正在跑，前面還有 `p2_free_lowmass`、`p6_lowmass_v2`、
 `p11_outlierfrac_v2` 排隊。**這個表格會在結果出來後更新，不要在結果
 出來前引用任何 α(<r) 的具體數字當成定案**。

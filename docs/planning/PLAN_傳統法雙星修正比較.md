@@ -41,9 +41,9 @@
 `traditional_alpha()` 是 boolean 旗標（`remove_cmd_binaries: bool`），只夠表示 A/B 兩種，
 擴充到 5 種必須先改成字串式的 `variant` 參數（見第四節 Step 1）。
 
-**引用修正**：`教授會談摘要.md:38` 把 arXiv:2604.20722 歸給「Carraro 等」，但第一作者其實是
+**引用修正**：`docs/reports/教授會談摘要.md:38` 把 arXiv:2604.20722 歸給「Carraro 等」，但第一作者其實是
 Mikhnevich——Carraro 是共同作者不是通訊/第一作者，**引用格式要訂正成
-"Mikhnevich et al. 2026"**（教學_傳統法誤差核算.md:179 原本就寫對了，是教授會談摘要那處錯）。
+"Mikhnevich et al. 2026"**（docs/teaching/教學_傳統法誤差核算.md:179 原本就寫對了，是docs/reports/教授會談摘要.md 那處錯）。
 
 ---
 
@@ -130,7 +130,7 @@ Step 5 的其餘 5 欄不受此阻塞，可以先做完。
 - Li, Shao, Li, Yu, Zhong & Chen 2020, ApJ 901, 49（NGC 3532 混合模型，DOI 已知
   10.3847/1538-4357/abaef3）
 - Rosen 2026, arXiv:2603.15779（目前只有 arXiv 編號沒有作者，補上 "Anna L. Rosen"）
-- 訂正 `教授會談摘要.md:38` 的 arXiv:2604.20722 作者歸屬（Mikhnevich et al.，不是
+- 訂正 `docs/reports/教授會談摘要.md:38` 的 arXiv:2604.20722 作者歸屬（Mikhnevich et al.，不是
   「Carraro 等」）
 
 **Step 9 — `PAPER_OUTLINE.md` 更新**：
