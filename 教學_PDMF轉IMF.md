@@ -576,6 +576,13 @@ def mle_powerlaw(masses, m_lo, m_hi):
     alpha = float(r.x)
 ```
 
+**先建立直覺：`np.percentile` 在做什麼**——把 `r_b`（所有星到密度中心
+的距離）由近到遠排成一排，「第 33 百分位數」就是排在前 33% 位置那顆
+星的半徑，也就是說大約有 33% 的星比它更靠近中心。同理「第 66 百分位
+數」是前 66% 位置的半徑。所以 `[0, 33, 66, 100]` 這四個切點，把整份
+樣本切成三段、每段各佔約 1/3 的星數——這就是「核心」「中間」「外圍」
+三箱的來源，而不是把半徑本身平均切成三段。
+
 ```python
 # nbody_setup/analyze_alpha_r.py — 徑向分箱：把 t=125 Myr 快照的星
 # 依到密度中心的距離切三等分（三分位數），各自丟進 mle_powerlaw()。
@@ -583,8 +590,12 @@ def mle_powerlaw(masses, m_lo, m_hi):
 # （跟 pipeline/step5_imf.py:mass_function_by_radius() 用同一個慣例）
 edges = np.percentile(r_b, [0, 33, 66, 100])
 n_bins = len(edges) - 1
+
+def bin_mask(i, lo, hi, x):
+    return (x >= lo) & (x < hi) if i < n_bins - 1 else (x >= lo) & (x <= hi)
+
 for i, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
-    sel = (r_b >= lo) & (r_b < hi) if i < n_bins - 1 else (r_b >= lo) & (r_b <= hi)
+    sel = bin_mask(i, lo, hi, r_b)
     fit = mle_powerlaw(mass_b[sel], mass_min, mass_max)
 ```
 
@@ -605,6 +616,21 @@ CodeRabbit 第二輪 review 又抓到分箱寫法的潛在問題：原本每一�
 前後數字不變），但已經改成除最後一箱外都用右開區間（跟
 `pipeline/step5_imf.py:mass_function_by_radius()` 的既有寫法一致），
 避免下次真的踩到。
+
+**可重現的細節**：`-b` 定義查的是 pinned commit
+[`lwang-astro/mcluster@a147bb5f1c0186a2d2d5b513ed112992929dd12a`](https://github.com/lwang-astro/mcluster/blob/a147bb5f1c0186a2d2d5b513ed112992929dd12a/main.c)
+的 `main.c`：`case 'b': fbin = atof(optarg);`（第 232 行）與
+`if (!nbin) nbin = 0.5*N*fbin;`（第 611 行）。跑法是
+`mcluster_sse ... -N 400 ... -b 0.65 ...` 產生初始條件，再用
+`python nbody_setup/analyze_alpha_r.py data.25` 分析快照。算式：
+`0.65 × 400 = 260` 顆星在聯星裡、`260 ÷ 2 = 130` 組聯星、
+`400 − 260 = 140` 顆單星、共 `130 + 140 = 270` 個系統。分箱邊界命中數
+（真的有星剛好落在 `edges[1]`／`edges[2]` 上）為 `0`，所以修正前後
+每箱的 `n` 與 α 完全相同：核心 `n=54, α=0.879`、中間 `n=58, α=0.934`、
+外圍 `n=57, α=1.316` → 修正後三箱數字不變。**注意**：這次分箱修正的
+前後 α 是 `0.879/0.934/1.316 → 0.879/0.934/1.316`（沒有變），不要
+跟上面第一輪密度中心修正的 `0.81/0.98/1.37 → 0.879/0.934/1.316`
+（有變）搞混，那是不同一次修正、影響的是不同 bug。
 
 ### 9.2 已排進佇列，還沒有結果（待重跑確認）
 
