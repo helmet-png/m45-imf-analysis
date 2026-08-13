@@ -14,7 +14,8 @@
 
 $ErrorActionPreference = "Stop"
 $targetHost = "stev.oapd.inaf.it"
-$outFile = Join-Path $PSScriptRoot "certs\parsec_chain.pem"
+$repoRoot = Split-Path $PSScriptRoot -Parent
+$outFile = Join-Path $repoRoot "certs\parsec_chain.pem"
 New-Item -ItemType Directory -Force (Split-Path $outFile) | Out-Null
 
 Write-Host "Connecting to $targetHost ..."
