@@ -1,0 +1,2 @@
+nbody_setup/*.sh text eol=lf
+nbody_setup/*.patch text eol=lf

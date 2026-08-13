@@ -1,0 +1,13 @@
+diff --git a/configure b/configure
+index 582c8de..b113310 100755
+--- a/configure
++++ b/configure
+@@ -3022,7 +3022,7 @@ case "${host_os}" in
+     Linux*)
+         build_linux=yes
+         ;;
+-    Cygwin*|Mingw*)
++    Cygwin*|Mingw*|MINGW*|MSYS*)
+         build_windows=yes
+         ;;
+     Darwin*)
