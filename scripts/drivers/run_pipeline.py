@@ -198,12 +198,36 @@ def main():
         np.savez(HERE / "results" / "step4_fit.npz",
                  logage=res4["logage"], av=res4["av"], fbin=res4["fbin"],
                  ages=res4["ages"], avs=res4["avs"], fbins=res4["fbins"],
-                 loglike=res4["loglike_grid"])
+                 loglike=res4["loglike_grid"],
+                 source_ids=np.asarray(sub["source_id"], np.int64))
         print(f"\n寫入 results/step4_binaries.csv 與 step4_fit.npz")
 
     if 5 in a.steps:
         banner("第 5 步：質量函數與 IMF 斜率")
         f4 = np.load(HERE / "results" / "step4_fit.npz")
+        # CodeRabbit 抓到的真的問題：獨立執行 --steps 5 時，第 4 步的樣本
+        # 遮罩（顏色一致性檢查、已確認非成員排除，見上面 excl）可能已經
+        # 改變，但這裡讀到的 step4_fit.npz 若是舊遮罩下產生的，fbin/logage/av
+        # 就是用不同樣本擬合出來的，跟這裡的 clean[ok] 混用會產生不可比的
+        # alpha。用存檔時記錄的 source_id 名單直接比對，不一致就拒絕執行，
+        # 不要猜測兩者相容。
+        if "source_ids" not in f4.files:
+            raise RuntimeError(
+                "results/step4_fit.npz 沒有 source_ids（舊版產生的檔案，"
+                "早於這次樣本遮罩指紋檢查）。請先用 --steps 4 用目前的"
+                "遮罩重跑一次第 4 步，才能執行第 5 步。")
+        step4_sids = set(np.asarray(f4["source_ids"], np.int64).tolist())
+        step5_sids = set(np.asarray(clean["source_id"], np.int64)[ok].tolist())
+        if step4_sids != step5_sids:
+            only4 = len(step4_sids - step5_sids)
+            only5 = len(step5_sids - step4_sids)
+            raise RuntimeError(
+                f"results/step4_fit.npz 的擬合樣本跟目前第 5 步的樣本不一致"
+                f"（只在第 4 步樣本裡：{only4} 顆；只在目前樣本裡：{only5} 顆）。"
+                f"代表 step4_fit.npz 是用不同的遮罩（例如尚未套用顏色一致性"
+                f"檢查或已確認非成員排除）產生的，直接混用 fbin/logage/av"
+                f"會得到不可比的 alpha。請先用 --steps 4 重新產生 "
+                f"step4_fit.npz 再執行第 5 步。")
         logage, av, fbin = float(f4["logage"]), float(f4["av"]), float(f4["fbin"])
         one = isomod.isochrone_at(grid, logage, cfg.step3_age.metallicity_mh)
         c5 = cfg.step5_imf
