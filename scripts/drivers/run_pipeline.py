@@ -130,10 +130,24 @@ def main():
         grid = isomod.load_grid(isomod.CACHE / (
             f"parsec_v2.0_gaiaEDR3_logt{c3.logage_min:g}-{c3.logage_max:g}"
             f"s{c3.logage_step:g}_mh{c3.mh_min:g}-{c3.mh_max:g}s{c3.mh_step:g}.dat"))
-        dm = distance_modulus(cfg, clean)
         color = np.asarray(clean["bp_rp"], float)
         mag = np.asarray(clean["phot_g_mean_mag"], float)
         ok = np.isfinite(color) & np.isfinite(mag)
+        # 已確認的非成員天體（RV+logg 雙訊號，見 LIMITATIONS.md A6），
+        # 顏色跟真成員無異，assign_masses() 的顏色檢查抓不到，這裡用獨立
+        # 名單排除，同時影響第 4 步（雙星判定）與第 5 步（質量函數）。
+        excl = step5_imf.exclude_confirmed_non_members(
+            np.asarray(clean["source_id"], np.int64))
+        if excl.any():
+            print(f"排除 {int(excl.sum())} 顆已確認非成員天體（見 "
+                  f"LIMITATIONS.md A6）")
+        ok &= ~excl
+        # dm 用視差中位數，理論上該用排除非成員後的樣本算（雖然單顆星
+        # 對上千顆星的中位數影響可忽略不計，這裡仍改成排除之後才算，
+        # 避免順序疑慮）。只套用 excl（已確認非成員），不套用完整 ok
+        # （那還包含 color/mag 缺值篩選，跟 dm 原本的分母定義無關，
+        # 不在這次修正範圍內）。
+        dm = distance_modulus(cfg, clean[~excl])
         ext = step3_age._Ext(cfg.step2_cmd.ext_coeff_g,
                              cfg.step2_cmd.ext_coeff_bp,
                              cfg.step2_cmd.ext_coeff_rp)
@@ -184,18 +198,43 @@ def main():
         np.savez(HERE / "results" / "step4_fit.npz",
                  logage=res4["logage"], av=res4["av"], fbin=res4["fbin"],
                  ages=res4["ages"], avs=res4["avs"], fbins=res4["fbins"],
-                 loglike=res4["loglike_grid"])
+                 loglike=res4["loglike_grid"],
+                 source_ids=np.asarray(sub["source_id"], np.int64))
         print(f"\n寫入 results/step4_binaries.csv 與 step4_fit.npz")
 
     if 5 in a.steps:
         banner("第 5 步：質量函數與 IMF 斜率")
         f4 = np.load(HERE / "results" / "step4_fit.npz")
+        # CodeRabbit 抓到的真的問題：獨立執行 --steps 5 時，第 4 步的樣本
+        # 遮罩（顏色一致性檢查、已確認非成員排除，見上面 excl）可能已經
+        # 改變，但這裡讀到的 step4_fit.npz 若是舊遮罩下產生的，fbin/logage/av
+        # 就是用不同樣本擬合出來的，跟這裡的 clean[ok] 混用會產生不可比的
+        # alpha。用存檔時記錄的 source_id 名單直接比對，不一致就拒絕執行，
+        # 不要猜測兩者相容。
+        if "source_ids" not in f4.files:
+            raise RuntimeError(
+                "results/step4_fit.npz 沒有 source_ids（舊版產生的檔案，"
+                "早於這次樣本遮罩指紋檢查）。請先用 --steps 4 用目前的"
+                "遮罩重跑一次第 4 步，才能執行第 5 步。")
+        step4_sids = set(np.asarray(f4["source_ids"], np.int64).tolist())
+        step5_sids = set(np.asarray(clean["source_id"], np.int64)[ok].tolist())
+        if step4_sids != step5_sids:
+            only4 = len(step4_sids - step5_sids)
+            only5 = len(step5_sids - step4_sids)
+            raise RuntimeError(
+                f"results/step4_fit.npz 的擬合樣本跟目前第 5 步的樣本不一致"
+                f"（只在第 4 步樣本裡：{only4} 顆；只在目前樣本裡：{only5} 顆）。"
+                f"代表 step4_fit.npz 是用不同的遮罩（例如尚未套用顏色一致性"
+                f"檢查或已確認非成員排除）產生的，直接混用 fbin/logage/av"
+                f"會得到不可比的 alpha。請先用 --steps 4 重新產生 "
+                f"step4_fit.npz 再執行第 5 步。")
         logage, av, fbin = float(f4["logage"]), float(f4["av"]), float(f4["fbin"])
         one = isomod.isochrone_at(grid, logage, cfg.step3_age.metallicity_mh)
         c5 = cfg.step5_imf
 
         print("方法 A：把每顆星當單星指派質量，再做 MLE 冪律擬合")
-        masses = step5_imf.assign_masses(mag[ok], one, dm, av, ext)
+        masses = step5_imf.assign_masses(mag[ok], one, dm, av, ext,
+                                         obs_color=color[ok])
         fitA = step5_imf.mle_powerlaw(masses, c5.mass_min, c5.mass_max)
         print(f"  alpha = {fitA['alpha']:.3f} +/- {fitA['alpha_err']:.3f}"
               f"  (n={fitA['n']:,}，質量 {c5.mass_min}-{c5.mass_max} M_sun)")

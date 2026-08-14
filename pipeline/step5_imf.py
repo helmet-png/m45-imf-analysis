@@ -24,6 +24,32 @@ from scipy.optimize import minimize_scalar
 from .step3_age import (COL_G, COL_BP, COL_RP, _Ext, draw_randoms, hess,
                         poisson_loglike, synth_populations)
 
+# 已確認的非成員天體，顏色跟真成員無異（assign_masses() 的顏色一致性檢查
+# 抓不到），只有 RV+logg 兩個獨立訊號才抓得到，見 LIMITATIONS.md A6、
+# check_giant_subgiant_contamination.py 的驗證過程。這是一個小型、有清楚
+# 出處的名單，不是隨手刪資料——每一筆都附上發現時的判定依據。換一批
+# `data/cmd_members.csv` 後要重跑 check_giant_subgiant_contamination.py
+# 確認名單有沒有變化，不會自動更新（需要 data/astrophys.csv，這份檔案
+# 依賴外部 TAP 查詢工具，不是每台機器都能重新產生）。
+CONFIRMED_NON_MEMBER_IDS = {
+    # logg_gspphot=4.00, Teff=3317K, RV=-93.65+/-5.08 km/s（偏離
+    # bulk_rv=5.343 km/s 達 19.5 sigma），2026-08-13 查證
+    64895139073954944,
+    # D9 那顆亮星：RV=53.062+/-0.136 km/s（偏離 bulk_rv=5.343 km/s 達
+    # 350 sigma，rv_nb_transits=13，不是單次量測雜訊），且不在 HR23
+    # (Hunt & Reffert 2023) 的 M45 成員表裡（任何機率都沒有，見 C20
+    # 重建出的原始「20 顆判定分歧」集合，check_c20_disagree_set.py）。
+    # 三個獨立證據（RV、HR23 排除、顏色偏離主序）都指向同一個結論，
+    # 2026-08-13 查證
+    68409590552589184,
+}
+
+
+def exclude_confirmed_non_members(source_id) -> np.ndarray:
+    """回傳跟 source_id 對齊的布林遮罩，True 表示應該排除（已確認非成員）。"""
+    sid = np.asarray(source_id, np.int64)
+    return np.isin(sid, np.array(list(CONFIRMED_NON_MEMBER_IDS), np.int64))
+
 
 def main_sequence_mass_luminosity(iso: Table, dist_mod: float, av: float,
                                   ext) -> tuple[np.ndarray, np.ndarray]:
@@ -50,11 +76,52 @@ def main_sequence_mass_luminosity(iso: Table, dist_mod: float, av: float,
     return g[idx], m[idx]
 
 
+def main_sequence_color(iso: Table, dist_mod: float, av: float,
+                        ext) -> tuple[np.ndarray, np.ndarray]:
+    """從 isochrone 取出單調主序段，回傳 (視星等 G, BP-RP 顏色)。
+
+    跟 `main_sequence_mass_luminosity()` 用同一個「保留 G 持續變亮」的
+    單調篩選，確保兩者定義的是同一段主序，查出來的質量與顏色可以對同一顆
+    觀測星互相對照。
+    """
+    m = np.asarray(iso["Mini"], float)
+    g = np.asarray(iso[COL_G], float) + dist_mod + ext.g * av
+    c = (np.asarray(iso[COL_BP], float) - np.asarray(iso[COL_RP], float)
+         + (ext.bp - ext.rp) * av)
+    order = np.argsort(m)
+    g, c = g[order], c[order]
+    keep = np.ones(len(m), bool)
+    gmin = np.inf
+    for i in range(len(g)):
+        if g[i] < gmin:
+            gmin = g[i]
+        else:
+            keep[i] = False
+    g, c = g[keep], c[keep]
+    idx = np.argsort(g)
+    return g[idx], c[idx]
+
+
 def assign_masses(obs_mag, iso: Table, dist_mod: float, av: float,
-                  ext) -> np.ndarray:
-    """方法 A：把每顆星當單星，由 G 星等查出質量。"""
+                  ext, obs_color=None, color_tol: float = 0.4) -> np.ndarray:
+    """方法 A：把每顆星當單星，由 G 星等查出質量。
+
+    `obs_color`（BP-RP）給定時，額外做顏色一致性檢查：算出該 G 星等對應
+    的主序顏色，觀測顏色偏離超過 `color_tol` 星等就回傳 NaN，跟現有處理
+    範圍外星等的機制一致。門檻抓 0.4：已知混入 `cmd_members.csv` 的白矮星
+    （source_id=66697547870378368）bp_rp=-0.403，同一 G 星等的主序顏色
+    偏離達 1 星等以上，遠超過未解析主序雙星的典型顏色偏移（通常 <0.2
+    星等），0.4 足以擋下非主序天體、不會誤殺正常雙星（見 `LIMITATIONS.md`
+    A6）。不給 `obs_color` 時完全不做這項檢查，行為與修正前一致。
+    """
     g_ms, m_ms = main_sequence_mass_luminosity(iso, dist_mod, av, ext)
-    return np.interp(obs_mag, g_ms, m_ms, left=np.nan, right=np.nan)
+    masses = np.interp(obs_mag, g_ms, m_ms, left=np.nan, right=np.nan)
+    if obs_color is not None:
+        g_c, c_ms = main_sequence_color(iso, dist_mod, av, ext)
+        pred_color = np.interp(obs_mag, g_c, c_ms, left=np.nan, right=np.nan)
+        bad = np.abs(np.asarray(obs_color, float) - pred_color) > color_tol
+        masses = np.where(bad, np.nan, masses)
+    return masses
 
 
 def mle_powerlaw(masses: np.ndarray, m_lo: float, m_hi: float) -> dict:
