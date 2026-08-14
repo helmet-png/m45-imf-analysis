@@ -24,6 +24,25 @@ from scipy.optimize import minimize_scalar
 from .step3_age import (COL_G, COL_BP, COL_RP, _Ext, draw_randoms, hess,
                         poisson_loglike, synth_populations)
 
+# 已確認的非成員天體，顏色跟真成員無異（assign_masses() 的顏色一致性檢查
+# 抓不到），只有 RV+logg 兩個獨立訊號才抓得到，見 LIMITATIONS.md A6、
+# check_giant_subgiant_contamination.py 的驗證過程。這是一個小型、有清楚
+# 出處的名單，不是隨手刪資料——每一筆都附上發現時的判定依據。換一批
+# `data/cmd_members.csv` 後要重跑 check_giant_subgiant_contamination.py
+# 確認名單有沒有變化，不會自動更新（需要 data/astrophys.csv，這份檔案
+# 依賴外部 TAP 查詢工具，不是每台機器都能重新產生）。
+CONFIRMED_NON_MEMBER_IDS = {
+    # logg_gspphot=4.00, Teff=3317K, RV=-93.65+/-5.08 km/s（偏離
+    # bulk_rv=5.343 km/s 達 19.5 sigma），2026-08-13 查證
+    64895139073954944,
+}
+
+
+def exclude_confirmed_non_members(source_id) -> np.ndarray:
+    """回傳跟 source_id 對齊的布林遮罩，True 表示應該排除（已確認非成員）。"""
+    sid = np.asarray(source_id, np.int64)
+    return np.isin(sid, np.array(list(CONFIRMED_NON_MEMBER_IDS), np.int64))
+
 
 def main_sequence_mass_luminosity(iso: Table, dist_mod: float, av: float,
                                   ext) -> tuple[np.ndarray, np.ndarray]:

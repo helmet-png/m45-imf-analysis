@@ -71,7 +71,8 @@ sys.modules.setdefault("astropy.table", _t)
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
 from pipeline import joint_fit, selection as selmod           # noqa: E402
 from pipeline.step3_age import COL_G, COL_BP, COL_RP, _Ext    # noqa: E402
-from pipeline.step5_imf import assign_masses, mle_powerlaw    # noqa: E402
+from pipeline.step5_imf import (assign_masses, mle_powerlaw,  # noqa: E402
+                                exclude_confirmed_non_members)
 from measure_overconfidence import GRID                       # noqa: E402
 from injection_recovery import THETA_TRUE, make_fake          # noqa: E402
 from pipeline.table_compat import Table                       # noqa: E402
@@ -225,6 +226,13 @@ def main():
               if "non_single_star" in clean.colnames
               else np.zeros(len(clean)))
     ok = np.isfinite(color) & np.isfinite(mag)
+    # 已確認的非成員天體（RV+logg 雙訊號，見 LIMITATIONS.md A6），顏色跟
+    # 真成員無異，assign_masses() 的顏色檢查抓不到，這裡用獨立名單排除。
+    excl = exclude_confirmed_non_members(np.asarray(clean["source_id"], np.int64))
+    if excl.any():
+        print(f"排除 {int(excl.sum())} 顆已確認非成員天體（見 "
+              f"LIMITATIONS.md A6）")
+    ok &= ~excl
     color, mag = color[ok], mag[ok]
     ruwe_all, nss_all = ruwe_all[ok], nss_all[ok]
     nss_all = np.nan_to_num(nss_all, nan=0.0) > 0

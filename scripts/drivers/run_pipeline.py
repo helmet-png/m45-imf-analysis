@@ -134,6 +134,15 @@ def main():
         color = np.asarray(clean["bp_rp"], float)
         mag = np.asarray(clean["phot_g_mean_mag"], float)
         ok = np.isfinite(color) & np.isfinite(mag)
+        # 已確認的非成員天體（RV+logg 雙訊號，見 LIMITATIONS.md A6），
+        # 顏色跟真成員無異，assign_masses() 的顏色檢查抓不到，這裡用獨立
+        # 名單排除，同時影響第 4 步（雙星判定）與第 5 步（質量函數）。
+        excl = step5_imf.exclude_confirmed_non_members(
+            np.asarray(clean["source_id"], np.int64))
+        if excl.any():
+            print(f"排除 {int(excl.sum())} 顆已確認非成員天體（見 "
+                  f"LIMITATIONS.md A6）")
+        ok &= ~excl
         ext = step3_age._Ext(cfg.step2_cmd.ext_coeff_g,
                              cfg.step2_cmd.ext_coeff_bp,
                              cfg.step2_cmd.ext_coeff_rp)
