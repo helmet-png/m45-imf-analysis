@@ -35,6 +35,13 @@ CONFIRMED_NON_MEMBER_IDS = {
     # logg_gspphot=4.00, Teff=3317K, RV=-93.65+/-5.08 km/s（偏離
     # bulk_rv=5.343 km/s 達 19.5 sigma），2026-08-13 查證
     64895139073954944,
+    # D9 那顆亮星：RV=53.062+/-0.136 km/s（偏離 bulk_rv=5.343 km/s 達
+    # 350 sigma，rv_nb_transits=13，不是單次量測雜訊），且不在 HR23
+    # (Hunt & Reffert 2023) 的 M45 成員表裡（任何機率都沒有，見 C20
+    # 重建出的原始「20 顆判定分歧」集合，check_c20_disagree_set.py）。
+    # 三個獨立證據（RV、HR23 排除、顏色偏離主序）都指向同一個結論，
+    # 2026-08-13 查證
+    68409590552589184,
 }
 
 
