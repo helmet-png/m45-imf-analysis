@@ -22,7 +22,7 @@
 
 ## A 類
 
-### A1 精修 bug 波及的結果尚未重跑（p2_final2_v3 是、p9a_redo_v2 是、p9c_redo_v2 是、p6b_inject_lowmass_v2 是、p6_lowmass_v2 否、p11_outlierfrac_v2 否）
+### A1 精修 bug 波及的結果尚未重跑（p2_final2_v3 是、p9a_redo_v2 是、p9c_redo_v2 是、p6b_inject_lowmass_v2 是、p6_lowmass_v2 否、p11_outlierfrac_v2 否、verify_bprperr_v2 否）
 
 **問題**：`injection_recovery.multi_stage_best()` 修好前，`--refines` 給單一值
 等於完全沒精修（回傳純粗網格 argmax），給 `3,3` 只精修一階。程式碼已修，
@@ -30,8 +30,8 @@
 
 | 等級 | 結果 |
 |---|---|
-| 完全沒精修 | `P9a-redo`（α=2.440±0.180）、`P9c`（α=2.180±0.098）、`p6_lowmass`（0.248 系統誤差）、`P6b`（ratio 0.92）、`P11`、`P12` |
-| 只精修一階 | `p2_final`／`p2_final2`（headline α=2.387±0.060）、`item4_davsweep`、注入回收 S1–S4（σ_α=0.144 的來源） |
+| 完全沒精修 | `P9a-redo`（α=2.440±0.180）、`P9c`（α=2.180±0.098）、`p6_lowmass`（0.248 系統誤差）、`P6b`（ratio 0.92）、`P11`、`P12`、**`verify_bprperr_off`（α=2.420±0.098，2026-08-13 新確認，見 B1）** |
+| 只精修一階 | `p2_final`／`p2_final2`（headline α=2.387±0.060）、`item4_davsweep`、注入回收 S1–S4（σ_α=0.144 的來源）、**`verify_bprperr_on`（α=2.420±0.078，2026-08-13 新確認，見 B1）** |
 
 **後果**：上表所有數字的精確值不可引用。alpha 的實際解析度是 0.20（完全沒
 精修）或 0.067（一階），不是宣稱的 0.022。質性結論可能仍成立（例如 A4 的
@@ -122,15 +122,36 @@ MNRAS 508, 3877) 的 Gaia EDR3 白矮星目錄（Vizier
 
 ## B 類
 
-### B1 測光誤差模型用 G 查 BP/RP 誤差（verify_bprperr重新確認 否）
+### B1 測光誤差模型用 G 查 BP/RP 誤差（verify_bprperr_v2 否）
 
 **問題**：`_interp_err(g, errmodel, "e_bp")` 用 G 星等查 BP/RP 誤差。同一個 G
 之下紅星的 BP 暗得多，因此低估紅星的 BP 誤差。選擇函數那一側已改用各波段
 自己的星等，加雜訊這一側還沒改。`use_native_bprp_err` 旗標與 A/B 比較
-（`verify_bprperr_off`／`on`）已存在，結果受 A1 影響。
+（`verify_bprperr_off`／`on`）已存在。
+
+**2026-08-13 兩次都跑完了，但誠實記錄一個問題——不是乾淨的對照組**：
+`verify_bprperr_off`（結果 `results/fit_real_bprperr_off.npz`，α=2.420±0.098）
+於 2026-08-11 10:47:42 開始跑，**早於同一天 16:57:09 才提交的
+`multi_stage_best()` 精修 bug 修正**（見 A1），這個長跑的 subprocess 在
+啟動當下就把舊版程式碼載進記憶體，中途 git 更新程式碼不會影響它，所以
+這批**是完全沒精修的粗網格 argmax**（5 次結果 2.500/2.500/2.300/2.300/2.500
+全部精確落在 COARSE 的 0.20 間距格點上，符合零精修的特徵）。
+`verify_bprperr_on`（結果 `results/fit_real_bprperr_on.npz`，α=2.420±0.078）
+緊接著在 18:07:11 才開始，晚於修正提交時間，跑的是修好後的程式碼，
+但因為呼叫時沒帶 `--refines 3,3`（`fit_real.py` 的 `--refines` 預設值是
+單一值 `"3"`），只精修一階（解析度約 0.067，5 次結果裡有 2 次
+2.367/2.433 對得上這個解析度，另外 3 次仍剛好落在粗網格點上——精修後
+最佳點跟粗網格點重合是可能發生的，不是矛盾）。**兩次用的精修程度不一樣，
+不是控制單一變因的乾淨對照**，α 中心值剛好都是 2.420（差 0.000）這件事
+方向上支持「BP/RP 誤差模型選擇對 alpha 影響很小」，但不能當成已驗證的
+結論——真正乾淨的比較要兩邊都用 `--refines 3,3` 重跑一次（`verify_bprperr_v2`），
+兩次用完全相同的精修程度才能排除是精修差異造成的巧合。
 
 **後果**：所有 `fit_real.py`／`injection_recovery.py` 的數字共用這個誤差模型。
 方向上會讓紅星在 Hess 圖裡看起來比實際精確，模型可能過度信任紅端形狀。
+**初步跡象顯示對 alpha 中心值影響可忽略（2.420 vs 2.420），但這個結論
+本身還沒有乾淨對照支持，待 `verify_bprperr_v2` 確認**，不能直接引用
+現有的 off/on 兩個數字當最終答案。
 大小未量。
 
 ### B2 殘留場星汙染固定在 1%（p11_outlierfrac_v2 否）
