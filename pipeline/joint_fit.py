@@ -19,6 +19,7 @@ IMF 斜率改變主序上的星數分布、雙星比例改變主序上方的展�
 from __future__ import annotations
 
 import numpy as np
+from scipy.stats import norm
 
 from . import isochrones as iso_mod
 from .step3_age import (IMF_BREAKS, _Ext, _interp_err, draw_randoms, hess,
@@ -74,6 +75,11 @@ class JointModel:
         # 預設 False 與原本行為一致；build_verify_bprperr.py 會把它
         # 打開來跟舊行為 A/B 比較 alpha 有沒有變。
         self.use_native_bprp_err = False
+        # 差異消光的分布形式（見 synthesise() 裡的完整說明）。**這是猜的
+        # 選擇，從未跟其他合理的分布形式比較過代價**（C5，2026-08-14）。
+        # 預設 "lognormal" 與原本行為一致；extinction_form_test 會覆寫成
+        # "trunc_exp"（截尾指數分布）來跟舊行為 A/B 比較 A_V 系統誤差。
+        self.dav_distribution = "lognormal"
         # 共用亂數：整條 MCMC 鏈共用同一批，概似才是參數的確定性函數
         self.draws = draw_randoms(
             self.n_syn, np.random.default_rng(cfg.step1_membership.random_seed))
@@ -294,6 +300,19 @@ class JointModel:
         # 乘性遮蔽，對數常態比常態更貼近。
         if dav <= 0 or av < 1e-6:
             av_i = av
+        elif self.dav_distribution == "trunc_exp":
+            # C5 替代分布（系統誤差比較用，見 LIMITATIONS.md C5）：截尾
+            # 指數分布，location=max(av-dav, 0)、scale=dav，av>=dav 時
+            # 平均恰為 av；av<dav 時退化成 location=0、scale=av 的純指數
+            # （此時無法同時滿足「均值=av」與「非負」，選擇保均值犧牲
+            # scale 跟 dav 的直接對應，這是截尾指數這個形式本身的限制，
+            # 不是實作 bug）。用同一個 z_av（標準常態）先轉成 U(0,1)
+            # 再反解指數分布的 CDF，維持「同一組共用亂數 -> 概似是參數的
+            # 確定性函數」這個前提，不能另外重新抽樣。
+            u = norm.cdf(d["z_av"][:n])
+            scale = dav if av >= dav else av
+            loc = max(av - dav, 0.0)
+            av_i = loc - scale * np.log1p(-u)
         else:
             s2 = np.log1p((dav / av) ** 2)
             av_i = np.exp(np.log(av) - 0.5 * s2
