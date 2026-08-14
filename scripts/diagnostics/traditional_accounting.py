@@ -121,14 +121,14 @@ def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
                       color_check=False):
     """跑一次完整的傳統流程，回傳 (alpha, 使用星數, 剔除數, alpha_err)。
 
-    variant: "ignore"（全當單星）/ "cmd_offset"（CMD剔除）/
-             "ruwe"（RUWE剔除，需傳 ruwe 陣列）/
-             "nss"（GaiaNSS剔除，需傳 nss 陣列）/
-             "analytic_correct"（不剔除，對 ignore 的結果套文獻修正量）
+    variant: "ignore"(全當單星)/ "cmd_offset"(CMD剔除)/
+             "ruwe"(RUWE剔除, 需傳 ruwe 陣列)/
+             "nss"(GaiaNSS剔除, 需傳 nss 陣列)/
+             "analytic_correct"(不剔除, 對 ignore 的結果套文獻修正量)
 
     `color_check=True` 時把 `color` 一併傳給 `assign_masses()` 做顏色一致性
-    檢查（見 `LIMITATIONS.md` A6），只用在真實資料段——注入回收段用的是
-    合成 `color`/`mag`（`make_fake()` 產生），維持舊行為不動，避免動到
+    檢查(見 `LIMITATIONS.md` A6), 只用在真實資料段——注入回收段用的是
+    合成 `color`/`mag`(`make_fake()` 產生), 維持舊行為不動, 避免動到
     已經驗證過的注入回收數字。
     """
     color = np.asarray(color, float)
