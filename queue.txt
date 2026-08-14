@@ -147,5 +147,11 @@ p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 # 這個設定（10 次重複 + 三階精修）在 Kaggle 上實測跑了 11.4 小時只完成
 # 10 次裡的第 1 次，換算要 100+ 小時，遠超 Kaggle 免費 session 上限
 # （9-12 小時），見 KAGGLE_DIAGNOSIS.md。本機 8 核應該快很多，P9a-redo/
-# P9c v2 用同樣雙階精修（3,3，比這裡少一階）在 Kaggle 都幾小時內完成。=====
-p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
+# P9c v2 用同樣雙階精修（3,3，比這裡少一階）在 Kaggle 都幾小時內完成，
+# 但本機對「3,3,3」這個設定還沒有實測耗時，**先跑單次重複的時間門檻**，
+# 不要直接排 10 次重複——run_queue.py 沒有條件分支，沒辦法自動判斷
+# 「門檻結果可不可接受」，所以完整 10 次重複故意不排在這裡，等時間門檻
+# 跑完、人工確認耗時可接受，再手動把下面這行加回 queue.txt 或直接手動
+# 執行：
+#   fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
+p2_final2_v3_timing|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --tag _p2final_v3_timing

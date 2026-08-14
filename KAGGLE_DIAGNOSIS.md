@@ -66,12 +66,15 @@ React 頁面，無痕視窗就正常。兩件事只是時間上湊巧同時出�
 
 ## 2026-08-14：重量級設定（`--repeats 10 --refines 3,3,3`）在 Kaggle 上不可行
 
-修好 `results/` 目錄 bug 後，用修好版本重推了 `p2_final2_v3-fixed`
-（headline 數字，config C，`--repeats 10 --refines 3,3,3`，justinlan11
-帳號）。**跑了約 11.4 小時，pull 回來的 log 顯示 10 次重複裡只跑完
-第 1 次**（`logage=8.026`、`alpha=2.396`、耗時 40934 秒 ≈ 11.37 小時
-**單次重複**），之後被系統標記 `CANCEL_ACKNOWLEDGED`（多半是 Kaggle
-平台自己依 session 時間上限中止，不是主動取消）。
+修好 `results/` 目錄 bug 後，用修好版本重推了 `p2-final2-v3-fixed`
+（任務名稱 `p2_final2_v3`，headline 數字，config C，
+`--repeats 10 --refines 3,3,3`，justinlan11 帳號）。**跑了約 11.4
+小時，pull 回來的 log 顯示 10 次重複裡只跑完第 1 次**（`logage=8.026`、
+`alpha=2.396`、耗時 40934 秒 ≈ 11.37 小時**單次重複**），之後被系統
+標記 `CANCEL_ACKNOWLEDGED`。**這個狀態只能確認 kernel 被取消了，取消
+原因未明**——沒有拉到 Kaggle 的 event log，「平台自己依 session 時間
+上限中止」只是推測（跟已觀察到的耗時量級一致，但不是唯一可能，也
+可能是有人手動取消），不要當成已證實的事實引用。
 
 **換算**：單次重複要 11.4 小時，10 次重複要 100+ 小時，遠遠超過
 Kaggle 免費 CPU-only notebook 的單次 session 上限（約 9–12 小時）。
