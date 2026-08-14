@@ -130,7 +130,6 @@ def main():
         grid = isomod.load_grid(isomod.CACHE / (
             f"parsec_v2.0_gaiaEDR3_logt{c3.logage_min:g}-{c3.logage_max:g}"
             f"s{c3.logage_step:g}_mh{c3.mh_min:g}-{c3.mh_max:g}s{c3.mh_step:g}.dat"))
-        dm = distance_modulus(cfg, clean)
         color = np.asarray(clean["bp_rp"], float)
         mag = np.asarray(clean["phot_g_mean_mag"], float)
         ok = np.isfinite(color) & np.isfinite(mag)
@@ -143,6 +142,12 @@ def main():
             print(f"排除 {int(excl.sum())} 顆已確認非成員天體（見 "
                   f"LIMITATIONS.md A6）")
         ok &= ~excl
+        # dm 用視差中位數，理論上該用排除非成員後的樣本算（雖然單顆星
+        # 對上千顆星的中位數影響可忽略不計，這裡仍改成排除之後才算，
+        # 避免順序疑慮）。只套用 excl（已確認非成員），不套用完整 ok
+        # （那還包含 color/mag 缺值篩選，跟 dm 原本的分母定義無關，
+        # 不在這次修正範圍內）。
+        dm = distance_modulus(cfg, clean[~excl])
         ext = step3_age._Ext(cfg.step2_cmd.ext_coeff_g,
                              cfg.step2_cmd.ext_coeff_bp,
                              cfg.step2_cmd.ext_coeff_rp)

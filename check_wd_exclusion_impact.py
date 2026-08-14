@@ -70,15 +70,16 @@ def report(label, mag, color, sid, iso, dm, av, ext, m_lo, m_hi, rv_excl):
     a_both = step5_imf.mle_powerlaw(m_both, m_lo, m_hi)
 
     print(f"\n{'=' * 70}\n{label}\n{'=' * 70}")
-    print(f"  基準（都不排除）    alpha = {a_base['alpha']:.4f} +/- "
+    print(f"  基準（都不排除）        alpha = {a_base['alpha']:.4f} +/- "
           f"{a_base['alpha_err']:.4f}  (n={a_base['n']:,})")
-    print(f"  只排白矮星（顏色）  alpha = {a_color['alpha']:.4f}"
+    print(f"  只做顏色一致性排除      alpha = {a_color['alpha']:.4f}"
           f"  差異 {a_color['alpha']-a_base['alpha']:+.4f}"
-          f"  (n={a_color['n']:,})")
-    print(f"  只排 RV 離群星      alpha = {a_rv['alpha']:.4f}"
+          f"  (n={a_color['n']:,})"
+          "  # 剔除對象依設定而異，不一定是白矮星，見下方逐顆清單")
+    print(f"  只做 RV 離群星名單排除  alpha = {a_rv['alpha']:.4f}"
           f"  差異 {a_rv['alpha']-a_base['alpha']:+.4f}"
           f"  (n={a_rv['n']:,})")
-    print(f"  兩者都排            alpha = {a_both['alpha']:.4f}"
+    print(f"  兩種排除都套用          alpha = {a_both['alpha']:.4f}"
           f"  差異 {a_both['alpha']-a_base['alpha']:+.4f}"
           f"  (n={a_both['n']:,})")
 
