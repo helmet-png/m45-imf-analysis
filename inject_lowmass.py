@@ -79,7 +79,16 @@ def main():
     ap.add_argument("--tag", default="", help="輸出檔名後綴，避免覆蓋前一次跑的"
                      "完整參數向量（見 LIMITATIONS.md D6：p6b/p6b2/p6b3 的中間"
                      "結果曾經因為固定檔名被後續跑覆寫，永久遺失）")
+    ap.add_argument("--only", type=float, default=None,
+                    help="只測 P_TRUE_LIST 裡的其中一個真值（例如 1.3），"
+                         "不是全部三個都跑。用於補測單一可疑結果，不用重跑"
+                         "整批（見 LIMITATIONS.md D5）")
     args = ap.parse_args()
+    p_true_list = P_TRUE_LIST
+    if args.only is not None:
+        if args.only not in P_TRUE_LIST:
+            ap.error(f"--only {args.only} 不在 P_TRUE_LIST={P_TRUE_LIST} 裡")
+        p_true_list = [args.only]
     # --tag 只能是檔名後綴，不能是路徑（CodeRabbit 2026-08-13 抓到：不擋的話
     # --tag "/../../tmp/x" 能把輸出導到 results/ 之外，覆寫任意 .npz）。
     if "/" in args.tag or "\\" in args.tag:
@@ -109,7 +118,7 @@ def main():
     dav_true = 0.30
     print(f"assumed n_obs={n_obs}, alpha_true={THETA_TRUE[3]}, "
           f"dav_true={dav_true}")
-    print(f"injecting p_lowmass = {P_TRUE_LIST}, "
+    print(f"injecting p_lowmass = {p_true_list}, "
           f"fit range {P_MIN}-{P_MAX}\n", flush=True)
 
     # 八維全掃會爆炸（粗掃 240 萬點、精修 7^8 = 576 萬點），必須收窄。
@@ -139,7 +148,7 @@ def main():
           f"(~{n_pts*0.015/n_proc/60:.0f} min per fit)\n", flush=True)
     results = {}
 
-    for p_true in P_TRUE_LIST:
+    for p_true in p_true_list:
         outs = []
         for t in range(args.trials):
             # 生成假資料：注入指定的低質量段冪次
@@ -202,7 +211,7 @@ def main():
     print(f"{'p_true':>8}{'p_recovered':>14}{'bias':>9}"
           f"{'alpha_rec':>11}{'alpha_bias':>11}")
     p_recs, p_true_ok = [], []
-    for p_true in P_TRUE_LIST:
+    for p_true in p_true_list:
         if p_true not in results:
             print(f"{p_true:>8.1f}  (全部試驗失敗，無資料)")
             continue
