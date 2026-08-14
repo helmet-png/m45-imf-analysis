@@ -141,3 +141,11 @@ radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refine
 # LIMITATIONS.md／WORK_BOARD.md 待認領清單，優先度較低，之後再排。=====
 p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
+# ===== 2026-08-14：headline p2_final2 重跑（A1 精修 bug + A2 金屬量先驗
+# 兩個修正一起套用，見 LIMITATIONS.md）。**排在這裡而不是 Kaggle**：
+# 這個設定（10 次重複 + 三階精修）在 Kaggle 上實測跑了 11.4 小時只完成
+# 10 次裡的第 1 次，換算要 100+ 小時，遠超 Kaggle 免費 session 上限
+# （9-12 小時），見 KAGGLE_DIAGNOSIS.md。本機 8 核應該快很多，P9a-redo/
+# P9c v2 用同樣雙階精修（3,3，比這裡少一階）在 Kaggle 都幾小時內完成。=====
+p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
