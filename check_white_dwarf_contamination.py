@@ -55,8 +55,11 @@ def main():
         print("需要 astroquery（pip install astroquery）。", file=sys.stderr)
         sys.exit(1)
 
-    # 直接用 ADQL 風格的 source_id IN (...) 查詢會超過 URL 長度限制，
-    # 這份目錄本身不大（~359,000 列），改成整份抓回來後在本地端做集合交集。
+    # 直接用 ADQL 風格的 source_id IN (...) 查詢會超過 URL 長度限制，改成
+    # 整份抓回來後在本地端做集合交集——實測整份約 128 萬列（見上方
+    # docstring），row_limit=-1 會真的抓全部，網路傳輸與記憶體都要吃這個
+    # 量級，不是原先誤記的 ~359,000（2026-08-13 CodeRabbit review 抓到
+    # 這裡的估計數字沒跟著 docstring 更新，容易讓人低估這支腳本的成本）。
     v = Vizier(columns=["GaiaEDR3", "Pwd", "Gmag", "MassH"], row_limit=-1)
     result = v.get_catalogs(VIZIER_CATALOG)
     if not result:

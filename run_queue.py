@@ -19,6 +19,7 @@ queue.txt 格式，每行一個工作：
 """
 from __future__ import annotations
 
+import ctypes
 import os
 import subprocess
 import sys
@@ -30,6 +31,53 @@ HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
 LOCK = HERE / "logs" / "run_queue.lock"
+
+# 這台機器是 ARM64 Snapdragon X，只支援「待命 (S0 低電源閒置)」（Modern
+# Standby），沒有傳統的 S1-S3。實測：`powercfg /a` 確認、`powercfg /query`
+# 也確認 STANDBYIDLE（睡眠啟動時間）在接電時已經是 0（永不睡眠）、
+# 處理器最高狀態已經是 100%——但螢幕關掉、使用者判定為「離開」後，
+# Modern Standby 仍會另外把背景行程當成閒置對待，這一層節流**不是**由
+# 睡眠計時器控制，關掉睡眠計時器擋不住它。
+#
+# Windows 官方解法是讓真正在算的行程自己呼叫 SetThreadExecutionState
+# 主動宣告「我在做事，別把我當閒置」——ES_SYSTEM_REQUIRED 告訴系統
+# 不要因為閒置而降頻/節流這個行程，ES_AWAYMODE_REQUIRED 明確允許螢幕
+# 依原本的逾時設定關掉、使用者可以照常判定為離開，但把運算維持在
+# 「有人在用」的滿速狀態——這正是這支腳本要的：只有它在跑的時候才
+# 撐住滿速，其他時間（腳本沒在跑、或這個 process 結束）系統照舊省電，
+# 不需要改全域電源設定去換（改全域設定的代價是沒在跑東西時也一直
+# 滿速，浪費電）。旗標帶 ES_CONTINUOUS 讓狀態持續生效，不用每隔幾秒
+# 重新宣告一次。
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
+ES_AWAYMODE_REQUIRED = 0x00000040
+
+
+def keep_system_awake():
+    """要求系統別把這個行程當閒置節流，螢幕仍可正常關閉。失敗（例如
+    非 Windows 環境，或這台機器的 OEM 電源管理不接受 AWAYMODE 旗標）
+    只印警告，不中斷佇列——保持滿速是最佳化，不是佇列能不能跑的前提。"""
+    try:
+        prev = ctypes.windll.kernel32.SetThreadExecutionState(
+            ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)
+        if not prev:
+            print("警告：SetThreadExecutionState 呼叫失敗（回傳 0），"
+                  "螢幕關閉後可能還是會被節流。", flush=True)
+    except (AttributeError, OSError) as e:
+        print(f"警告：無法呼叫 SetThreadExecutionState（{e}），"
+              f"螢幕關閉後可能還是會被節流。", flush=True)
+
+
+def release_system_awake():
+    """佇列跑完就把狀態還原成一般——不要讓「保持滿速」這件事在腳本
+    結束後還繼續生效，其餘時間系統該怎麼省電就怎麼省電。行程真的
+    結束時 Windows 本來就會自動清掉這個宣告，這裡顯式做一次只是
+    避免依賴「process 終止時機」這種隱性行為，讓 finally 區塊自己
+    講清楚在做什麼。"""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+    except (AttributeError, OSError):
+        pass
 
 
 def _pid_alive(pid: int) -> bool | None:
@@ -148,6 +196,7 @@ def mark_done(label, status, secs):
 
 def main():
     acquire_lock()
+    keep_system_awake()
     try:
         print(f"佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
         while True:
@@ -175,6 +224,7 @@ def main():
             print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
                   f"（{secs/60:.1f} 分）", flush=True)
     finally:
+        release_system_awake()
         release_lock()
 
 

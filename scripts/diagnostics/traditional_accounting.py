@@ -71,7 +71,8 @@ sys.modules.setdefault("astropy.table", _t)
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
 from pipeline import joint_fit, selection as selmod           # noqa: E402
 from pipeline.step3_age import COL_G, COL_BP, COL_RP, _Ext    # noqa: E402
-from pipeline.step5_imf import assign_masses, mle_powerlaw    # noqa: E402
+from pipeline.step5_imf import (assign_masses, mle_powerlaw,  # noqa: E402
+                                exclude_confirmed_non_members)
 from measure_overconfidence import GRID                       # noqa: E402
 from injection_recovery import THETA_TRUE, make_fake          # noqa: E402
 from pipeline.table_compat import Table                       # noqa: E402
@@ -116,13 +117,19 @@ def ms_colour_to_g(iso, dist_mod, av, ext):
 
 def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
                       variant="ignore", cmd_thresh=0.375,
-                      ruwe=None, nss=None, ruwe_threshold=1.4):
+                      ruwe=None, nss=None, ruwe_threshold=1.4,
+                      color_check=False):
     """跑一次完整的傳統流程，回傳 (alpha, 使用星數, 剔除數, alpha_err)。
 
-    variant: "ignore"（全當單星）/ "cmd_offset"（CMD剔除）/
-             "ruwe"（RUWE剔除，需傳 ruwe 陣列）/
-             "nss"（GaiaNSS剔除，需傳 nss 陣列）/
-             "analytic_correct"（不剔除，對 ignore 的結果套文獻修正量）
+    variant: "ignore"(全當單星)/ "cmd_offset"(CMD剔除)/
+             "ruwe"(RUWE剔除, 需傳 ruwe 陣列)/
+             "nss"(GaiaNSS剔除, 需傳 nss 陣列)/
+             "analytic_correct"(不剔除, 對 ignore 的結果套文獻修正量)
+
+    `color_check=True` 時把 `color` 一併傳給 `assign_masses()` 做顏色一致性
+    檢查(見 `LIMITATIONS.md` A6), 只用在真實資料段——注入回收段用的是
+    合成 `color`/`mag`(`make_fake()` 產生), 維持舊行為不動, 避免動到
+    已經驗證過的注入回收數字。
     """
     color = np.asarray(color, float)
     mag = np.asarray(mag, float)
@@ -148,7 +155,8 @@ def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
     elif variant not in ("ignore", "analytic_correct"):
         raise ValueError(f"未知的 variant：{variant!r}")
 
-    masses = assign_masses(mag, iso, dm, av, ext)
+    masses = assign_masses(mag, iso, dm, av, ext,
+                           obs_color=(color if color_check else None))
     fit = mle_powerlaw(masses, m_lo, m_hi)
     alpha = fit["alpha"]
     if variant == "analytic_correct" and np.isfinite(alpha):
@@ -158,7 +166,7 @@ def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
 
 def bootstrap_alpha_err(color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
                         ruwe=None, nss=None, ruwe_threshold=1.4,
-                        n_boot=1000, seed=7000):
+                        n_boot=1000, seed=7000, color_check=False):
     """對真實資料做 with-replacement 重抽，量「對這 1,078 顆星本身的敏感度」。
 
     **這跟注入回收量的不是同一個量**：注入回收量的是「對真實但未知的
@@ -178,7 +186,7 @@ def bootstrap_alpha_err(color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
             variant=variant,
             ruwe=(np.asarray(ruwe)[idx] if ruwe is not None else None),
             nss=(np.asarray(nss)[idx] if nss is not None else None),
-            ruwe_threshold=ruwe_threshold)
+            ruwe_threshold=ruwe_threshold, color_check=color_check)
         if np.isfinite(a):
             outs.append(a)
     outs = np.array(outs)
@@ -218,6 +226,13 @@ def main():
               if "non_single_star" in clean.colnames
               else np.zeros(len(clean)))
     ok = np.isfinite(color) & np.isfinite(mag)
+    # 已確認的非成員天體（RV+logg 雙訊號，見 LIMITATIONS.md A6），顏色跟
+    # 真成員無異，assign_masses() 的顏色檢查抓不到，這裡用獨立名單排除。
+    excl = exclude_confirmed_non_members(np.asarray(clean["source_id"], np.int64))
+    if excl.any():
+        print(f"排除 {int(excl.sum())} 顆已確認非成員天體（見 "
+              f"LIMITATIONS.md A6）")
+    ok &= ~excl
     color, mag = color[ok], mag[ok]
     ruwe_all, nss_all = ruwe_all[ok], nss_all[ok]
     nss_all = np.nan_to_num(nss_all, nan=0.0) > 0
@@ -271,7 +286,7 @@ def main():
         print()
 
     # --- 真實資料：五種變體 x isochrone 選擇 x 質量範圍 ---
-    print("\n真實資料（1,078 顆）：")
+    print(f"\n真實資料（{n_obs:,} 顆，已排除已確認非成員天體）：")
     print(f"{'isochrone':>26}{'質量範圍':>16}{'變體':>16}{'alpha':>8}"
           f"{'誤差':>8}{'誤差核算':>10}{'星數':>7}{'剔除':>6}")
     real = {}
@@ -286,18 +301,20 @@ def main():
         for rlo, rhi, rtag in ranges:
             for variant, tag in INJ_VARIANTS:
                 a, n, n_rm, err = traditional_alpha(
-                    color, mag, iso, dm, av, ext, rlo, rhi, variant=variant)
+                    color, mag, iso, dm, av, ext, rlo, rhi, variant=variant,
+                    color_check=True)
                 real[(note, rtag, tag)] = (a, err, "曲率")
                 print(f"{note:>26}{rtag:>16}{tag:>16}{a:>8.3f}"
                       f"{err:>8.3f}{'曲率':>10}{n:>7}{n_rm:>6}")
             for variant, tag in REAL_ONLY_VARIANTS:
                 a, n, n_rm, _ = traditional_alpha(
                     color, mag, iso, dm, av, ext, rlo, rhi, variant=variant,
-                    ruwe=ruwe_all, nss=nss_all, ruwe_threshold=ruwe_thr)
+                    ruwe=ruwe_all, nss=nss_all, ruwe_threshold=ruwe_thr,
+                    color_check=True)
                 _, boot_err = bootstrap_alpha_err(
                     color, mag, iso, dm, av, ext, rlo, rhi, variant,
                     ruwe=ruwe_all, nss=nss_all, ruwe_threshold=ruwe_thr,
-                    n_boot=args.n_boot)
+                    n_boot=args.n_boot, color_check=True)
                 real[(note, rtag, tag)] = (a, boot_err, "bootstrap")
                 print(f"{note:>26}{rtag:>16}{tag:>16}{a:>8.3f}"
                       f"{boot_err:>8.3f}{'bootstrap':>10}{n:>7}{n_rm:>6}")
@@ -309,7 +326,7 @@ def main():
     for variant, tag in INJ_VARIANTS[:2]:   # analytic_correct 沒有獨立剔除，不必比
         boot_mean, boot_err = bootstrap_alpha_err(
             color, mag, iso_c, dm, CURRENT_AV, ext, 0.50, m_hi, variant,
-            n_boot=args.n_boot)
+            n_boot=args.n_boot, color_check=True)
         print(f"  {tag:<12} bootstrap: alpha={boot_mean:.3f} 散布={boot_err:.3f}")
 
     print("\n判讀：")
