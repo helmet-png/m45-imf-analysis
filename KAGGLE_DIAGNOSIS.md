@@ -61,3 +61,34 @@ React 頁面，無痕視窗就正常。兩件事只是時間上湊巧同時出�
   `~/.claude/` 底下的全域檔案，不在這個 repo 裡，其他機器的 agent 讀不到，
   需要另外建置）。
 - 恢復派工與否、恢復哪些項目，由使用者或負責的 session 決定。
+
+---
+
+## 2026-08-14：重量級設定（`--repeats 10 --refines 3,3,3`）在 Kaggle 上不可行
+
+修好 `results/` 目錄 bug 後，用修好版本重推了 `p2_final2_v3-fixed`
+（headline 數字，config C，`--repeats 10 --refines 3,3,3`，justinlan11
+帳號）。**跑了約 11.4 小時，pull 回來的 log 顯示 10 次重複裡只跑完
+第 1 次**（`logage=8.026`、`alpha=2.396`、耗時 40934 秒 ≈ 11.37 小時
+**單次重複**），之後被系統標記 `CANCEL_ACKNOWLEDGED`（多半是 Kaggle
+平台自己依 session 時間上限中止，不是主動取消）。
+
+**換算**：單次重複要 11.4 小時，10 次重複要 100+ 小時，遠遠超過
+Kaggle 免費 CPU-only notebook 的單次 session 上限（約 9–12 小時）。
+**`--refines 3,3,3`（三階精修）比 P9a-redo／P9c v2 用的 `--refines 3,3`
+（雙階）貴很多**，這兩個各自跑 10 次重複只花數小時就完成，差別就在
+多一階精修。
+
+**結論：這個特定設定（三階精修 + 10 次重複）在 Kaggle 上不可行**，
+不是掛載問題也不是 `results/` bug，是純粹的計算量超過單次 session
+能負擔的上限。這種等級的重跑應該在本機 8 核佇列（`queue.txt`，
+Windows ARM64 機器）上做，不要再排進 `kaggle_queue.txt`。
+
+**唯一拿到的資料**（不是完整結果，只有 1/10 次重複，不能引用當
+headline 數字）：logage=8.026（106.2 Myr）、A_V=0.359、f_bin=0.602、
+**alpha=2.396**、MH=−0.022、q_gamma=−0.867、dav=0.500——跟先前記錄的
+舊 headline（α=2.387±0.060）同量級，方向上沒有意外，但單次重複沒有
+統計意義，不能取代真正的重跑。
+
+**下一步**：`p2_final2_v3`（headline，A1+A2 兩個修正一起套用）需要在
+本機 ARM64 佇列排隊重跑，不是 Kaggle。
