@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 from astropy.table import Table
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
 
 TARGET_SOURCE_ID = 68409590552589184
