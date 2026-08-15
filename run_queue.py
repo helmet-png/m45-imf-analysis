@@ -56,6 +56,16 @@ MAX_STALL_RETRIES = 2   # 同一個 label 因卡死自動重試最多 2 次，
                         # 第 3 次還卡死就放棄、標記完成並印警告，
                         # 避免真正壞掉的工作在無人看顧時無限重跑
 
+# 2026-08-16：radial_r3 在加了卡死偵測之後還是連續卡了好幾次（原因見上面
+# 2026-08-15 的說明：懷疑是防毒即時掃描卡住剛建立的 python.exe，時間點
+# 正好接在砍掉卡死行程樹之後）——而每一次自動重試都是「砍掉、立刻
+# 建立新的」，如果真的是防毒掃描的問題，這個「立刻」正好就是會撞進同一個
+# 觸發窗口的模式，等於重試機制自己在製造下一次卡死的條件。加一段緩衝，
+# 讓砍掉的行程樹跟系統（防毒/檔案控制代碼釋放）有時間收尾，再建立新的，
+# 不保證解決（成因本來就沒有內部堆疊能鐵證），但直接對應症狀本身描述的
+# 觸發模式，不是憑空的猜測。
+STALL_RETRY_SETTLE_S = 30
+
 # 這台機器是 ARM64 Snapdragon X，只支援「待命 (S0 低電源閒置)」（Modern
 # Standby），沒有傳統的 S1-S3。實測：`powercfg /a` 確認、`powercfg /query`
 # 也確認 STANDBYIDLE（睡眠啟動時間）在接電時已經是 0（永不睡眠）、
@@ -421,7 +431,9 @@ def main():
                 if n <= MAX_STALL_RETRIES:
                     print(f"[{datetime.now():%H:%M:%S}] {label} 卡死重試"
                           f"（第 {n}/{MAX_STALL_RETRIES} 次），"
-                          f"不標記完成，下一輪佇列會重跑。", flush=True)
+                          f"不標記完成，緩衝 {STALL_RETRY_SETTLE_S} 秒後"
+                          f"重跑。", flush=True)
+                    time.sleep(STALL_RETRY_SETTLE_S)
                     continue                            # 不 mark_done，留在 pending
                 print(f"[{datetime.now():%H:%M:%S}] {label} 連續卡死 "
                       f"{n} 次，這一輪放棄重試，記一筆 stalled_giveup"
