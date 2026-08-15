@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 from astropy.table import Table
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
 
 G_SUN_AU3_MSUN_DAY2 = 2.959122e-4  # G in AU^3 / (Msun * day^2)

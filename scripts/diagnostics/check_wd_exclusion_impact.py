@@ -47,7 +47,7 @@ from pathlib import Path
 import numpy as np
 from astropy.table import Table
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod  # noqa: E402
