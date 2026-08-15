@@ -93,5 +93,31 @@ headline 數字）：logage=8.026（106.2 Myr）、A_V=0.359、f_bin=0.602、
 舊 headline（α=2.387±0.060）同量級，方向上沒有意外，但單次重複沒有
 統計意義，不能取代真正的重跑。
 
-**下一步**：`p2_final2_v3`（headline，A1+A2 兩個修正一起套用）需要在
-本機 ARM64 佇列排隊重跑，不是 Kaggle。
+**2026-08-15 補充：`CANCEL_ACKNOWLEDGED` 的原因已確認，不再是推測**。
+另一個工作（`p6b_inject_lowmass_v2-fixed`，`inject_lowmass.py`，
+`--trials 3 --refines 3,3`，account5）同樣被取消，這次 log 完整拉到
+了明確的錯誤訊息：
+
+```
+nbclient.exceptions.CellTimeoutError: A cell timed out while it was
+being executed, after 43200 seconds.
+```
+
+**43200 秒 = 12 小時整**——Kaggle notebook 執行框架（`nbclient`）本身
+對單一 cell 有硬性 12 小時逾時，這就是兩個工作都被取消的確切原因，
+不是猜測、不是帳號或平台不穩。`p6b` 的 log 顯示只跑完 3 次試驗裡的
+第 1 次（`p_true=0.9 trial1`，耗時 30931 秒 ≈ 8.6 小時）就撞到這道牆
+——**代表這個 12 小時限制不只擋掉 headline 這個特別重的設定，連
+`inject_lowmass.py` 這種相對輕量的設定也擋不過去**，Kaggle 免費
+CPU-only notebook 對這整類 `n_syn=40000` 等級的正式跑而言，額度都
+偏緊。
+
+**下一步**：
+1. `p2_final2_v3`（headline，A1+A2 兩個修正一起套用）已改用
+   `--repeat-offset`（見另一個 PR）拆成 5 個帳號各跑 1 次重複平行進行
+   ——單次重複 11.4 小時仍在 12 小時內，應該能個別完成，不用再排本機
+   佇列的完整 10 次重複（`p2_final2_v3_timing` 那個單次時間門檻仍保留
+   在 `queue.txt`，當作跟本機速度的對照組）。
+2. `p6b_inject_lowmass_v2`：`inject_lowmass.py` 目前沒有等價的
+   `--repeat-offset`／trial 偏移機制，這個 12 小時的牆還沒解決，
+   需要之後補上類似的拆分機制，或改在本機佇列跑。
