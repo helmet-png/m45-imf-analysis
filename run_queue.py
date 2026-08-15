@@ -334,10 +334,32 @@ def read_queue():
 
 
 def read_done():
+    """回傳「不用再排進 pending」的標籤集合。**2026-08-16 修正**：
+    `stalled_giveup` 不算數——原本任何狀態（含 stalled_giveup）只要出現在
+    這個檔案就會被當成「已處理」永久跳過，結果 radial_rall 卡死重試 3 次
+    放棄後，被直接當成完成，實際上完全沒有產出結果檔，之後每次重啟都
+    悄悄跳過它，得靠人工翻 log 才會發現「這項其實沒跑完」。卡死的根因
+    常常是環境性的（防毒掃描、剛砍完一堆殘留行程後系統喚醒的時機這類
+    跟程式碼內容無關的偶發因素，見檔案開頭 2026-08-15 的說明），全新
+    重啟後值得再給一次機會，不該永久噤聲。exit1／error 這類「真的跑完
+    但失敗」維持原本行為（不自動重試，避免真正壞掉的工作卡住佇列）——
+    只有 stalled_giveup 這個特例排除在外，讓它留在 pending 讓下次重啟
+    自然重跑（配合 mark_stall_giveup() 把重試次數計數器歸零，重跑時
+    有完整的 MAX_STALL_RETRIES 次數可用，不會因為計數器沒重置而一卡
+    就立刻又放棄）。"""
     if not DONE.exists():
         return set()
-    return {l.split("\t")[0] for l in
-            DONE.read_text(encoding="utf-8").splitlines() if l.strip()}
+    out = set()
+    for l in DONE.read_text(encoding="utf-8").splitlines():
+        if not l.strip():
+            continue
+        parts = l.split("\t")
+        label = parts[0]
+        status = parts[1] if len(parts) > 1 else ""
+        if status == "stalled_giveup":
+            continue
+        out.add(label)
+    return out
 
 
 def mark_done(label, status, secs):
@@ -347,14 +369,40 @@ def mark_done(label, status, secs):
                 f"{datetime.now():%Y-%m-%d %H:%M:%S}\n")
 
 
+def _reset_stall_retry(label: str):
+    """放棄自動重試、記錄 stalled_giveup 之後歸零這個標籤的重試計數器
+    ——不歸零的話，下次重啟時第一次卡死就會立刻沿用舊計數（已經是
+    MAX_STALL_RETRIES），馬上又放棄，等於「多一次重啟機會」形同虛設。
+    歸零後下次重啟會有完整 MAX_STALL_RETRIES 次數可以重試，才是
+    read_done() 讓它重新排進 pending 這個修正真正想達到的效果。"""
+    counts = _read_stall_retries()
+    if label not in counts:
+        return
+    del counts[label]
+    STALL_RETRIES.parent.mkdir(exist_ok=True)
+    with open(STALL_RETRIES, "w", encoding="utf-8") as f:
+        for lb, c in counts.items():
+            f.write(f"{lb}\t{c}\n")
+
+
 def main():
     acquire_lock()
     keep_system_awake()
+    # 這一輪 process 生命週期內、已經放棄重試過的標籤——只存在記憶體裡，
+    # 不寫檔。read_done() 現在不再把 stalled_giveup 當成「已處理」（見
+    # read_done() 的說明），如果沒有這個記憶體集合擋著，giveup 之後迴圈
+    # 立刻回到最上面重新選 pending[0]，選到的還是同一個剛放棄的標籤，
+    # 會在這個 process 裡卡成無窮重試迴圈——這正是原本設計 giveup 機制
+    # 想避免的事。加這個集合讓「這個 process 這輩子不再碰它」，但下次
+    # 全新啟動 run_queue.py（新 process，這個集合重新歸零）還是會給
+    # 它一次機會，兩件事分開處理才對。
+    skip_this_run: set[str] = set()
     try:
         print(f"佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
         while True:
             done = read_done()
-            pending = [(l, c) for l, c in read_queue() if l not in done]
+            pending = [(l, c) for l, c in read_queue()
+                       if l not in done and l not in skip_this_run]
             if not pending:
                 print("佇列已清空，結束。", flush=True)
                 return
@@ -376,10 +424,15 @@ def main():
                           f"不標記完成，下一輪佇列會重跑。", flush=True)
                     continue                            # 不 mark_done，留在 pending
                 print(f"[{datetime.now():%H:%M:%S}] {label} 連續卡死 "
-                      f"{n} 次，放棄自動重試，標記完成——這代表工作本身"
-                      f"可能真的有問題（不只是防毒掃描這類偶發原因），"
-                      f"需要人工檢查。", flush=True)
+                      f"{n} 次，這一輪放棄重試，記一筆 stalled_giveup"
+                      f"——注意這**不等於**完成，read_done() 不會把這個狀態"
+                      f"當成已處理，下次重啟（不是這一輪佇列迴圈裡）會"
+                      f"自動再排進 pending 重跑，重試計數器也已歸零。"
+                      f"如果重啟後又立刻卡死，才是真的需要人工檢查的訊號。",
+                      flush=True)
                 status = "stalled_giveup"
+                _reset_stall_retry(label)
+                skip_this_run.add(label)
             mark_done(label, status, secs)
             print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
                   f"（{secs/60:.1f} 分）", flush=True)
