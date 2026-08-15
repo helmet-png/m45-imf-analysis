@@ -51,6 +51,13 @@ def main():
     # 「單次擬合的重現性」，A 與 C 的差要大於它才算真的位移。
     ap.add_argument("--repeats", type=int, default=1,
                     help="每個設定重複幾次（每次換一組模型端共用亂數）")
+    ap.add_argument("--repeat-offset", type=int, default=0,
+                    help="重複次數的起始索引偏移（種子 = 2000 + 13*(rep+offset)）。"
+                         "用來把同一組 --repeats N 拆到不同機器/帳號各跑一部分、"
+                         "彼此用不同亂數種子，例如 5 個帳號各跑 --repeats 2 "
+                         "搭配 --repeat-offset 0,2,4,6,8，結果檔案的 C 陣列"
+                         "沿 axis=0 串接起來就等於一次 --repeats 10 的結果。"
+                         "預設 0，不影響既有行為")
     ap.add_argument("--grid", default=GRID,
                     help="isochrone 網格檔名（在 isochrones/ 底下）。"
                          "換成 MIST 的檔案即可量出等時線模型造成的系統誤差")
@@ -186,9 +193,14 @@ def main():
             m.n_obs = len(color)
             m.selection = s
             m.bounds = base.bounds[:6].copy()
-            if args.repeats > 1:
-                m.draws = draw_randoms(m.n_syn,
-                                       np.random.default_rng(2000 + 13 * rep))
+            # repeat_offset 預設 0，只在明確要跨機器/帳號拆分時才會非零——
+            # 加進判斷式而不是只改種子公式，這樣 repeat_offset=0 時的行為
+            # 跟修改前逐位元相同（args.repeats==1 且沒給 offset 時完全不
+            # 重抽，沿用 base 建構時的預設種子），不影響任何既有結果。
+            if args.repeats > 1 or args.repeat_offset != 0:
+                m.draws = draw_randoms(
+                    m.n_syn,
+                    np.random.default_rng(2000 + 13 * (rep + args.repeat_offset)))
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             extra_axes = [extra] if extra is not None else []
