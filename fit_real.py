@@ -23,12 +23,36 @@ D 是必要的：注入回收顯示 dav 是**不可辨識**的，給多少範圍
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
+
+# 存在輸出 npz 裡的一個保留鍵，記錄「這批部分結果是用什麼設定算出來的」
+# （見 build_manifest() / main() 裡的比對邏輯）。用雙底線包住避免跟
+# CONFIGS 的單字母鍵（A/B/C/D）或未來可能加的設定名稱撞名。
+MANIFEST_KEY = "__manifest__"
+
+
+def build_manifest(args) -> dict:
+    """列出所有會影響擬合結果、續傳時必須跟既有部分結果一致的執行設定。
+    2026-08-15 CodeRabbit review 抓到：load_partial() 只看檔名（--tag），
+    不驗證其餘設定——用同一個 --tag、換一個 --grid 或 --n-syn 續傳，會把
+    舊設定算出的結果當成新設定已經算完，直接跳過重算，兩種不可比的結果
+    混進同一個檔案卻看不出來。這裡把「會不會被 load_partial 誤判成同一批」
+    的所有輸入都列進來，缺一個都可能造成誤判。"""
+    return {
+        "grid": args.grid,
+        "n_syn": args.n_syn,
+        "refines": args.refines,
+        "fix_mh": args.fix_mh,
+        "free_lowmass": args.free_lowmass,
+        "native_bprp_err": args.native_bprp_err,
+        "radius_range": args.radius_range,
+    }
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -38,6 +62,82 @@ from pipeline import joint_fit, selection as selmod           # noqa: E402
 from pipeline.table_compat import Table                       # noqa: E402
 from measure_overconfidence import GRID                       # noqa: E402
 from injection_recovery import COARSE, multi_stage_best       # noqa: E402
+
+
+def atomic_savez(out_path: Path, **arrays):
+    """np.savez 不是原子操作，寫到一半被中斷會留下截斷或空檔案。改成寫到
+    同目錄的暫存檔，成功才用 os.replace() 原子性換過去（跟
+    inject_lowmass.py 的 atomic_savez() 同一個理由、同一套寫法）。"""
+    tmp_path = out_path.with_name(out_path.stem + ".tmp.npz")
+    try:
+        np.savez(tmp_path, **arrays)
+        os.replace(tmp_path, out_path)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _acquire_write_lock(out_path: Path, timeout_s: float = 1800.0):
+    """對 out_path 的存檔操作加互斥鎖，避免兩個用同一個 --tag 的行程同時
+    讀-改-寫同一份 npz（2026-08-15 CodeRabbit review：atomic_savez() 只
+    保證單次 os.replace() 不會留下半檔，不保護 load_partial() 到
+    atomic_savez() 之間的整段讀-改-寫——兩個行程各自讀到舊快照、各自
+    加上自己新算出的重複再存檔，後存的會整批覆蓋掉先存的那些新結果）。
+
+    做法跟 run_queue.py 的 acquire_lock() 同一套 O_CREAT|O_EXCL 原子建立
+    模式（該檔已用這個模式解決過同一類競態，這裡不重新發明）。**這只解決
+    「檔案不會被覆蓋壞掉」，不解決「兩個行程各算了一份 rep 0 卻只留得住
+    一份」**——要跨機器/帳號真正平行擴充同一批 repeats，還是要搭配不重疊
+    的 repeat 索引（例如各自用不同 --tag 各出一個分片檔，跑完再手動合併），
+    不是這個鎖能單獨補上的，見 fit_real.py 開頭這段留言與 PR #53 review。
+    """
+    lock_path = out_path.with_name(out_path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    while True:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            return lock_path
+        except FileExistsError:
+            if time.time() - t0 > timeout_s:
+                print(f"警告：等待 {lock_path.name} 超過 {timeout_s:.0f} 秒"
+                      f"（可能是上一個行程異常結束沒清掉鎖檔），強制視為"
+                      f"可以繼續，手動確認沒有另一個行程還在寫這個檔案。",
+                      flush=True)
+                try:
+                    lock_path.unlink()
+                except FileNotFoundError:
+                    pass
+                continue
+            time.sleep(0.5)
+
+
+def _release_write_lock(lock_path: Path):
+    try:
+        lock_path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def load_partial(out_path: Path) -> dict:
+    """載入上次中斷前已經存檔的部分結果，讓 main() 可以跳過已經算完的
+    (config, rep) 組合，不必整批重算（2026-08-15：run_queue.py 需要重啟
+    套用電源管理修正時，發現原本的存檔邏輯要等全部 configs/repeats 都跑完
+    才存一次，中途被砍全部白工，即使每一次重複本身花好幾小時。改成每跑完
+    一次重複就存一次，重跑時先讀回已有的部分結果）。"""
+    if not out_path.exists():
+        return {}
+    try:
+        d = np.load(out_path)
+        return {k: np.asarray(d[k]) for k in d.files}
+    except Exception as e:                                    # noqa: BLE001
+        print(f"警告：讀取既有部分結果 {out_path} 失敗（{e}），"
+              f"視為沒有可續傳的進度，從頭開始。", flush=True)
+        return {}
 
 
 def main():
@@ -171,14 +271,43 @@ def main():
     }
 
     from pipeline.step3_age import draw_randoms
-    out = {}
+    out_path = HERE / "results" / f"fit_real{args.tag}.npz"
+    manifest = build_manifest(args)
+    partial_raw = load_partial(out_path)
+    old_manifest_arr = partial_raw.pop(MANIFEST_KEY, None)
+    partial = partial_raw
+    if partial:
+        if old_manifest_arr is None:
+            # 舊檔案沒存過 manifest（這個檢查是 2026-08-15 才加的），沒有
+            # 東西可比對——信任沿用，不因為缺 manifest 就拒絕續傳既有進度。
+            print(f"警告：{out_path.name} 是加 manifest 檢查前存的舊檔，"
+                  f"無法自動確認這次的設定跟它一致，視為信任沿用。",
+                  flush=True)
+        else:
+            old_manifest = json.loads(str(old_manifest_arr))
+            diffs = {k: (old_manifest.get(k), v) for k, v in manifest.items()
+                     if old_manifest.get(k) != v}
+            if diffs:
+                print(f"錯誤：{out_path.name} 已有部分結果，但執行設定跟"
+                      f"這次不同（{diffs}）。沿用會把兩種不可比的設定混進"
+                      f"同一個檔案——換一個 --tag，或確認要不要刪掉舊檔"
+                      f"重跑。", flush=True)
+                sys.exit(1)
+        n_done = {k: len(v) for k, v in partial.items()}
+        print(f"讀到既有部分結果 {out_path.name}：{n_done}"
+              f"（會跳過已經算完的重複，不是從頭重算）\n", flush=True)
+    out = {k: list(v) for k, v in partial.items()}
     for key in [k.strip().upper() for k in args.configs.split(",")]:
         if key not in CONFIGS:
             continue
         desc, s, extra, allow = CONFIGS[key]
         print(f"{'='*74}\n{key}：{desc}\n{'='*74}", flush=True)
-        reps = []
+        reps = out.get(key, [])
         for rep in range(args.repeats):
+            if rep < len(reps):
+                print(f"{key} 第 {rep+1} 次：沿用既有結果，跳過重算",
+                      flush=True)
+                continue
             import copy
             m = copy.copy(base)
             m.obs_h = joint_fit.hess(color, mag, base.nb_c, base.nb_m,
@@ -186,9 +315,17 @@ def main():
             m.n_obs = len(color)
             m.selection = s
             m.bounds = base.bounds[:6].copy()
-            if args.repeats > 1:
-                m.draws = draw_randoms(m.n_syn,
-                                       np.random.default_rng(2000 + 13 * rep))
+            # **2026-08-15 拿掉 `if args.repeats > 1` 這個條件**：原本
+            # `--repeats 1` 時完全不換模型端亂數，沿用 base 建構時就固定
+            # 的種子（config.toml 的 random_seed）——代表跑十次
+            # `--repeats 1` 會得到十個一模一樣的結果，不是十個獨立樣本。
+            # 現在一律用 rep 索引換種子，不管這次呼叫的 --repeats 是多少，
+            # 同一個 rep 索引永遠對應同一組亂數——這樣才能把一個
+            # `--repeats 10` 的工作拆成多次獨立呼叫（例如分散到不同機器），
+            # 結果跟一次跑完完全等價，也是這次能續傳的前提（續傳本質上
+            # 就是「用同一個索引重跑一次」，種子不能因為 repeats 不同而變）。
+            m.draws = draw_randoms(m.n_syn,
+                                   np.random.default_rng(2000 + 13 * rep))
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             extra_axes = [extra] if extra is not None else []
@@ -226,8 +363,36 @@ def main():
             print(f"lnP = {lp:.1f}   年齡 {10**best[0]/1e6:.1f} Myr"
                   f"   ({time.time()-t0:.0f}s)\n", flush=True)
             reps.append(best)
-        arr = np.array(reps)
-        out[key] = arr
+            # 跑完一次重複就存一次，不等這個 config 的全部 repeats 或
+            # 全部 configs 都跑完——中途被砍（不管是意外還是像這次一樣
+            # 為了套用別的修正主動重啟），已經算完的每一次重複都保得住，
+            # 重跑時 load_partial() 會讀回來跳過，不會白工。
+            #
+            # 存檔前先拿鎖、重新讀一次磁碟上的最新版本再合併——如果磁碟上
+            # 這個 key 的重複數已經比我們手上這份多（代表有另一個行程用
+            # 同一個 --tag 平行在跑，且比我們快），採用磁碟版本，不要用
+            # 自己比較舊的覆蓋過去。這解決的是「檔案被覆蓋壞掉／新結果
+            # 被舊結果蓋掉」，不解決「兩個行程各自算了一份同樣的 rep 卻
+            # 只留得住一份」——真要跨機器平行擴充同一批 repeats，必須用
+            # 不重疊的 repeat 索引分開跑（每個行程各自的 --tag），這裡的
+            # 鎖只是最後一道防線，見 _acquire_write_lock() 的說明。
+            lock_path = _acquire_write_lock(out_path)
+            try:
+                fresh = {k: v for k, v in load_partial(out_path).items()
+                         if k != MANIFEST_KEY}
+                if len(fresh.get(key, [])) > len(reps):
+                    print(f"  [注意] 磁碟上 {key} 已有 "
+                          f"{len(fresh[key])} 次重複，比這個行程手上的 "
+                          f"{len(reps)} 次多（可能有另一個行程平行在跑同一個 "
+                          f"--tag），改沿用磁碟版本繼續。", flush=True)
+                    reps = list(fresh[key])
+                out.update({k: v for k, v in fresh.items() if k != key})
+                out[key] = np.array(reps)
+                manifest_arr = np.array(json.dumps(manifest, sort_keys=True))
+                atomic_savez(out_path, **out, **{MANIFEST_KEY: manifest_arr})
+            finally:
+                _release_write_lock(lock_path)
+        arr = out[key]
         if args.repeats > 1:
             print(f"{key} 跨 {args.repeats} 次：alpha 平均 {arr[:,3].mean():.3f}"
                   f"、散布 {arr[:,3].std():.3f}"
@@ -254,9 +419,9 @@ def main():
               f"dav {out['C'][:,6].mean():.3f} -> {out['D'][:,6].mean():.3f}，"
               f"alpha {out['C'][:,3].mean():.3f} -> {out['D'][:,3].mean():.3f}")
 
-    np.savez(HERE / "results" / f"fit_real{args.tag}.npz",
-             **{k: v for k, v in out.items()})
-    print("\n寫入 results/fit_real.npz")
+    # 每一次重複跑完就已經存過檔了（見上面的迴圈），這裡不用再存一次，
+    # 只是印出最終確認訊息。
+    print(f"\n已寫入 {out_path.relative_to(HERE)}（含全部 config／repeats）")
 
 
 if __name__ == "__main__":

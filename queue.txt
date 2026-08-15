@@ -113,7 +113,13 @@ verify_bprperr_on|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --
 # 這是第一次真的用自由的低質量段冪次跑出 config C 的 alpha，用來跟
 # p2_final2（固定 -1.3）比較，看升格後 alpha 有沒有系統性移動。
 # 跟 P10（MH 高斯先驗）分開跑，一次只動一個變因，才知道是哪個造成的差異。
-p2_free_lowmass|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass
+# 2026-08-14：使用者中斷了這項——第 1 次重複已花 158,545 秒（44 小時）
+# 跑完，結果已手動存進 results/p2_free_lowmass_rep1_preserved.npz（不會
+# 白跑：logage=8.033/A_V=0.333/f_bin=0.617/alpha=2.389/MH=-0.017/
+# q_gamma=-0.867/dav=0.500/p_lowmass=1.322/lnP=1334.3），剩下 9 次重複
+# 排到本機佇列以外去處理（會議前優先度不如下面的 radial 診斷），這裡先
+# 註解掉整條，不讓它繼續卡住佇列。
+# p2_free_lowmass|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass
 
 # ===== 2026-08-12（使用者標為要緊，插到最前面，p2_free_lowmass 跑完後
 # 下一個就是這批）：PDMF -> IMF 這條線的第一個診斷（見 PDMF_TO_IMF_PLAN.md）=====
@@ -126,10 +132,21 @@ p2_free_lowmass|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --refines 3,3 -
 #   (2) alpha(<r) 到潮汐半徑(4.71度)有沒有收斂（我們的 r=5 度夠不夠）
 # 四個全部同設定、只有半徑範圍不同，一次只動一個變因才比得起來。
 # radial_rall 是同設定的全樣本對照組，不要拿 p2_final2 代替（設定不同）。
-radial_r1|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --radius-range 0,1 --tag _radial_r1
-radial_r2|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --radius-range 0,2 --tag _radial_r2
-radial_r3|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --radius-range 0,3 --tag _radial_r3
-radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _radial_rall
+# 2026-08-14：會議前先求快、不求最終精度——改成 --repeats 1 --refines 3
+# （粗網格+1層精修，不是原本的 5 次+2層精修），單一數字沒有誤差棒，
+# 只看方向與量級，粗估每項 4.5-5 小時、四項依序跑完 19-20 小時內完成，
+# 兩天內做得完。**這批數字是初步結果，開會後如果方向確認有意義，
+# 要用原本的 --repeats 5 --refines 3,3 重跑才能當最終數字引用**。
+# 2026-08-15 CodeRabbit PR #53 review 抓到：--configs 預設是 A,B,C,D，
+# 這四行漏寫 --configs C，導致每一項都在算四套模型（不是設計說明講的
+# 「只有半徑範圍不同」），時間變 4 倍——radial_r1 已經這樣跑完（29319s，
+# 遠超估計的 4.5-5 小時），config C 的結果本身沒錯（每個 config 各自存成
+# 獨立的 npz key），只是白算了 A/B/D，不影響已存的 C 數字可用性。
+# radial_r2 發現時正在跑，已請使用者手動砍掉重跑（PID 見對話紀錄）。
+radial_r1|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --radius-range 0,1 --tag _radial_r1_prelim
+radial_r2|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --radius-range 0,2 --tag _radial_r2_prelim
+radial_r3|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --radius-range 0,3 --tag _radial_r3_prelim
+radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --tag _radial_rall_prelim
 
 # ===== 2026-08-11：修好 multi_stage_best() 的精修 bug 後最優先的兩個重跑
 # （見 LIMITATIONS.md「multi_stage_best() 精修 bug：完整波及範圍與修法」）。
