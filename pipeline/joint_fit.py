@@ -302,17 +302,24 @@ class JointModel:
             av_i = av
         elif self.dav_distribution == "trunc_exp":
             # C5 替代分布（系統誤差比較用，見 LIMITATIONS.md C5）：截尾
-            # 指數分布，location=max(av-dav, 0)、scale=dav，av>=dav 時
-            # 平均恰為 av；av<dav 時退化成 location=0、scale=av 的純指數
-            # （此時無法同時滿足「均值=av」與「非負」，選擇保均值犧牲
-            # scale 跟 dav 的直接對應，這是截尾指數這個形式本身的限制，
-            # 不是實作 bug）。用同一個 z_av（標準常態）先轉成 U(0,1)
-            # 再反解指數分布的 CDF，維持「同一組共用亂數 -> 概似是參數的
-            # 確定性函數」這個前提，不能另外重新抽樣。
+            # 指數分布，scale **恆為 dav**（不像 2026-08-14 第一版那樣在
+            # av<dav 時偷偷把 scale 換成 av——那個版本會讓「dav 這個展寬
+            # 參數」在 av<dav 時完全不影響生成的樣本，等於在測試最想看的
+            # 「dav 遠大於 av」這個區間時，trunc_exp 這條線根本沒有真的
+            # 用到那個 dav，比較會失去意義。CodeRabbit review 抓到這個
+            # 問題，這裡改成一律 scale=dav、location=av-dav（可以是負的），
+            # 對負值做真正的截尾（夾到 0），這才是「截尾指數分布」字面上
+            # 的意思：av>=dav 時 location>=0，不會有任何值被截到，平均恰為
+            # av；av<dav 時 location<0，一部分機率質量會被截到剛好 0（這是
+            # 真正的離散質量點，不是浮點數下溢的假象），平均會比 av 高
+            # （物理上合理：消光不能是負的，「本來會是負的」那批星全部堆
+            # 在 A_V=0，其餘星的消光被推高，不是隨機雜訊）。用同一個 z_av
+            # （標準常態）先轉成 U(0,1) 再反解指數分布的 CDF，維持「同一組
+            # 共用亂數 -> 概似是參數的確定性函數」這個前提，不能另外重新
+            # 抽樣。
             u = norm.cdf(d["z_av"][:n])
-            scale = dav if av >= dav else av
-            loc = max(av - dav, 0.0)
-            av_i = loc - scale * np.log1p(-u)
+            loc = av - dav
+            av_i = np.clip(loc - dav * np.log1p(-u), 0.0, None)
         else:
             s2 = np.log1p((dav / av) ** 2)
             av_i = np.exp(np.log(av) - 0.5 * s2

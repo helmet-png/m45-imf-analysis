@@ -317,6 +317,10 @@ def main():
     args = ap.parse_args()
     if "/" in args.tag or "\\" in args.tag:
         ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
+    if args.dav_distribution != "lognormal" and not args.tag:
+        ap.error("--dav-distribution 不是 lognormal 時必須給 --tag，"
+                 "避免覆寫 results/injection_recovery.npz（A1 統計誤差 "
+                 "0.144 的來源檔案，見 LIMITATIONS.md D6 記錄過的同類事故）")
     n_proc = args.procs or (os.cpu_count() or 1)
     want = [s.strip().upper() for s in args.scenarios.split(",")]
 
