@@ -440,7 +440,7 @@ def main():
                   f"{b.std():>9.3f}")
         print("\n判讀：若偏差隨 dav 平滑變化且外推到 dav=0 時趨近 0，")
         print("      代表 +0.178 只是曲線在 dav=0.30 這一點的值，")
-        print("      與選擇函數的 −0.178 相等純屬巧合（因為 0.30 是我挑的）。")
+        print("      與選擇函數的 -0.178 相等純屬巧合（因為 0.30 是我挑的）。")
 
     out_path = HERE / "results" / f"injection_recovery{args.tag}.npz"
     np.savez(out_path,
