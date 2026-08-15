@@ -137,10 +137,16 @@ verify_bprperr_on|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --
 # 只看方向與量級，粗估每項 4.5-5 小時、四項依序跑完 19-20 小時內完成，
 # 兩天內做得完。**這批數字是初步結果，開會後如果方向確認有意義，
 # 要用原本的 --repeats 5 --refines 3,3 重跑才能當最終數字引用**。
-radial_r1|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --radius-range 0,1 --tag _radial_r1_prelim
-radial_r2|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --radius-range 0,2 --tag _radial_r2_prelim
-radial_r3|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --radius-range 0,3 --tag _radial_r3_prelim
-radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --tag _radial_rall_prelim
+# 2026-08-15 CodeRabbit PR #53 review 抓到：--configs 預設是 A,B,C,D，
+# 這四行漏寫 --configs C，導致每一項都在算四套模型（不是設計說明講的
+# 「只有半徑範圍不同」），時間變 4 倍——radial_r1 已經這樣跑完（29319s，
+# 遠超估計的 4.5-5 小時），config C 的結果本身沒錯（每個 config 各自存成
+# 獨立的 npz key），只是白算了 A/B/D，不影響已存的 C 數字可用性。
+# radial_r2 發現時正在跑，已請使用者手動砍掉重跑（PID 見對話紀錄）。
+radial_r1|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --radius-range 0,1 --tag _radial_r1_prelim
+radial_r2|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --radius-range 0,2 --tag _radial_r2_prelim
+radial_r3|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --radius-range 0,3 --tag _radial_r3_prelim
+radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --configs C --tag _radial_rall_prelim
 
 # ===== 2026-08-11：修好 multi_stage_best() 的精修 bug 後最優先的兩個重跑
 # （見 LIMITATIONS.md「multi_stage_best() 精修 bug：完整波及範圍與修法」）。
