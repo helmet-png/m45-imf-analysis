@@ -298,9 +298,18 @@ class JointModel:
         # 關鍵是 A_V -> 0 時整個分布跟著 -> 0，dav 再大也變不出消光來，
         # 這在結構上就切斷了那條簡併。物理上也合理：塵埃是沿視線的
         # 乘性遮蔽，對數常態比常態更貼近。
+        # 用 getattr 而非 self.dav_distribution 直接讀，理由跟上面
+        # low_mass_slope 那段一樣（2026-08-08 讓 p2_final 中途失敗的
+        # AttributeError race condition）：多行程 worker unpickle 到的
+        # 物件屬性值來自主行程 pickle 當時的 __dict__，若這個屬性是背景
+        # 工作跑到一半時才新增的，舊物件的 __dict__ 裡沒有它，直接讀會
+        # 拋 AttributeError。2026-08-14 的 p6b4 補測任務就是撞到這個
+        # class 的 bug（見 WORK_BOARD.md），當時是另一個屬性但同一個
+        # 成因，這裡順手把 dav_distribution 也改成防禦性寫法。
+        dav_distribution = getattr(self, "dav_distribution", "lognormal")
         if dav <= 0 or av < 1e-6:
             av_i = av
-        elif self.dav_distribution == "trunc_exp":
+        elif dav_distribution == "trunc_exp":
             # C5 替代分布（系統誤差比較用，見 LIMITATIONS.md C5）：截尾
             # 指數分布，scale **恆為 dav**（不像 2026-08-14 第一版那樣在
             # av<dav 時偷偷把 scale 換成 av——那個版本會讓「dav 這個展寬
