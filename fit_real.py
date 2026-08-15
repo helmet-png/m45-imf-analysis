@@ -110,6 +110,8 @@ def main():
                     help="只用距星團中心 LO<=r<HI 度的成員擬合（例如 0,2）。"
                          "累積式用 0,r；環帶式用 lo,hi")
     args = ap.parse_args()
+    if args.repeat_offset < 0:
+        ap.error("--repeat-offset must be non-negative")
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
 
