@@ -40,6 +40,8 @@ prepared/
 # PARSEC 的 CA 鏈，由 setup_ca.ps1 在本機重新產生
 certs/
 *.pem
+# Zotero API key（zotero_sync.py 讀這個檔案的 ZOTERO_API_KEY/ZOTERO_LIBRARY_ID）
+.env
 kaggle.json
 access_token
 # 多帳號憑證登記檔（每位成員一個 token），只有範本 kaggle_accounts.json.example
