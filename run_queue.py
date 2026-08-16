@@ -287,6 +287,16 @@ def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
             if ticks is None:
                 # 量不到不代表卡死（可能剛好行程結束、也可能 PowerShell
                 # 這次呼叫失敗），下一輪再量，不要用「量不到」誤判。
+                # **2026-08-16 CodeRabbit 又抓到一個邊界情況**：如果連續
+                # 好幾輪都量不到（`last_check` 停在最後一次量到的時間
+                # 沒有更新），中間經過的時間可能已經超過 STALL_WINDOW_S，
+                # 下一次量到剛好等於 `last_ticks` 的值時會立刻判定卡死
+                # ——但這段期間其實完全沒有兩次「量得到」的結果可以互相
+                # 比較，不能算「確認零增量」。把 `last_ticks` 重設成
+                # `None`，讓下一次量到的結果重新走「初始化基準」那條路
+                # （見下面 `if last_ticks is None or ...`），需要之後再
+                # 連續 STALL_WINDOW_S 秒量到不變的值才會判定卡死。
+                last_ticks = None
                 continue
             # **2026-08-16 CodeRabbit review 抓到的真 bug**：原本
             # `ticks <= last_ticks` 把「減少」也當成「零增量」——
