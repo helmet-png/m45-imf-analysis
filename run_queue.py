@@ -31,6 +31,40 @@ HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
 LOCK = HERE / "logs" / "run_queue.lock"
+STALL_RETRIES = HERE / "logs" / "stall_retries.txt"
+
+# 2026-08-15：radial_r3 第一次執行卡死了 83 分鐘——行程活著、但完全零
+# CPU 時間增量、一個 multiprocessing worker 都沒 spawn 出來，得靠人工
+# 用 Get-Process 量 CPU 時間才發現。最可能的成因是 Windows 防毒即時掃描
+# 卡住新建立的 python.exe（時間點正好接在剛砍掉一串殘留行程之後，這是
+# Windows 上 multiprocessing.Pool() 已知會踩的雷，但這次沒有拿到內部
+# 堆疊確認，只是症狀吻合，不是鐵證）。無論真正成因是不是防毒，问题的
+# 根本是：subprocess.run() 沒有逾時機制，卡死的子行程會讓整條佇列
+# 安靜地空等到有人手動發現為止——這才是要修的，不是去猜對這一次的
+# 成因。加一個 CPU 時間監看：定期量子行程樹整體的 CPU 時間，長時間
+# 零增量就視為卡死，砍掉重試，重試次數寫進這個檔案避免真的壞掉的
+# 工作無限重試。
+STALL_GRACE_S = 600     # 前 10 分鐘不判定卡死——讀資料、展開 isochrone
+                        # 本身就可能要好幾分鐘，不能一開始就誤判
+STALL_WINDOW_S = 1200   # CPU 時間連續 20 分鐘零增量才算卡死（不是看
+                        # log 有沒有新輸出——有些工作本來就好幾小時才印
+                        # 一行，例如 p2_free_lowmass 曾經單次重複跑了
+                        # 44 小時，log 沉默不代表沒在算，只有 CPU 時間
+                        # 真的不動才是可靠訊號）
+STALL_POLL_S = 120      # 每 2 分鐘量一次
+MAX_STALL_RETRIES = 2   # 同一個 label 因卡死自動重試最多 2 次，
+                        # 第 3 次還卡死就放棄、標記完成並印警告，
+                        # 避免真正壞掉的工作在無人看顧時無限重跑
+
+# 2026-08-16：radial_r3 在加了卡死偵測之後還是連續卡了好幾次（原因見上面
+# 2026-08-15 的說明：懷疑是防毒即時掃描卡住剛建立的 python.exe，時間點
+# 正好接在砍掉卡死行程樹之後）——而每一次自動重試都是「砍掉、立刻
+# 建立新的」，如果真的是防毒掃描的問題，這個「立刻」正好就是會撞進同一個
+# 觸發窗口的模式，等於重試機制自己在製造下一次卡死的條件。加一段緩衝，
+# 讓砍掉的行程樹跟系統（防毒/檔案控制代碼釋放）有時間收尾，再建立新的，
+# 不保證解決（成因本來就沒有內部堆疊能鐵證），但直接對應症狀本身描述的
+# 觸發模式，不是憑空的猜測。
+STALL_RETRY_SETTLE_S = 30
 
 # 這台機器是 ARM64 Snapdragon X，只支援「待命 (S0 低電源閒置)」（Modern
 # Standby），沒有傳統的 S1-S3。實測：`powercfg /a` 確認、`powercfg /query`
@@ -100,6 +134,205 @@ def _pid_alive(pid: int) -> bool | None:
     if out.returncode != 0:
         return None
     return str(pid) in out.stdout
+
+
+def _process_tree_cpu_ticks(root_pid: int) -> int | None:
+    """量 root_pid 這棵行程樹（root 本身 + 所有子孫）目前累積的總 CPU
+    時間（核心態+使用者態，單位是 Win32 的 100ns tick，數值本身沒有
+    意義，只拿來跟下一次量到的結果比較有沒有變大）。
+
+    用 PowerShell 的 Get-CimInstance 一次列出全系統行程再自己在 Python
+    端做親子關係展開，而不是對每個 PID 各查一次——一次查詢的成本跟
+    行程數無關，避免樹一大就變成 N 次子行程呼叫，本身又拖慢偵測。
+
+    回傳 None 代表量不到（PowerShell 失敗，或 root_pid 已經不存在了——
+    後者通常代表工作剛好在這次輪詢之間自然結束，不算卡死，呼叫端要把
+    None 當「先別下判斷」處理，不能當成 0）。"""
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-CimInstance Win32_Process | "
+             "Select-Object ProcessId,ParentProcessId,KernelModeTime,"
+             "UserModeTime | ConvertTo-Csv -NoTypeInformation"],
+            capture_output=True, text=True, timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception:                                     # noqa: BLE001
+        return None
+    if out.returncode != 0 or not out.stdout.strip():
+        return None
+    rows = out.stdout.strip().splitlines()
+    if len(rows) < 2:
+        return None
+    children: dict[int, list[int]] = {}
+    ticks: dict[int, int] = {}
+    for line in rows[1:]:
+        parts = [p.strip('"') for p in line.split(",")]
+        if len(parts) != 4:
+            continue
+        try:
+            pid, ppid = int(parts[0]), int(parts[1])
+            k = int(parts[2]) if parts[2] else 0
+            u = int(parts[3]) if parts[3] else 0
+        except ValueError:
+            continue
+        ticks[pid] = k + u
+        children.setdefault(ppid, []).append(pid)
+    if root_pid not in ticks:
+        return None
+    total = 0
+    stack = [root_pid]
+    seen = set()
+    while stack:
+        pid = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        total += ticks.get(pid, 0)
+        stack.extend(children.get(pid, []))
+    return total
+
+
+def _read_stall_retries() -> dict[str, int]:
+    if not STALL_RETRIES.exists():
+        return {}
+    out = {}
+    for line in STALL_RETRIES.read_text(encoding="utf-8").splitlines():
+        if "\t" not in line:
+            continue
+        label, count = line.split("\t", 1)
+        try:
+            out[label] = int(count)
+        except ValueError:
+            pass
+    return out
+
+
+def _write_stall_retries(counts: dict[str, int]):
+    """2026-08-16 CodeRabbit review 抓到：原本直接 `open(..., "w")` 覆寫，
+    不是原子操作——寫到一半被中斷（跟這支腳本本來就在防的「行程被砍掉」
+    是同一類風險）會留下空檔或半截內容，`_read_stall_retries()` 讀到的
+    次數會憑空歸零或亂掉，讓某個 label 的重試計數不準（可能因此提早
+    或延後觸發 giveup）。改成跟 `fit_real.py` 的 `atomic_savez()`、
+    `acquire_lock()` 同一套邏輯：寫暫存檔、flush+fsync 確保真的落盤，
+    再用 `os.replace()` 原子性換過去。"""
+    STALL_RETRIES.parent.mkdir(exist_ok=True)
+    tmp_path = STALL_RETRIES.with_name(STALL_RETRIES.name + ".tmp")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            for lb, c in counts.items():
+                f.write(f"{lb}\t{c}\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, STALL_RETRIES)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _bump_stall_retry(label: str) -> int:
+    counts = _read_stall_retries()
+    counts[label] = counts.get(label, 0) + 1
+    _write_stall_retries(counts)
+    return counts[label]
+
+
+def _kill_process_tree(pid: int):
+    """2026-08-16 CodeRabbit review 抓到：Windows 上 `proc.kill()` 只會
+    終止 root process 本身，不會連帶終止子孫行程——`fit_real.py` 底下
+    用 `multiprocessing.Pool` 開出來的工人是孫行程（`fit_real.py` 的
+    子行程），`proc.kill()` 砍掉的只有 `fit_real.py` 這一層，工人全部
+    變成孤兒，繼續佔用 CPU／核心，直到它們自己因為管道斷線
+    （`BrokenPipeError`，parent 已死）跳例外才會自然結束——這正是這次
+    session 好幾次觀察到「砍掉重試後 log 裡一堆 BrokenPipeError」的
+    根因，不只是重試時機的問題。改用 `taskkill /PID <pid> /T /F`
+    （`/T` 連子孫行程樹一起砍、`/F` 強制），這是 Windows 官方提供、
+    專門處理行程樹終止的工具，比自己在 Python 端遞迴列舉子行程再逐一
+    kill 可靠。失敗（例如 taskkill 本身不存在、行程已經自然結束）就
+    退回 `proc.kill()`，至少把 root process 砍乾淨，不讓例外中斷整個
+    watchdog。"""
+    try:
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                       capture_output=True, timeout=15,
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception:                                     # noqa: BLE001
+        pass
+
+
+def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
+    """跑一個子行程，定期量整棵行程樹的 CPU 時間，長時間零增量就判定
+    卡死、砍掉重試（見檔案開頭 STALL_* 常數與 2026-08-15 的說明）。
+
+    回傳 (status, secs, stalled)——stalled=True 時呼叫端要決定這一輪
+    要不要重試（由 label 的重試次數決定），不在這支函式裡處理。"""
+    t0 = time.time()
+    with open(log_path, "w", encoding="utf-8") as fh:
+        proc = subprocess.Popen(cmd_list, cwd=str(cwd), stdout=fh,
+                                stderr=subprocess.STDOUT)
+        last_ticks, last_check = None, t0
+        stalled = False
+        while True:
+            try:
+                proc.wait(timeout=STALL_POLL_S)
+                break                                     # 正常結束
+            except subprocess.TimeoutExpired:
+                pass
+            elapsed = time.time() - t0
+            if elapsed < STALL_GRACE_S:
+                continue
+            ticks = _process_tree_cpu_ticks(proc.pid)
+            now = time.time()
+            if ticks is None:
+                # 量不到不代表卡死（可能剛好行程結束、也可能 PowerShell
+                # 這次呼叫失敗），下一輪再量，不要用「量不到」誤判。
+                # **2026-08-16 CodeRabbit 又抓到一個邊界情況**：如果連續
+                # 好幾輪都量不到（`last_check` 停在最後一次量到的時間
+                # 沒有更新），中間經過的時間可能已經超過 STALL_WINDOW_S，
+                # 下一次量到剛好等於 `last_ticks` 的值時會立刻判定卡死
+                # ——但這段期間其實完全沒有兩次「量得到」的結果可以互相
+                # 比較，不能算「確認零增量」。把 `last_ticks` 重設成
+                # `None`，讓下一次量到的結果重新走「初始化基準」那條路
+                # （見下面 `if last_ticks is None or ...`），需要之後再
+                # 連續 STALL_WINDOW_S 秒量到不變的值才會判定卡死。
+                last_ticks = None
+                continue
+            # **2026-08-16 CodeRabbit review 抓到的真 bug**：原本
+            # `ticks <= last_ticks` 把「減少」也當成「零增量」——
+            # `_process_tree_cpu_ticks()` 只加總目前還活著的子孫行程，
+            # `multi_stage_best()` 每個精修階段都重開一次 Pool，舊工人
+            # 結束、新工人還沒起來的空窗期，總 ticks 可能真的往下掉。
+            # 原本的邏輯不會在下降時重設 `last_check`，如果這段爬升期
+            # 恰好接近 `STALL_WINDOW_S`，會把「正常在算，只是換了一批
+            # 工人」誤判成卡死——這可能是這次 session 追查到的部分卡死
+            # 事件的真正成因，不只是猜測的防毒掃描。改成：**只要
+            # ticks 有任何變化（不論升降）就重設基準跟計時**，只有
+            # ticks 連續 `STALL_WINDOW_S` 秒完全沒變（不是「沒有增加」）
+            # 才判定卡死——這才是註解原本講的「CPU 時間真的不動」。
+            if last_ticks is None or ticks != last_ticks:
+                last_ticks, last_check = ticks, now
+                continue
+            if now - last_check >= STALL_WINDOW_S:
+                print(f"  警告：{label} 過去 {STALL_WINDOW_S/60:.0f} 分鐘"
+                      f"整棵行程樹 CPU 時間零增量，判定卡死，砍掉。",
+                      flush=True)
+                _kill_process_tree(proc.pid)
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()                    # taskkill 沒成功時的最後防線
+                    try:
+                        proc.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        pass
+                stalled = True
+                break
+    secs = time.time() - t0
+    if stalled:
+        return "stalled", secs, True
+    status = "ok" if proc.returncode == 0 else f"exit{proc.returncode}"
+    return status, secs, False
 
 
 def acquire_lock():
@@ -181,10 +414,32 @@ def read_queue():
 
 
 def read_done():
+    """回傳「不用再排進 pending」的標籤集合。**2026-08-16 修正**：
+    `stalled_giveup` 不算數——原本任何狀態（含 stalled_giveup）只要出現在
+    這個檔案就會被當成「已處理」永久跳過，結果 radial_rall 卡死重試 3 次
+    放棄後，被直接當成完成，實際上完全沒有產出結果檔，之後每次重啟都
+    悄悄跳過它，得靠人工翻 log 才會發現「這項其實沒跑完」。卡死的根因
+    常常是環境性的（防毒掃描、剛砍完一堆殘留行程後系統喚醒的時機這類
+    跟程式碼內容無關的偶發因素，見檔案開頭 2026-08-15 的說明），全新
+    重啟後值得再給一次機會，不該永久噤聲。exit1／error 這類「真的跑完
+    但失敗」維持原本行為（不自動重試，避免真正壞掉的工作卡住佇列）——
+    只有 stalled_giveup 這個特例排除在外，讓它留在 pending 讓下次重啟
+    自然重跑（配合 mark_stall_giveup() 把重試次數計數器歸零，重跑時
+    有完整的 MAX_STALL_RETRIES 次數可用，不會因為計數器沒重置而一卡
+    就立刻又放棄）。"""
     if not DONE.exists():
         return set()
-    return {l.split("\t")[0] for l in
-            DONE.read_text(encoding="utf-8").splitlines() if l.strip()}
+    out = set()
+    for l in DONE.read_text(encoding="utf-8").splitlines():
+        if not l.strip():
+            continue
+        parts = l.split("\t")
+        label = parts[0]
+        status = parts[1] if len(parts) > 1 else ""
+        if status == "stalled_giveup":
+            continue
+        out.add(label)
+    return out
 
 
 def mark_done(label, status, secs):
@@ -194,14 +449,37 @@ def mark_done(label, status, secs):
                 f"{datetime.now():%Y-%m-%d %H:%M:%S}\n")
 
 
+def _reset_stall_retry(label: str):
+    """放棄自動重試、記錄 stalled_giveup 之後歸零這個標籤的重試計數器
+    ——不歸零的話，下次重啟時第一次卡死就會立刻沿用舊計數（已經是
+    MAX_STALL_RETRIES），馬上又放棄，等於「多一次重啟機會」形同虛設。
+    歸零後下次重啟會有完整 MAX_STALL_RETRIES 次數可以重試，才是
+    read_done() 讓它重新排進 pending 這個修正真正想達到的效果。"""
+    counts = _read_stall_retries()
+    if label not in counts:
+        return
+    del counts[label]
+    _write_stall_retries(counts)
+
+
 def main():
     acquire_lock()
     keep_system_awake()
+    # 這一輪 process 生命週期內、已經放棄重試過的標籤——只存在記憶體裡，
+    # 不寫檔。read_done() 現在不再把 stalled_giveup 當成「已處理」（見
+    # read_done() 的說明），如果沒有這個記憶體集合擋著，giveup 之後迴圈
+    # 立刻回到最上面重新選 pending[0]，選到的還是同一個剛放棄的標籤，
+    # 會在這個 process 裡卡成無窮重試迴圈——這正是原本設計 giveup 機制
+    # 想避免的事。加這個集合讓「這個 process 這輩子不再碰它」，但下次
+    # 全新啟動 run_queue.py（新 process，這個集合重新歸零）還是會給
+    # 它一次機會，兩件事分開處理才對。
+    skip_this_run: set[str] = set()
     try:
         print(f"佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
         while True:
             done = read_done()
-            pending = [(l, c) for l, c in read_queue() if l not in done]
+            pending = [(l, c) for l, c in read_queue()
+                       if l not in done and l not in skip_this_run]
             if not pending:
                 print("佇列已清空，結束。", flush=True)
                 return
@@ -209,17 +487,31 @@ def main():
             log = HERE / "logs" / f"{label}.log"
             print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] 開始 {label}\n"
                   f"  python {cmd}\n  輸出 -> {log.name}\n{'='*70}", flush=True)
-            t0 = time.time()
             try:
-                with open(log, "w", encoding="utf-8") as fh:
-                    p = subprocess.run([sys.executable, "-u"] + cmd.split(),
-                                       cwd=str(HERE), stdout=fh,
-                                       stderr=subprocess.STDOUT)
-                status = "ok" if p.returncode == 0 else f"exit{p.returncode}"
+                status, secs, stalled = run_with_stall_watchdog(
+                    [sys.executable, "-u"] + cmd.split(), HERE, log, label)
             except Exception as e:                      # noqa: BLE001
-                status = f"error:{type(e).__name__}"
+                status, secs, stalled = f"error:{type(e).__name__}", 0.0, False
                 print(f"  例外：{e}", flush=True)
-            secs = time.time() - t0
+            if stalled:
+                n = _bump_stall_retry(label)
+                if n <= MAX_STALL_RETRIES:
+                    print(f"[{datetime.now():%H:%M:%S}] {label} 卡死重試"
+                          f"（第 {n}/{MAX_STALL_RETRIES} 次），"
+                          f"不標記完成，緩衝 {STALL_RETRY_SETTLE_S} 秒後"
+                          f"重跑。", flush=True)
+                    time.sleep(STALL_RETRY_SETTLE_S)
+                    continue                            # 不 mark_done，留在 pending
+                print(f"[{datetime.now():%H:%M:%S}] {label} 連續卡死 "
+                      f"{n} 次，這一輪放棄重試，記一筆 stalled_giveup"
+                      f"——注意這**不等於**完成，read_done() 不會把這個狀態"
+                      f"當成已處理，下次重啟（不是這一輪佇列迴圈裡）會"
+                      f"自動再排進 pending 重跑，重試計數器也已歸零。"
+                      f"如果重啟後又立刻卡死，才是真的需要人工檢查的訊號。",
+                      flush=True)
+                status = "stalled_giveup"
+                _reset_stall_retry(label)
+                skip_this_run.add(label)
             mark_done(label, status, secs)
             print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
                   f"（{secs/60:.1f} 分）", flush=True)

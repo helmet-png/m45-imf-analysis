@@ -7,7 +7,13 @@
 這個 repo 現在有多個 AI agent（Claude、Codex 等）與多個人同時工作。
 **協作規則見 `CONTRIBUTING.md`（給所有人與所有 agent 讀，不是 Claude 專屬）**：
 `main` 分支所有人都要走 PR、`results/RESULTS_LOG.md` 記錄每次新結果、
-commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`。
+commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`。**另外
+（`CONTRIBUTING.md` 零之二，2026-08-15 起）**：寫進規劃類文件（`docs/planning/`
+底下這些、`WORK_BOARD.md` 備註、PR 描述）的「結論」「判斷」「建議」，
+預設只代表寫下當下的想法，不是定案——語氣用「初步判讀」而非「結論是」，
+但推理過程跟數字要完整交代；發現別人（或自己稍早）的判斷站不住腳，
+直接改，不用先問。這條不影響 `LIMITATIONS.md` 的 A–D 分級或引用可信度
+標記這類已經在用的結構化信心表達方式。
 
 ## 教學者角色（僅當使用者明確指派時適用，不是每個 session 的預設角色）
 
