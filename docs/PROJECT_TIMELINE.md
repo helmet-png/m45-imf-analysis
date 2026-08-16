@@ -1,8 +1,12 @@
 # M45 IMF 專案進度日誌
 
-整理依據：GitHub 前（8/1–8/8）依 `results/RESULTS_LOG.md` 回填記錄的檔案 mtime；
-GitHub 後（8/9 起）依實際 git commit 歷史（189 筆 commit，逐日彙整重點，
-省略純粹的 PR merge／CodeRabbit 小修這類雜訊，只留下真的改變結論或架構的項目）。
+整理依據：GitHub 前（8/1–8/8）依 `results/RESULTS_LOG.md` 表格裡**已經記錄好的
+明確日期**回填（那份表格自己註明日期原始來源是檔案 mtime，但這裡讀的是表格裡
+寫定的日期字串，不是去讀即時的檔案 mtime——checkout／複製後 mtime 會變，
+不能拿來當史料來源）；GitHub 後（8/9 起）依實際 git commit 歷史（截至
+2026-08-16 共 189 筆，逐日彙整重點，省略純粹的 PR merge／CodeRabbit 小修這類
+雜訊，只留下真的改變結論或架構的項目）。這個總數會隨後續 commit 過時，
+不必每次都回頭更新，只在整理新的一天時順便核對一下數量級是否合理即可。
 
 ---
 
@@ -108,10 +112,13 @@ GitHub 後（8/9 起）依實際 git commit 歷史（189 筆 commit，逐日彙�
 * 新的多星團規劃文件 `PLAN_多星團擴展.md`：候選星團挑選、統計檢定力估計、Pang+2024／Li+2026 文獻比對
 * 拉回 headline `p2_final2_v3` 已完成的 5/10 次 Kaggle 重複結果，避免資料遺失
 
-### 8/16 —— run_queue.py 卡死根因追查（進行中）
+### 8/16 —— run_queue.py 卡死根因修好並驗證有效，PDMF→IMF 第 2 步四項全部跑完
 * 修正 `stalled_giveup` 被誤判成「完成」的 bug——放棄重試後永久跳過，實際沒有產出結果
 * 卡死自動重試前加 30 秒緩衝
 * `measure_overconfidence.py`：Pool worker 自己宣告 keep-awake，補上真正燒 CPU 的行程沒被保護的缺口
 * `PLAN_多星團擴展.md` 第十一節：MiMO 金屬量方法論查證 + 找到比 MiMO 更大的 Gaia XP 全天星表交叉比對路線
 * 新增 D10：config C/D 的 alpha 一致性只在假資料驗證過，真實資料還沒直接比較（教學問答中發現的缺口）
-* PR #59 CodeRabbit review 抓到並修好 `run_queue.py` **兩個真 bug**：CPU ticks 基準沒在下降時重設（可能是部分卡死誤判的根因）、`proc.kill()` 在 Windows 上不會砍掉子孫行程（解釋了反覆出現的孤兒 worker）——目前正在實測這兩個修正是否真的降低了 `radial_r3` 的卡死頻率
+* PR #59 CodeRabbit review 抓到並修好 `run_queue.py` **兩個真 bug**：CPU ticks 基準沒在下降時重設（`multi_stage_best()` 換 Pool 階段時 ticks 真的會暫時下降，舊邏輯誤判成卡死）、`proc.kill()` 在 Windows 上不會砍掉子孫行程（解釋了反覆出現的孤兒 worker BrokenPipeError）
+* **實測驗證修正有效**：套用修正後重跑，`radial_r3` 連續近 6 小時沒有再卡死一次（之前規律每 68–98 分鐘卡一次），最終乾淨完成
+* **PDMF→IMF 第 2 步徑向診斷四項全部跑完**（config C，單次重複、單階精修，會議前初步方向數字）：r1(0-1°)=2.10、r2(0-2°)=2.43、r3(0-3°)=2.50、rall(全樣本)=2.43——r1→r3 遞增支持核心到外圍的質量分層方向，但 rall 比 r3 低、不是單調，原因未解，需要正式 `--repeats 5 --refines 3,3` 重跑才能判斷是雜訊還是真訊號
+* 新增 `docs/PROJECT_TIMELINE.md`（本文件）+ `CONTRIBUTING.md` 五之三定期更新規則
