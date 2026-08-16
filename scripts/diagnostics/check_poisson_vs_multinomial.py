@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
 
 from pipeline.step3_age import hess  # noqa: E402 —— 故意真的 import，見下方 main()

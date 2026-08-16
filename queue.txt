@@ -19,7 +19,7 @@ item2b_repeat|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs A,C --ta
 # 先下載官方打包檔（152 MB）並轉成與 PARSEC 同格式 ——
 # 欄位名一致，所以下游程式一行都不用改，「換等時線」才是唯一的變因。
 # 網頁表單那條路實測不通（會忽略 output_option=photometry、只回傳理論輸出）。
-item3a_mistgrid|build_mist_grid.py --logage-lo 7.80 --logage-hi 8.50 --mh-lo -0.50 --mh-hi 0.50
+item3a_mistgrid|scripts/data_prep/build_mist_grid.py --logage-lo 7.80 --logage-hi 8.50 --mh-lo -0.50 --mh-hi 0.50
 
 # 用 MIST 網格重跑同一批觀測。與 item2b 的差別只有等時線，
 # 兩者的 alpha 差就是「等時線模型」這一項的系統誤差 ——
@@ -31,7 +31,7 @@ item2c_repeat|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs A,C --ta
 item3c_mistfit|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs A,C --grid mist_v1.2_gaiaDR2_logt7.8-8.5_feh-0.5-0.5.dat --tag _mist
 
 # ===== P3a：下載 PARSEC 的 DR2 濾光片版（先跑，快，失敗要早知道）=====
-p3a_dr2grid|build_dr2_grid.py
+p3a_dr2grid|scripts/data_prep/build_dr2_grid.py
 
 # ===== P2：前向模型最終數字。C 設定 10 次，精修兩階（格距 0.022，
 # 避免 alpha 被量化到 2.1/2.3/2.5）。標準誤目標 ~0.03 =====
@@ -45,7 +45,7 @@ p6_lowmass|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3
 # p3a 重排：DR2 的 BP 有 bright/faint 兩套通帶，改取 faint 版（92% 樣本比 G=11 暗）
 # **必須排在 p3b 之前** —— p3b 要用它產生的重新命名網格檔。
 # 上一版順序寫反了，p3b 會先跑然後找不到檔案，這裡一併修掉。
-p3a2_dr2grid|build_dr2_grid.py
+p3a2_dr2grid|scripts/data_prep/build_dr2_grid.py
 
 # ===== P3b：用 DR2 濾光片的 PARSEC 重跑，與 EDR3 版相減 = 純濾光片效應 =====
 p3b_dr2fit|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs A,C --grid parsec_v2.0_gaiaDR2_logt7.7-8.3s0.05_mh-0.6-0.6s0.05_renamed.dat --tag _dr2

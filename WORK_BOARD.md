@@ -52,7 +52,7 @@ commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 | 中 | P9a-redo v2（MH 鎖定检验，PARSEC）（A1、A4） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --tag _fixmh_parsec_redo_v2 --refines 3,3` | 舊結果 α=2.440±0.180 完全沒精修（純粗網格 argmax）。這是表 4 穩健性主張的一半，另一半是下面 P9c |
 | 中 | P9c v2（MH 鎖定检验，MIST）（A1、A4） | `python fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --fix-mh 0.0 --grid mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat --tag _fixmh_mist_redo_v2 --refines 3,3` | 舊結果 α=2.180±0.098 同樣完全沒精修 |
 | 中 | P6b v2（低質量段冪次可辨識性）（A1） | `python inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3` | 舊結果（ratio 0.92）完全沒精修；這個數字決定要不要把低質量段冪次升格成自由參數（`p2_free_lowmass` 已經在跑了，但可辨識性本身的精確度也該補） |
-| 低 | `verify_bprperr_off`／`on` 值得懷疑就重跑一次確認（B1） | （同 `queue.txt` 裡的參數，加 `--refines 3,3`） | 這兩個已經在 bug 修好**之後**才跑的（時間戳對得上），大機率沒事，但因為背景長跑程序曾經在其他項目上遇過「模組被即時修改」的競態，還沒 100% 排除，列在這裡給有餘力的人做確認，不急 |
+| 中 | `verify_bprperr_v2`：off/on 都用相同精修程度重跑（A1、B1） | `verify_bprperr_off`／`on` 已經跑完（2026-08-13 commit），**但這裡先前的判斷是錯的**：逐一核對時間戳後發現 `verify_bprperr_off` 實際在 2026-08-11 10:47:42 開始跑，**早於**同一天 16:57:09 才提交的精修 bug 修正，是完全沒精修的粗網格結果（α=2.420±0.098）；`verify_bprperr_on` 在 18:07:11 才開始，晚於修正時間，但沒帶 `--refines 3,3`，只精修一階（α=2.420±0.078）。兩次精修程度不一樣，不是乾淨對照，兩邊都要用同一組 `--refines 3,3` 重跑一次。**可直接執行的指令**（輸出改用 `_v2` 後綴，不會覆寫既有的 `fit_real_bprperr_off.npz`／`_on.npz`）：<br>`python fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _bprperr_off_v2`<br>`python fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --refines 3,3 --tag _bprperr_on_v2`<br>跑完後兩個新檔案都要記進 `results/RESULTS_LOG.md` | 兩次中心值剛好都是 2.420（差 0.000），方向上支持「BP/RP 誤差模型選擇對 alpha 影響可忽略」，但精修程度不一致，不能當成已驗證的結論——`verify_bprperr_v2` 是要排除這是不是精修差異造成的巧合 |
 
 **另外**：PR #11（多星團驗證）已經留言列出 4 個正確性問題（貼牆偵測
 被關掉、選擇函數驗證漏掉紅藍分色檢查等）（D8、C22），見
@@ -98,11 +98,14 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 
 - **本機 8 核運算佇列**（`queue.txt` / `run_queue.py`，Windows ARM64 這台機器）
-  只有這台機器能跑，其他人／agent 不會撞到，不需要在此認領。目前跑到
-  `verify_bprperr_off`，後面排 `verify_bprperr_on`、`p2_free_lowmass`、
+  只有這台機器能跑，其他人／agent 不會撞到，不需要在此認領。**2026-08-13
+  更新**：`verify_bprperr_off`／`verify_bprperr_on` 已跑完（結果與精修
+  程度不一致的發現見上面 `verify_bprperr_v2` 那一行，不要重複派工），
+  目前正在跑 `p2_free_lowmass`，後面排
   `radial_r1`、`radial_r2`、`radial_r3`、`radial_rall`（PDMF→IMF 第 2 步，
   2026-08-12 已插入且已標為優先，**2026-08-12 這條筆記原本漏列這四項，
-  已補回**）、`p6_lowmass_v2`、`p11_outlierfrac_v2`。
+  已補回**）、`p6_lowmass_v2`、`p11_outlierfrac_v2`。`verify_bprperr_v2`
+  不在 `queue.txt` 裡，是新待認領項目，還沒有人排進任何佇列。
 - 若要在別的機器（Kaggle、同學的電腦、Codex 的環境）重跑本機佇列裡
   同一個腳本、同一組參數，**先在這裡加一行認領**，避免兩邊各自跑一次
   浪費算力、之後也不知道該採哪一份結果。
@@ -150,4 +153,5 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 | 2026-08-14 | Claude session（新協作者機器，x64，Yu Tung Lan） | Kaggle 多帳號正式派工（接續 2026-08-13 認領的那行，**發現並修好 results/ 目錄 bug，用修好版本重跑**） | **P9c v2 完成；P9a-redo v2 與 headline p2_final2_v3 仍在跑** | `kaggle_sync.py`（`results/` 目錄 bug 修正，PR #46 已合併）、`results/fit_real_fixmh_mist_redo_v2.npz`（新增）、`results/RESULTS_LOG.md` | **發現嚴重 bug**：`fit_real.py`／`inject_lowmass.py` 等全部直接假設 `results/` 資料夾存在才能存檔，本機因為 git 版控本來就有這個資料夾所以沒踩到，但 Kaggle 是全新環境，`kaggle_sync.py` 打包時從沒建立這個資料夾——`p9a_redo_v2` 因此跑了 10.5 小時後才在存檔那步炸掉，等於白算。已在 `make_kernel()` 統一補上 `os.makedirs('results', exist_ok=True)`，小規模測試驗證有效，PR #46 已合併。**原本三個正式跑（`p2_final2_v3`／`p9a_redo_v2`／`p9c_redo_v2`）都是用修好前的舊版本**，`p9a_redo_v2` 確認因此錯誤，另外兩個本機監控逾時放棄但 Kaggle 端還在跑——用修好的程式碼重新推送三項（slug 加 `-fixed` 後綴，避免干擾原本可能還在跑的舊 kernel）：`p2-final2-v3-fixed`（justinlan11）、`p9c-redo-v2-fixed`（helmetalbert，**已完成**，logage=7.733/54.1Myr、alpha=2.102±0.102，見 `RESULTS_LOG.md`）、`p9a-redo-v2-fixed`（teammate2，進行中）。詳見 `KAGGLE_DIAGNOSIS.md` |
 | 2026-08-14 | Claude session（新協作者機器，x64，Yu Tung Lan） | Kaggle 多帳號正式派工（接續 2026-08-14 P9c 那行，**P9a-redo v2 完成，A4 表 4 穩健性檢驗定案**） | **P9a-redo v2、P9c v2 都完成；headline p2_final2_v3-fixed 仍在跑** | `results/fit_real_fixmh_parsec_redo_v2.npz`（新增）、`results/RESULTS_LOG.md`、`LIMITATIONS.md`（A4 用乾淨數字更新並訂正、A1 表格回頭標記這兩項已重跑確認） | `p9a-redo-v2-fixed`（teammate2）COMPLETE：logage=8.033/108.0Myr、alpha=2.387±0.108，跟 P9c v2（MIST：54.1Myr、alpha=2.102±0.102）比較，年齡差一倍、alpha 差 1.9 倍合併標準誤（CodeRabbit 訂正：這個比值本身是邊緣證據，p≈0.055，真正支持結論的是年齡差一倍這個更直接的證據），**確認 A4「表 4 穩健性主張（年齡一致）不成立」，非精修 bug 造成的假象**。`p2_final2` 吸收 PARSEC 偏差的機制解釋降級為待驗證假說，見 `LIMITATIONS.md` A4 |
 | 2026-08-14 | Claude session（新協作者機器，x64，Yu Tung Lan） | `p6b_inject_lowmass_v2`（A1，另一個並行 session 用 `dispatch_new_accounts_tmp.py` 派給 account5，不是這條分支自己派的） | **已取消，待用修正版重跑** | 無（本行純記錄狀態，不涉及檔案異動） | 查詢 Kaggle 狀態發現是 `CANCEL_ACKNOWLEDGED`（被取消，取消者不明，可能是另一個視窗手動操作）。且這個 kernel 用的是 `kaggle_sync.py` 的 `results/` 目錄 bug 修好**之前**的舊程式碼，就算沒被取消、跑完也會在存檔那一步失敗（跟 `p9a_redo_v2` 舊版本同一個下場）。**下一步**：任何人／任何 session 要拿到這項結果，需要用修好版本（PR #46 之後的 `kaggle_sync.py`）重新推送，不要沿用這個已取消的 kernel |
+| 2026-08-15 | Claude session（本機） | headline `p2_final2_v3`（A1、A2，接續 2026-08-14 那兩行）：用尚未合併的 PR #55 `--repeat-offset` 拆到 5 個 Kaggle 帳號、拉回並保存已完成的部分 | **5/10 次重複已拉回並保存，還差 5 次；未合併成最終檔案** | `results/fit_real_p2final_v3_rep0.npz` ～ `rep4.npz`（新增，5 個各 1 次重複的檔案）、`results/RESULTS_LOG.md`，分支 `claude/headline-partial-reps`（rep0 的執行 log 存在本機 `logs/kaggle_p2final2_v3_rep0.log`，該資料夾整個被 `.gitignore`，沒進版控） | 直接用 Kaggle API 查即時狀態（不是看本機過期紀錄）才發現：另一個 session／人已經用 `claude/fit-real-repeat-offset` 分支（PR #55，還沒合併）把卡死的 headline 重跑拆成 5 個 kernel（`p2-final2-v3-rep0`～`rep4`，各 `--repeats 1 --repeat-offset {0..4}`），派給 `justinlan11`／`teammate2`／`helmetalbert`／`account6`／`account7`，**Kaggle 端 5 個全部 COMPLETE**，但沒人拉回來合併，本機也完全沒有這 5 個結果檔案（只存在對應 Kaggle 帳號的 kernel output 裡）。已用 `kernels_output()` 全部拉下來、存進這個分支，避免資料再遺失。**下一步**（交接內容，見 `STATE.md`）：(1) 用 `--repeat-offset 5,6,7,8,9` 各跑 1 次補滿剩下 5 次重複；(2) 10 個 `rep*.npz` 的 `C` 陣列沿 axis=0 串接、另存成 `fit_real_p2final_v3.npz`（不要直接覆寫任何 `rep*.npz`）；(3) 更新 `RESULTS_LOG.md`／`LIMITATIONS.md` A1／A2 那兩行，標記 headline 數字正式重跑完成。**這個分支只負責保存已算出的部分，沒有動 `fit_real.py`／`kaggle_sync.py` 等程式碼**，PR #55 合併與否不影響這裡保存的資料 |
 | 2026-08-14 | Claude session（新協作者機器，x64，Yu Tung Lan） | headline `p2_final2_v3`（A1、A2，接續 P9a／P9c 那兩行） | **在 Kaggle 上不可行，需要移到本機佇列** | `KAGGLE_DIAGNOSIS.md`（新增章節說明計算量超過 Kaggle session 上限） | `p2-final2-v3-fixed`（justinlan11）跑了 11.4 小時後被 `CANCEL_ACKNOWLEDGED`——log 顯示 10 次重複只跑完第 1 次（單次耗時 40934 秒），換算 10 次要 100+ 小時，遠超 Kaggle 免費 session 上限（9–12 小時）。跟 P9a-redo／P9c v2（同樣 10 次重複但只用雙階精修 `3,3`，數小時內完成）比較，多一階精修（`3,3,3`）就是差異所在。**這個設定不適合排進 `kaggle_queue.txt`，需要在本機 ARM64 8 核佇列（`queue.txt`）重新排隊**，唯一拿到的單次重複資料點（alpha=2.396）記在 `KAGGLE_DIAGNOSIS.md`，不能當 headline 數字引用。順帶查了 `p6b_inject_lowmass_v2`：先前取消後沒有人重推，已用修好版本補推到 account5（`p6b-inject-lowmass-v2-fixed`） |

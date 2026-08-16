@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
 
 from pipeline import mist  # noqa: E402

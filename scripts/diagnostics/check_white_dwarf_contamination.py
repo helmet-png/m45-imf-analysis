@@ -33,7 +33,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent
 MEMBERS_CSV = HERE / "data" / "cmd_members.csv"
 VIZIER_CATALOG = "J/MNRAS/508/3877/maincat"
 
