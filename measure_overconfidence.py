@@ -105,8 +105,14 @@ def _keep_worker_awake():
         ES_CONTINUOUS = 0x80000000
         ES_SYSTEM_REQUIRED = 0x00000001
         ES_AWAYMODE_REQUIRED = 0x00000040
-        ctypes.windll.kernel32.SetThreadExecutionState(
+        prev = ctypes.windll.kernel32.SetThreadExecutionState(
             ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)
+        if not prev:
+            # 跟 run_queue.py 的 keep_system_awake() 用同一種處理方式：
+            # 回傳 0 代表宣告失敗，印警告但不中斷這個工人——保持滿速是
+            # 最佳化，不是能不能跑的前提。
+            print("警告：worker 呼叫 SetThreadExecutionState 失敗"
+                  "（回傳 0），可能還是會被系統當閒置節流。", flush=True)
     except (AttributeError, OSError, ImportError):
         pass                      # 非 Windows／OEM 電源管理不接受這個旗標
 

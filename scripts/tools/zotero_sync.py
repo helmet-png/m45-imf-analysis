@@ -80,7 +80,9 @@ def title_of(md_path: Path) -> str:
 
 def get_or_create_collection(zot: zotero.Zotero, name: str,
                              parent_key: str | None, dry_run: bool) -> str | None:
-    existing = zot.collections()
+    # zot.everything() 自動翻頁——不加的話，collection 數量一旦超過
+    # 單頁上限，找不到既有 collection 會被誤判成「不存在」而重複建立。
+    existing = zot.everything(zot.collections())
     for c in existing:
         data = c["data"]
         if data["name"] == name and data.get("parentCollection", False) == (
@@ -100,7 +102,8 @@ def get_or_create_collection(zot: zotero.Zotero, name: str,
 
 
 def item_exists(zot: zotero.Zotero, collection_key: str, title: str) -> bool:
-    for it in zot.collection_items(collection_key, itemType="document"):
+    for it in zot.everything(zot.collection_items(collection_key,
+                                                   itemType="document")):
         if it["data"].get("title") == title:
             return True
     return False
@@ -126,6 +129,9 @@ def sync_file(zot: zotero.Zotero, collection_key: str | None, md_path: Path,
     # 多一種要對齊資料格式的方式，不如一開始就指定好。
     tmpl["collections"] = [collection_key]
     resp = zot.create_items([tmpl])
+    if resp.get("failed"):
+        print(f"    錯誤：Zotero 建立項目失敗：{resp['failed']}")
+        return
     item_key = list(resp["successful"].values())[0]["key"]
     zot.attachment_simple([str(md_path)], item_key)
     print(f"    新增：{title}（{item_key}）")

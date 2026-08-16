@@ -94,6 +94,11 @@ def load_env(path: Path) -> dict:
             continue
         k, v = line.split("=", 1)
         env[k.strip()] = v.strip()
+    missing = [k for k in ("ZOTERO_API_KEY", "ZOTERO_LIBRARY_ID",
+                           "ZOTERO_LIBRARY_TYPE") if not env.get(k)]
+    if missing:
+        print(f"錯誤：{path} 缺少或空白：{', '.join(missing)}")
+        sys.exit(1)
     return env
 
 
@@ -102,16 +107,27 @@ def fetch_arxiv_meta(arxiv_id: str, client: httpx.Client) -> dict:
     （這次同步過程中實測連續呼叫會被 429），呼叫端自己控制間隔，
     這支函式只負責單次查詢＋重試。"""
     for attempt in range(5):
-        resp = client.get("https://export.arxiv.org/api/query",
-                          params={"id_list": arxiv_id})
-        if resp.status_code == 429:
-            wait = 10 * (attempt + 1)
-            print(f"    arXiv API 429（速率限制），等 {wait}s 重試...",
-                  flush=True)
-            time.sleep(wait)
-            continue
-        resp.raise_for_status()
+        try:
+            resp = client.get("https://export.arxiv.org/api/query",
+                              params={"id_list": arxiv_id})
+            if resp.status_code == 429:
+                wait = 10 * (attempt + 1)
+                print(f"    arXiv API 429（速率限制），等 {wait}s 重試...",
+                      flush=True)
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            print(f"    警告：查詢 {arxiv_id} 中繼資料失敗：{exc}")
+            return {}
         xml = resp.text
+        if "<entry>" not in xml:
+            # arXiv API 對不存在／格式錯誤的 id 會回 HTTP 200 但沒有
+            # <entry>，不是丟錯誤——不擋這個情況的話，下面會用
+            # arxiv_id 字串本身當標題造出一筆假資料寫進 Zotero。
+            print(f"    警告：{arxiv_id} 查無結果（arXiv 回傳空 feed，"
+                  f"id 可能打錯或不存在），跳過這篇。")
+            return {}
         title = re.search(r"<entry>.*?<title>(.*?)</title>", xml, re.S)
         authors = re.findall(r"<author>\s*<name>(.*?)</name>", xml, re.S)
         summary = re.search(r"<summary>(.*?)</summary>", xml, re.S)
@@ -128,7 +144,7 @@ def fetch_arxiv_meta(arxiv_id: str, client: httpx.Client) -> dict:
 
 def get_or_create_collection(zot: zotero.Zotero, name: str,
                              parent_key: str | None) -> str:
-    for c in zot.collections():
+    for c in zot.everything(zot.collections()):
         data = c["data"]
         if data["name"] == name and data.get("parentCollection", False) == (
                 parent_key or False):
@@ -143,7 +159,11 @@ def get_or_create_collection(zot: zotero.Zotero, name: str,
 
 
 def item_exists(zot: zotero.Zotero, collection_key: str, title: str) -> bool:
-    for it in zot.collection_items(collection_key, itemType="journalArticle"):
+    # zot.everything() 自動翻頁——這個 collection 目前遠小於單頁上限，
+    # 但不加翻頁的話，一旦文獻累積超過一頁，找不到的項目會被誤判成
+    # 「不存在」而重複建立，不如一開始就寫對。
+    for it in zot.everything(zot.collection_items(collection_key,
+                                                   itemType="journalArticle")):
         if it["data"].get("title") == title:
             return True
     return False
@@ -165,62 +185,69 @@ def main():
         top_key = get_or_create_collection(zot, TOP_COLLECTION, None)
         lit_key = get_or_create_collection(zot, LIT_COLLECTION, top_key)
 
-    client = httpx.Client(timeout=30.0)
     n_new, n_skip, n_fail = 0, 0, 0
-    for i, (arxiv_id, label) in enumerate(ARXIV_IDS):
-        print(f"\n[{i+1}/{len(ARXIV_IDS)}] {label}（{arxiv_id}）")
-        # arXiv 對 export.arxiv.org 的建議間隔是 3 秒一次請求，這次同步
-        # 過程實測連續呼叫幾次就被 429——保守起見拉到 4 秒。
-        if i > 0:
-            time.sleep(4)
+    with httpx.Client(timeout=30.0) as client:
+        for i, (arxiv_id, label) in enumerate(ARXIV_IDS):
+            print(f"\n[{i+1}/{len(ARXIV_IDS)}] {label}（{arxiv_id}）")
+            # arXiv 對 export.arxiv.org 的建議間隔是 3 秒一次請求，這次
+            # 同步過程實測連續呼叫幾次就被 429——保守起見拉到 4 秒。
+            if i > 0:
+                time.sleep(4)
 
-        pdf_path = LIT_DIR / f"{arxiv_id.replace('/', '_')}.pdf"
-        if args.dry_run:
-            print(f"    [dry-run] 會下載 {pdf_path.name}，同步進 Zotero")
-            continue
+            pdf_path = LIT_DIR / f"{arxiv_id.replace('/', '_')}.pdf"
+            if args.dry_run:
+                print(f"    [dry-run] 會下載 {pdf_path.name}，同步進 Zotero")
+                continue
 
-        meta = fetch_arxiv_meta(arxiv_id, client)
-        if not meta:
-            n_fail += 1
-            continue
-        title = meta["title"]
+            meta = fetch_arxiv_meta(arxiv_id, client)
+            if not meta:
+                n_fail += 1
+                continue
+            title = meta["title"]
 
-        if item_exists(zot, lit_key, title):
-            print(f"    已存在，跳過：{title}")
-            n_skip += 1
-            continue
+            if item_exists(zot, lit_key, title):
+                print(f"    已存在，跳過：{title}")
+                n_skip += 1
+                continue
 
-        if not pdf_path.exists():
-            pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
-            r = client.get(pdf_url, follow_redirects=True)
-            r.raise_for_status()
-            pdf_path.write_bytes(r.content)
-            print(f"    下載：{pdf_path.name}（{len(r.content)/1024:.0f} KB）")
-        else:
-            print(f"    已有本機檔案，重用：{pdf_path.name}")
+            if not pdf_path.exists():
+                pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
+                try:
+                    r = client.get(pdf_url, follow_redirects=True)
+                    r.raise_for_status()
+                except httpx.HTTPError as exc:
+                    # 跟其餘失敗路徑（arXiv 中繼資料查詢、Zotero 建立
+                    # 項目）一致：單篇失敗計入 n_fail 後跳過，不中斷
+                    # 整批同步——一篇論文暫時的 4xx/5xx 不該讓後面
+                    # 二十幾篇全部處理不到。
+                    print(f"    錯誤：下載 {pdf_url} 失敗：{exc}")
+                    n_fail += 1
+                    continue
+                pdf_path.write_bytes(r.content)
+                print(f"    下載：{pdf_path.name}（{len(r.content)/1024:.0f} KB）")
+            else:
+                print(f"    已有本機檔案，重用：{pdf_path.name}")
 
-        tmpl = zot.item_template("journalArticle")
-        tmpl["title"] = title
-        tmpl["creators"] = [
-            {"creatorType": "author", "name": a} for a in meta["authors"]
-        ] or tmpl.get("creators", [])
-        tmpl["abstractNote"] = meta["summary"]
-        tmpl["date"] = meta["year"]
-        tmpl["url"] = f"https://arxiv.org/abs/{arxiv_id}"
-        tmpl["archive"] = "arXiv"
-        tmpl["archiveLocation"] = arxiv_id
-        tmpl["collections"] = [lit_key]
-        resp = zot.create_items([tmpl])
-        if resp.get("failed"):
-            print(f"    錯誤：Zotero 建立項目失敗：{resp['failed']}")
-            n_fail += 1
-            continue
-        item_key = list(resp["successful"].values())[0]["key"]
-        zot.attachment_simple([str(pdf_path)], item_key)
-        print(f"    新增：{title}（{item_key}）")
-        n_new += 1
-
-    client.close()
+            tmpl = zot.item_template("journalArticle")
+            tmpl["title"] = title
+            tmpl["creators"] = [
+                {"creatorType": "author", "name": a} for a in meta["authors"]
+            ] or tmpl.get("creators", [])
+            tmpl["abstractNote"] = meta["summary"]
+            tmpl["date"] = meta["year"]
+            tmpl["url"] = f"https://arxiv.org/abs/{arxiv_id}"
+            tmpl["archive"] = "arXiv"
+            tmpl["archiveLocation"] = arxiv_id
+            tmpl["collections"] = [lit_key]
+            resp = zot.create_items([tmpl])
+            if resp.get("failed"):
+                print(f"    錯誤：Zotero 建立項目失敗：{resp['failed']}")
+                n_fail += 1
+                continue
+            item_key = list(resp["successful"].values())[0]["key"]
+            zot.attachment_simple([str(pdf_path)], item_key)
+            print(f"    新增：{title}（{item_key}）")
+            n_new += 1
 
     print(f"\n{'='*60}")
     print(f"{'[dry-run] ' if args.dry_run else ''}"

@@ -207,14 +207,58 @@ def _read_stall_retries() -> dict[str, int]:
     return out
 
 
+def _write_stall_retries(counts: dict[str, int]):
+    """2026-08-16 CodeRabbit review 抓到：原本直接 `open(..., "w")` 覆寫，
+    不是原子操作——寫到一半被中斷（跟這支腳本本來就在防的「行程被砍掉」
+    是同一類風險）會留下空檔或半截內容，`_read_stall_retries()` 讀到的
+    次數會憑空歸零或亂掉，讓某個 label 的重試計數不準（可能因此提早
+    或延後觸發 giveup）。改成跟 `fit_real.py` 的 `atomic_savez()`、
+    `acquire_lock()` 同一套邏輯：寫暫存檔、flush+fsync 確保真的落盤，
+    再用 `os.replace()` 原子性換過去。"""
+    STALL_RETRIES.parent.mkdir(exist_ok=True)
+    tmp_path = STALL_RETRIES.with_name(STALL_RETRIES.name + ".tmp")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            for lb, c in counts.items():
+                f.write(f"{lb}\t{c}\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, STALL_RETRIES)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def _bump_stall_retry(label: str) -> int:
     counts = _read_stall_retries()
     counts[label] = counts.get(label, 0) + 1
-    STALL_RETRIES.parent.mkdir(exist_ok=True)
-    with open(STALL_RETRIES, "w", encoding="utf-8") as f:
-        for lb, c in counts.items():
-            f.write(f"{lb}\t{c}\n")
+    _write_stall_retries(counts)
     return counts[label]
+
+
+def _kill_process_tree(pid: int):
+    """2026-08-16 CodeRabbit review 抓到：Windows 上 `proc.kill()` 只會
+    終止 root process 本身，不會連帶終止子孫行程——`fit_real.py` 底下
+    用 `multiprocessing.Pool` 開出來的工人是孫行程（`fit_real.py` 的
+    子行程），`proc.kill()` 砍掉的只有 `fit_real.py` 這一層，工人全部
+    變成孤兒，繼續佔用 CPU／核心，直到它們自己因為管道斷線
+    （`BrokenPipeError`，parent 已死）跳例外才會自然結束——這正是這次
+    session 好幾次觀察到「砍掉重試後 log 裡一堆 BrokenPipeError」的
+    根因，不只是重試時機的問題。改用 `taskkill /PID <pid> /T /F`
+    （`/T` 連子孫行程樹一起砍、`/F` 強制），這是 Windows 官方提供、
+    專門處理行程樹終止的工具，比自己在 Python 端遞迴列舉子行程再逐一
+    kill 可靠。失敗（例如 taskkill 本身不存在、行程已經自然結束）就
+    退回 `proc.kill()`，至少把 root process 砍乾淨，不讓例外中斷整個
+    watchdog。"""
+    try:
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                       capture_output=True, timeout=15,
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception:                                     # noqa: BLE001
+        pass
 
 
 def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
@@ -244,20 +288,36 @@ def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
                 # 量不到不代表卡死（可能剛好行程結束、也可能 PowerShell
                 # 這次呼叫失敗），下一輪再量，不要用「量不到」誤判。
                 continue
-            if last_ticks is not None and ticks <= last_ticks and \
-                    now - last_check >= STALL_WINDOW_S:
+            # **2026-08-16 CodeRabbit review 抓到的真 bug**：原本
+            # `ticks <= last_ticks` 把「減少」也當成「零增量」——
+            # `_process_tree_cpu_ticks()` 只加總目前還活著的子孫行程，
+            # `multi_stage_best()` 每個精修階段都重開一次 Pool，舊工人
+            # 結束、新工人還沒起來的空窗期，總 ticks 可能真的往下掉。
+            # 原本的邏輯不會在下降時重設 `last_check`，如果這段爬升期
+            # 恰好接近 `STALL_WINDOW_S`，會把「正常在算，只是換了一批
+            # 工人」誤判成卡死——這可能是這次 session 追查到的部分卡死
+            # 事件的真正成因，不只是猜測的防毒掃描。改成：**只要
+            # ticks 有任何變化（不論升降）就重設基準跟計時**，只有
+            # ticks 連續 `STALL_WINDOW_S` 秒完全沒變（不是「沒有增加」）
+            # 才判定卡死——這才是註解原本講的「CPU 時間真的不動」。
+            if last_ticks is None or ticks != last_ticks:
+                last_ticks, last_check = ticks, now
+                continue
+            if now - last_check >= STALL_WINDOW_S:
                 print(f"  警告：{label} 過去 {STALL_WINDOW_S/60:.0f} 分鐘"
                       f"整棵行程樹 CPU 時間零增量，判定卡死，砍掉。",
                       flush=True)
-                proc.kill()
+                _kill_process_tree(proc.pid)
                 try:
                     proc.wait(timeout=15)
                 except subprocess.TimeoutExpired:
-                    pass
+                    proc.kill()                    # taskkill 沒成功時的最後防線
+                    try:
+                        proc.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        pass
                 stalled = True
                 break
-            if last_ticks is None or ticks > last_ticks:
-                last_ticks, last_check = ticks, now
     secs = time.time() - t0
     if stalled:
         return "stalled", secs, True
@@ -389,10 +449,7 @@ def _reset_stall_retry(label: str):
     if label not in counts:
         return
     del counts[label]
-    STALL_RETRIES.parent.mkdir(exist_ok=True)
-    with open(STALL_RETRIES, "w", encoding="utf-8") as f:
-        for lb, c in counts.items():
-            f.write(f"{lb}\t{c}\n")
+    _write_stall_retries(counts)
 
 
 def main():
