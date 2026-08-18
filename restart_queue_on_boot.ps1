@@ -43,10 +43,16 @@
 #    「失敗路徑可能被靜默吞掉」風險的活生生案例，所以這次補上
 #    -ErrorAction Stop + exit 1，讓失敗至少能被工作排程器看到。
 
+# **2026-08-18 擴充，同一支腳本一併顧 kaggle_queue.py**：這台機器（Acer
+# AI 16）連續遇到兩次非預期重開機（8/16、8/18），第二次連 kaggle_queue.py
+# 這支輪詢器也一起被砍了——雖然 Kaggle 端的 kernel 不受影響（本機重開機
+# 砍不到遠端），但本機沒有輪詢器就沒人去 pull 結果、也沒人往下派剩下的
+# 待辦項目。kaggle_queue.py 已經加了 recover_running_slots()（開機時
+# 掃描接回已在跑的 kernel，不會重推打斷進度），重啟這支跟重啟
+# run_queue.py 一樣安全，一併加進來顧。
+
 $repo = $PSScriptRoot
 $selfLog = Join-Path $repo "logs\autorestart.log"
-$queueLog = Join-Path $repo "logs\queue_runner8.log"
-$scriptPath = Join-Path $repo "run_queue.py"
 
 function Write-SelfLog {
     param([string]$Message)
@@ -59,33 +65,44 @@ function Write-SelfLog {
     }
 }
 
+function Restart-QueueIfNotRunning {
+    param(
+        [string]$ScriptName,   # 例如 "run_queue.py"
+        [string]$LogFile       # 對應的輸出 log 檔名
+    )
+    $scriptPath = Join-Path $repo $ScriptName
+    $queueLog = Join-Path $repo "logs\$LogFile"
+
+    # 只比對這個 repo 自己的腳本完整路徑，不是裸的檔名片段——避免別的
+    # checkout、備份檔（例如 run_queue.py.bak）之類的命令列片段誤判成
+    # 「已經在跑」，導致該重啟的時候被誤判成略過（CodeRabbit review
+    # 指出的問題）。光是比對完整路徑還不夠：路徑本身也只是子字串，
+    # "run_queue.py.bak" 一樣會匹配到 "run_queue.py" 這個前綴。加邊界
+    # 要求——前面不能接非空白字元（排除更長檔名的一部分），後面要接
+    # 空白或字串結尾，且允許路徑前後可能有的雙引號（Start-Process
+    # 組出的命令行會加）。
+    $pattern = '(?<!\S)"?' + [regex]::Escape($scriptPath) + '"?(?=\s|$)'
+    $existing = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction Stop |
+        Where-Object { $_.CommandLine -match $pattern }
+
+    if ($existing) {
+        $pids = ($existing | Select-Object -ExpandProperty ProcessId) -join ","
+        Write-SelfLog "$ScriptName 已在跑（PID $pids），略過重複啟動"
+        return
+    }
+
+    Write-SelfLog "偵測到 $ScriptName 沒在跑，自動重啟"
+    $command = '/c python -u "{0}" >> "{1}" 2>&1' -f $scriptPath, $queueLog
+    Start-Process -FilePath "cmd.exe" -ArgumentList $command -WorkingDirectory $repo -WindowStyle Hidden -ErrorAction Stop
+    Write-SelfLog "已呼叫 Start-Process 重啟 $ScriptName"
+}
+
 Write-SelfLog "腳本開始執行"
 
 try {
     Set-Location -Path $repo -ErrorAction Stop
-
-    # 只比對這個 repo 自己的 run_queue.py 完整路徑，不是裸的
-    # "run_queue.py" 片段——避免別的 checkout、備份檔
-    # （run_queue.py.bak）之類的命令列片段誤判成「已經在跑」，
-    # 導致該重啟的時候被誤判成略過（CodeRabbit review 指出的問題）。
-    # 光是比對完整路徑還不夠：路徑本身也只是子字串，"run_queue.py.bak"
-    # 一樣會匹配到 "run_queue.py" 這個前綴。加邊界要求——前面不能接
-    # 非空白字元（排除更長檔名的一部分），後面要接空白或字串結尾，
-    # 且允許路徑前後可能有的雙引號（Start-Process 組出的命令行會加）。
-    $scriptArgumentPattern = '(?<!\S)"?' + [regex]::Escape($scriptPath) + '"?(?=\s|$)'
-    $existing = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction Stop |
-        Where-Object { $_.CommandLine -match $scriptArgumentPattern }
-
-    if ($existing) {
-        $pids = ($existing | Select-Object -ExpandProperty ProcessId) -join ","
-        Write-SelfLog "run_queue.py 已在跑（PID $pids），略過重複啟動"
-        exit 0
-    }
-
-    Write-SelfLog "偵測到佇列執行器沒在跑，自動重啟"
-    $command = '/c python -u "{0}" >> "{1}" 2>&1' -f $scriptPath, $queueLog
-    Start-Process -FilePath "cmd.exe" -ArgumentList $command -WorkingDirectory $repo -WindowStyle Hidden -ErrorAction Stop
-    Write-SelfLog "已呼叫 Start-Process 重啟 run_queue.py"
+    Restart-QueueIfNotRunning -ScriptName "run_queue.py" -LogFile "queue_runner8.log"
+    Restart-QueueIfNotRunning -ScriptName "kaggle_queue.py" -LogFile "kaggle_queue_runner.log"
 }
 catch {
     Write-SelfLog "例外，重啟失敗：$($_.Exception.Message)"

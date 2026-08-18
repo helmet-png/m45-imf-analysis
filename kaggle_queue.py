@@ -35,6 +35,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -42,10 +43,12 @@ from datetime import datetime
 from pathlib import Path
 
 import kaggle_accounts
+from run_queue import _pid_alive  # 單例鎖用，見 acquire_lock() 的說明
 
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "kaggle_queue.txt"
 DONE = HERE / "logs" / "kaggle_queue_done.txt"
+LOCK = HERE / "logs" / "kaggle_queue.lock"
 POLL_SECS = 60
 # 免費 CPU notebook 的執行時間上限一般約 9-12 小時，留一點餘裕就中止輪詢
 # （不強制砍 kernel，只是本地停止等待，之後可以再手動 pull）。
@@ -53,6 +56,57 @@ MAX_WAIT_HOURS = 11
 # dataset 掛載時序不穩，偵測到那個特定失敗模式就重推 kernel，
 # 間隔遞增（不是猜一個固定等待時長，見 is_mount_race_failure 的說明）。
 BACKOFFS = [60, 120, 240, 480]
+
+
+def acquire_lock():
+    """單例鎖，避免兩個 kaggle_queue.py 同時搶佇列——跟 run_queue.py 的
+    acquire_lock() 同一個理由、同一套寫法（O_CREAT|O_EXCL 原子建立，PID
+    存活探測失敗一律 fail closed）：2026-08-18 這台機器重開機後，
+    restart_queue_on_boot.ps1 的行程比對（比對啟動指令列裡的絕對路徑）
+    因為手動用相對路徑啟動過一次而漏配，誤判成「沒在跑」又重啟了一份，
+    兩個 kaggle_queue.py 同時活著（只是還沒真的撞在一起做出壞事就先發現
+    並砍掉了）。當時 run_queue.py 自己因為有這個鎖而安全退出，
+    kaggle_queue.py 沒有，這裡補上，讓保護不再只靠 PowerShell 那邊的
+    快速路徑檢查。"""
+    LOCK.parent.mkdir(exist_ok=True)
+    while True:
+        try:
+            fd = os.open(str(LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                old_pid = int(LOCK.read_text().strip())
+            except (ValueError, OSError):
+                old_pid = None
+            alive = _pid_alive(old_pid) if old_pid is not None else False
+            if alive is None:
+                print(f"無法確認鎖檔案（PID {old_pid}）是否還存活"
+                      f"（tasklist 探測失敗），保守起見當作還活著，"
+                      f"退出，不搶佇列。", flush=True)
+                sys.exit(1)
+            if alive:
+                print(f"偵測到另一個 kaggle_queue.py 正在跑（PID {old_pid}），"
+                      f"退出，不搶佇列。", flush=True)
+                sys.exit(1)
+            print(f"鎖檔案殘留（PID {old_pid} 已不存在，視為上次沒清"
+                  f"乾淨），清掉重新搶鎖。", flush=True)
+            try:
+                LOCK.unlink()
+            except FileNotFoundError:
+                pass
+            continue
+        else:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(str(os.getpid()))
+            return
+
+
+def release_lock():
+    """只在鎖確實是自己持有時才刪除——避免刪掉別人剛搶到的鎖。"""
+    try:
+        if int(LOCK.read_text().strip()) == os.getpid():
+            LOCK.unlink()
+    except (FileNotFoundError, ValueError, OSError):
+        pass
 
 
 def read_queue() -> list[dict]:
@@ -159,6 +213,37 @@ def is_mount_race_failure(label: str) -> bool:
     return False
 
 
+def recover_running_slots(accounts: dict, envs: dict) -> dict[str, dict | None]:
+    """開機時的復原：掃描所有還沒標記完成的待辦項目，看有沒有帳號已經在
+    Kaggle 端跑著對應的 kernel（2026-08-18 這台機器連續遇到兩次非預期
+    重開機——本機重開機／agent session 中斷不會影響 Kaggle 端已經在跑的
+    kernel，只會讓這支輪詢器失去追蹤；重開這支腳本若直接對每個閒置帳號
+    重推，等於中斷已經跑了一段時間的進度，白算掉）。找到 RUNNING／QUEUED
+    的就接回槽位，不重推；找不到才照原本流程當作全新工作處理。"""
+    done = read_done()
+    pending = [it for it in read_queue() if it["label"] not in done]
+    slots: dict[str, dict | None] = {name: None for name in accounts}
+    for name in accounts:
+        for item in pending:
+            if item["account"] not in (None, name):
+                continue
+            slug = item["label"].replace("_", "-")
+            username = accounts[name]["username"]
+            kid = f"{username}/m45-imf-run-{slug}"
+            r = run(["kaggle", "kernels", "status", kid], env=envs[name])
+            status = (r.stdout + r.stderr).strip()
+            if "RUNNING" in status or "QUEUED" in status:
+                slots[name] = {
+                    "phase": "running", "item": item, "kid": kid,
+                    "work_dir": HERE / "kaggle_work" / name,
+                    "t0": time.time(), "retries": 0,
+                }
+                print(f"復原：{name} 已經在跑 {item['label']}（{kid}），"
+                      f"接回追蹤、不重推", flush=True)
+                break
+    return slots
+
+
 def push_kernel_only(work_dir: Path, env: dict) -> bool:
     """只重推 kernel，沿用該帳號 work_dir 裡已經上傳過的 dataset。"""
     r = run(["kaggle", "kernels", "push", "-p", str(work_dir)], env=env)
@@ -175,14 +260,24 @@ def pull(kid: str, label: str, env: dict) -> None:
 
 
 def main() -> None:
+    acquire_lock()
+    import atexit
+    atexit.register(release_lock)  # 涵蓋正常結束、例外、sys.exit()
+
     accounts = kaggle_accounts.load_accounts()
     print(f"Kaggle 佇列執行器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}，"
           f"{len(accounts)} 個帳號同時派工：{list(accounts)}", flush=True)
     envs = {name: kaggle_accounts.env_for(info)
             for name, info in accounts.items()}
 
-    # slots[帳號名] = None（閒置）或一個描述目前工作狀態的 dict
-    slots: dict[str, dict | None] = {name: None for name in accounts}
+    # slots[帳號名] = None（閒置）或一個描述目前工作狀態的 dict。
+    # 啟動時先掃一輪，接回任何帳號已經在 Kaggle 端跑著的 kernel，
+    # 不要無條件當成全新一輪、把還在跑的進度重推掉。
+    slots = recover_running_slots(accounts, envs)
+    if any(slots.values()):
+        running = [n for n, s in slots.items() if s]
+        print(f"復原完成，接回 {len(running)} 個已在跑的槽位：{running}",
+              flush=True)
 
     while True:
         done = read_done()
