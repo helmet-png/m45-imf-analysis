@@ -151,6 +151,13 @@ def main():
     # 「單次擬合的重現性」，A 與 C 的差要大於它才算真的位移。
     ap.add_argument("--repeats", type=int, default=1,
                     help="每個設定重複幾次（每次換一組模型端共用亂數）")
+    ap.add_argument("--repeat-offset", type=int, default=0,
+                    help="重複次數的起始索引偏移（種子 = 2000 + 13*(rep+offset)）。"
+                         "用來把同一組 --repeats N 拆到不同機器/帳號各跑一部分、"
+                         "彼此用不同亂數種子，例如 5 個帳號各跑 --repeats 1 "
+                         "搭配 --repeat-offset 0,1,2,3,4，結果檔案的 C 陣列"
+                         "沿 axis=0 串接起來就等於一次 --repeats 5 的結果。"
+                         "預設 0，不影響既有行為（見 PR #55）")
     ap.add_argument("--grid", default=GRID,
                     help="isochrone 網格檔名（在 isochrones/ 底下）。"
                          "換成 MIST 的檔案即可量出等時線模型造成的系統誤差")
@@ -203,6 +210,8 @@ def main():
                     help="只用距星團中心 LO<=r<HI 度的成員擬合（例如 0,2）。"
                          "累積式用 0,r；環帶式用 lo,hi")
     args = ap.parse_args()
+    if args.repeat_offset < 0:
+        ap.error("--repeat-offset must be non-negative")
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
 
@@ -324,8 +333,9 @@ def main():
             # `--repeats 10` 的工作拆成多次獨立呼叫（例如分散到不同機器），
             # 結果跟一次跑完完全等價，也是這次能續傳的前提（續傳本質上
             # 就是「用同一個索引重跑一次」，種子不能因為 repeats 不同而變）。
-            m.draws = draw_randoms(m.n_syn,
-                                   np.random.default_rng(2000 + 13 * rep))
+            m.draws = draw_randoms(
+                m.n_syn,
+                np.random.default_rng(2000 + 13 * (rep + args.repeat_offset)))
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             extra_axes = [extra] if extra is not None else []
