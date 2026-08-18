@@ -344,7 +344,7 @@ r_t=19.26 pc 是 LIMEPY 內部的 phi(r)=0 半徑，跟 `dynamics_estimate.py`
 
 ## C 類
 
-### C1 注入回收測不到等時線的物理誤差（尚無認領工作）
+### C1 注入回收測不到等時線的物理誤差（BHAC15 網格已備妥，比較還沒跑，見 D1）
 
 **問題**：假資料由同一個生成模型產生，檢驗的是搜尋演算法與估計量，不是天文
 物理。PARSEC 等時線本身若有系統誤差，模型錯、假資料也跟著錯，測試會通過。
@@ -633,13 +633,27 @@ M45 的差距：
 
 ## D 類
 
-### D1 BHAC15 等時線未測（尚無認領工作）
+### D1 BHAC15 等時線未測（網格已備妥，`fit_real.py` 比較還沒跑）
 
 **問題**：BHAC15 專為低質量前主序設計，而 M45 的年齡主要由低質量前主序收縮
 軌跡約束。已測的 PARSEC 與 MIST 在這一段用相似的對流／大氣處理。
 
 **後果**：兩套模型一致不代表沒有共同偏差（見 C1）。現有結果沒有被污染的
 證據，只是還沒證實「換了也一樣」。
+
+**2026-08-18 網格已可用**：正確下載網址是
+`https://perso.ens-lyon.fr/isabelle.baraffe/BHAC15dir/BHAC15_iso.GAIA`（該
+服務跟 PARSEC 一樣不送中繼憑證，`pipeline/net.py` 已通用化支援多組憑證鏈，
+用 `chain_name="ens_lyon"`）。新增 `pipeline/bhac.py`／
+`scripts/data_prep/build_bhac_grid.py`，轉出跟 PARSEC/MIST 同格式的網格
+（`logAge`／`MH`／`Mini`／`G_fSBmag`／`G_BP_fSBmag`／`G_RP_fSBmag`），已用
+`pipeline.isochrones.load_grid()`／`isochrone_at()` 驗證讀取正常。**確認
+質量範圍只到 0.015–1.4 M_sun**（BHAC15 官方設計範圍，不蓋過 M45 擬合上限
+2.50 M_sun），且只有太陽金屬量一組（MH 這個維度形同鎖死），驗證過用
+BHAC15 重跑只能檢驗低質量段，不能宣稱驗證全範圍。**還沒做的部分**：真正
+用 `fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat` 跑一次跟 P3
+（`build_dr2_grid.py`）同樣的濾光片/模型效應分解比較，這步需要
+`fit_real.py` 等級的計算量，還沒人跑完。
 
 ### D2 未做過敏感度測試的設定（尚無認領工作）
 
