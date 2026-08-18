@@ -19,6 +19,7 @@ IMF 斜率改變主序上的星數分布、雙星比例改變主序上方的展�
 from __future__ import annotations
 
 import numpy as np
+from scipy.stats import norm
 
 from . import isochrones as iso_mod
 from .step3_age import (IMF_BREAKS, _Ext, _interp_err, draw_randoms, hess,
@@ -74,6 +75,11 @@ class JointModel:
         # 預設 False 與原本行為一致；build_verify_bprperr.py 會把它
         # 打開來跟舊行為 A/B 比較 alpha 有沒有變。
         self.use_native_bprp_err = False
+        # 差異消光的分布形式（見 synthesise() 裡的完整說明）。**這是猜的
+        # 選擇，從未跟其他合理的分布形式比較過代價**（C5，2026-08-14）。
+        # 預設 "lognormal" 與原本行為一致；extinction_form_test 會覆寫成
+        # "trunc_exp"（截尾指數分布）來跟舊行為 A/B 比較 A_V 系統誤差。
+        self.dav_distribution = "lognormal"
         # 共用亂數：整條 MCMC 鏈共用同一批，概似才是參數的確定性函數
         self.draws = draw_randoms(
             self.n_syn, np.random.default_rng(cfg.step1_membership.random_seed))
@@ -292,8 +298,37 @@ class JointModel:
         # 關鍵是 A_V -> 0 時整個分布跟著 -> 0，dav 再大也變不出消光來，
         # 這在結構上就切斷了那條簡併。物理上也合理：塵埃是沿視線的
         # 乘性遮蔽，對數常態比常態更貼近。
+        # 用 getattr 而非 self.dav_distribution 直接讀，理由跟上面
+        # low_mass_slope 那段一樣（2026-08-08 讓 p2_final 中途失敗的
+        # AttributeError race condition）：多行程 worker unpickle 到的
+        # 物件屬性值來自主行程 pickle 當時的 __dict__，若這個屬性是背景
+        # 工作跑到一半時才新增的，舊物件的 __dict__ 裡沒有它，直接讀會
+        # 拋 AttributeError。2026-08-14 的 p6b4 補測任務就是撞到這個
+        # class 的 bug（見 WORK_BOARD.md），當時是另一個屬性但同一個
+        # 成因，這裡順手把 dav_distribution 也改成防禦性寫法。
+        dav_distribution = getattr(self, "dav_distribution", "lognormal")
         if dav <= 0 or av < 1e-6:
             av_i = av
+        elif dav_distribution == "trunc_exp":
+            # C5 替代分布（系統誤差比較用，見 LIMITATIONS.md C5）：截尾
+            # 指數分布，scale **恆為 dav**（不像 2026-08-14 第一版那樣在
+            # av<dav 時偷偷把 scale 換成 av——那個版本會讓「dav 這個展寬
+            # 參數」在 av<dav 時完全不影響生成的樣本，等於在測試最想看的
+            # 「dav 遠大於 av」這個區間時，trunc_exp 這條線根本沒有真的
+            # 用到那個 dav，比較會失去意義。CodeRabbit review 抓到這個
+            # 問題，這裡改成一律 scale=dav、location=av-dav（可以是負的），
+            # 對負值做真正的截尾（夾到 0），這才是「截尾指數分布」字面上
+            # 的意思：av>=dav 時 location>=0，不會有任何值被截到，平均恰為
+            # av；av<dav 時 location<0，一部分機率質量會被截到剛好 0（這是
+            # 真正的離散質量點，不是浮點數下溢的假象），平均會比 av 高
+            # （物理上合理：消光不能是負的，「本來會是負的」那批星全部堆
+            # 在 A_V=0，其餘星的消光被推高，不是隨機雜訊）。用同一個 z_av
+            # （標準常態）先轉成 U(0,1) 再反解指數分布的 CDF，維持「同一組
+            # 共用亂數 -> 概似是參數的確定性函數」這個前提，不能另外重新
+            # 抽樣。
+            u = norm.cdf(d["z_av"][:n])
+            loc = av - dav
+            av_i = np.clip(loc - dav * np.log1p(-u), 0.0, None)
         else:
             s2 = np.log1p((dav / av) ** 2)
             av_i = np.exp(np.log(av) - 0.5 * s2
