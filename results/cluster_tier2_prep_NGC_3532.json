@@ -1,0 +1,38 @@
+{
+  "hr23_name": "NGC_3532",
+  "params": {
+    "Name": "NGC_3532",
+    "logAge50": 8.3764534,
+    "AV50": 0.12013751,
+    "dist50": 471.88491963,
+    "MOD50": 8.2796936
+  },
+  "n_hr23": 756,
+  "n_gaia_crossmatch": 756,
+  "n_g_le_18": 683,
+  "n_clean": 647,
+  "quality_cut_stats": {
+    "亮端飽和": 0,
+    "G 訊噪比": 0,
+    "BP 訊噪比": 4,
+    "RP 訊噪比": 1,
+    "BP/RP 超額": 31,
+    "_保留": 647,
+    "_原始": 683
+  },
+  "selection_validation": {
+    "observed_survival": 0.9472913616398243,
+    "predicted_survival": 0.9529575402635432,
+    "overall_error": 0.005666178623718876,
+    "worst_mag_bin_error": 0.019789473684210468,
+    "n_validation_bins": 9,
+    "pass_overall": true,
+    "pass_mag_bins": true
+  },
+  "files": {
+    "raw": "cluster_NGC_3532_gaia.csv",
+    "clean": "cluster_NGC_3532_cmd_members.csv",
+    "errmodel": "cluster_NGC_3532_errmodel.npz",
+    "selection": "cluster_NGC_3532_selection.npz"
+  }
+}

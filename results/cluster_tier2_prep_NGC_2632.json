@@ -1,0 +1,38 @@
+{
+  "hr23_name": "NGC_2632",
+  "params": {
+    "Name": "NGC_2632",
+    "logAge50": 8.5393858,
+    "AV50": 0.15869616,
+    "dist50": 183.49109237,
+    "MOD50": 6.32631493
+  },
+  "n_hr23": 434,
+  "n_gaia_crossmatch": 434,
+  "n_g_le_18": 394,
+  "n_clean": 381,
+  "quality_cut_stats": {
+    "亮端飽和": 0,
+    "G 訊噪比": 0,
+    "BP 訊噪比": 6,
+    "RP 訊噪比": 0,
+    "BP/RP 超額": 7,
+    "_保留": 381,
+    "_原始": 394
+  },
+  "selection_validation": {
+    "observed_survival": 0.9670050761421319,
+    "predicted_survival": 0.9663959390862944,
+    "overall_error": -0.0006091370558375386,
+    "worst_mag_bin_error": 0.009868421052631637,
+    "n_validation_bins": 9,
+    "pass_overall": true,
+    "pass_mag_bins": true
+  },
+  "files": {
+    "raw": "cluster_NGC_2632_gaia.csv",
+    "clean": "cluster_NGC_2632_cmd_members.csv",
+    "errmodel": "cluster_NGC_2632_errmodel.npz",
+    "selection": "cluster_NGC_2632_selection.npz"
+  }
+}
