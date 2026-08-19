@@ -166,7 +166,10 @@ delta alpha = 0.076   （統計誤差 0.144 的 0.53 倍）
 （不是 PyPI 上另一個同名的問卷調查工具 `limepy`），scipy 舊版
 `scipy.integrate.ode` API 相容性問題用獨立 venv 釘 `scipy==1.16.3`
 解決，修正單位 bug 後 reduced chi^2=0.75（擬合品質好），但質量區間
-比例沿用觀測 PDMF 是已知簡化，還沒有第 2 步結果可交叉驗證。
+比例沿用觀測 PDMF 是已知簡化。**2026-08-19 更新**：第 2 步的 `_prelim`
+四個值已到齊，可以做探索性的交叉比對（見 `WORK_BOARD.md` 的
+`limepy_radial_crosscheck`），但這只是方向性檢查——正式的驗收比對
+要等 `radial_final_reruns` 的有誤差棒版本才算數。
 
 ### 第 4 步（A 完整版）：放大搜尋半徑，量真正的全域質量函數
 r=5° 擴到 8–17°，重抓 Gaia、重跑成員判定、重建選擇函數。**觀測上的決定性
