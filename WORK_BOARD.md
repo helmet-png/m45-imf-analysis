@@ -166,7 +166,7 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 | 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |
 |---|---|---|
-| `empirical_ml_relation_test`（D11） | 蒐集公開食雙星質量-光度資料（同一批文獻來源：Torres et al. 2010、Benedict et al. 2016、Iglesias-Marzoa et al. 2017，都可公開取得），仿 `pipeline/step5_imf.py` 的 `assign_masses()` 架構寫一條獨立於任何等時線的經驗質量估計路徑（M_V vs mass 的平滑擬合，方法可參考 Hobart et al. 2026 用的 B-spline + GCV 判準，或用更簡單的多項式/樣條，先求有再求精） | 用這條經驗關係重跑低質量段（<0.5 M☉）alpha，跟 PARSEC／MIST 兩條既有結果放在同一張表比較，量化三者的差異量級 |
+| `empirical_ml_relation_test`（D11） | 蒐集公開食雙星質量-光度資料（同一批文獻來源：Torres et al. 2010、Benedict et al. 2016、Iglesias-Marzoa et al. 2017，都可公開取得），仿 `pipeline/step5_imf.py` 的 `assign_masses()` 架構寫一條獨立於任何等時線的經驗質量估計路徑（M_V vs mass 的平滑擬合，方法可參考 Hobart et al. 2026 用的 B-spline + GCV 判準，或用更簡單的多項式/樣條，先求有再求精）。**這條關係是 M_V（Johnson V 波段）對質量，不是 Gaia G 波段對質量**——Hobart et al. 2026 明確指出兩者不等價，用顏色相依轉換（Riello et al. 2021 的 Gaia EDR3 光度轉換）把 Gaia 觀測轉成 M_V，這一步的轉換方法、消光處理、金屬量涵蓋範圍、未解析聯星處理、誤差傳播都要先定好並記錄下來，不能直接把 M_V-mass 關係套在 Gaia G/GBP/GRP 上 | 先固定 Gaia→M_V 波段轉換方法、消光處理、誤差傳播鏈；再用這條經驗關係重跑低質量段（<0.5 M☉）alpha，跟 PARSEC／MIST 兩條既有結果放在同一張表比較；alpha 差異要拆解成「質量-光度關係本身的差異」跟「波段轉換/金屬量/未解析聯星造成的額外差異」兩部分分別量化，不能混在一起報一個數字 |
 | `bright_end_completeness_check`（D12） | M45 已知最亮成員（Alcyone 等，G~2.85 附近）數量少，查公開 HIPPARCOS 目錄（ESA 1997，可透過 VizieR/Simbad 查詢）確認 `g_bright_limit=4.0` 這條線以上有沒有星團成員被 Gaia 測光品質篩選誤判掉 | 給出「HIPPARCOS 目錄裡、落在 M45 天測範圍內、比 G=4 亮的星」清單，逐顆核對是否都在現有 `cmd_members.csv` 裡且測光正常，或說明為什麼沒有 |
 | `system_stellar_mf_doc`（D14） | 在 `PAPER_OUTLINE.md` 與 `pipeline/joint_fit.py`／`fit_real.py` 相關函式註解裡加一句話，明確說明目前 `alpha`／`binary_fraction` 對應 system MF 還是 stellar MF 空間、合成星團生成邏輯的抽樣順序 | 文件與程式碼註解讀起來能直接回答「這個 alpha 是哪種 MF」，不需要回頭推導程式邏輯才能確認 |
 | `stick_out_fraction_constraint`（D13，成本高，建議先評估） | 這個任務會牽動 `pipeline/joint_fit.py` 核心概似函數，不建議直接動手改——先寫一份成本評估（要新增什麼似然項、`f_bin` 與 alpha 的簡併目前實際有多嚴重、值不值得為了這個投入架構層級改動），放進 `docs/planning/` 討論後再決定要不要真的做 | 有一份明確的成本/效益評估文件，使用者或後續 session 能據此決定要不要排進時程 |
@@ -177,18 +177,34 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 **背景**：`PLAN_多星團擴展.md` 已把 Coma Ber 列為候選星團（動機一：第三個老年齡星團對照；動機二：金屬量接近太陽），但尚未實際起跑。核對 Hobart et al. 2026 時發現這篇論文的引言直接點名 Coma Ber 是「老年齡疏散星團次太陽質量段變平」的代表案例（引用 Kraus & Hillenbrand 2007、Tang et al. 2019），這兩篇文獻值得當作 Coma Ber 的既有 PDMF 基準線（比照 `PDMF_TO_IMF_PLAN.md` 第一步「文獻基準線」的做法）。**這項工作本次核對只做到規劃，沒有實際查詢 HR23 目錄或跑任何 pipeline**，交給認領的 session 執行。
 
+**前置阻擋條件（必須先完成，不能邊做 Coma Ber 邊順手修）**：`LIMITATIONS.md`
+D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆偵測被關掉、選擇
+函數驗證漏掉紅藍分色檢查、SNR 迴歸沒有獨立場星樣本、`--refresh` 遇
+NSS 為 null 會崩潰）**必須先各自獨立認領、修好、補回歸測試，D8 標記
+全部解決之後才能開始 Coma Ber 的 Tier 1 執行**——這四個問題都在共用
+的 pipeline 程式碼（`cluster_imf_tier1.py`／`prepare_cluster_tier2.py`／
+`cluster_forward_validation.py`）裡，若邊跑 Coma Ber 邊修，之後沒辦法
+可靠判斷 Coma Ber 的結果差異是星團本身的物理差異，還是同一輪意外
+夾帶的程式修正造成的，會污染可追溯性。
+
 **起手式**：
-1. 先讀 `PDMF_TO_IMF_PLAN.md` 第八節的 Tier1/Tier2 分層協定，Coma Ber（~600–800 Myr）的動力學年齡大機率會觸發 Tier 2（需要動力學校正），起跑前先照第六節公式粗算一次 τ = age / t_rh 確認。
-2. 查證 Coma Ber 在 `Hunt & Reffert (2023)` 目錄裡的對應名稱與成員表品質（`PLAN_多星團擴展.md` 第六節的「應該可行但沒驗證過」假設，這是第一個要驗證的環節）。
-3. 讀 Kraus & Hillenbrand (2007)、Tang et al. (2019) 兩篇原文（不只摘要），把它們報告的 PDMF 斜率、質量範圍記下來當基準線對照。
-4. 仿 `scripts/multicluster/cluster_imf_tier1.py`（NGC 3532／Praesepe 已用過的同一套腳本）跑 Tier 1（誤差核算框架 + 動力學年齡 + 徑向 α(r) 診斷），注意 `LIMITATIONS.md` D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆偵測、選擇函數紅藍分色檢查缺失等）在套用到新星團前要先確認有沒有修好，沒修好就要在 Coma Ber 這輪順手修，不要讓已知 bug 傳播到新星團。
-5. 開始前先在 `WORK_BOARD.md` 加一行認領，避免跟其他 session／協作者重工。
+0. 開始前先在 `WORK_BOARD.md` 加一行「進行中」認領，避免跟其他
+   session／協作者重工——這是第一步，不是最後一步。
+1. 確認上面「前置阻擋條件」的 D8 四項已經全部標記解決（查
+   `LIMITATIONS.md` D8 與 `WORK_BOARD.md` 有沒有對應的「完成」紀錄），
+   沒有的話先去修，不要跳過這一步直接跑 Coma Ber。
+2. 讀 `PDMF_TO_IMF_PLAN.md` 第八節的 Tier1/Tier2 分層協定，Coma Ber（~600–800 Myr）的動力學年齡大機率會觸發 Tier 2（需要動力學校正），起跑前先照第六節公式粗算一次 τ = age / t_rh 確認。
+3. 查證 Coma Ber 在 `Hunt & Reffert (2023)` 目錄裡的對應名稱與成員表品質（`PLAN_多星團擴展.md` 第六節的「應該可行但沒驗證過」假設，這是第一個要驗證的環節）。
+4. 讀 Kraus & Hillenbrand (2007)、Tang et al. (2019) 兩篇原文（不只摘要），把它們報告的 PDMF 斜率、質量範圍記下來當基準線對照。
+5. 仿 `scripts/multicluster/cluster_imf_tier1.py`（NGC 3532／Praesepe 已用過的同一套腳本）跑 Tier 1（誤差核算框架 + 動力學年齡 + 徑向 α(r) 診斷）——這時 D8 四項應該已經修好，不需要再順手處理。
 
 **驗收標準**：Coma Ber 交出跟 `PDMF_TO_IMF_PLAN.md` 第八節表格同樣結構的誤差預算表（原始 PDMF±統計誤差、動力學校正項或上限估計、其餘系統誤差），且頭條 alpha 與 Kraus & Hillenbrand (2007)／Tang et al. (2019) 的既有測定值做過對照。**對照前必須先讀這兩篇原文，逐項列出下面這些欄位、雙方（我們 vs 各篇文獻）分別是什麼，口徑不同就要先在同一個質量範圍/樣本定義下重新對齊才能比較 alpha，不能直接拿不同口徑的數字並排**：
-  - MF／PDMF 的確切定義（system MF 還是 stellar MF，見 D14）
+  - MF／PDMF 的確切定義（system MF 還是 stellar MF，見 D14）——Hobart et al. 2026 分別報告兩種，只對齊質量範圍/樣本不足以保證是同一個量
   - 擬合/報告用的質量範圍（M☉ 上下限）
   - 成員樣本定義與空間涵蓋範圍（搜尋半徑、是否含潮汐尾／外圍結構）
   - 完整度修正方式（有沒有做、怎麼做）
   - 聯星處理方式（有沒有修正、修正法）
+  - MF 的數學定義（`dN/dm` 還是 `dN/dlog m`）與 alpha 的正負號慣例
+  - 分箱方式（分箱數／對數等寬度等）、擬合函數形式、估計器（MLE／貝氏／最小平方等）、不確定度的定義（1σ 信賴區間怎麼算出來的）
 
 一致或不一致都要交代量級與可能原因，不是只列數字不解讀。
