@@ -74,6 +74,17 @@ def main():
     ap.add_argument("--procs", type=int, default=None)
     ap.add_argument("--n-syn", type=int, default=40000)
     ap.add_argument("--trials", type=int, default=2)
+    ap.add_argument("--trial-offset", type=int, default=0,
+                    help="試驗次數的起始索引偏移（假資料種子 = 7000+37*(t+offset)，"
+                         "擬合種子 = 4000+11*(t+offset)）。只吃單一整數，不接受逗號"
+                         "清單。用來把同一組 --trials N 拆到不同機器/帳號各跑一部分："
+                         "3 個帳號各跑一次時，是各自下 --trials 1 --trial-offset 0 / "
+                         "1 / 2 三道獨立指令。**每個分片必須配一個唯一的 --tag**"
+                         "（例如 _p6b_v2_t0 / _t1 / _t2）——輸出路徑只由 --tag 決定，"
+                         "共用同一個 --tag 的分片會互相覆寫，atomic_savez() 不會幫忙"
+                         "合併。全部跑完後把各檔案依 offset 由小到大沿 axis=0 串接，"
+                         "即等於一次跑完。預設 0，不影響既有行為（比照 fit_real.py 的"
+                         "--repeat-offset，見 PR #55）")
     ap.add_argument("--refines", default="3")
     ap.add_argument("--dav-max", type=float, default=0.6)
     ap.add_argument("--tag", default="", help="輸出檔名後綴，避免覆蓋前一次跑的"
@@ -84,6 +95,8 @@ def main():
                          "不是全部三個都跑。用於補測單一可疑結果，不用重跑"
                          "整批（見 LIMITATIONS.md D5）")
     args = ap.parse_args()
+    if args.trial_offset < 0:
+        ap.error("--trial-offset must be non-negative")
     p_true_list = P_TRUE_LIST
     if args.only is not None:
         if args.only not in P_TRUE_LIST:
@@ -155,7 +168,8 @@ def main():
             gen = base.with_observations(color, mag)
             gen.selection = sel
             gen.low_mass_slope = -p_true
-            fc, fm = make_fake(gen, THETA_TRUE, n_obs, seed=7000 + 37 * t,
+            fc, fm = make_fake(gen, THETA_TRUE, n_obs,
+                               seed=7000 + 37 * (t + args.trial_offset),
                                dav=dav_true, selection=sel)
 
             # 擬合：八參數，低質量段冪次自由
@@ -164,8 +178,9 @@ def main():
             m.bounds = base.bounds[:6].copy()
             m.enable_dav_fit(0.0, args.dav_max)
             m.enable_lowmass_fit(P_MIN, P_MAX)
-            m.draws = draw_randoms(m.n_syn,
-                                   np.random.default_rng(4000 + 11 * t))
+            m.draws = draw_randoms(
+                m.n_syn,
+                np.random.default_rng(4000 + 11 * (t + args.trial_offset)))
             t0 = time.time()
             # q_gamma(5) 與 dav(6) 是已知的 nuisance，貼牆放行；
             # p_lowmass(7) **不放行** —— 它貼牆正是我們要偵測的失敗模式。
