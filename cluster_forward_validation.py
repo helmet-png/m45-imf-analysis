@@ -270,7 +270,8 @@ def main():
                      "runs": fitted[k].tolist(),
                      "diagnostics": diagnostics[k]} for k in fitted},
         "injection": {
-            "truth": truth.tolist(), "runs": injection.tolist(),
+            "truth": (truth.tolist() if len(injection) else None),
+            "runs": injection.tolist(),
             "alpha_bias": (float(np.mean(injection[:, 3] - truth[3]))
                            if len(injection) else None),
             "alpha_scatter": (float(np.std(injection[:, 3] - truth[3]))
