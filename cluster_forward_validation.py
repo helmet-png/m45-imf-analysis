@@ -233,9 +233,15 @@ def main():
         print(f"{key} alpha={fitted[key][:, 3].mean():.3f} ± "
               f"{fitted[key][:, 3].std():.3f}（模型亂數重現性）")
 
+    fit_validity = {
+        key: np.asarray([not row["has_unexpected_wall"]
+                         for row in diagnostics[key]], dtype=bool)
+        for key in fitted}
+    valid_fitted = {key: fitted[key][fit_validity[key]] for key in fitted}
+
     injection = []
-    if args.injection_trials > 0:
-        truth = fitted["B"].mean(axis=0)
+    if args.injection_trials > 0 and len(valid_fitted["B"]):
+        truth = valid_fitted["B"].mean(axis=0)
         print(f"\n{'='*70}\n注入回收：以 B 平均最佳解為已知真值\n{'='*70}")
         for trial in range(args.injection_trials):
             gen = copy.copy(base)
@@ -261,6 +267,9 @@ def main():
         print(f"注入回收 alpha 偏差 {np.mean(injection[:,3]-truth[3]):+.3f}，"
               f"散布 {np.std(injection[:,3]-truth[3]):.3f}")
     else:
+        if args.injection_trials > 0:
+            print("Skipping injection recovery: no valid selection-model fit.",
+                  flush=True)
         truth = np.full(len(axes), np.nan)
         injection = np.empty((0, len(axes)))
 
@@ -275,10 +284,6 @@ def main():
     parameter_names = joint_fit.PARAM_NAMES + (["dav"] if args.fit_dav else [])
     effective_axes = {name: np.asarray(axis, float).tolist()
                       for name, axis in zip(parameter_names, axes)}
-    fit_validity = {
-        key: np.asarray([not row["has_unexpected_wall"]
-                         for row in diagnostics[key]], dtype=bool)
-        for key in fitted}
     np.savez(npz_path, A=fitted["A"], B=fitted["B"], truth=truth,
              injection=injection, n_obs=len(color), n_clean=len(clean),
              parameter_names=np.asarray(parameter_names),
@@ -296,8 +301,11 @@ def main():
         "grid": args.grid, "hr23_logage": float(params["logAge50"]),
         "hr23_av": float(params["AV50"]), "effective_axes": effective_axes,
         "dm": dm,
-        "fits": {k: {"mean": fitted[k].mean(axis=0).tolist(),
-                     "std": fitted[k].std(axis=0).tolist(),
+        "fits": {k: {"n_valid_runs": int(len(valid_fitted[k])),
+                     "mean": (valid_fitted[k].mean(axis=0).tolist()
+                              if len(valid_fitted[k]) else None),
+                     "std": (valid_fitted[k].std(axis=0).tolist()
+                             if len(valid_fitted[k]) else None),
                      "runs": fitted[k].tolist(),
                      "diagnostics": diagnostics[k]} for k in fitted},
         "injection": {

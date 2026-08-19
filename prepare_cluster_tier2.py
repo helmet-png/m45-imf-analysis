@@ -113,8 +113,13 @@ def fetch_control_field(raw: Table, max_rows: int = 1000) -> Table:
         "FROM gaiadr3.gaia_source "
         "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), "
         f"CIRCLE('ICRS', {ra0:.8f}, {dec0:.8f}, 1.5)) "
-        "AND phot_g_mean_mag <= 18")
+        "AND phot_g_mean_mag <= 18 ORDER BY source_id")
     rows = _post_csv(query)
+    member_ids = set(np.asarray(raw["source_id"], np.int64).tolist())
+    rows = [row for row in rows if int(row["source_id"]) not in member_ids]
+    if len(rows) < 100:
+        raise RuntimeError(
+            f"control field has only {len(rows)} non-member stars; need at least 100")
     names = ("source_id",) + tuple(c for c in GAIA_COLUMNS if c != "source_id")
     return Table({name: np.asarray([
         int(row[name]) if name == "source_id" else _float(row[name])
