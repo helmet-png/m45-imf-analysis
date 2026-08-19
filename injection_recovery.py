@@ -443,8 +443,13 @@ def main():
         print("      與選擇函數的 -0.178 相等純屬巧合（因為 0.30 是我挑的）。")
 
     out_path = HERE / "results" / f"injection_recovery{args.tag}.npz"
+    # dav_distribution 一起存進檔案（2026-08-19 CodeRabbit PR #63）：
+    # 它會改變假資料的生成方式，兩種分布跑出來的結果不可互比，但檔名只由
+    # --tag 決定。不存的話，事後拿到 npz 無從判斷這批是 lognormal 還是
+    # trunc_exp 算的——C5 這個比較的重點正是兩者的差，認錯來源就整個作廢。
     np.savez(out_path,
              theta_true=THETA_TRUE,
+             dav_distribution=args.dav_distribution,
              **{k.replace("@", "_at_").replace(".", "p"): v
                 for k, v in results.items()})
     print(f"\n寫入 {out_path}")
