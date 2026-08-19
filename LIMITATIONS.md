@@ -655,9 +655,13 @@ config C 前向模型量 alpha）與 `stars_per_cluster`（需重跑 pyUPMASK �
 腳本先做可行性檢查）兩個影響面最廣的設定。流程本身已用小規模參數驗證可
 執行，**但還沒有真正的敏感度數字**——完整掃描需要原始 Gaia 查詢 CSV，這台
 機器當時沒有，補齊依賴（clone `github.com/helmet-png/gaia-dr3-export`）後
-重抓時 ESA Gaia TAP 封存站連續回應異常（HTTP 500、逾時），懷疑是服務端
-暫時性問題。`stars_per_cluster` 則受限於這台機器沒有 `pyUPMASK/`，腳本
-確認會誠實回報做不到、不編造數字。詳細下一步見 `WORK_BOARD.md` D2 那行。
+重抓卡在 `fetch_gaia.py` 第一步的 `SELECT COUNT(*)` 查詢——手動重現並拿到
+完整錯誤內文，確認是 ESA 伺服器端主動取消：`SQL exception: ERROR:
+canceling statement due to statement timeout`（等 183 秒後被砍），不是
+本機網路或帳號問題，是這個查詢（5 度錐形 + G<=18 + parallax>=4，對 18
+億列做未加速的 COUNT）在伺服端太重。`stars_per_cluster` 則受限於這台
+機器沒有 `pyUPMASK/`，腳本確認會誠實回報做不到、不編造數字。詳細下一步
+（含可能的繞過法）見 `WORK_BOARD.md` D2 那行。
 
 ### D3 主序轉折點截斷對老星團會變成真限制（尚無認領工作）
 
