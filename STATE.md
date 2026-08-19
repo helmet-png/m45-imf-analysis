@@ -32,8 +32,8 @@
 | 第 1 步：文獻基準線（Li+2026） | **完成** | Δα=0.076（文獻公式代入值） |
 | 第 2 步：前向模型逐半徑重跑 α(<r) | **2026-08-19 更新：四項 `_prelim` 值都已到齊**（r1=2.10、r2=2.43、r3=2.50、rall=2.43，非單調待確認），仍不是最終數字 | 正式 `--repeats 5 --refines 3,3` 重跑見 `WORK_BOARD.md` 的 `radial_final_reruns`，明確不排本機 |
 | 第 3 步：LIMEPY 多質量平衡模型 | **模型完成並合併**（PR #41），2026-08-19 起可用 `_prelim` 值做探索性交叉驗證（`limepy_radial_crosscheck`），正式驗收仍待 `_final` | King 模型 reduced χ²=0.75，潮汐半徑外估計還有 14.4 M☉（3.2%） |
-| 第 4 步：放大搜尋半徑到 8–17° | 2026-08-19 更新：有 `_prelim` 資料可看但梯度還沒統計上證實，不建議直接投入 | 等 `radial_final_reruns` |
-| 第 5 步：N-body（Converse & Stahler 2010） | 探索性 pilot 已完成，方向與觀測質量分層一致（但比較用的分箱定義不一致，見 `WORK_BOARD.md`），非正式結果 | 正式校準版等 `radial_final_reruns`，2026-08-19 起可用 `_prelim` 做初步方向校準（`nbody_prior_from_radial`） |
+| 第 4 步：放大搜尋半徑到 8–17° | 2026-08-19 更新：`_prelim` 只能支援探索性判讀（梯度方向看起來還沒收斂），不能支援正式投入決策 | 正式投入決策與驗收要等 `radial_final_reruns` 的有誤差棒 `_final` 結果 |
+| 第 5 步：N-body（Converse & Stahler 2010） | 探索性 pilot 已完成，方向與觀測質量分層一致（但比較用的分箱定義不一致，見 `WORK_BOARD.md`），非正式結果 | `_prelim` 只能支援探索性初步校準方向（`nbody_prior_from_radial`），正式 N-body 校準要等 `radial_final_reruns` 的 `_final` 結果 |
 
 ---
 
@@ -99,8 +99,9 @@ N-body 需要 x64 機器（PeTar/mcluster 編譯環境），**新機器如果不
 1. **完成 headline `p2_final2_v3`**：用 `--repeat-offset 5,6,7,8,9` 補滿
    剩下 5 次重複，跟 PR #57 已拉回的 5 次合併，正式更新
    `RESULTS_LOG.md`／`LIMITATIONS.md` A1／A2。
-2. **`radial_r1/r2/r3/rall`**：PDMF→IMF 主線最大瓶頸，`radial_r2/r3/rall`
-   完全還沒開始。
+2. **`radial_final_reruns`**：四項 `_prelim`（r1/r2/r3/rall）已於
+   2026-08-19 前完成，待補的是 `--repeats 5 --refines 3,3` 的四項
+   正式重跑，見 `WORK_BOARD.md`。
 3. 決定 PR #55 要不要合併（現在是「分支上能用但沒進 main」的尷尬狀態，
    建議先合併，headline 拆分派工才有正式依據）。
 4. 4 個開著的 PR 找時間 review／合併（見上表）。
