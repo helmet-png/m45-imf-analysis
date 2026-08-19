@@ -38,6 +38,23 @@ def main():
     ages = np.unique(np.asarray(t["logAge"], float))
     print(f"\n驗證讀取：{len(t):,} 列，年齡格點 {len(ages)} 個："
           f"{ages.min():.2f} – {ages.max():.2f}")
+    # Mini／MH 也要真的轉成數值驗一次（CodeRabbit PR #65）：只驗 logAge 的話，
+    # 某一欄若因為解析錯誤混進非數值（例如把註解行當成資料列），要到 JointModel
+    # 展開 isochrone 時才會炸，而那時已經看不出是網格建置階段的問題。
+    # 質量範圍尤其要印出來——BHAC15 只到 1.4 M_sun、蓋不過 M45 擬合上限 2.50，
+    # 這是這個網格的已知限制（見 LIMITATIONS.md D1），每次建完都該當場看到。
+    mini = np.asarray(t["Mini"], float)
+    mh = np.unique(np.asarray(t["MH"], float))
+    if not np.isfinite(mini).all():
+        raise ValueError(f"Mini 欄有 {(~np.isfinite(mini)).sum()} 個非數值，"
+                         f"解析有問題，不要拿去擬合")
+    if not np.isfinite(mh).all():
+        raise ValueError("MH 欄有非數值，解析有問題，不要拿去擬合")
+    print(f"  質量範圍 {mini.min():.3f} – {mini.max():.3f} M_sun"
+          f"（M45 擬合上限 2.50，BHAC15 蓋不過，只能檢驗低質量段）")
+    print(f"  金屬量格點 {len(mh)} 個：{', '.join(f'{v:+.2f}' for v in mh)}"
+          f"{'（單一值，MH 維度形同鎖死）' if len(mh) == 1 else ''}")
+
     nearest = iso.isochrone_at(t, 8.03, 0.0)  # M45 大致的 logage
     g = np.asarray(nearest["G_fSBmag"], float)
     print(f"  logAge=8.03（最近格點）：{len(nearest):,} 點，"

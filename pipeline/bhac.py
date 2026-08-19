@@ -50,7 +50,9 @@ def download(force: bool = False) -> Path:
     print(f"下載 {SOURCE_URL} …")
     raw = net.get(SOURCE_URL, timeout=120, extra_chain=True,
                   chain_name=CHAIN_NAME)
-    RAW_FILE.write_bytes(raw)
+    # 原子寫入：上面那個 `RAW_FILE.exists()` 判斷會把任何已存在的檔案當成
+    # 「下載完成、可以直接用」，所以絕不能留下截斷的半成品（見 net.atomic_write）
+    net.atomic_write(RAW_FILE, raw)
     print(f"寫入 {RAW_FILE}（{len(raw):,} bytes）")
     return RAW_FILE
 

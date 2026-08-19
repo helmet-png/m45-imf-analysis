@@ -10,6 +10,7 @@
 （見 `setup/setup_ca.ps1` 抓 PARSEC 的那份，其他服務照同樣手法抓），
 用 `chain_name` 參數選要用哪一組，預設 `"parsec"` 保留舊行為不變。
 """
+import os
 import ssl
 import urllib.request
 from pathlib import Path
@@ -20,6 +21,36 @@ CERT_DIR = ROOT / "certs"
 UA = "m45-pipeline/1.0 (academic research; contact via repository)"
 
 _ctx_cache = {}
+
+
+def atomic_write(path: Path, data, encoding: str | None = None) -> Path:
+    """先寫到同目錄的暫存檔，成功才 os.replace() 換過去。
+
+    2026-08-19 CodeRabbit PR #65 指出：這個模組與 pipeline/bhac.py 直接
+    write_bytes()／write_text() 到目標路徑，寫到一半被中斷（斷網、斷電、
+    被砍行程）會留下截斷的檔案，而兩處的呼叫端都是「檔案存在就直接沿用」
+    ——截斷的憑證 bundle 會讓之後每一次連線都驗證失敗，截斷的 52 MB
+    BHAC15 原始檔則會被當成下載完成、解析出一份缺了尾段的網格，而且
+    看不出來。跟 fit_real.py／inject_lowmass.py 的 atomic_savez() 是同一
+    個理由、同一套寫法：os.replace() 在 POSIX 與 Windows 都保證原子性，
+    不會有「新檔寫一半、舊檔已被砍」的中間狀態。暫存檔放同目錄，
+    跨磁區的 replace 不保證原子。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    try:
+        if encoding is None:
+            tmp_path.write_bytes(data)
+        else:
+            tmp_path.write_text(data, encoding=encoding)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    return path
 
 
 def _build_bundle(chain_name: str) -> Path:
@@ -37,7 +68,7 @@ def _build_bundle(chain_name: str) -> Path:
         )
     extra = chain_pem.read_text(encoding="utf-8")
     CERT_DIR.mkdir(exist_ok=True)
-    bundle_pem.write_text(roots + "\n" + extra, encoding="utf-8")
+    atomic_write(bundle_pem, roots + "\n" + extra, encoding="utf-8")
     return bundle_pem
 
 
