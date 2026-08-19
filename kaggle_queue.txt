@@ -52,6 +52,21 @@ p6b_inject_lowmass_v2_t1_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trial
 # t0/t1 更早那次（08-18）失敗的原因不同：Kaggle 派工背景執行時本機切了
 # git 分支，kaggle_sync.py 打包到還沒有 --trial-offset 的舊版
 # inject_lowmass.py，Kaggle 端 argparse 直接報錯。
+#
+# ===== rep9／t2 為什麼用「一模一樣的參數」重試（2026-08-19 CodeRabbit PR #64）
+# CodeRabbit 提醒「不要用相同的執行計畫重試已因時限取消的工作」。取消原因已
+# 直接查證屬實：原本的 `...-rep9` 與 `...-v2-t2` 兩個 kernel 目前狀態都是
+# CANCEL_ACKNOWLEDGED，是 Kaggle 端砍的，不是本機輪詢器誤判。
+# **但這裡不能改小參數，理由是可比性**：rep0-rep9 是同一個 headline 數字的
+# 10 次重複，唯一該不同的是亂數種子；把 rep9 的 --n-syn 或 --refines 調小，
+# 它就不再是同一批的第 10 個樣本，串接起來的散布會是假的。p6b 的 t0/t1/t2
+# 同理。所以「降規格重試」在這個位置等於用壞掉的數字換一次成功。
+# **可行性有實測支撐**：同樣的 recipe，rep5/6/7/8 四個都在 ~62,600 秒
+# （17.4 小時）真的跑完並 COMPLETE，只有 rep9/t2 被砍——不是必定超時，
+# 是卡在 Kaggle 免費 session 上限附近的機率問題（實測 4/6 成功）。
+# **退路（若這次再被砍就走這條，不要再無限重試）**：改用本機 8 核跑
+# 這一個 rep9（本機沒有 session 上限，核心數也多一倍，估 8-9 小時），
+# 指令與這行完全相同、只把 --procs 4 改成 8。=====
 verify_bprperr_off_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _bprperr_off_v2|measure_overconfidence.py,injection_recovery.py|false|
 verify_bprperr_on_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --refines 3,3 --tag _bprperr_on_v2|measure_overconfidence.py,injection_recovery.py|false|
 p6b_inject_lowmass_v2_t0_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_t0|measure_overconfidence.py,injection_recovery.py|false|
