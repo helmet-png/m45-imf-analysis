@@ -52,6 +52,9 @@ def build_manifest(args) -> dict:
         "free_lowmass": args.free_lowmass,
         "native_bprp_err": args.native_bprp_err,
         "radius_range": args.radius_range,
+        # 亮端截斷會改變觀測樣本本身，跟 radius_range 一樣是「會讓結果
+        # 不可比」的輸入，必須進 manifest（見 MANIFEST_LEGACY_DEFAULTS）。
+        "g_bright": args.g_bright,
         # 2026-08-19 CodeRabbit PR #62 抓到：--repeat-offset 會改動每次重複的
         # 亂數種子，所以它跟 --n-syn 一樣是「會改變結果」的輸入。少了它，同一個
         # --tag 先用 offset 0 寫入部分結果、再用 offset 1 續跑時 manifest 完全
@@ -66,6 +69,7 @@ def build_manifest(args) -> dict:
 # 這裡明確寫出每個後加鍵的「當時等效值」，讓缺鍵的舊檔案只在這次真的用了
 # 非預設值時才判為不相容，不會因為補了一個欄位就逼所有既有部分結果重算。
 MANIFEST_LEGACY_DEFAULTS = {
+    "g_bright": None,
     "repeat_offset": 0,
 }
 
@@ -228,6 +232,18 @@ def main():
     ap.add_argument("--radius-range", default=None, metavar="LO,HI",
                     help="只用距星團中心 LO<=r<HI 度的成員擬合（例如 0,2）。"
                          "累積式用 0,r；環帶式用 lo,hi")
+    # --- 亮端截斷（2026-08-19 新增，為了 D1 的 BHAC15 比較）---
+    # BHAC15 只涵蓋到 1.4 Msun（M45 擬合範圍是 0.30-2.50），合成星團因此
+    # 生不出亮於 G=8.88 的星。若不同時砍觀測端，那些只有觀測、模型必為零
+    # 的 Hess 格會給出巨大的概似懲罰，擬合會扭曲其他參數去補償——量到的
+    # 就不是「換等時線模型的代價」，而是「網格質量涵蓋不足的代價」。
+    # 兩邊砍在同一個值才是同基準比較。**用這個旗標跑 BHAC15 時，PARSEC
+    # 對照組必須用同一個值再跑一次**，否則比較的是兩個不同的樣本。
+    ap.add_argument("--g-bright", type=float, default=None, metavar="MAG",
+                    help="亮端截斷：觀測與合成兩邊都只保留 G >= MAG 的星。"
+                         "預設 None＝沿用 config.toml 的 g_bright_limit（4.0）、"
+                         "且不砍觀測端，行為與加入這個旗標前完全相同。"
+                         "用於等時線網格質量涵蓋不足時做同基準比較（D1）")
     args = ap.parse_args()
     if args.repeat_offset < 0:
         ap.error("--repeat-offset must be non-negative")
@@ -258,6 +274,11 @@ def main():
         ok &= (rdeg >= r_lo) & (rdeg < r_hi)
         print(f"徑向切片 {r_lo:.2f} <= r < {r_hi:.2f} 度："
               f"{int(ok.sum()):,} / {len(rdeg):,} 顆", flush=True)
+    if args.g_bright is not None:
+        ok &= mag >= args.g_bright
+        print(f"亮端截斷 G >= {args.g_bright:.2f}："
+              f"{int(ok.sum()):,} / {int(np.isfinite(mag).sum()):,} 顆",
+              flush=True)
     color, mag = color[ok], mag[ok]
 
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
@@ -270,6 +291,10 @@ def main():
     # 沒有重新檢視。移除覆寫，改回讀 config 宣告的高斯先驗。
 
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
+    if args.g_bright is not None:
+        # 合成端的亮端截斷，跟上面觀測端砍在同一個值。JointModel 預設從
+        # config.toml 讀 g_bright_limit=4.0；這裡覆寫掉。
+        base.g_bright = args.g_bright
     base.use_native_bprp_err = args.native_bprp_err
     if args.native_bprp_err and "e_bp_native" not in errmodel:
         print("錯誤：--native-bprp-err 需要 errmodel.npz 含 e_bp_native/"
