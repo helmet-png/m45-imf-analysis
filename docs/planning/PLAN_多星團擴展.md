@@ -216,9 +216,12 @@ Pang+2024 給 45 Myr），這看起來是文獻本身的分歧，不是我方筆
 
 **Coma Berenices 的既有 PDMF 基準線（2026-08-19，核對 Hobart et al. 2026
 arXiv:2607.17300 引言時發現；同日已讀 Tang et al. 2019 原文查證，
-Kraus & Hillenbrand 2007 還沒有）**：`Kraus & Hillenbrand (2007)` 與
-`Tang et al. (2019)` 兩篇都測過 Coma Ber 在次太陽質量段的 PDMF 變平
-現象（歸因於動力學演化／質量分層，跟 Praesepe 用同一套解釋）。
+Kraus & Hillenbrand 2007 還沒有）**：`Tang et al. (2019)` 已確認 Coma
+Ber 在次太陽質量段有 PDMF 變平現象（歸因於動力學演化／質量分層，
+跟 Praesepe 用同一套解釋）。`Kraus & Hillenbrand (2007)` 的相關觀察
+與解釋**目前只有 Tang et al. 2019 原文裡的二手轉述**（提到一個
+α=0.6±0.3 的數字），原文本身還沒查證過，不能列為已確認的基準線
+——見下段的查證狀態。
 
 **Tang et al. (2019, ApJ 877, 12) 已讀原文完成口徑核對**（完整表格見
 `docs/planning/PLAN_文獻對照_Hobart2026.md` 第五節）：他們的
