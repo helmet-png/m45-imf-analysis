@@ -55,6 +55,12 @@ def build_manifest(args) -> dict:
         # 亮端截斷會改變觀測樣本本身，跟 radius_range 一樣是「會讓結果
         # 不可比」的輸入，必須進 manifest（見 MANIFEST_LEGACY_DEFAULTS）。
         "g_bright": args.g_bright,
+        # 2026-08-19 CodeRabbit PR #62 抓到：--repeat-offset 會改動每次重複的
+        # 亂數種子，所以它跟 --n-syn 一樣是「會改變結果」的輸入。少了它，同一個
+        # --tag 先用 offset 0 寫入部分結果、再用 offset 1 續跑時 manifest 完全
+        # 相同，rep < len(reps) 會直接跳過重算，把 offset 0 的結果當成 offset 1
+        # 的結果沿用。
+        "repeat_offset": args.repeat_offset,
     }
 
 
@@ -64,6 +70,7 @@ def build_manifest(args) -> dict:
 # 非預設值時才判為不相容，不會因為補了一個欄位就逼所有既有部分結果重算。
 MANIFEST_LEGACY_DEFAULTS = {
     "g_bright": None,
+    "repeat_offset": 0,
 }
 
 HERE = Path(__file__).resolve().parent
@@ -163,6 +170,17 @@ def main():
     # 「單次擬合的重現性」，A 與 C 的差要大於它才算真的位移。
     ap.add_argument("--repeats", type=int, default=1,
                     help="每個設定重複幾次（每次換一組模型端共用亂數）")
+    ap.add_argument("--repeat-offset", type=int, default=0,
+                    help="重複次數的起始索引偏移（種子 = 2000 + 13*(rep+offset)）。"
+                         "只吃單一整數，不接受逗號清單。用來把同一組 --repeats N "
+                         "拆到不同機器/帳號各跑一部分、彼此用不同亂數種子：5 個帳號"
+                         "各跑一次時，是各自下 --repeats 1 --repeat-offset 0 / 1 / "
+                         "2 / 3 / 4 五道獨立指令。**每個分片必須配一個唯一的 --tag**"
+                         "（例如 _p2final_v3_rep0 ... _rep4）——輸出路徑只由 --tag "
+                         "決定，共用同一個 --tag 的分片會互相覆寫，atomic_savez() "
+                         "不會幫忙合併。全部跑完後把各檔案的 C 陣列依 offset 由小到大"
+                         "沿 axis=0 串接，即等於一次 --repeats 5 的結果。"
+                         "預設 0，不影響既有行為（見 PR #55）")
     ap.add_argument("--grid", default=GRID,
                     help="isochrone 網格檔名（在 isochrones/ 底下）。"
                          "換成 MIST 的檔案即可量出等時線模型造成的系統誤差")
@@ -227,6 +245,8 @@ def main():
                          "且不砍觀測端，行為與加入這個旗標前完全相同。"
                          "用於等時線網格質量涵蓋不足時做同基準比較（D1）")
     args = ap.parse_args()
+    if args.repeat_offset < 0:
+        ap.error("--repeat-offset must be non-negative")
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
 
@@ -361,8 +381,9 @@ def main():
             # `--repeats 10` 的工作拆成多次獨立呼叫（例如分散到不同機器），
             # 結果跟一次跑完完全等價，也是這次能續傳的前提（續傳本質上
             # 就是「用同一個索引重跑一次」，種子不能因為 repeats 不同而變）。
-            m.draws = draw_randoms(m.n_syn,
-                                   np.random.default_rng(2000 + 13 * rep))
+            m.draws = draw_randoms(
+                m.n_syn,
+                np.random.default_rng(2000 + 13 * (rep + args.repeat_offset)))
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             extra_axes = [extra] if extra is not None else []
