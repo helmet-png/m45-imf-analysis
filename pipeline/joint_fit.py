@@ -258,6 +258,11 @@ class JointModel:
             # 這正是 2026-08-08 讓 p2_final 中途失敗的原因。
             # low_mass 已在函式開頭決定（可能來自 theta[7] 或物件屬性）。
             IMF_BREAKS["kroupa"] = (orig[0], [orig[1][0], low_mass, -alpha])
+            # **這裡抽的是「主星」質量，不是「所有恆星」的質量**（D14，
+            # 見下面 is_bin 那段與本方法末尾的說明）。抽樣範圍是等時線網格
+            # 實際涵蓋的質量區間（mi.min()–mi.max()），不是 config 設定值——
+            # 換一份質量涵蓋較窄的網格（例如 BHAC15 只到 1.4 Msun）會連帶
+            # 改變被抽樣的質量上限，比較不同網格的結果時要記得這一點。
             m1 = sample_imf(d["u_mass"][:n], "kroupa", mi.min(), mi.max())
         finally:
             IMF_BREAKS["kroupa"] = orig
@@ -266,6 +271,17 @@ class JointModel:
         bp = np.interp(m1, mi, bpi)
         rp = np.interp(m1, mi, rpi)
 
+        # **合成星團的一「筆」是一個系統，不是一顆恆星**（D14）。抽樣順序是：
+        #   (1) 抽 n_syn 個主星質量 m1（冪次由 alpha 決定，見上面）
+        #   (2) 獨立地擲 Bernoulli(f_bin) 決定哪些主星帶伴星
+        #   (3) 伴星質量 m2 = q*m1，q 抽自 p(q) ∝ q^qgamma，**不是抽自 IMF**
+        #   (4) 主星與伴星的**流量相加**，塌縮成同一筆測光點
+        # 所以 alpha 是**主星質量分布**的冪次（等價於以主星質量標記的
+        # system MF），不是把伴星也算進去的 stellar／single-star MF。
+        # 要換算成 stellar MF 必須把 f_bin 與 q 分布一起摺積回去，那是
+        # 一個後處理步驟，這裡沒有做，報出來的 alpha 也不是那個東西。
+        # 另外第 (2) 步與 m1 獨立，等於假設**雙星比例不隨質量變化**——
+        # 這是已知的簡化，不是疏忽（見 LIMITATIONS.md）。
         is_bin = d["u_bin"][:n] < fbin
         if is_bin.any():
             u = d["u_q"][:n][is_bin]
