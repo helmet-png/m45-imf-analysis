@@ -165,7 +165,21 @@ p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 # 10 次裡的第 1 次，換算要 100+ 小時，遠超 Kaggle 免費 session 上限
 # （9-12 小時），見 KAGGLE_DIAGNOSIS.md。本機 8 核應該快很多，P9a-redo/
 # P9c v2 用同樣雙階精修（3,3，比這裡少一階）在 Kaggle 都幾小時內完成。=====
-p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
+#
+# ===== 2026-08-19：**這一項已停用，不要重新打開**（CodeRabbit PR #63 抓到）
+# 上面那段理由在 --repeat-offset 出現之前是對的，現在已經過時：headline 早就
+# 改用 Kaggle 拆片跑（kaggle_queue.txt 的 p2_final2_v3_rep5 ~ rep9，各
+# --repeats 1 --repeat-offset N --tag _p2final_v3_repN，rep0-4 是更早拆的），
+# rep0-8 已經完成並存進 results/，只剩 rep9 在跑。留著這一項有兩個問題：
+#   (1) **輸出路徑直接撞名**：這一項的 --tag _p2final_v3 會寫到
+#       results/fit_real_p2final_v3.npz，而那正是 rep0-9 串接後要存的正規
+#       檔名。兩邊都寫同一個檔案，最後留下哪一份看誰晚跑完，從檔案看不出來。
+#   (2) **重複算同一批工作**：同樣 10 次重複、同樣三階精修，本機再算一次是
+#       純浪費——本機 8 核也沒快到能無視，radial_r2 單次重複就跑了 285 分鐘。
+# 正規來源固定為 Kaggle 分片：rep0-9 全部拉回後依 offset 由小到大沿 axis=0
+# 串接成 results/fit_real_p2final_v3.npz，每個分片檔與這個正規產物都要記進
+# results/RESULTS_LOG.md。要重跑 headline 請改 kaggle_queue.txt，不要動這裡。=====
+# p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
 
 # ===== 2026-08-19：B/C/D 待認領清單裡「純換參數重跑、不用寫新腳本」
 # 的兩項（見 WORK_BOARD.md「待認領工作：B/C/D 類補齊」表）=====
