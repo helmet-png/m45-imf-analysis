@@ -181,18 +181,53 @@ def push(item: dict, account_name: str) -> tuple[bool, str, Path]:
     return r.returncode == 0, kid, work_dir
 
 
-def check_status_once(kid: str, env: dict) -> str | None:
-    """查一次狀態，不阻塞等待。回傳 "ok"/"error"/"cancelled"（終止狀態）
-    或 None（還在排隊或執行中，下一輪再查）。
+# probe_kernel_status() 的回傳值裡代表「kernel 真的跑完了」的那幾個。
+TERMINAL = {"complete", "error", "cancelled"}
+
+
+def probe_kernel_status(kid: str, env: dict) -> str:
+    """查一次 kernel 狀態，把「還在跑」「不存在」「查不到」三種情況分開。
+
+    2026-08-19 CodeRabbit PR #66 指出：原本 check_status_once() 對這三種
+    情況一律回傳 None，呼叫端只能一律當成「還在跑，下一輪再看」。在主迴圈
+    裡那是安全的，但在 recover_running_slots() 裡不是——「不存在」要讓槽位
+    空著去派新工作，「查不到」（網路斷、憑證過期、被限流）則絕對不能，那會
+    讓復原邏輯誤判成沒人在跑而重推，把遠端已經跑了十幾小時的進度洗掉。
+
+    實測 `kaggle kernels status` 的輸出（2026-08-19）：
+      存在   -> returncode 0，stdout 有 `has status "KernelWorkerStatus.XXX"`
+      不存在 -> returncode 1，stderr 是 `Cannot access kernel ...`
+                （訊息自稱是權限問題，但實際上打錯 slug 也是這一句）
+    其他非零退出碼一律歸到 "unknown"，由呼叫端決定要不要保守處理。
+
+    回傳 "running"／"complete"／"error"／"cancelled"／"missing"／"unknown"。
     """
     r = run(["kaggle", "kernels", "status", kid], env=env)
-    status = (r.stdout + r.stderr).strip()
-    if "COMPLETE" in status:
+    text = (r.stdout + r.stderr).strip()
+    if r.returncode == 0 and "has status" in text:
+        if "COMPLETE" in text:
+            return "complete"
+        if "ERROR" in text:
+            return "error"
+        if "CANCEL" in text:
+            return "cancelled"
+        return "running"        # RUNNING／QUEUED 等尚未結束的狀態
+    if "Cannot access kernel" in text or "wrong kernel slug" in text:
+        return "missing"
+    print(f"  查詢 {kid} 狀態失敗（rc={r.returncode}）：{text[:300]}",
+          flush=True)
+    return "unknown"
+
+
+def check_status_once(kid: str, env: dict) -> str | None:
+    """查一次狀態，不阻塞等待。回傳 "ok"/"error"/"cancelled"（終止狀態）
+    或 None（還在排隊或執行中，或這次查不到——都是「先不要下結論」）。
+    """
+    st = probe_kernel_status(kid, env)
+    if st == "complete":
         return "ok"
-    if "ERROR" in status:
-        return "error"
-    if "CANCEL" in status:
-        return "cancelled"
+    if st in ("error", "cancelled"):
+        return st
     return None
 
 
@@ -225,7 +260,19 @@ def recover_running_slots(accounts: dict, envs: dict) -> dict[str, dict | None]:
     重開機——本機重開機／agent session 中斷不會影響 Kaggle 端已經在跑的
     kernel，只會讓這支輪詢器失去追蹤；重開這支腳本若直接對每個閒置帳號
     重推，等於中斷已經跑了一段時間的進度，白算掉）。找到 RUNNING／QUEUED
-    的就接回槽位，不重推；找不到才照原本流程當作全新工作處理。"""
+    的就接回槽位，不重推；找不到才照原本流程當作全新工作處理。
+
+    2026-08-19 CodeRabbit PR #66 補了兩個原本會漏掉的情況：
+      * **遠端已經跑完**（COMPLETE／ERROR／CANCELLED）：本機失聯期間 kernel
+        自己結束了。原本只認 RUNNING／QUEUED，會留下空槽位，主迴圈接著把
+        同一個 label 重推一次——COMPLETE 的話等於把已經算完的結果丟掉重算。
+        改成 COMPLETE 就照正常流程 pull + mark_done；ERROR／CANCELLED
+        **不標 done**，讓主迴圈照既有的重推/重試邏輯處理（那是這支腳本本來
+        就有的失敗處置，不該在復原路徑另立一套）。
+      * **狀態查不到**（網路斷、憑證過期、被限流）：這跟「kernel 不存在」
+        看起來都像沒東西在跑，但處置相反。查不到時**佔住槽位**這一輪不派
+        新工作，下一輪再查；寧可慢一輪，也不要在遠端其實正在跑的情況下重推。
+    """
     done = read_done()
     pending = [it for it in read_queue() if it["label"] not in done]
     slots: dict[str, dict | None] = {name: None for name in accounts}
@@ -236,9 +283,23 @@ def recover_running_slots(accounts: dict, envs: dict) -> dict[str, dict | None]:
             slug = item["label"].replace("_", "-")
             username = accounts[name]["username"]
             kid = f"{username}/m45-imf-run-{slug}"
-            r = run(["kaggle", "kernels", "status", kid], env=envs[name])
-            status = (r.stdout + r.stderr).strip()
-            if "RUNNING" in status or "QUEUED" in status:
+            st = probe_kernel_status(kid, envs[name])
+            if st == "missing":
+                continue        # 這個帳號沒推過這項，繼續看下一項
+            if st == "unknown":
+                # 查不到就保守處理：佔住槽位、這一輪不派新工作。
+                # phase="probe" 不帶 kid，主迴圈的忙碌槽位檢查會跳過它，
+                # 下一輪復原式查詢由 main() 的 requeue 邏輯重來。
+                slots[name] = {
+                    "phase": "probe", "item": item, "kid": kid,
+                    "work_dir": HERE / "kaggle_work" / name,
+                    "t0": time.time(), "retries": 0,
+                }
+                print(f"復原：{name} 查 {item['label']}（{kid}）狀態失敗，"
+                      f"這一輪不派新工作，下一輪再查（避免遠端其實正在跑"
+                      f"卻被重推洗掉）", flush=True)
+                break
+            if st == "running":
                 slots[name] = {
                     "phase": "running", "item": item, "kid": kid,
                     "work_dir": HERE / "kaggle_work" / name,
@@ -247,6 +308,19 @@ def recover_running_slots(accounts: dict, envs: dict) -> dict[str, dict | None]:
                 print(f"復原：{name} 已經在跑 {item['label']}（{kid}），"
                       f"接回追蹤、不重推", flush=True)
                 break
+            if st == "complete":
+                print(f"復原：{name} 的 {item['label']}（{kid}）在本機失聯"
+                      f"期間已經 COMPLETE，補拉結果並標記完成，不重算",
+                      flush=True)
+                if pull(kid, item["label"], envs[name]):
+                    mark_done(item["label"], "ok", 0, name)
+                else:
+                    print(f"  結果下載失敗，不標記完成——留給主迴圈重試",
+                          flush=True)
+                continue        # 槽位保持空著，可以接新工作
+            # error／cancelled：不標 done，讓主迴圈照既有失敗處置重推
+            print(f"復原：{name} 的 {item['label']}（{kid}）遠端狀態為 "
+                  f"{st}，交回主迴圈照既有重試流程處理", flush=True)
     return slots
 
 
@@ -259,10 +333,23 @@ def push_kernel_only(work_dir: Path, env: dict) -> bool:
     return r.returncode == 0
 
 
-def pull(kid: str, label: str, env: dict) -> None:
+def pull(kid: str, label: str, env: dict) -> bool:
+    """下載 kernel 輸出。回傳是否成功。
+
+    2026-08-19 CodeRabbit PR #66 指出：原本丟掉 `kaggle kernels output` 的
+    回傳碼，呼叫端無論下載成功與否都接著 mark_done()——DONE 檔一寫下去就
+    不會再重試，等於一次網路中斷就永久丟掉一個已經算完的 kernel 的結果。
+    這在這個專案不是假設性風險：rep5 的下載就曾經因為 IncompleteRead 中斷
+    過，當時是人工發現才補拉的。
+    """
     out = HERE / "kaggle_results" / label
     out.mkdir(parents=True, exist_ok=True)
-    run(["kaggle", "kernels", "output", kid, "-p", str(out)], env=env)
+    r = run(["kaggle", "kernels", "output", kid, "-p", str(out)], env=env)
+    if r.returncode != 0:
+        print(f"  下載 {kid} 輸出失敗（rc={r.returncode}）："
+              f"{(r.stderr or r.stdout)[-500:]}", flush=True)
+        return False
+    return True
 
 
 def main() -> None:
@@ -316,6 +403,38 @@ def main() -> None:
         for name, slot in list(slots.items()):
             if slot is None:
                 continue
+            if slot["phase"] == "probe":
+                # 復原時狀態查不到而暫時佔住的槽位（見 recover_running_slots）。
+                # 每一輪重查一次，查得到就照結果轉正常流程；還是查不到就繼續
+                # 佔著——「查不到」代表我們無從判斷遠端到底有沒有在跑，這種
+                # 情況下派新工作的風險（重推洗掉進度）遠大於慢一輪的代價。
+                # 持續查不到通常是憑證過期或網路斷，屬於要人介入的狀況，
+                # 每一輪都印出來讓它顯眼。
+                st = probe_kernel_status(slot["kid"], envs[name])
+                if st == "missing":
+                    print(f"  [{name}] {slot['item']['label']} 確認遠端沒有這個"
+                          f"kernel，釋放槽位、照正常流程派工", flush=True)
+                    slots[name] = None
+                elif st == "running":
+                    slot["phase"] = "running"
+                    slot["t0"] = time.time()
+                    print(f"  [{name}] {slot['item']['label']} 查到遠端正在跑，"
+                          f"接回追蹤", flush=True)
+                elif st in TERMINAL:
+                    if st == "complete":
+                        if pull(slot["kid"], slot["item"]["label"], envs[name]):
+                            mark_done(slot["item"]["label"], "ok", 0, name)
+                        else:
+                            print(f"  [{name}] 結果下載失敗，保留工作供下一輪"
+                                  f"重試", flush=True)
+                            continue
+                    slots[name] = None
+                else:
+                    print(f"  [{name}] {slot['item']['label']} 狀態仍查不到，"
+                          f"繼續佔住槽位（若持續如此請檢查憑證與網路）",
+                          flush=True)
+                continue
+
             if slot["phase"] == "cooldown":
                 if time.time() >= slot["resume_at"]:
                     ok = push_kernel_only(slot["work_dir"], envs[name])
@@ -337,7 +456,16 @@ def main() -> None:
                 # 就照正常流程 pull，不要平白丟掉可能剛好算完的結果。
                 final_status = check_status_once(slot["kid"], envs[name])
                 if final_status is not None:
-                    pull(slot["kid"], slot["item"]["label"], envs[name])
+                    pulled = pull(slot["kid"], slot["item"]["label"],
+                                  envs[name])
+                    if final_status == "ok" and not pulled:
+                        # 已經 COMPLETE 卻拉不下來：**絕對不能 mark_done**，
+                        # 那會讓這個算完的 kernel 永遠不再被重試。留在槽位裡
+                        # 下一輪重拉（逾時判斷會再次成立，所以是每輪重試一次）。
+                        print(f"[{datetime.now():%H:%M:%S}] [{name}] "
+                              f"{slot['item']['label']} 已 COMPLETE 但結果"
+                              f"下載失敗，保留工作供下一輪重試", flush=True)
+                        continue
                     mark_done(slot["item"]["label"], final_status,
                              time.time() - slot["t0"], name)
                     print(f"[{datetime.now():%H:%M:%S}] [{name}] "
@@ -353,7 +481,14 @@ def main() -> None:
             if status is None:
                 continue    # 還在跑，下一輪再看
 
-            pull(slot["kid"], slot["item"]["label"], envs[name])
+            pulled = pull(slot["kid"], slot["item"]["label"], envs[name])
+            if status == "ok" and not pulled:
+                # 同上：算完了但結果沒拉下來，不標記完成，下一輪重拉。
+                # 只對 "ok" 這樣做——"error"／"cancelled" 拉的是 log 不是
+                # 結果，拉不到不該讓槽位卡住不放。
+                print(f"  [{name}] {slot['item']['label']} 已 COMPLETE 但"
+                      f"結果下載失敗，保留工作供下一輪重試", flush=True)
+                continue
             if (status == "error" and is_mount_race_failure(slot["item"]["label"])
                     and slot["retries"] < len(BACKOFFS)):
                 wait_s = BACKOFFS[slot["retries"]]
