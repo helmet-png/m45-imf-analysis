@@ -96,7 +96,7 @@ def fetch_gaia(source_ids: list[str], chunk_size: int = 200) -> list[dict]:
     return rows
 
 
-def fetch_control_field(raw: Table, max_rows: int = 5000) -> Table:
+def fetch_control_field(raw: Table, max_rows: int = 1000) -> Table:
     """Fetch a local Gaia sample for the survey-selection calibration.
 
     HR23 members do not span Gaia's full colour/SNR distribution.  Selection is
@@ -274,6 +274,8 @@ def main():
     ap.add_argument("--hr23-name", required=True)
     ap.add_argument("--prob-min", type=float, default=0.7)
     ap.add_argument("--refresh-gaia", action="store_true")
+    ap.add_argument("--control-max-rows", type=int, default=1000,
+                    help="maximum nearby field stars used to calibrate selection")
     args = ap.parse_args()
 
     params, members = read_hr23(args.hr23_name, args.prob_min)
@@ -308,7 +310,9 @@ def main():
         control = Table.read(control_path, format="csv")
         print(f"using cached control field: {control_path.name} ({len(control):,} stars)")
     else:
-        control = fetch_control_field(raw)
+        if args.control_max_rows < 100:
+            raise ValueError("--control-max-rows must be at least 100")
+        control = fetch_control_field(raw, args.control_max_rows)
         control.write(control_path, format="csv", overwrite=True)
         print(f"wrote control field: {control_path.name} ({len(control):,} stars)")
 
