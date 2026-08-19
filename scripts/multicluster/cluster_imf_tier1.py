@@ -184,7 +184,10 @@ def main():
     color = mem["BPmag"] - mem["RPmag"]
     mag = mem["Gmag"]
     ruwe = mem["RUWE"]
-    nss = np.isfinite(mem["NSS"]) & (np.asarray(mem["NSS"], float) != 0)
+    # VizieR JSON uses null for missing NSS values.  Convert before np.isfinite
+    # so a refreshed catalogue cannot turn this into an object-array TypeError.
+    nss_values = np.asarray(mem["NSS"], dtype=float)
+    nss = np.isfinite(nss_values) & (nss_values != 0)
     ok = np.isfinite(color) & np.isfinite(mag)
     color, mag, ruwe, nss = color[ok], mag[ok], ruwe[ok], nss[ok]
     n_obs = len(color)

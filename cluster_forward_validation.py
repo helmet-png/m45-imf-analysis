@@ -107,13 +107,18 @@ def fit_once(base, axes, selection, seed: int, refines, n_proc: int):
     model.selection = selection
     model.draws = draw_randoms(model.n_syn, np.random.default_rng(seed))
     started = time.time()
+    # Zero differential-extinction scatter is an allowed physical boundary.
+    # Other boundary solutions are retained only as diagnostics, never IMF fits.
+    allowed_wall = (6,) if len(axes) > 6 else ()
     best, lp, bounds = multi_stage_best(
         model, [np.asarray(x) for x in axes], refines, n_proc,
-        allow_wall=tuple(range(len(axes))), no_refine=(0, 4))
+        allow_wall=allowed_wall, raise_on_wall=False, no_refine=(0, 4))
     names = joint_fit.PARAM_NAMES + (["dav"] if len(best) > 6 else [])
-    walls = [text for _, text in check_walls(
-        best, bounds, names)]
-    return model, best, float(lp), bounds, walls, time.time() - started
+    unexpected_hits = check_walls(best, bounds, names, allow=allowed_wall)
+    wall_hits = [{"kind": kind, "message": message}
+                 for kind, message in unexpected_hits]
+    return (model, best, float(lp), bounds, wall_hits, bool(wall_hits),
+            time.time() - started)
 
 
 def main():
@@ -205,11 +210,17 @@ def main():
         rows = []
         diagnostics[key] = []
         for repeat in range(args.repeats):
-            _, best, lp, bounds, walls, elapsed = fit_once(
+            _, best, lp, bounds, wall_hits, has_unexpected_wall, elapsed = fit_once(
                 base, axes, sel, 8200 + 101 * repeat, refines, n_proc)
             rows.append(best)
-            diagnostics[key].append({"log_posterior": lp, "walls": walls,
-                                     "elapsed_s": elapsed})
+            diagnostics[key].append({
+                "log_posterior": lp,
+                "wall_hits": wall_hits,
+                "has_unexpected_wall": has_unexpected_wall,
+                "valid_for_imf": not has_unexpected_wall,
+                "diagnostic_only": has_unexpected_wall,
+                "elapsed_s": elapsed})
+            walls = [hit["message"] for hit in wall_hits]
             line = (f"第 {repeat+1} 次：alpha={best[3]:.3f}，"
                     f"f_bin={best[2]:.3f}，q_gamma={best[5]:.3f}，"
                     f"logAge={best[0]:.3f}，A_V={best[1]:.3f}，")
@@ -234,9 +245,14 @@ def main():
                 dav=(float(truth[6]) if len(truth) > 6 else 0.0),
                 selection=selection, n_gen=max(100000, len(color) * 250))
             fake_base = base.with_observations(fake_color, fake_mag)
-            _, got, lp, bounds, walls, elapsed = fit_once(
+            _, got, lp, bounds, wall_hits, has_unexpected_wall, elapsed = fit_once(
                 fake_base, axes, selection, 10200 + 101 * trial,
                 refines, n_proc)
+            if has_unexpected_wall:
+                raise RuntimeError(
+                    "Injection-recovery fit reached an unexpected boundary; "
+                    "do not use this recovery trial: "
+                    + "; ".join(hit["message"] for hit in wall_hits))
             injection.append(got)
             print(f"第 {trial+1} 次：alpha 真值 {truth[3]:.3f} -> "
                   f"{got[3]:.3f}（差 {got[3]-truth[3]:+.3f}），"
@@ -256,15 +272,30 @@ def main():
     mode += args.tag
     npz_path = HERE / "results" / f"cluster_forward_{tag}_{mode}.npz"
     json_path = HERE / "results" / f"cluster_forward_{tag}_{mode}.json"
+    parameter_names = joint_fit.PARAM_NAMES + (["dav"] if args.fit_dav else [])
+    effective_axes = {name: np.asarray(axis, float).tolist()
+                      for name, axis in zip(parameter_names, axes)}
+    fit_validity = {
+        key: np.asarray([not row["has_unexpected_wall"]
+                         for row in diagnostics[key]], dtype=bool)
+        for key in fitted}
     np.savez(npz_path, A=fitted["A"], B=fitted["B"], truth=truth,
              injection=injection, n_obs=len(color), n_clean=len(clean),
-             used_logage=used_age, av=float(params["AV50"]), dm=dm,
+             parameter_names=np.asarray(parameter_names),
+             effective_axes_json=json.dumps(effective_axes),
+             valid_for_imf_A=fit_validity["A"],
+             valid_for_imf_B=fit_validity["B"],
+             diagnostic_only_A=~fit_validity["A"],
+             diagnostic_only_B=~fit_validity["B"],
+             hr23_logage=float(params["logAge50"]),
+             hr23_av=float(params["AV50"]), dm=dm,
              n_synthetic=args.n_syn)
     summary = {
         "hr23_name": tag, "mode": mode, "n_clean": len(clean),
         "n_hess": len(color), "n_synthetic": args.n_syn,
         "grid": args.grid, "hr23_logage": float(params["logAge50"]),
-        "grid_logage": used_age, "hr23_av": float(params["AV50"]), "dm": dm,
+        "hr23_av": float(params["AV50"]), "effective_axes": effective_axes,
+        "dm": dm,
         "fits": {k: {"mean": fitted[k].mean(axis=0).tolist(),
                      "std": fitted[k].std(axis=0).tolist(),
                      "runs": fitted[k].tolist(),

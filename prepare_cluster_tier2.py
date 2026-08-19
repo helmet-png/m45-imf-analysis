@@ -96,6 +96,31 @@ def fetch_gaia(source_ids: list[str], chunk_size: int = 200) -> list[dict]:
     return rows
 
 
+def fetch_control_field(raw: Table, max_rows: int = 5000) -> Table:
+    """Fetch a local Gaia sample for the survey-selection calibration.
+
+    HR23 members do not span Gaia's full colour/SNR distribution.  Selection is
+    a survey property, so the SNR regression uses nearby field sources too.
+    """
+    ra = np.asarray(raw["ra"], float)
+    dec = np.asarray(raw["dec"], float)
+    finite = np.isfinite(ra) & np.isfinite(dec)
+    if finite.sum() == 0:
+        raise ValueError("cannot define a control field without finite RA/Dec")
+    ra0, dec0 = float(np.median(ra[finite])), float(np.median(dec[finite]))
+    query = (
+        f"SELECT TOP {int(max_rows)} {','.join(GAIA_COLUMNS)} "
+        "FROM gaiadr3.gaia_source "
+        "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), "
+        f"CIRCLE('ICRS', {ra0:.8f}, {dec0:.8f}, 1.5)) "
+        "AND phot_g_mean_mag <= 18")
+    rows = _post_csv(query)
+    names = ("source_id",) + tuple(c for c in GAIA_COLUMNS if c != "source_id")
+    return Table({name: np.asarray([
+        int(row[name]) if name == "source_id" else _float(row[name])
+        for row in rows]) for name in names})
+
+
 def read_hr23(name: str, prob_min: float) -> tuple[dict, list[dict]]:
     params_path = HERE / "data" / f"hr23_{name}_params.json"
     members_path = HERE / "data" / f"hr23_{name}_members.csv"
@@ -195,6 +220,27 @@ def validate_selection(model, raw: Table, clean: Table) -> dict:
             worst = max(worst, abs(float(predicted[mask].mean()
                                         - observed[mask].mean())))
             used_bins += 1
+    faint = g >= 17.0
+    if faint.sum() >= 20:
+        colour = bp - rp
+        split = float(np.median(colour[faint]))
+        red, blue = faint & (colour > split), faint & (colour <= split)
+        if red.any() and blue.any():
+            observed_red, observed_blue = float(observed[red].mean()), float(observed[blue].mean())
+            predicted_red, predicted_blue = float(predicted[red].mean()), float(predicted[blue].mean())
+            colour_difference_error = ((predicted_red - predicted_blue)
+                                       - (observed_red - observed_blue))
+            pass_colour_split = abs(colour_difference_error) < 0.10
+        else:
+            observed_red = observed_blue = np.nan
+            predicted_red = predicted_blue = colour_difference_error = np.nan
+            pass_colour_split = False
+    else:
+        split = observed_red = observed_blue = np.nan
+        predicted_red = predicted_blue = colour_difference_error = np.nan
+        pass_colour_split = False
+    passed = (abs(overall_error) < 0.02 and used_bins > 0 and worst < 0.08
+              and pass_colour_split)
     return {
         "observed_survival": float(observed.mean()),
         "predicted_survival": float(predicted.mean()),
@@ -203,6 +249,14 @@ def validate_selection(model, raw: Table, clean: Table) -> dict:
         "n_validation_bins": used_bins,
         "pass_overall": abs(overall_error) < 0.02,
         "pass_mag_bins": used_bins > 0 and worst < 0.08,
+        "faint_colour_split_bp_rp": split,
+        "observed_survival_red": observed_red,
+        "observed_survival_blue": observed_blue,
+        "predicted_survival_red": predicted_red,
+        "predicted_survival_blue": predicted_blue,
+        "red_minus_blue_error": colour_difference_error,
+        "pass_faint_colour_split": pass_colour_split,
+        "passed": passed,
     }
 
 
@@ -228,6 +282,7 @@ def main():
     clean_path = HERE / "data" / f"cluster_{tag}_cmd_members.csv"
     err_path = HERE / "data" / f"cluster_{tag}_errmodel.npz"
     sel_path = HERE / "data" / f"cluster_{tag}_selection.npz"
+    control_path = HERE / "data" / f"cluster_{tag}_control_field.csv"
     report_path = HERE / "results" / f"cluster_tier2_prep_{tag}.json"
 
     if raw_path.exists() and not args.refresh_gaia:
@@ -249,13 +304,24 @@ def main():
     clean, cut_stats = apply_quality_cuts(raw, c2)
     errmodel = photometric_error_model(clean)
 
-    mags = {"g": np.asarray(raw["phot_g_mean_mag"], float),
-            "bp": np.asarray(raw["phot_bp_mean_mag"], float),
-            "rp": np.asarray(raw["phot_rp_mean_mag"], float)}
-    snrs = {"g": np.asarray(raw["phot_g_mean_flux_over_error"], float),
-            "bp": np.asarray(raw["phot_bp_mean_flux_over_error"], float),
-            "rp": np.asarray(raw["phot_rp_mean_flux_over_error"], float)}
-    colour = np.asarray(raw["bp_rp"], float)
+    if control_path.exists() and not args.refresh_gaia:
+        control = Table.read(control_path, format="csv")
+        print(f"using cached control field: {control_path.name} ({len(control):,} stars)")
+    else:
+        control = fetch_control_field(raw)
+        control.write(control_path, format="csv", overwrite=True)
+        print(f"wrote control field: {control_path.name} ({len(control):,} stars)")
+
+    calibration = Table({name: np.concatenate((np.asarray(raw[name]),
+                                                np.asarray(control[name])))
+                         for name in GAIA_COLUMNS})
+    mags = {"g": np.asarray(calibration["phot_g_mean_mag"], float),
+            "bp": np.asarray(calibration["phot_bp_mean_mag"], float),
+            "rp": np.asarray(calibration["phot_rp_mean_mag"], float)}
+    snrs = {"g": np.asarray(calibration["phot_g_mean_flux_over_error"], float),
+            "bp": np.asarray(calibration["phot_bp_mean_flux_over_error"], float),
+            "rp": np.asarray(calibration["phot_rp_mean_flux_over_error"], float)}
+    colour = np.asarray(calibration["bp_rp"], float)
     thresholds = {"g": c2.min_flux_snr_g, "bp": c2.min_flux_snr_bp,
                   "rp": c2.min_flux_snr_rp}
     selection = selmod.build(mags, colour, snrs, thresholds, verbose=True)
@@ -272,11 +338,14 @@ def main():
         "n_hr23": len(members),
         "n_gaia_crossmatch": len(raw_all),
         "n_g_le_18": len(raw),
+        "n_control_field": len(control),
+        "n_selection_calibration": len(calibration),
         "n_clean": len(clean),
         "quality_cut_stats": cut_stats,
         "selection_validation": validation,
         "files": {"raw": raw_path.name, "clean": clean_path.name,
-                  "errmodel": err_path.name, "selection": sel_path.name},
+                  "errmodel": err_path.name, "selection": sel_path.name,
+                  "control_field": control_path.name},
     }
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
                            encoding="utf-8")
