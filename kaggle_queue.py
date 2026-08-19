@@ -50,9 +50,15 @@ QUEUE = HERE / "kaggle_queue.txt"
 DONE = HERE / "logs" / "kaggle_queue_done.txt"
 LOCK = HERE / "logs" / "kaggle_queue.lock"
 POLL_SECS = 60
-# 免費 CPU notebook 的執行時間上限一般約 9-12 小時，留一點餘裕就中止輪詢
-# （不強制砍 kernel，只是本地停止等待，之後可以再手動 pull）。
-MAX_WAIT_HOURS = 11
+# 免費 CPU notebook 的執行時間上限文件說約 9-12 小時，但 2026-08-19 實測
+# --refines 3,3,3 的 headline recipe 單次重複跑了 62544-62604 秒
+# （~17.4 小時）才 COMPLETE——原本設 11 小時太保守，導致本機輪詢器在
+# kernel 快完成前就放棄，差點漏接 4 個已經算完的結果（靠人工事後查證
+# 才補救回來，見 check_status_once() 呼叫處的說明）。調高到 20 小時，
+# 並且逾時放棄前一律最後補查一次狀態、COMPLETE 就照樣 pull，兩道防線
+# 一起降低漏接風險（不強制砍 kernel，只是本地停止等待，逾時後仍可以
+# 再手動 pull）。
+MAX_WAIT_HOURS = 20
 # dataset 掛載時序不穩，偵測到那個特定失敗模式就重推 kernel，
 # 間隔遞增（不是猜一個固定等待時長，見 is_mount_race_failure 的說明）。
 BACKOFFS = [60, 120, 240, 480]
@@ -323,8 +329,23 @@ def main() -> None:
 
             elapsed_h = (time.time() - slot["t0"]) / 3600
             if elapsed_h > MAX_WAIT_HOURS:
-                mark_done(slot["item"]["label"], "timeout",
-                         time.time() - slot["t0"], name)
+                # 2026-08-19 教訓：這個 recipe（--refines 3,3,3）單次重複
+                # 實測跑了 62544-62604 秒（~17.4 小時）才真的 COMPLETE，
+                # 遠超 MAX_WAIT_HOURS=11——本機輪詢器直接放棄不拉結果，
+                # 差點漏接 4 個已經算完的 kernel（rep5-8），只是剛好人工
+                # 事後查證才發現。逾時放棄前，最後再查一次狀態，COMPLETE
+                # 就照正常流程 pull，不要平白丟掉可能剛好算完的結果。
+                final_status = check_status_once(slot["kid"], envs[name])
+                if final_status is not None:
+                    pull(slot["kid"], slot["item"]["label"], envs[name])
+                    mark_done(slot["item"]["label"], final_status,
+                             time.time() - slot["t0"], name)
+                    print(f"[{datetime.now():%H:%M:%S}] [{name}] "
+                          f"{slot['item']['label']} 逾時前最後一查，其實已經"
+                          f"結束：{final_status}，已補拉結果", flush=True)
+                else:
+                    mark_done(slot["item"]["label"], "timeout",
+                             time.time() - slot["t0"], name)
                 slots[name] = None
                 continue
 
