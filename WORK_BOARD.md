@@ -170,7 +170,7 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 | `system_stellar_mf_doc`（D14） | 在 `PAPER_OUTLINE.md` 與 `pipeline/joint_fit.py`／`fit_real.py` 相關函式註解裡加一句話，明確說明目前 `alpha`／`binary_fraction` 對應 system MF 還是 stellar MF 空間、合成星團生成邏輯的抽樣順序 | 文件與程式碼註解讀起來能直接回答「這個 alpha 是哪種 MF」，不需要回頭推導程式邏輯才能確認 |
 | `stick_out_fraction_constraint`（D13，成本高，建議先評估） | 這個任務會牽動 `pipeline/joint_fit.py` 核心概似函數，不建議直接動手改——先寫一份成本評估（要新增什麼似然項、`f_bin` 與 alpha 的簡併目前實際有多嚴重、值不值得為了這個投入架構層級改動），放進 `docs/planning/` 討論後再決定要不要真的做 | 有一份明確的成本/效益評估文件，使用者或後續 session 能據此決定要不要排進時程 |
 
-**另外**：`WORK_BOARD.md` 前面「PDMF → IMF 第 5 步（N-body）」條目的做法設想（目前偏向「直接模擬＋等第 2 步結果再定初始條件」）建議更新為 **Hobart et al. 2026 的模擬器路線**——用中等規模的 N-body 模擬網格（不需要到他們的 550–942 次，先抓幾十到百來次評估可行性）訓練一個機器學習模擬器（Python 生態可用 `scikit-learn` 的 `GaussianProcessRegressor`，或找 `AUTOEMULATE`（Stoffel et al. 2025）本身是否能裝），再用既有的 `emcee` 或改用 HMC 套件（如 `numpyro`）抽初始條件的後驗分布，取代暴力網格搜尋（他們自己算過暴力法對這個維度的參數空間要一個世紀）。這個做法特別適合我們的算力限制（單台 ARM64 8 核桌機），是這次核對文獻後最值得直接採用的具體方法論升級，不是另開新工作項，是替換第 5 步原本「正式模擬」的做法本身。
+**另外**：`WORK_BOARD.md` 前面「PDMF → IMF 第 5 步（N-body）」條目的做法設想（目前偏向「直接模擬＋等第 2 步結果再定初始條件」）建議加入 **Hobart et al. 2026 的模擬器路線**當優先評估的候選方案——用中等規模的 N-body 模擬網格（不需要到他們的 550–942 次，先抓幾十到百來次評估可行性）訓練一個機器學習模擬器（Python 生態可用 `scikit-learn` 的 `GaussianProcessRegressor`，或找 `AUTOEMULATE`（Stoffel et al. 2025）本身是否能裝），再用既有的 `emcee` 或改用 HMC 套件（如 `numpyro`）抽初始條件的後驗分布，取代暴力網格搜尋（他們自己算過暴力法對這個維度的參數空間要一個世紀）。這個做法概念上適合我們的算力限制（單台 ARM64 8 核桌機），但實際可行性（訓練資料要多少組模擬才夠、模擬器預測誤差多大）還沒驗證過，先當第 5 步「正式跑」設想中優先評估的候選方案，不是已確定要採用的定論，也不是另開新工作項，是補充第 5 步原本「正式模擬」規劃的一個選項。
 
 ## 待認領工作：Coma Berenices（Melotte 111）Tier 1 起步（2026-08-19，見 `docs/planning/PLAN_多星團擴展.md` 第五、七節、`docs/planning/PDMF_TO_IMF_PLAN.md` 第八節分層協定）
 
@@ -183,4 +183,4 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 4. 仿 `scripts/multicluster/cluster_imf_tier1.py`（NGC 3532／Praesepe 已用過的同一套腳本）跑 Tier 1（誤差核算框架 + 動力學年齡 + 徑向 α(r) 診斷），注意 `LIMITATIONS.md` D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆偵測、選擇函數紅藍分色檢查缺失等）在套用到新星團前要先確認有沒有修好，沒修好就要在 Coma Ber 這輪順手修，不要讓已知 bug 傳播到新星團。
 5. 開始前先在 `WORK_BOARD.md` 加一行認領，避免跟其他 session／協作者重工。
 
-**驗收標準**：Coma Ber 交出跟 `PDMF_TO_IMF_PLAN.md` 第八節表格同樣結構的誤差預算表（原始 PDMF±統計誤差、動力學校正項或上限估計、其餘系統誤差），且頭條 alpha 與 Kraus & Hillenbrand (2007)／Tang et al. (2019) 的既有測定值做過對照（一致或不一致都要交代量級與可能原因，不是只列數字不解讀）。
+**驗收標準**：Coma Ber 交出跟 `PDMF_TO_IMF_PLAN.md` 第八節表格同樣結構的誤差預算表（原始 PDMF±統計誤差、動力學校正項或上限估計、其餘系統誤差），且頭條 alpha 與 Kraus & Hillenbrand (2007)／Tang et al. (2019) 的既有測定值做過對照。**對照前必須先讀這兩篇原文，核對並列出雙方的質量範圍、成員樣本定義、空間涵蓋範圍、完整度、聯星處理方式、PDMF 定義是否一致**——口徑不同就要先在同一個質量範圍/樣本定義下重新對齊才能比較 alpha，不能直接拿不同口徑的數字並排；一致或不一致都要交代量級與可能原因，不是只列數字不解讀。
