@@ -304,7 +304,23 @@ def main():
     ap.add_argument("--model-seed", type=int, default=None,
                     help="改掉擬合模型的共用亂數種子。"
                          "用來判定 S1 的殘餘偏差是不是蒙地卡羅產物")
+    ap.add_argument("--dav-distribution", default="lognormal",
+                    choices=["lognormal", "trunc_exp"],
+                    help="差異消光的分布形式（見 LIMITATIONS.md C5）。"
+                         "預設 lognormal 與原本行為一致。設在 base 上，"
+                         "透過 make_fake()/with_observations() 的淺複製"
+                         "自動傳給注入與擬合兩側，不需要另外改動")
+    ap.add_argument("--tag", default="", help="輸出檔名後綴，避免覆蓋"
+                     "results/injection_recovery.npz（跟 fit_real.py／"
+                     "inject_lowmass.py 同款式，見 LIMITATIONS.md D6："
+                     "固定檔名被重跑覆寫過，這裡原本沒有這個防呆）")
     args = ap.parse_args()
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
+    if args.dav_distribution != "lognormal" and not args.tag:
+        ap.error("--dav-distribution 不是 lognormal 時必須給 --tag，"
+                 "避免覆寫 results/injection_recovery.npz（A1 統計誤差 "
+                 "0.144 的來源檔案，見 LIMITATIONS.md D6 記錄過的同類事故）")
     n_proc = args.procs or (os.cpu_count() or 1)
     want = [s.strip().upper() for s in args.scenarios.split(",")]
 
@@ -324,6 +340,9 @@ def main():
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0   # 測流程本身，關掉先驗
 
     base = joint_fit.JointModel(cfg, color[ok], mag[ok], grid, errmodel, dm)
+    base.dav_distribution = args.dav_distribution
+    if args.dav_distribution != "lognormal":
+        print(f"差異消光分布形式改用 {args.dav_distribution}（C5 系統誤差比較）")
     if args.model_seed is not None:
         # 擬合模型的共用亂數是固定的一批，n_synthetic 有限就會留下一個
         # 與參數無關的蒙地卡羅偏移。換種子重跑，偏差若跟著變，
@@ -421,13 +440,19 @@ def main():
                   f"{b.std():>9.3f}")
         print("\n判讀：若偏差隨 dav 平滑變化且外推到 dav=0 時趨近 0，")
         print("      代表 +0.178 只是曲線在 dav=0.30 這一點的值，")
-        print("      與選擇函數的 −0.178 相等純屬巧合（因為 0.30 是我挑的）。")
+        print("      與選擇函數的 -0.178 相等純屬巧合（因為 0.30 是我挑的）。")
 
-    np.savez(HERE / "results" / "injection_recovery.npz",
+    out_path = HERE / "results" / f"injection_recovery{args.tag}.npz"
+    # dav_distribution 一起存進檔案（2026-08-19 CodeRabbit PR #63）：
+    # 它會改變假資料的生成方式，兩種分布跑出來的結果不可互比，但檔名只由
+    # --tag 決定。不存的話，事後拿到 npz 無從判斷這批是 lognormal 還是
+    # trunc_exp 算的——C5 這個比較的重點正是兩者的差，認錯來源就整個作廢。
+    np.savez(out_path,
              theta_true=THETA_TRUE,
+             dav_distribution=args.dav_distribution,
              **{k.replace("@", "_at_").replace(".", "p"): v
                 for k, v in results.items()})
-    print("\n寫入 results/injection_recovery.npz")
+    print(f"\n寫入 {out_path}")
 
 
 if __name__ == "__main__":
