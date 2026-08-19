@@ -641,13 +641,23 @@ M45 的差距：
 **後果**：兩套模型一致不代表沒有共同偏差（見 C1）。現有結果沒有被污染的
 證據，只是還沒證實「換了也一樣」。
 
-### D2 未做過敏感度測試的設定（尚無認領工作）
+### D2 未做過敏感度測試的設定（**部分進行中，2026-08-19**，見下方）
 
 **問題**：`pca_dims` 本身（非開關）、`stars_per_cluster`、`clustering_method`、
 `inner_loop_runs`、`hess_color_range`／`hess_mag_range`、BP 訊噪比門檻 20
 這個值本身、成員機率門檻對 IMF 的影響。
 
 **後果**：這些設定的敏感度未知。
+
+**2026-08-19 進度**：新增 `scripts/diagnostics/sensitivity_sweep.py`，示範
+`membership_threshold`（重新套用 `baseline.dat` 門檻 -> 重跑第 2/3 步 ->
+config C 前向模型量 alpha）與 `stars_per_cluster`（需重跑 pyUPMASK 聚類，
+腳本先做可行性檢查）兩個影響面最廣的設定。流程本身已用小規模參數驗證可
+執行，**但還沒有真正的敏感度數字**——完整掃描需要原始 Gaia 查詢 CSV，這台
+機器當時沒有，補齊依賴（clone `github.com/helmet-png/gaia-dr3-export`）後
+重抓時 ESA Gaia TAP 封存站連續回應異常（HTTP 500、逾時），懷疑是服務端
+暫時性問題。`stars_per_cluster` 則受限於這台機器沒有 `pyUPMASK/`，腳本
+確認會誠實回報做不到、不編造數字。詳細下一步見 `WORK_BOARD.md` D2 那行。
 
 ### D3 主序轉折點截斷對老星團會變成真限制（尚無認領工作）
 
