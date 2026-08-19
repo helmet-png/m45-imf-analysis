@@ -107,6 +107,11 @@ def draw_randoms(n: int, rng: np.random.Generator) -> dict:
         "z_av": rng.normal(0, 1, n),    # 差異消光：每顆星的 A_V 偏移
         "z_snr": rng.normal(0, 1, n),   # 訊噪比在關係式周圍的散布
         "u_sel": rng.random(n),         # BP/RP 流量超額那一刀的存活判定
+        # C19 敏感度測試用（2026-08-19 追加，同樣排在最後，前面九組的
+        # 抽取次序完全沒變，舊結果仍然逐位元可重現）：自轉調製／前主序
+        # 光變／黑子造成的額外亮度散布。預設不啟用（JointModel 的
+        # extra_scatter=0），只有明確開啟時才真的用到這組亂數。
+        "z_var": rng.normal(0, 1, n),
     }
 
 

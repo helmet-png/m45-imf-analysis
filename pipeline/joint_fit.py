@@ -74,6 +74,12 @@ class JointModel:
         # 預設 False 與原本行為一致；build_verify_bprperr.py 會把它
         # 打開來跟舊行為 A/B 比較 alpha 有沒有變。
         self.use_native_bprp_err = False
+        # C19：自轉調製／前主序光變／黑子造成的額外亮度散布（星等）。
+        # 模型完全沒有這一項，這個屬性是為了量「有這種未建模的物理時
+        # alpha 會偏多少」的敏感度測試用（見 synthesise() 裡的說明與
+        # LIMITATIONS.md C19）。預設 0.0 = 不啟用，行為與加入前
+        # 逐位元相同。
+        self.extra_scatter = 0.0
         # 共用亂數：整條 MCMC 鏈共用同一批，概似才是參數的確定性函數
         self.draws = draw_randoms(
             self.n_syn, np.random.default_rng(cfg.step1_membership.random_seed))
@@ -301,6 +307,32 @@ class JointModel:
         g += self.dm + self.ext.g * av_i
         bp += self.dm + self.ext.bp * av_i
         rp += self.dm + self.ext.rp * av_i
+
+        # C19 敏感度測試：自轉調製／前主序光變／黑子造成的額外亮度散布。
+        # 模型本身完全沒有這一項（見 LIMITATIONS.md C19），這裡不是要
+        # 「把它建模進去」，而是要量「真的存在這種未建模物理時，alpha
+        # 會被推多少」——掃過幾個散布量級跑注入回收，得到敏感度曲線。
+        #
+        # **刻意用同一個 z_var 加到三個波段**（消色差、純垂直方向的
+        # CMD 模糊化），不是三個波段各抽一次：黑子/自轉調製的實際效應
+        # 確實有顏色相依（變暗時偏紅），但那需要多一個「顏色振幅比」
+        # 參數，而這個測試要回答的是「光度散布本身對冪律 MLE 的影響」——
+        # IMF 斜率是從光度分布量出來的，垂直方向的模糊化才是主效應。
+        # **這個簡化是已知限制，不是疏漏**：這條敏感度曲線只涵蓋消色差
+        # 那一半，顏色方向的效應沒有測到，解讀時不能宣稱涵蓋全部。
+        #
+        # 加在測光誤差**之前**：光變是天體本身的亮度變化，Gaia 的測光
+        # 誤差是在那之上再疊加的觀測誤差，次序反過來在物理上說不通
+        # （雖然兩個都是高斯、對最終散布量級的影響相同，但選擇函數與
+        # g_faint 截斷是對「觀測到的星等」作用的，次序會影響哪些星被
+        # 截掉，所以不是純粹的形式問題）。
+        extra_scatter = getattr(self, "extra_scatter", 0.0)
+        if extra_scatter > 0:
+            dvar = d["z_var"][:n] * extra_scatter
+            g += dvar
+            bp += dvar
+            rp += dvar
+
         g += d["z_g"][:n] * _interp_err(g, self.errmodel, "e_g")
         # **已知現役缺陷**：用 G 查 BP/RP 的誤差。同一個 G 之下紅星的 BP
         # 暗得多，用 G 查等於用一個比真實 BP 星等亮的值去查，會低估紅星
