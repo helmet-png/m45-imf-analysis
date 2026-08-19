@@ -76,10 +76,14 @@ def main():
     ap.add_argument("--trials", type=int, default=2)
     ap.add_argument("--trial-offset", type=int, default=0,
                     help="試驗次數的起始索引偏移（假資料種子 = 7000+37*(t+offset)，"
-                         "擬合種子 = 4000+11*(t+offset)）。用來把同一組 --trials N "
-                         "拆到不同機器/帳號各跑一部分（例如 3 個帳號各跑 --trials 1 "
-                         "搭配 --trial-offset 0,1,2），結果沿 axis=0 串接即等於一次"
-                         "跑完。預設 0，不影響既有行為（比照 fit_real.py 的"
+                         "擬合種子 = 4000+11*(t+offset)）。只吃單一整數，不接受逗號"
+                         "清單。用來把同一組 --trials N 拆到不同機器/帳號各跑一部分："
+                         "3 個帳號各跑一次時，是各自下 --trials 1 --trial-offset 0 / "
+                         "1 / 2 三道獨立指令。**每個分片必須配一個唯一的 --tag**"
+                         "（例如 _p6b_v2_t0 / _t1 / _t2）——輸出路徑只由 --tag 決定，"
+                         "共用同一個 --tag 的分片會互相覆寫，atomic_savez() 不會幫忙"
+                         "合併。全部跑完後把各檔案依 offset 由小到大沿 axis=0 串接，"
+                         "即等於一次跑完。預設 0，不影響既有行為（比照 fit_real.py 的"
                          "--repeat-offset，見 PR #55）")
     ap.add_argument("--refines", default="3")
     ap.add_argument("--dav-max", type=float, default=0.6)
