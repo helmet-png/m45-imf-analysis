@@ -57,7 +57,7 @@ kaggle_accounts.json
 # ============================================================
 # 第三方原始碼：用 clone 取得，不納入本 repo
 # ============================================================
-# pyUPMASK 來自 https://github.com/msl/pyUPMASK
+# pyUPMASK 來自 https://github.com/msolpera/pyUPMASK
 # 我們對它的修改記錄在 README.md，不直接夾帶對方的程式碼
 pyUPMASK/
 
