@@ -1,203 +1,200 @@
 # 專案現況與交接
 
-**下一輪對話請先讀這份，再依需要讀下面列的檔案。**
+**下一輪對話請先讀這份，再依需要讀 `WORK_BOARD.md`（逐日詳細紀錄）、
+`LIMITATIONS.md`（已知限制）、`docs/planning/PDMF_TO_IMF_PLAN.md`（目前
+主線的完整規劃）。這份文件只給「現在是什麼狀態、接下來能做什麼」，細節
+一律去讀上面三份，不要只憑這裡的摘要動手。**
 
-最後更新：2026-08-04
+最後更新：2026-08-15（x64 協作機，Yu Tung Lan，**交接給新機器 Acer AI 16**）
 
 ---
 
 ## 一句話現況
 
-五步 pipeline 跑通、兩個文獻缺口的初步結果已拿到，但**方法學還沒定案**：
-前向模型漏了兩個效應，各自讓 α 偏 0.18 且方向相反、剛好互相抵消。
-兩個都補上並重測之前，任何 IMF 數字都不能定案。
+五步 pipeline 早就跑通。`p2_final2` 前向模型頭條數字目前**卡在重跑一半**：
+精修 bug／金屬量先驗修好後的乾淨版本（`p2_final2_v3`）10 次重複裡，5 次
+已經在 Kaggle 端跑完並拉回保存（[PR #57](https://github.com/helmet-png/m45-imf-analysis/pull/57)，
+`α` 暫時平均 2.379），但**還沒有最終合併檔案，不可引用**。跟表 4 穩健性
+相關的 P9a-redo v2／P9c v2 已經定案（見下方 A4）。PDMF→IMF 主線
+（`docs/planning/PDMF_TO_IMF_PLAN.md`）仍是專案重心，**第 2 步
+（`radial_r1/r2/r3/rall`）依然是最大瓶頸**，只跑完一個單次無誤差棒的
+初步方向數字（`radial_r1_prelim`）。
 
 ---
 
-## 研究目標（已定案，未變）
+## PDMF → IMF 五步進度（完整規劃見 `PDMF_TO_IMF_PLAN.md` 第五節）
 
-填補兩個經查證確認的文獻缺口：
-
-1. **雙星比例算出來卻沒接回 IMF**（Cordoni et al. 2023 對 78 個疏散星團
-   量了雙星比例，質量函數計算完全沒用上）。
-2. **沒人把不同雙星判定法在同一星團上互比**（我們做了四種，兩兩重疊最高 18%）。
-
-上位問題（教授的框架）：IMF 是否普適？切入角度是「方法選擇能製造多大的差異」。
-
----
-
-## 三條絕不能違反的原則
-
-1. **先建立比較基準，再解讀差異。** 犯過的十個錯裡有八個源於此。
-2. **不能用對照目錄調自己的超參數。**
-3. **分支規則必須是資料的函數，不是對特定天體既有認知的函數。**
-
-新增第四條，2026-08-04 起：
-
-4. **任何搜尋範圍的邊界都要先確認沒被貼上。** 這個坑已經踩了四次：
-   金屬量先驗上界 0.25、切半實驗的網格窗（20 個半樣本有 7 個貼牆）、
-   S4 的 A_V 下界、S4 的 dav 上界。貼牆代表答案是被邊界決定的。
-
----
-
-## 2026-08-04 推翻的兩件事
-
-### 一、「2,000 格被當成獨立證據」這個診斷不成立
-
-原本的計畫是改用無分箱概似。前提錯了：分箱是**有損壓縮**，
-格距趨近零時分箱 Poisson 概似會收斂到無分箱概似，
-所以無分箱是資訊量**最大**的那一端，不是最小的。
-
-實測（`bin_scaling_test.py`，結果在 `results/bin_scaling.npz`）：
-
-| | σ_alpha | σ_MH |
+| 步驟 | 狀態 | 備註 |
 |---|---|---|
-| 120 格 | 0.0666 | 0.0115 |
-| 500 格 | 0.0409 | 0.0085 |
-| 2,000 格（正式用） | 0.0299 | 0.0050 |
-| 8,000 格 | 0.0218 | 0.0050 |
-| 無分箱 KDE（Scott） | 0.0574 | 0.0061 |
-
-σ 對格子數的冪次是 **−0.18 / −0.22**，不是「灌水」預測的 −0.50；
-而且無分箱 KDE 只有 1,078 項、不可能重複採計，σ_MH 卻與分箱一樣（0.0061 vs 0.0050）。
-**無分箱概似不會解決過度自信，還會多引進帶寬這個旋鈕**
-（帶寬 0.15→0.30 讓 α 峰位從 1.762 跑到 2.391，跨度 0.63）。
-
-**過度自信是真的，但成因是模型設定錯誤。** 證據：把格子數從 2,000 換成 8,000
-（沒有物理意義的選擇），MH 中心值從 0.180 移到 0.130；跨全部格數的中心值跨度
-是宣稱誤差的 **24 倍**，α 是 **30 倍**。
-
-### 二、可辯護的格子數區間
-
-下界：格子不能寬過雙星序偏移 0.753 星等 → 星等方向至少 46 格。
-上界：模型每格的合成星數不能太少，否則概似被模型自己的取樣雜訊主導。
-n_synthetic = 40,000 時，2,000 格 = 每格 20 顆，已在邊緣；8,000 格只剩 5 顆。
-**可辯護區間約 500–2,000 格；要把區間拉寬必須提高 n_synthetic。**
+| 第 1 步：文獻基準線（Li+2026） | **完成** | Δα=0.076（文獻公式代入值） |
+| 第 2 步：前向模型逐半徑重跑 α(<r) | **仍是瓶頸**——只有 `radial_r1_prelim`（單次重複、單階精修，2026-08-15，方向數字 alpha=2.10，非最終值）跑完，`radial_r2/r3/rall` 都還沒開始 | 需要用修正後的 `--configs C` 跑（見 `queue.txt`／CodeRabbit PR #53 review 的備註，之前漏帶過一次） |
+| 第 3 步：LIMEPY 多質量平衡模型 | **完成並合併**（PR #41） | King 模型 reduced χ²=0.75，潮汐半徑外估計還有 14.4 M☉（3.2%）。仍沒有第 2 步的 α(<r) 可交叉驗證 |
+| 第 4 步：放大搜尋半徑到 8–17° | 卡住，等第 2 步結果 | 不用現在做 |
+| 第 5 步：N-body（Converse & Stahler 2010） | 探索性 pilot 已完成，方向與觀測質量分層一致，非正式結果 | 正式校準版一樣等第 2 步 |
 
 ---
 
-## 模型缺的兩個效應（各約 0.18，方向相反）
+## 這次（x64，2026-08-13～15）做的事總覽
 
-用注入回收測試量出來（`injection_recovery.py`）。α 偏差：
+### 1. Kaggle 多帳號派工：headline 重跑卡了兩天，剛發現有進度沒人拉
 
-| 情境 | α 偏差 | 扣掉對照組 |
+- 帳號池目前有 7 個（見下方「Kaggle 帳號」一節），`kaggle_accounts.json`
+  **本機檔案、gitignored，不會跟著 git pull 過去新機器**。
+- `p9a_redo_v2`／`p9c_redo_v2`（表 4 穩健性檢驗）**已經定案**：兩者一起
+  確認「跨 isochrone 年齡穩健性」主張不成立（PARSEC 108.0 Myr vs MIST
+  54.1 Myr，α 差 1.9 倍合併標準誤），見 `LIMITATIONS.md` A4。
+- headline `p2_final2_v3`（`--repeats 10 --refines 3,3,3`）單一 kernel
+  在 Kaggle 免費 session 上限內跑不完（`p2-final2-v3-fixed` 跑 11.4 小時
+  只完成 1/10 次重複就被系統取消）。**PR #55**（`claude/fit-real-repeat-offset`，
+  **還沒合併**）加了 `--repeat-offset` 旗標，可以把 `--repeats N` 拆到多台
+  機器/帳號，各跑一部分、用不同種子，結果串接起來等於一次跑完。
+- **2026-08-15 發現**：有人（可能是同學的 session）已經用這個未合併的
+  分支把 headline 拆成 5 個 kernel（`p2-final2-v3-rep0`～`rep4`，各
+  `--repeat-offset 0,1,2,3,4`），派給 5 個帳號，**Kaggle 端全部
+  COMPLETE**，但沒人拉回來合併，本機也完全沒有這些檔案（一查才發現，
+  不是猜的——直接用 Kaggle API `kernels_status()`／`kernels_output()`
+  查證）。已經拉回來存進 **PR #57**（`claude/headline-partial-reps`），
+  避免 kernel 過期後資料遺失。**還差 `--repeat-offset 5,6,7,8,9` 這 5 次
+  重複才是完整的 10 次**，10 個 `rep*.npz` 的 `C` 陣列沿 axis=0 串接
+  存成 `results/fit_real_p2final_v3.npz` 才是正式 headline 數字。
+- `p6b_inject_lowmass_v2`、`verify_bprperr_off_v2`、`verify_bprperr_on_v2`
+  三項**都還是失敗狀態**（`CANCEL_ACKNOWLEDGED`），沒人成功重推過。
+
+### 2. N-body pilot、LIMEPY 第 3 步
+
+都已完成並合併（見 `WORK_BOARD.md` 2026-08-13 相關行），這裡不重複。
+N-body 需要 x64 機器（PeTar/mcluster 編譯環境），**新機器如果不是 x64，
+這條路線的後續模擬要另外處理**；LIMEPY 純 Python，架構無關。
+
+### 3. A6（白矮星/RV 污染排除）、C3/C18/C20/D9 等 B/C/D 類補齊
+
+全部完成，見 `LIMITATIONS.md` 對應條目與 `WORK_BOARD.md` 2026-08-13 那
+一批紀錄，不重複列。
+
+### 4. 根目錄腳本整理
+
+`PR #56` 已合併，散落的 `check_*.py`／`build_*_grid.py` 分類進
+`scripts/diagnostics/`／`scripts/data_prep/`。刻意沒動 `fit_real.py`
+系列、`kaggle_*.py`、`run_queue.py`／`queue.txt`（原因見 PR body）。
+
+---
+
+## 目前開著、還沒處理的 PR
+
+| # | 標題 | 狀態 |
 |---|---|---|
-| S1 對照（注入＝擬合） | −0.050 | — |
-| S2 漏掉差異消光（dav=0.30） | +0.128 | **+0.178** |
-| S3 漏掉測光品質選擇函數 | −0.228 | **−0.178** |
-| S3F 選擇函數補上 | +0.017 | 0.000（修好了） |
-| S4 差異消光放自由 | −0.050 | 0.000（修好了） |
-
-**兩個偏差幾乎完全抵消。所以只修一個，會比兩個都不修更糟。**
-
-### 選擇函數（已實作，`pipeline/selection.py`）
-
-第 2 步的品質篩選把 1,297 顆砍到 1,078，**不是隨機砍**：
-G≥17 的紅星被砍 59%、藍星只有 20%，落差 0.388 幾乎全來自 BP 訊噪比那一刀。
-
-試過三種形式，前兩種被事前訂好的驗收標準否決：
-- 一維（G 星等）完整度曲線 → 殘留顏色相依 0.388，否決
-- 改用 BP 星等當自變數 → 殘留 0.378，否決
-  （因為同一 BP 星等下紅星的訊噪比只有藍星的 0.70–0.81 倍）
-- **訊噪比 = 星等的非參數函數 + 顏色線性項，再原封不動套用那三把刀** → 通過
-
-驗收：整體 +0.018（<0.02）、逐星等最大 0.048（<0.08）、
-G≥17 紅藍落差 −0.362 vs 觀測 −0.388（誤差 <0.10）。
-
-**沒有新增自由參數**，係數由資料迴歸決定。
-
-### 差異消光（實作中，`dav` 為選配的第七維）
-
-- 截斷常態 `max(0, A_V + dav·z)` **不能用**：截斷讓實際平均變成兩者的混合，
-  A_V 被推到 0 貼牆、dav overshoot 到 0.45。實測 A_V=0.15/dav=0.30 時
-  截斷常態實際給出 mean 0.210、sd 0.223。
-- 已改用**對數常態**：平均恰為 A_V、標準差恰為 dav、恆正。A_V 的偏差
-  從 −0.150 降到 −0.050 且離開牆。
-- **但 dav 自己仍不可測**：3 次裡 2 次貼在上界 0.600。
-  正在以 n_synthetic = 120,000 與放寬到 1.2 的網格重測，判定是本質不可測
-  還是蒙地卡羅雜訊。
-- **結論（暫）：dav 必須放進模型（否則 α 偏 0.178），但不能當測量值報告。**
-  A_V 同樣降級成 nuisance。α 不受這條簡併影響 —— 因為 α 約束的是
-  主序上的星數分布，而簡併發生在「序列位置」那條稜線上。
-
----
-
-## α 的統計誤差：三種方法收斂到約 4 倍
-
-| 方法 | σ_α |
-|---|---|
-| 概似曲率（模型自己宣稱） | 0.030 |
-| 切半實驗 | 0.106 |
-| 注入回收（最乾淨，不受貼牆影響） | 0.144 |
-
-**概似過度自信約 4 倍。** 注意這三個都只是**統計**誤差，
-系統誤差（格子數、isochrone 模型、成員門檻、品質切門檻）要另外掃、平方相加。
-
-補上選擇函數後散布從 0.000 變成 0.144，原因是實質的：
-品質篩選砍掉的正是最能約束 α 的暗紅星，舊模型假裝我們有那些星。
-
----
-
-## 關鍵數字（成員判定部分未受影響，仍可引用）
-
-| 項目 | 值 |
-|---|---|
-| 成員數（P ≥ 0.7，G<18） | 1,297 |
-| 測光品質篩選後 | 1,078 |
-| 與 HR23 的 recall | 1.000（930 顆全中） |
-| 真正的判定分歧 | 20 顆（1.7%） |
-| 四種雙星法兩兩重疊 | 最高 18%，多數 2–13% |
-| 質量分層 α(r) | 1.77（0–1°）→ 2.29（3–5.1°） |
-
-**α 的絕對值（傳統 1.980、前向 2.26–2.35）暫時作廢**，
-要等兩個效應都補上後重跑。質量分層是相對比較、系統誤差大致抵消，仍然穩固。
+| [#57](https://github.com/helmet-png/m45-imf-analysis/pull/57) | 拉回 headline p2_final2_v3 已完成的 5/10 次 Kaggle 重複結果 | 這次新開，等 review／合併 |
+| [#55](https://github.com/helmet-png/m45-imf-analysis/pull/55) | `fit_real.py` 加 `--repeat-offset` | 還沒合併，但**已經被拿去用在上面的 headline 拆分派工**——合併前分支上的 code 仍可直接用（worktree `../m45-imf-offset-wt` 已經 checkout 這個分支） |
+| [#54](https://github.com/helmet-png/m45-imf-analysis/pull/54) | D5 補測 + C5 核心程式碼（extinction_form_test） | 待 review |
+| [#45](https://github.com/helmet-png/m45-imf-analysis/pull/45) | [Codex] PDMF-to-IMF LIMEPY / N-body 驗證 | 待 review，跟這裡的 LIMEPY／N-body 工作可能有重疊，合併前先比對 |
+| [#11](https://github.com/helmet-png/m45-imf-analysis/pull/11) | 驗證 NGC 3532 與 Praesepe 多星團通用性 | 開很久了，待 review |
 
 ---
 
 ## 待辦（依優先序）
 
-1. 等 `logs/inject_bignsyn.log`：n_synthetic=120,000 下 S1 的偏差地板與
-   S4 的 dav 是否離開牆
-2. 把選擇函數 + 差異消光同時接上**真實資料**，重測格子數敏感度
-   （判準：中心值跨度要從 24 倍降到跟統計誤差同量級）
-3. 修切半實驗：網格窗放寬到與先驗一致、estimator 從 argmax 換成後驗中位數
-4. 掃過所有分析選擇（格數、Hess 範圍、成員門檻、品質切、isochrone 模型），
-   統計誤差與系統誤差分開報
-5. **同一套系統誤差核算原封不動套到傳統法**，兩者放同一張表（缺口二的核心）
-6. 主樣本從 G<18 換成 G<20（涵蓋率 91.7% → 99.7%，幾乎不花時間）
-7. 開始寫論文
+1. **完成 headline `p2_final2_v3`**：用 `--repeat-offset 5,6,7,8,9` 補滿
+   剩下 5 次重複，跟 PR #57 已拉回的 5 次合併，正式更新
+   `RESULTS_LOG.md`／`LIMITATIONS.md` A1／A2。
+2. **`radial_r1/r2/r3/rall`**：PDMF→IMF 主線最大瓶頸，`radial_r2/r3/rall`
+   完全還沒開始。
+3. 決定 PR #55 要不要合併（現在是「分支上能用但沒進 main」的尷尬狀態，
+   建議先合併，headline 拆分派工才有正式依據）。
+4. 4 個開著的 PR 找時間 review／合併（見上表）。
+5. `p6b_inject_lowmass_v2`／`verify_bprperr_v2` 兩項失敗的 Kaggle 派工，
+   要不要重推、還是移回本機佇列，跟 headline 一樣的判斷（單次 kernel
+   會不會超過 Kaggle 免費 session 上限）。
+6. 其餘不衝突的待認領工作見 `WORK_BOARD.md`「待認領工作：B/C/D 類補齊」表。
 
 ---
 
-## 注入回收測試看不到什麼
+## 交接到新機器（Acer AI 16）的具體 checklist
 
-假資料是同一個生成模型做的，所以它檢驗的是**搜尋與估計量**，不是物理。
-PARSEC 等時線本身的系統誤差永遠測不出來 —— 那要靠換 MIST/BHAC15 對照。
+**這台 x64 機器上有些東西是本機專屬、`.gitignore` 排除、`git pull` 不會
+帶過去的，換機器前要自己決定要不要手動搬：**
+
+1. **`kaggle_accounts.json`**（repo 根目錄，gitignored）：7 個 Kaggle 帳號
+   的 token（`justinlan11`／`teammate2`／`helmetalbert`／`account4`～`7`）。
+   **不要把這個檔案的內容貼進對話或 commit 進 git**——如果新機器要繼續
+   派 Kaggle 工，用安全的方式（USB、密碼管理器等）手動搬過去，或者
+   用同一組 token 重新建立這個檔案。`account4`（`thepisnotsure`）先前
+   两次 smoke test 都 280 秒逾時失敗，不建議繼續用。
+2. **`isochrones/` 底下兩個網格檔案**（不進版控，體積大）：
+   `parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat`、
+   `mist_v1.2_gaiaDR2_logt7.3-8.5_feh-0.5-0.5.dat`——本機 Kaggle 派工需要
+   打包上傳，新機器第一次跑 Kaggle 派工前要確認這兩個檔案存在（沒有的話
+   `kaggle_sync.py` 應該會告訴你怎麼補）。
+3. **本機 git worktree**（只在這台機器的磁碟上，新機器不會有）：
+   - `../m45-imf-offset-wt`（`claude/fit-real-repeat-offset`，PR #55）
+   - `../m45-imf-headline-wt`（`claude/kaggle-headline-infeasible`，已合併，可以直接刪）
+   - 新機器要做同樣的事，用 `git worktree add ../<新目錄> <分支>` 重新建立即可，不用複製。
+4. **`.venv_limepy/`**（LIMEPY 專用，釘 `scipy==1.16.3`）與 `nbody/`（N-body
+   外部工作目錄，在 repo 外面）：新機器要跑 LIMEPY／N-body 才需要，重新
+   建置步驟見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節，不用複製整個
+   目錄。
+5. **這次 session 對主 checkout（`m45-imf-analysis/`）留下的雜項**：
+   `dispatch_new_accounts_tmp.py`、`resume_kaggle_watch_tmp.py`（暫時性
+   監控腳本，非 repo 正式檔案）、`m45-imf-run-p2-final2-v3-rep0.log`、
+   `results/fit_real_p2final_v3_rep0.npz`～`rep4.npz`（已經進 PR #57，
+   本機這幾份是多的，新機器 `git pull` 合併 PR #57 後就有了，這幾個
+   本機檔案不用特別搬）。**這個 checkout 目前還有其他 session／機器
+   未 commit 的修改**（`fit_real.py`、`pipeline/joint_fit.py`、
+   `injection_recovery.py`、`kaggle_queue.txt`——本 session 沒有動它們，
+   不確定是誰的，換機器前建議先確認這些改動有沒有人要 commit，不要用
+   `git checkout --` 之類的指令清掉，除非你確定那是可以丟的）。
+6. **開新機器的第一步**：`git clone` 或 `git pull`，讀這份 `STATE.md`，
+   確認 PR #57／#55 有沒有被合併（若已合併，這份文件的「還差 5 次重複」
+   可能已經有人接手做完，先看 `RESULTS_LOG.md` 最新幾行再決定要不要重做）。
+
+---
+
+## 工作方式要求（沿用不變）
+
+- 先確定方法沒有邏輯問題，再產出最終數據，不要為了交出數字繞過問題。
+- 每次改動都要開分支 `<身分>/<主題>`，走 PR，等 CodeRabbit review 過再合併。
+- 每次算出新結果都要主動同步寫進 `results/RESULTS_LOG.md`／
+  `LIMITATIONS.md`／`WORK_BOARD.md`，不必等使用者要求。
+- 發現任何跟自己無關、正在被其他 session 動的檔案（未提交的修改、
+  暫存檔），不要碰，也不用花時間猜是誰改的，回報就好。
+- 舊結論被推翻時，用附加寫入標記「已作廢，見下一行修正」，不要直接
+  覆寫或刪除舊的行——見 `results/RESULTS_LOG.md`／`WORK_BOARD.md` 的
+  既有寫法。
+- **多台機器/多個帳號同時派工時，動手前先用 API／CLI 查即時狀態**
+  （`kernels_status()`／`kernels_output()`），不要只看本機的
+  `logs/kaggle_queue_done.txt`——這次就是本機紀錄檔過期，導致 5 個已經
+  跑完的 kernel 放了一天多沒人拉回來。
 
 ---
 
 ## 檔案地圖
 
-**必讀**
-- `docs/reports/研究日誌_2026-07-31_08-01.md` — 完整過程、所有數字、十項自我更正
-- `docs/teaching/兩種IMF方法對照.md` — 傳統法 vs 前向模型
-- `README.md` — 每個參數的作用與兩個數值陷阱
+**必讀（比這份新）**
+- `WORK_BOARD.md` —— 逐日詳細紀錄與待認領工作清單，這份文件的完整版
+- `LIMITATIONS.md` —— 全部已知限制，A/B/C/D 嚴重度分類
+- `docs/planning/PDMF_TO_IMF_PLAN.md` —— PDMF→IMF 主線完整規劃與第七節
+  環境建置記錄（LIMEPY／N-body 在 Windows 上的坑都記在這裡）
+- `results/RESULTS_LOG.md` —— 每個結果檔案的索引與一句話結論
+- `KAGGLE_DIAGNOSIS.md` —— Kaggle 掛載路徑 bug／`results/` 目錄 bug／
+  headline 在 Kaggle 上跑不完等基礎設施問題的專門紀錄
 
-**2026-08-04 新增的程式**
-- `bin_scaling_test.py` — 概似 σ 對格子數的依賴（否證了「格子灌水」診斷）
-- `injection_recovery.py` — 注入回收測試（新參數的通行閘）
-- `selection_probe.py` — 追查測光品質篩選真正的自變數
-- `build_selection.py` / `pipeline/selection.py` — 選擇函數的建立與驗證
-- `completeness.py` — 一維完整度曲線（已被選擇函數取代，保留作對照）
-- `check_split_walls.py` — 檢查切半實驗的網格貼牆
+**背景（較舊，仍有效但已不是專案重心）**
+- `PAPER_OUTLINE.md` —— 論文範圍凍結文件、誤差預算表
+- `docs/teaching/` —— 給高中生程度的完整方法論教學（含 PDMF→IMF 教學文件）
+- `README.md` —— 環境建置、每個參數的作用
 
 ---
 
-## 環境（別重新診斷）
+## 環境備忘（別重新診斷）
 
-- ARM64 原生 Python 在 `%LOCALAPPDATA%\Python\pythoncore-3.14-arm64\python.exe`
-- astropy 在 ARM64 裝不起來，已用 `pipeline/table_compat.py` 取代
-- pyUPMASK 仍需 x64
-- 長時間任務用 `Start-Process` 脫離式啟動，**重導向路徑要用絕對路徑**
-  （相對路徑是相對於呼叫端的工作目錄，不是 `-WorkingDirectory`）
-- 模型必須用 Pool 的 initializer 只送一次
+- ARM64 原生 Python 在 `%LOCALAPPDATA%\Python\pythoncore-3.14-arm64\python.exe`，
+  astropy 裝不起來，已用 `pipeline/table_compat.py` 取代。
+- x64 機器 Python 3.14，`astro-limepy` 需要獨立 venv 釘 `scipy==1.16.3`
+  （`.venv_limepy/`，不進版控，見 `PDMF_TO_IMF_PLAN.md` 第七節）。
+- pyUPMASK 仍需 x64。
+- 長時間任務用脫離式背景執行，重導向路徑要用絕對路徑。
+- Kaggle 免費 CPU-only notebook：4 顆虛擬核心（`--procs 4`，不是本機的
+  8 核）、session 上限約 9–12 小時，`--repeats 10 --refines 3,3,3` 這種
+  重設定單一 kernel 跑不完，要用 `--repeat-offset` 拆。
+- 新機器如果架構跟這台不同（不確定 Acer AI 16 是 x64 還是 ARM64），
+  先跑一次 `README.md` 的環境建置章節確認 astropy／pyUPMASK 能不能裝，
+  不要假設跟這台一樣。
