@@ -62,9 +62,14 @@ commit 進 `results/`、`results/RESULTS_LOG.md` 記一行、開 PR。
 ## 待認領工作：PDMF → IMF（2026-08-12，見 `PDMF_TO_IMF_PLAN.md` 完整背景）
 
 第 1、2 步（文獻基準線、前向模型徑向診斷）已在做，見上面的「紀錄」。
-以下第 3–5 步都還沒人認領，且都跟本機佇列不衝突（第 5 步甚至需要
-另一台 x64 機器，本機跑不了）。這三個不是「跑一行指令」等級的任務，
-起手式跟驗收標準寫在下面，實際做法留給認領的人判斷。
+**2026-08-19 更新：第 2 步的四個初步值（r1/r2/r3/rall）都已到齊**，
+下面第 3、4、5 步原本各自標注「等第 2 步結果」的部分現在都有東西
+可以對照了——**但這四個值仍是 `_prelim`（單次重複、單階精修）版本，
+不是最終數字**，下面每一步用到這些數字時都要清楚標注這一點，不要
+當成已經統計上穩健的最終基準線。以下第 3–5 步都還沒人認領，且都
+跟本機佇列不衝突（第 5 步甚至需要另一台 x64 機器，本機跑不了）。
+這三個不是「跑一行指令」等級的任務，起手式跟驗收標準寫在下面，
+實際做法留給認領的人判斷。
 
 **2026-08-12（新機器，x64，Yu Tung Lan）優先度覆核**：使用者要求把
 PDMF→IMF 這條線的優先度調到非 A/B 類項目之前（見 `LIMITATIONS.md`
@@ -79,9 +84,22 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 | 步驟 | 任務（括號＝對應 `LIMITATIONS.md` 條目，全部是 A5） | 優先度 | 起手式 | 驗收標準 | 為什麼 |
 |---|---|---|---|---|---|
-| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數（A5） | **整個建模工作都不用等第 2 步**（不只環境準備——模型輸入是自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱出來的徑向數密度剖面，跟第 2 步的 `radial_r1/r2/r3/rall` 是兩份獨立算出來的東西，不是後者的下游。**唯一用到第 2 步結果的地方是最後一步「驗收標準」**——把 LIMEPY 模型預測的 α(<r) 拿去跟第 2 步觀測到的 α(<r) 對照，但那是整個第 3 步做完後的最後一個動作，不是起手式的前提，而且第 2 步屆時大機率早就跑完了，不會真的卡住。ARM64 已知會壞，這台 x64 機器要先自己測一次，不能假設同樣的 scipy 版本問題） | 正確套件是 `pip install astro-limepy`（**不是** `pip install limepy`，那是同名的問卷調查工具，已踩過這個坑）。**已知環境問題（ARM64 機器上）**：scipy 1.17.1 會讓 `limepy.limepy()` 在 `scipy.integrate.ode`（舊版 API）爆掉，`nsteps=1e6` 改 `int(1e6)` 沒解決，需要在獨立 venv 釘舊版 scipy，或等上游改用 `solve_ivp`——先解決這個才能開始（這台 x64 機器的 scipy 版本不一定一樣，需要先測）。之後要準備逐質量段的徑向數密度剖面（不是現成的 `step5_mf_radial.csv`，那是 alpha 不是密度，需要自己從 `data/cmd_members.csv` 的 ra/dec/mass 重新分箱） | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
-| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數（A5） | **等第 2 步結果**（維持原判斷） | **先等第 2 步（radial 診斷）結果出來再決定要不要投入**——如果 α(<r) 在 r=5° 內已經收斂，這步的急迫性大幅下降。真的要做時起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
-| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線）（A5） | **探索性模擬不用等第 2 步**（第一個 pilot 已經跑完並拿到初步 α(r)，用的初始條件是文獻 Converse & Stahler 2010 的參數，不是第 2 步的觀測數字，所以可以繼續跑更多 pilot／重複次數。**只有「正式校準版」需要第 2 步**——校準版要拿觀測到的 α(<r) 去反推初始質量分層度等參數，這一步定義上就是需要基準線才能做，不是等待造成的延誤） | 編譯與工具鏈已裝好並驗證（見 `nbody_setup/`）。**2026-08-13 已跑第一個 pilot**（400 顆星、270 系統、65% 聯星、Kroupa IMF、質量分層度 0.5、virial 平衡起始、含 BSE 恆星演化，積分 125 Myr，用 `nbody_setup/analyze_alpha_r.py` 分析）：**alpha(r) 從核心 0.879 升到外圍 1.316**，跟 M45 觀測的質量分層方向（核心 1.77 → 外圍 2.29，核心較平）**定性一致**，但這只是**單次、小 N、未校準的示範跑**——用 Kroupa IMF 不是文獻的 lognormal-Salpeter、270 個系統少於文獻最佳擬合的~400 個系統（這個文獻數字本身還沒查證到 Table 1 精度）、沒有潮汐場、只跑一次不是文獻的 25 次平均，數值不能直接引用或跟觀測數字比大小，只能看方向。正式版要等第 2 步基準線出來後才能定初始條件、且要多次重複跑統計誤差。完整記錄見 `PDMF_TO_IMF_PLAN.md` 第七節、`nbody_setup/` | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
+| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數（A5） | **模型本身已完成（2026-08-13，`limepy_multimass.npz`，見 `LIMITATIONS.md` B5）——2026-08-19 更新：驗收標準的最後一步（跟第 2 步 α(<r) 對照）現在可以做探索性比對了**，見下方新增待認領表 `limepy_radial_crosscheck`；**但這只是方向性檢查，用的是 `_prelim` 單次無誤差棒版本，正式驗收（判斷模型是否真的「重現」觀測）要等 `radial_final_reruns` 的有誤差棒版本才算數** | 環境問題已解決（獨立 venv 釘 `scipy==1.16.3` + `astro-limepy`），模型本身不用重做 | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
+| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數（A5） | **2026-08-19 更新：分兩層門檻，只有第一層滿足**——`PDMF_TO_IMF_PLAN.md` 第四節原文是「要等第 2 步證實梯度是真的才投入」，這個條件本身分成 (1) 有資料可看：**已滿足**，`_prelim` 版 α(<r) 到齊（r1(0-1°)=2.10、r2(0-2°)=2.43、r3(0-3°)=2.50、rall(0-5.1°)=2.43）；(2) 梯度統計上證實是真的（不是雜訊）：**還沒滿足**，這四個是單次無誤差棒的初步值，r1→r3 上升後 rall 又降，這個非單調現象本身還不能判斷是真實訊號還是雜訊。**兩份文件（本檔與 `PDMF_TO_IMF_PLAN.md`）在這一點上是一致的：都要求先做下方 `radial_final_reruns` 拿到有誤差棒的版本，才能真的判斷「梯度是否證實為真」，還不能直接投入第 4 步** | 起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
+| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線，**2026-08-19 更新：方法本身建議改採 Hobart et al. 2026 的模擬器路線，見 `PLAN_文獻對照_Hobart2026.md` 第二節 2.5**）（A5） | **探索性模擬不用等第 2 步**（第一個 pilot 已經跑完並拿到初步 α(r)）。**2026-08-19 更新：跟第 4 步同一套兩層門檻**——`PDMF_TO_IMF_PLAN.md` 第五節說「需要先有觀測基準線才有東西可以比」，這個條件的第一層（有基準線可比）**已滿足**（`_prelim` 版四個值到齊），可以拿來做**初步、探索性的校準方向**（見下方 `nbody_prior_from_radial`）；但第二層（基準線本身統計上穩健）**還沒滿足**，正式、投入完整算力的校準版本，仍要等 `radial_final_reruns` 的有誤差棒版本才能做，這一點跟 `PDMF_TO_IMF_PLAN.md` 沒有矛盾 | 編譯與工具鏈已裝好並驗證（見 `nbody_setup/`）。**2026-08-13 已跑第一個 pilot**（400 顆星、270 系統、65% 聯星、Kroupa IMF、質量分層度 0.5、virial 平衡起始、含 BSE 恆星演化，積分 125 Myr）：**alpha(r) 從核心 0.879 升到外圍 1.316**，方向跟 M45 觀測的質量分層方向（核心 1.77 → 外圍 2.29）一致。**2026-08-19 訂正**：這個「方向一致」的比較本身還沒有嚴謹意義——pilot 用的是互斥環帶的 α（`analyze_alpha_r.py` 用 percentile 切三等分），觀測用的是累積 α(<r)（`radial_r1/r2/r3/rall`），兩者定義不同（見下方 `nbody_prior_from_radial` 的說明），在兩邊統一成同一種分箱定義之前，「定性一致」這個講法先降級為「兩條曲線都是遞增的，但嚴格比較還沒做」，不是已確認的一致性。此外單次、小 N、未校準，數值本來就不能直接引用。完整記錄見 `PDMF_TO_IMF_PLAN.md` 第七節、`nbody_setup/` | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
+
+## 待認領工作：第 2 步四項到齊後新解鎖的工作（2026-08-19）
+
+**全部不在本機（ARM64 8 核桌機）跑**——本機佇列（`queue.txt`）留給
+既有排隊項目，這幾項規模較大或需要不同架構／機器，請認領的人在
+自己的機器（x64 協作機、Kaggle、或評估過的雲算力，見
+[雲算力評估](https://claude.ai/code/artifact/8f3b0148-708e-4ddc-a10d-1870dc39ec83)）上跑，不要排進本機的 `queue.txt`。
+
+| 任務 | 起手式 | 驗收標準 | 為什麼現在能做 |
+|---|---|---|---|
+| `radial_final_reruns`（A5，最優先——下面兩項都依賴這個） | 用完整設定重跑四項：`fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final`（r2/r3 比照，半徑範圍改 `0,2`／`0,3`；rall 不帶 `--radius-range`，`--tag _radial_rall_final`）。四項合計單次 prelim 已知耗時 5,298–29,319 秒不等（見 `logs/queue_done.txt`），乘上 5 次重複，四項合計預估數十小時等級，適合排到有很多核心的機器（TWCC／雲端 spot，不是本機） | 四個 `_final` 版本都有統計誤差棒（不是單次無誤差棒），且要明確回答「r3(2.50) > rall(2.43) 這個非單調現象是真實訊號還是統計雜訊」——誤差棒若明顯重疊則是雜訊，若不重疊則是需要解釋的真實現象 | 下面 `limepy_radial_crosscheck` 與「決定要不要投入第 4 步」都需要有統計誤差棒的版本才能下結論，`_prelim` 版本（單次無誤差棒）不夠 |
+| `limepy_radial_crosscheck`（A5、B5，對應第 3 步驗收標準） | 讀 `scripts/diagnostics/limepy_multimass.py` 目前的模型輸出（`results/limepy_multimass.npz`），從擬合出的 King 模型（phi0=3.44、r0=2.50 pc）算出模型預測的 α(<r) 在 r1/r2/r3/rall 對應半徑處的值，跟觀測值（prelim：2.10/2.43/2.50/2.43；建議等 `radial_final_reruns` 的 `_final` 版本出來再做，用有誤差棒的版本比較才有意義）並排比較 | 給出模型預測 α(<r) 與觀測 α(<r) 的逐項對照表，量化兩者差距是否在統計誤差內；若明顯不符，要指出可能原因（King 模型是單一質量分層假設，跟真實分層可能不符） | LIMEPY 模型本身已經擬合完成（2026-08-13），只差這一步比對，是第 3 步唯一剩下的動作 |
+| `nbody_prior_from_radial`（A5，第 5 步「初步校準」，不是正式版） | **開始前先解決一個真的定義不一致的問題**：`fit_real.py --radius-range LO,HI` 算出來的 `radial_r1/r2/r3/rall` 是**累積**α(<r)（0-1°、0-2°、0-3°、全樣本，一層包一層，不是互斥區間）；`nbody_setup/analyze_alpha_r.py` 卻是用 `np.percentile` 切三等分位算**互斥環帶**的 α（0-33%、33-66%、66-100%，各自獨立不重疊）。這兩種是不同的量，不能直接並排比較同一條「α(r)」曲線。**兩個修法選一個，校準目標各自對應，不要混用**：(1) 把 `analyze_alpha_r.py` 的模擬粒子改用累積半徑切法（比照 `radius-range` 的 0-1°/0-2°/0-3° 換算成 pc 後的累積邊界）重新分箱，這種做法的校準目標就是**現成的** `radial_r1/r2/r3/rall`（prelim 或 `_final`）α 值，不用另外算；(2) 把觀測資料也額外用互斥環帶（比照 `analyze_alpha_r.py` 的 percentile 切法）重新分箱一次算出**另一組獨立的**觀測 α，這種做法的校準目標是這組新算出來的環帶 α，**不是**現成的 `radial_r1/r2/r3/rall`（那是累積值，跟環帶模擬結果比會是選項 (1) 沒做完就混用了選項 (2) 的資料）。選定一種、備妥對應的目標值後，設計一組圍繞 pilot 參數（400 顆星、質量分層度 0.5、virial Q=0.5）小幅擾動的網格（例如質量分層度 0.3/0.5/0.7 各跑幾次） | 至少 3–5 組不同初始參數的模擬跑完，且**觀測與模擬用的是同一種半徑分箱定義（累積或互斥擇一，並在結果裡明確標注是哪一種）**，每組跟觀測 α 的擬合優度（例如簡單的殘差平方和）有量化比較，明確標注這是「用 prelim 值做的初步校準方向」不是正式最終校準 | 這是 Hobart et al. 2026 建議的「先用小規模模擬網格摸清方向」路線的起手式，不用等到有大量模擬（他們是 550–942 次）才能開始，先幾組摸清梯度方向即可 |
 
 ## 待認領工作：B/C/D 類補齊（2026-08-13，見上一行紀錄的查證過程）
 
@@ -160,13 +178,14 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 | 2026-08-16 | Claude session（新機器，Acer AI 16，x64） | `radial_r2`（A5，接續 `radial_r1_prelim`，PDMF→IMF 第 2 步最大瓶頸）：本機重跑 | **進行中**（背景執行，預估數小時） | `logs/radial_r2.log`（不進版控），分支 `claude/local-queue-radial` | 這台新機器的 `logs/queue_done.txt` 是空的（gitignored，不會跟著 git pull 過去），**不能直接跑 `run_queue.py`**（會從 `queue.txt` 最上面開始，重跑一堆已經完成且結果已 commit 的舊項目）。改成比對 `results/` 目錄現有的 `.npz` 檔案，確認只有 `fit_real_radial_r1_prelim.npz` 存在，`radial_r2/r3/rall` 都還沒人做，直接照 `queue.txt` 裡的指令單獨執行 `radial_r2`。**第一次嘗試用 Bash 工具的 `run_in_background` 啟動，session 中斷時被連帶砍掉**（只跑了幾秒鐘，log 只有開頭幾行，process 已不存在）——推測是背景行程綁在 agent session 生命週期上，不是真正在 OS 層級脫離。改用 PowerShell `Start-Process`（`-WindowStyle Hidden`，重導向到獨立 log 檔）啟動，這樣產生的行程不掛在任何 shell/agent 行程樹下，理論上能撐過 session 交接；確實撐過本次 session 交接還需要之後驗證。跑完後（`results/fit_real_radial_r2_prelim.npz` 出現）要接著跑 `radial_r3`、`radial_rall`（同樣指令模式，只改 `--radius-range` 與 `--tag`），三個都跑完才能連成 alpha(r) 曲線 |
 | 2026-08-16 | Claude session（新機器，Acer AI 16，x64） | `bhac15_isochrone_test`（C1、D1，B/C/D 待認領工作表） | **卡住，外部服務目前連不上，非本機/程式問題** | 無檔案異動 | 正確下載網址是 `https://perso.ens-lyon.fr/isabelle.baraffe/BHAC15dir/`（`WORK_BOARD.md` 舊條目寫的 `phoenix.ens-lyon.fr/Grids/BHAC15/` 是錯的，靠 WebSearch 才找到正確路徑）。分別用 WebFetch（Anthropic 端網路）與本機 `pipeline.net.get()` 測試連線，兩邊都是連線逾時（不是 SSL 握手失敗，也不是 404），同時測了 `phoenix.ens-lyon.fr` 根網域一樣逾時，但 `google.com` 正常，排除本機網路/DNS 問題，判斷是 ENS-Lyon 那台伺服器目前真的連不上（跟本專案先前遇過的 PARSEC 服務暫時性斷線是同一類狀況）。**尚未寫 `build_bhac_grid.py`**，下一個接手的人先重試連線，通了再繼續，不用重查網址 |
 | 2026-08-19 | Claude session（本機） | 訂正上一行（`radial_r2`）留下的預約式敘述：`radial_r3`／`radial_rall` 其實已經跑完 | **狀態更新，非新工作** | 無檔案異動（純狀態澄清） | CodeRabbit review 提醒上一行只認領了 `radial_r2`，卻在備註承諾「跑完後接著跑 `radial_r3`、`radial_rall`」，其他 session 可能誤以為這兩項還沒人認領而重複啟動。查證 `results/RESULTS_LOG.md`（第 50、51 行）跟本機 `results/` 目錄：`fit_real_radial_r3_prelim.npz`、`fit_real_radial_rall_prelim.npz` 都已存在，是另一台機器（本機 ARM64 8 核佇列，commit `43c8737` 起）稍早／同時完成並已 commit 的結果，不是上一行那台 Acer AI 16 x64 機器跑出來的。**四項徑向診斷（r1/r2/r3/rall）目前全部已有初步值**，不需要任何人再重跑，PDMF→IMF 第 2 步的下一步是等使用者/教授確認方向後，用完整 `--repeats 5 --refines 3,3` 重跑做正式版（見 `results/RESULTS_LOG.md` 第 51 行的說明），不是重跑這四個初步值 |
+| 2026-08-19 | Claude session（本機） | PDMF→IMF 第 2 步（徑向診斷 r1/r2/r3/rall）四項全部完成，確認下游第 3–5 步的探索性工作已解鎖（正式門檻仍受限），安排新解鎖的工作 | **狀態確認＋規劃，未跑任何計算** | `WORK_BOARD.md`（本行＋下方步驟表更新＋新增待認領工作） | 使用者確認 `radial_r1/r2/r3/rall` 四項徑向診斷都已跑完。**這裡指的是既有的 `_prelim` 版本**（單次重複、單階精修：r1=2.10、r2=2.43、r3=2.50、rall=2.43，2026-08-15/16 完成，見 `results/RESULTS_LOG.md`），**不是 `--repeats 5 --refines 3,3` 的正式版——正式版還沒人跑，仍是待認領工作**，下面已列出。既然四個初步值都到齊，第 3、4、5 步原本卡在「等第 2 步結果」的部分現在**有資料可以做探索性對照，但統計上證實梯度為真、可以投入正式工作的那一層門檻還沒滿足**（見下方步驟表逐項說明的兩層門檻），新解鎖的具體工作列在下面步驟表與新增的待認領表，本次核對只更新文件、沒有跑任何計算 |
 | 2026-08-19 | Claude session（本機） | 核對 Hobart, Baumgardt & Sweet (2026)（arXiv:2607.17300，Alpha Persei／Pleiades／Praesepe IMF 論文，方法論與本專案高度重疊）：找落差、回溯他們決策的文獻基礎 | **完成，純文件工作，未跑任何計算** | 新增 `docs/planning/PLAN_文獻對照_Hobart2026.md`（完整比較與文獻回溯）、`LIMITATIONS.md`（新增 D11–D14）、`WORK_BOARD.md`（本行＋下面兩個新表） | 使用者提供 PDF（本機 `Downloads/2607.17300v1.pdf`），用 `pdftotext -layout` 抽全文文字（非圖片辨識，抽到完整正文與參考文獻），逐段核對他們的成員判定／等時線／雙星修正／冪律擬合／N-body 五個步驟跟我們現有方法論的差異，並回溯他們每個關鍵數字（卡方門檻、視差/PM 瀰散、搜尋半徑等）在文中引用的原始依據。**找到 4 個新落差（D11–D14，詳見比較文件第四節）**：低質量段無獨立於等時線的經驗質量-光度校驗、亮端完整度無獨立目錄交叉驗證、`f_bin` 只有 Hess 圖一條觀測制約、system MF／stellar MF 定義未在文件明確標註。**也找到我們方法論優於這篇論文的兩處**（金屬量高斯先驗資料驅動、逐星三法雙星交叉比對），已寫進比較文件，論文寫作時可以直接主張。**N-body 的最大洞見**：他們用「中等規模模擬網格＋高斯過程模擬器＋HMC 抽後驗」取代暴力網格搜尋（他們自己算過暴力法要一個世紀），這正好對應我們算力受限（單台 ARM64 8 核）的處境，建議取代下面 PDMF→IMF 第 5 步原本設想的「直接模擬」做法 |
 
 ## 待認領工作：對照 Hobart et al. 2026 的鞏固工作（2026-08-19，完整比較見 `docs/planning/PLAN_文獻對照_Hobart2026.md`）
 
 | 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |
 |---|---|---|
-| `empirical_ml_relation_test`（D11） | 蒐集公開食雙星質量-光度資料（同一批文獻來源：Torres et al. 2010、Benedict et al. 2016、Iglesias-Marzoa et al. 2017，都可公開取得），仿 `pipeline/step5_imf.py` 的 `assign_masses()` 架構寫一條獨立於任何等時線的經驗質量估計路徑（M_V vs mass 的平滑擬合，方法可參考 Hobart et al. 2026 用的 B-spline + GCV 判準，或用更簡單的多項式/樣條，先求有再求精） | 用這條經驗關係重跑低質量段（<0.5 M☉）alpha，跟 PARSEC／MIST 兩條既有結果放在同一張表比較，量化三者的差異量級 |
+| `empirical_ml_relation_test`（D11） | 蒐集公開食雙星質量-光度資料（同一批文獻來源：Torres et al. 2010、Benedict et al. 2016、Iglesias-Marzoa et al. 2017，都可公開取得），仿 `pipeline/step5_imf.py` 的 `assign_masses()` 架構寫一條獨立於任何等時線的經驗質量估計路徑（M_V vs mass 的平滑擬合，方法可參考 Hobart et al. 2026 用的 B-spline + GCV 判準，或用更簡單的多項式/樣條，先求有再求精）。**這條關係是 M_V（Johnson V 波段）對質量，不是 Gaia G 波段對質量**——Hobart et al. 2026 明確指出兩者不等價，用顏色相依轉換（Riello et al. 2021 的 Gaia EDR3 光度轉換）把 Gaia 觀測轉成 M_V，這一步的轉換方法、消光處理、金屬量涵蓋範圍、未解析聯星處理、誤差傳播都要先定好並記錄下來，不能直接把 M_V-mass 關係套在 Gaia G/GBP/GRP 上 | 先固定 Gaia→M_V 波段轉換方法、消光處理、誤差傳播鏈；再用這條經驗關係重跑低質量段（<0.5 M☉）alpha，跟 PARSEC／MIST 兩條既有結果放在同一張表比較；alpha 差異要拆解成「質量-光度關係本身的差異」跟「波段轉換/金屬量/未解析聯星造成的額外差異」兩部分分別量化，不能混在一起報一個數字 |
 | `bright_end_completeness_check`（D12） | M45 已知最亮成員（Alcyone 等，G~2.85 附近）數量少，查公開 HIPPARCOS 目錄（ESA 1997，可透過 VizieR/Simbad 查詢）確認 `g_bright_limit=4.0` 這條線以上有沒有星團成員被 Gaia 測光品質篩選誤判掉 | 給出「HIPPARCOS 目錄裡、落在 M45 天測範圍內、比 G=4 亮的星」清單，逐顆核對是否都在現有 `cmd_members.csv` 裡且測光正常，或說明為什麼沒有 |
 | `system_stellar_mf_doc`（D14） | 在 `PAPER_OUTLINE.md` 與 `pipeline/joint_fit.py`／`fit_real.py` 相關函式註解裡加一句話，明確說明目前 `alpha`／`binary_fraction` 對應 system MF 還是 stellar MF 空間、合成星團生成邏輯的抽樣順序 | 文件與程式碼註解讀起來能直接回答「這個 alpha 是哪種 MF」，不需要回頭推導程式邏輯才能確認 |
 | `stick_out_fraction_constraint`（D13，成本高，建議先評估） | 這個任務會牽動 `pipeline/joint_fit.py` 核心概似函數，不建議直接動手改——先寫一份成本評估（要新增什麼似然項、`f_bin` 與 alpha 的簡併目前實際有多嚴重、值不值得為了這個投入架構層級改動），放進 `docs/planning/` 討論後再決定要不要真的做 | 有一份明確的成本/效益評估文件，使用者或後續 session 能據此決定要不要排進時程 |
@@ -177,18 +196,34 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 **背景**：`PLAN_多星團擴展.md` 已把 Coma Ber 列為候選星團（動機一：第三個老年齡星團對照；動機二：金屬量接近太陽），但尚未實際起跑。核對 Hobart et al. 2026 時發現這篇論文的引言直接點名 Coma Ber 是「老年齡疏散星團次太陽質量段變平」的代表案例（引用 Kraus & Hillenbrand 2007、Tang et al. 2019），這兩篇文獻值得當作 Coma Ber 的既有 PDMF 基準線（比照 `PDMF_TO_IMF_PLAN.md` 第一步「文獻基準線」的做法）。**這項工作本次核對只做到規劃，沒有實際查詢 HR23 目錄或跑任何 pipeline**，交給認領的 session 執行。
 
+**前置阻擋條件（必須先完成，不能邊做 Coma Ber 邊順手修）**：`LIMITATIONS.md`
+D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆偵測被關掉、選擇
+函數驗證漏掉紅藍分色檢查、SNR 迴歸沒有獨立場星樣本、`--refresh` 遇
+NSS 為 null 會崩潰）**必須先各自獨立認領、修好、補回歸測試，D8 標記
+全部解決之後才能開始 Coma Ber 的 Tier 1 執行**——這四個問題都在共用
+的 pipeline 程式碼（`cluster_imf_tier1.py`／`prepare_cluster_tier2.py`／
+`cluster_forward_validation.py`）裡，若邊跑 Coma Ber 邊修，之後沒辦法
+可靠判斷 Coma Ber 的結果差異是星團本身的物理差異，還是同一輪意外
+夾帶的程式修正造成的，會污染可追溯性。
+
 **起手式**：
-1. 先讀 `PDMF_TO_IMF_PLAN.md` 第八節的 Tier1/Tier2 分層協定，Coma Ber（~600–800 Myr）的動力學年齡大機率會觸發 Tier 2（需要動力學校正），起跑前先照第六節公式粗算一次 τ = age / t_rh 確認。
-2. 查證 Coma Ber 在 `Hunt & Reffert (2023)` 目錄裡的對應名稱與成員表品質（`PLAN_多星團擴展.md` 第六節的「應該可行但沒驗證過」假設，這是第一個要驗證的環節）。
-3. 讀 Kraus & Hillenbrand (2007)、Tang et al. (2019) 兩篇原文（不只摘要），把它們報告的 PDMF 斜率、質量範圍記下來當基準線對照。
-4. 仿 `scripts/multicluster/cluster_imf_tier1.py`（NGC 3532／Praesepe 已用過的同一套腳本）跑 Tier 1（誤差核算框架 + 動力學年齡 + 徑向 α(r) 診斷），注意 `LIMITATIONS.md` D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆偵測、選擇函數紅藍分色檢查缺失等）在套用到新星團前要先確認有沒有修好，沒修好就要在 Coma Ber 這輪順手修，不要讓已知 bug 傳播到新星團。
-5. 開始前先在 `WORK_BOARD.md` 加一行認領，避免跟其他 session／協作者重工。
+0. 開始前先在 `WORK_BOARD.md` 加一行「進行中」認領，避免跟其他
+   session／協作者重工——這是第一步，不是最後一步。
+1. 確認上面「前置阻擋條件」的 D8 四項已經全部標記解決（查
+   `LIMITATIONS.md` D8 與 `WORK_BOARD.md` 有沒有對應的「完成」紀錄），
+   沒有的話先去修，不要跳過這一步直接跑 Coma Ber。
+2. 讀 `PDMF_TO_IMF_PLAN.md` 第八節的 Tier1/Tier2 分層協定，Coma Ber（~600–800 Myr）的動力學年齡大機率會觸發 Tier 2（需要動力學校正），起跑前先照第六節公式粗算一次 τ = age / t_rh 確認。
+3. 查證 Coma Ber 在 `Hunt & Reffert (2023)` 目錄裡的對應名稱與成員表品質（`PLAN_多星團擴展.md` 第六節的「應該可行但沒驗證過」假設，這是第一個要驗證的環節）。
+4. 讀 Kraus & Hillenbrand (2007)、Tang et al. (2019) 兩篇原文（不只摘要），把它們報告的 PDMF 斜率、質量範圍記下來當基準線對照。**Tang et al. (2019, ApJ 877, 12) 已於 2026-08-19 讀原文完成口徑核對，結果見 `PLAN_文獻對照_Hobart2026.md` 第五節與 `PLAN_多星團擴展.md` 對應段落，不用重讀**——結論是他們的 α=0.79±0.16（0.25–2.51 M☉）不能直接跟我們的 headline alpha 比較（樣本含潮汐尾、未做聯星修正），需要重算子樣本或用未修正版本對照。**Kraus & Hillenbrand (2007) 還沒查證**：2026-08-19 收到的 PDF 抓錯論文（使用者給的是同作者同年份的 *ApJ* 662, 413，跟 Coma Ber 無關），Hobart et al. 2026 實際引用的是 ***The Astronomical Journal*, 134, 2340**，需要使用者重新提供正確那篇才能完成這半邊查證，目前只有 Tang 原文轉述的二手數字（α=0.6±0.3，0.1–1.0 M☉）可用，不能當已核對口徑的基準線引用。
+5. 仿 `scripts/multicluster/cluster_imf_tier1.py`（NGC 3532／Praesepe 已用過的同一套腳本）跑 Tier 1（誤差核算框架 + 動力學年齡 + 徑向 α(r) 診斷）——這時 D8 四項應該已經修好，不需要再順手處理。
 
 **驗收標準**：Coma Ber 交出跟 `PDMF_TO_IMF_PLAN.md` 第八節表格同樣結構的誤差預算表（原始 PDMF±統計誤差、動力學校正項或上限估計、其餘系統誤差），且頭條 alpha 與 Kraus & Hillenbrand (2007)／Tang et al. (2019) 的既有測定值做過對照。**對照前必須先讀這兩篇原文，逐項列出下面這些欄位、雙方（我們 vs 各篇文獻）分別是什麼，口徑不同就要先在同一個質量範圍/樣本定義下重新對齊才能比較 alpha，不能直接拿不同口徑的數字並排**：
-  - MF／PDMF 的確切定義（system MF 還是 stellar MF，見 D14）
+  - MF／PDMF 的確切定義（system MF 還是 stellar MF，見 D14）——Hobart et al. 2026 分別報告兩種，只對齊質量範圍/樣本不足以保證是同一個量
   - 擬合/報告用的質量範圍（M☉ 上下限）
   - 成員樣本定義與空間涵蓋範圍（搜尋半徑、是否含潮汐尾／外圍結構）
   - 完整度修正方式（有沒有做、怎麼做）
   - 聯星處理方式（有沒有修正、修正法）
+  - MF 的數學定義（`dN/dm` 還是 `dN/dlog m`）與 alpha 的正負號慣例
+  - 分箱方式（分箱數／對數等寬度等）、擬合函數形式、估計器（MLE／貝氏／最小平方等）、不確定度的定義（1σ 信賴區間怎麼算出來的）
 
 一致或不一致都要交代量級與可能原因，不是只列數字不解讀。
