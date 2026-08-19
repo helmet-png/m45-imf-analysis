@@ -166,3 +166,13 @@ p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 # （9-12 小時），見 KAGGLE_DIAGNOSIS.md。本機 8 核應該快很多，P9a-redo/
 # P9c v2 用同樣雙階精修（3,3，比這裡少一階）在 Kaggle 都幾小時內完成。=====
 p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
+
+# ===== 2026-08-19：D1（BHAC15 比較）診斷用途，不是 headline 數字 =====
+# 煙霧測試規模（n_syn=5000, refines=3）在對稱亮端截斷 G>=8.9 下撞牆
+# （f_bin 貼上界 0.950、alpha 貼下界 1.500），詳見 LIMITATIONS.md D1。
+# 這裡用正式規模重跑一次，確認撞牆是蒙地卡羅雜訊還是真實簡併：
+#   若還撞牆 -> 是真實效應，D1 完成條件需要重新評估（放寬範圍或接受
+#              「亮端截斷後的 BHAC15 比較做不出可信數字」這個結論）
+#   若不撞牆 -> 照 D1 原計畫用同一個 --g-bright 跑一次 PARSEC 對照組比較
+# 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
+d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
