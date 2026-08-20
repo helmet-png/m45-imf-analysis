@@ -127,15 +127,25 @@ def _pid_alive(pid: int) -> bool | None:
     int(LOCK.read_text()) 解析出來的整數，不存在 shell injection 的
     問題——自動掃描工具的 CWE-78 標記是這個模式的通用誤判，不是真的
     有可控字串被組進 shell 命令。"""
+    # **2026-08-20 修**：原本用 text=True 讓 subprocess 自己決定編碼。
+    # 這台是中文 Windows，`tasklist` 輸出 cp950（Big5）——平常剛好能解，
+    # 但只要環境有 PYTHONUTF8=1（用 UTF-8 去解 Big5 位元組），解碼會在
+    # subprocess 內部的讀取執行緒炸掉，`out.stdout` 變成 None，接著
+    # `str(pid) in None` 丟 TypeError。**後果比看起來嚴重**：這個函式的
+    # 整份設計是「探測失敗要回傳 None 讓呼叫端 fail closed」，但未捕捉的
+    # 例外會直接讓 run_queue.py 整個崩掉，fail-closed 完全沒生效——實際
+    # 就這樣發生過一次，佇列啟動後立刻死掉、什麼都沒跑。
+    # 改成讀 bytes 自己解碼（errors="replace" 保證不會因為編碼失敗），
+    # 並把 stdout 是 None 的情況明確當成探測失敗。
     try:
         out = subprocess.run(
             ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True,
-            text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+            timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception:                                 # noqa: BLE001
         return None
-    if out.returncode != 0:
+    if out.returncode != 0 or out.stdout is None:
         return None
-    return str(pid) in out.stdout
+    return str(pid) in out.stdout.decode("utf-8", errors="replace")
 
 
 def _process_tree_cpu_ticks(root_pid: int) -> int | None:
@@ -156,13 +166,19 @@ def _process_tree_cpu_ticks(root_pid: int) -> int | None:
              "Get-CimInstance Win32_Process | "
              "Select-Object ProcessId,ParentProcessId,KernelModeTime,"
              "UserModeTime | ConvertTo-Csv -NoTypeInformation"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, timeout=30,
             creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception:                                     # noqa: BLE001
         return None
-    if out.returncode != 0 or not out.stdout.strip():
+    # 同 _pid_alive() 的理由（見那邊 2026-08-20 的說明）：自己解碼，
+    # 不讓編碼問題把「回傳 None＝探測失敗」變成未捕捉例外。這支函式
+    # 崩掉會連帶把整個卡死監看迴圈帶走，而它正是用來讓長跑工作可靠的。
+    if out.returncode != 0 or out.stdout is None:
         return None
-    rows = out.stdout.strip().splitlines()
+    text = out.stdout.decode("utf-8", errors="replace").strip()
+    if not text:
+        return None
+    rows = text.splitlines()
     if len(rows) < 2:
         return None
     children: dict[int, list[int]] = {}
@@ -307,8 +323,13 @@ def _preflight_ok(label: str, cmd: str) -> bool:
     if script != "fit_real.py":
         return True
     try:
+        # 子行程要用 UTF-8 輸出，否則中文 Windows 下它會寫 cp950 到管線，
+        # 這邊以 utf-8 解出來全是亂碼，下面用開頭字串挑警告行就全部挑不到
+        #（訊息沒消失，但沒人看得懂＝等於沒有警告）。只影響這個子行程，
+        # 不會像整個 process 設 PYTHONUTF8 那樣連帶弄壞 tasklist 的解碼。
+        env = {**os.environ, "PYTHONUTF8": "1"}
         r = subprocess.run([sys.executable, script, *cmd.split()[1:],
-                            "--preflight"], cwd=str(HERE),
+                            "--preflight"], cwd=str(HERE), env=env,
                            capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=1800)
     except Exception as e:                                   # noqa: BLE001
