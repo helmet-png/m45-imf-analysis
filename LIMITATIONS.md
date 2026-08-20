@@ -664,7 +664,7 @@ p_recovered=1.367（偏差 +0.067）、alpha_rec=2.433（偏差 +0.083），量�
 **後果**：這幾次執行的參數落點永久遺失，只剩 log 裡的 alpha／dav／p_rec／lnP。
 需要事後核對邊界時無資料可查。
 
-### D8 PR #11（多星團驗證）有 4 個待確認的正確性問題（PR#11修正 否）
+### D8 PR #11（多星團驗證）有 4 個待確認的正確性問題（PR#11修正 程式碼查證完成，PR #11 尚未合併＋未重跑，現役缺陷維持）
 
 **問題**：PR #11（`codex/ngc3532-praesepe-generalization`，NGC 3532／
 Praesepe 多星團驗證，尚未合併）的程式碼審查發現：`cluster_forward_
@@ -678,6 +678,36 @@ Praesepe f_bin=1.000）會被當成收斂解寫進結果；`prepare_cluster_tier
 **後果**：只影響 PR #11 的 NGC 3532／Praesepe 結果（未合併，不影響 M45
 本身任何已引用數字），但現狀合併的話，α 值可能不可靠——尤其前兩點會讓
 角落解／有偏差的選擇函數被當成有效的多星團驗證結果寫進去。
+
+**2026-08-20 查證更新（僅程式碼查證，非實證結論——見下方限制）**：為了
+評估 Coma Berenices Tier 1（見 `WORK_BOARD.md` 起步條件）能不能起跑，逐項
+核對 PR #11 分支（`codex/ngc3532-praesepe-generalization`，commit `c631e73`）
+目前內容，發現 Codex 在留言之後已針對下列 4 點各自寫了對應的程式碼修法
+（不是這次新修的，是查證既有進度）——**這只確認「程式碼看起來已處理」，
+不等於「問題已解決」，PR #11 仍未合併、也還沒重跑資料驗證，D8 維持現役
+缺陷狀態，不降級、不結案**：
+1. `cluster_forward_validation.py:112` — `allowed_wall = (6,) if len(axes) > 6 else ()`，
+   只放行 dav（索引 6，已知不可辨識、貼牆是預期行為），其餘維度貼牆會被
+   `check_walls()` 標成 `wall_hits`、寫進機讀輸出（`fit_once()` 回傳
+   `bool(wall_hits)`），角落解不會再被當成有效解悄悄吃掉。
+2. `cluster_imf_tier1.py:189` — `nss_values = np.asarray(mem["NSS"], dtype=float)`
+   明確轉型，VizieR 的 `null` 會變成 `np.nan` 而不是 object dtype 的 `None`，
+   `np.isfinite()` 不會再崩潰（程式碼註解也記錄了修法原因）。
+3. `prepare_cluster_tier2.py:238`（`validate_selection()`）已有 `faint = g >= 17.0`
+   後的紅藍分色存活率差檢查（`red_minus_blue_error`），重現了
+   `build_selection.py` 講的關鍵檢查。
+4. `prepare_cluster_tier2.py:104`（`fetch_control_field()`）已實作抓場星樣本
+   （查詢星團周圍 1.5 度內、扣掉成員本身的 Gaia 星，至少 100 顆才視為有效），
+   且確認有接進 `main()`（第 330、348 行）餵給 SNR 迴歸與 `validate_selection`。
+
+**只用讀程式碼＋確認呼叫鏈有接上做的查證，沒有實際重跑 NGC 3532／Praesepe
+驗證資料確認數值結果**（例如貼牆偵測改了之後 Praesepe 的 f_bin 最終數字
+變成多少）——這一步是這則更新沒做到的部分，留給實際合併 PR #11、跑一次
+Tier 1 流程時順便確認，確認前不能排除程式碼看似修好、實際仍有其他未發現
+問題的可能。**Coma Berenices Tier 1 的起步前置條件（`WORK_BOARD.md`）視為
+「查證通過、可以開始起手式」，但不是「D8 已結案」**——D8 要等 PR #11 合併
+且跑過一次帶新資料的 Tier 1 驗證、確認角落解偵測與選擇函數檢查在真實資料
+上如預期運作後，才能改標記為已解決。
 
 ### D10 config C／D 的 alpha 一致性只在假資料上驗證過，真實資料沒有直接比較過（尚無認領工作）
 

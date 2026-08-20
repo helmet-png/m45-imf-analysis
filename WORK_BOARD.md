@@ -214,6 +214,19 @@ NSS 為 null 會崩潰）**必須先各自獨立認領、修好、補回歸測�
 可靠判斷 Coma Ber 的結果差異是星團本身的物理差異，還是同一輪意外
 夾帶的程式修正造成的，會污染可追溯性。
 
+**2026-08-20 更新：起手式可以開始，但前置條件不算「已解決」**——查證
+PR #11 分支（`codex/ngc3532-praesepe-generalization`）目前內容，發現 Codex
+已針對 D8 四項各自寫了對應的程式碼修法（只是讀程式碼查證，沒有重新動手改，
+也沒有重跑資料驗證），詳見 `LIMITATIONS.md` D8 同日期段落——**D8 仍標記為
+現役缺陷，要等 PR #11 合併並實際重跑 Tier 1 確認數值結果後才能結案**。
+`main` 目前不含這四項修法，**任何要跑 Tier 1（含只是 HR23 目錄查證以外、
+真的呼叫 `cluster_forward_validation.py`／`prepare_cluster_tier2.py`／
+`cluster_imf_tier1.py` 的步驟）都必須明確 checkout commit
+`c631e733de40b7c9110e9c00eab1c8b39b53821a` 或保留這四項修法的後代 commit**，
+不能直接用 `main`，且要在產出的結果檔／PR 說明裡記錄實際用的 commit。
+PR #11 合併後要回頭重新核對 D8、重跑一次驗證確認數值結果，才能把 D8
+標記改為已解決。
+
 **起手式**：
 0. 開始前先在 `WORK_BOARD.md` 加一行「進行中」認領，避免跟其他
    session／協作者重工——這是第一步，不是最後一步。
