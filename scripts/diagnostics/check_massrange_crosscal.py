@@ -177,15 +177,19 @@ def main() -> None:
     diff_naive = OUR_NAIVE["alpha"] - pdmf_030
     diff_forward_vs_pdmf = OUR_FORWARD["alpha"] - pdmf_050
     diff_forward_vs_imf = OUR_FORWARD["alpha"] - imf_050
-    sigma_naive = diff_naive / OUR_NAIVE["err"]
+    # 不報告差異顯著度（sigma）：Hobart 的 PDMF 參數、我們重擬合的抽樣
+    # 誤差、蒙地卡羅抽樣本身的誤差都沒有量化與傳播，只除以我們自己的
+    # 統計誤差不能代表兩組測量的差異顯著度（2026-08-20 CodeRabbit 提醒）。
     hobart_pdmf_to_imf_gap = imf_050 - pdmf_050
     binary_corrected_high = HOBART_PLEIADES_ALPHA_HIGH_BINARY_CORRECTED
     hobart_binary_step = binary_corrected_high - pdmf_high
     hobart_dynamic_step = imf_high - binary_corrected_high
 
     # 一致性檢查：確保 Table 4 的雙星修正中繼值真的落在 PDMF 與
-    # stellar IMF 之間，不是筆誤或抄錯欄位。
-    assert 0 < hobart_binary_step < hobart_pdmf_to_imf_gap, (
+    # stellar IMF 兩個高質量段端點之間，不是筆誤或抄錯欄位——直接比較
+    # 三個高質量段值本身，不要拿階段差跟整體擬合落差比較（後者只保證
+    # 量級相符，沒辦法保證真的落在區間內，2026-08-20 CodeRabbit 提醒）。
+    assert pdmf_high < binary_corrected_high < imf_high, (
         f"一致性檢查失敗：雙星修正中繼值 {binary_corrected_high} 不在 "
         f"PDMF({pdmf_high}) 與 stellar IMF({imf_high}) 之間，需要重新核對 Hobart 原文 Table 4"
     )
@@ -199,8 +203,8 @@ def main() -> None:
     print("兩組比較要分開講，不要混成一個數字：")
     print(f"  [未修雙星 vs 未修雙星] alpha_naive {OUR_NAIVE['alpha']:.3f} vs "
           f"Hobart PDMF@0.30-2.50 = {pdmf_030:.3f}")
-    print(f"      差 {diff_naive:+.3f}（約 {abs(sigma_naive):.1f} sigma）。"
-          f"兩邊都沒修雙星，是目前最接近同口徑的一組。")
+    print(f"      差 {diff_naive:+.3f}。Hobart 參數不確定度尚未傳播，"
+          f"不報告差異顯著度。兩邊都沒修雙星，是目前最接近同口徑的一組。")
     print(f"  [已修雙星 vs 未修雙星] alpha_forward {OUR_FORWARD['alpha']:.3f} vs "
           f"Hobart PDMF@0.50-2.50 = {pdmf_050:.3f}")
     print(f"      差 {diff_forward_vs_pdmf:+.3f}。數字幾乎一樣，但**口徑不對等**："
