@@ -58,6 +58,14 @@ def main():
                     help="逗號分隔，覆寫預設的 SLOPES 掃描點。"
                          "本機已掃過 0.9-1.7，要擴大範圍時用這個而不改本檔，"
                          "避免正在跑的背景工作看到不一致的模組狀態")
+    # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py、
+    # docs/reference/PREFLIGHT.md）——這支腳本沒有續傳機制，本機曾經因為
+    # Windows 非預期重開機連續四天從頭重算一次都沒完成，確保設定沒錯
+    # 比 fit_real.py 更要緊，不是次要功能。
+    ap.add_argument("--preflight", action="store_true",
+                    help="只做開跑前檢查然後結束，不進行任何擬合")
+    ap.add_argument("--force", action="store_true",
+                    help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
@@ -80,6 +88,20 @@ def main():
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
+
+    # 開跑前檢查——無條件執行，不是選用步驟（見 scripts/tools/
+    # preflight.py 的 mandatory_gate() 說明）。mh_prior_sigma=0.0 是這支
+    # 腳本刻意的行為（先驗會污染要測的低質量段冪次敏感度），登記進
+    # expected_overrides 避免每次都誤報成阻擋。
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import preflight                                             # noqa: E402
+    if args.preflight:
+        preflight._force_utf8_stdout()
+    preflight.mandatory_gate(
+        base, grid, refines, script="profile_lowmass.py",
+        expected_overrides={"mh_prior_sigma": 0.0},
+        force=args.force, dry_run=args.preflight)
+
     sel = selmod.load(HERE / "data" / "selection.npz")
     print(f"真實觀測 {n_obs:,} 顆，config C（選擇函數 + 差異消光），"
           f"n_synthetic {args.n_syn:,}")

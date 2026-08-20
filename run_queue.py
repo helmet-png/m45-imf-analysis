@@ -324,12 +324,25 @@ def _log_tick(label: str, ticks, delta, note: str = "") -> None:
         pass                    # 留痕是輔助功能，寫檔失敗不該讓監看中止
 
 
+
+# 2026-08-20：五支計算腳本都已經支援 `--preflight`（`fit_real.py` 自己
+# 一套，其餘四支共用 `preflight.mandatory_gate()`，見
+# `docs/reference/PREFLIGHT.md`）。這裡列出來而不是用
+# `os.access(..., os.X_OK)` 之類的方式猜，是因為「這支腳本有沒有
+# `--preflight`」本來就該是清楚列出、審查得到的事實，不是推斷出來的。
+PREFLIGHT_AWARE_SCRIPTS = frozenset({
+    "fit_real.py", "profile_lowmass.py", "profile_outlierfrac.py",
+    "inject_lowmass.py", "injection_recovery.py",
+})
+
+
 def _preflight_ok(label: str, cmd: str) -> bool:
     """派工前先讓目標腳本自己做一次開跑前檢查（見 scripts/tools/preflight.py）。
 
-    只對已經支援 `--preflight` 的腳本生效；其他腳本一律放行（回傳 True），
-    **不是因為它們安全，是因為還沒有幫它們做這個功能**——涵蓋差異寫在
-    `docs/reference/PREFLIGHT.md`，不要把「放行」讀成「檢查過了」。
+    只對 `PREFLIGHT_AWARE_SCRIPTS` 裡的腳本生效；其他腳本一律放行
+    （回傳 True），**不是因為它們安全，是因為還沒有幫它們做這個功能**
+    ——涵蓋差異寫在 `docs/reference/PREFLIGHT.md`，不要把「放行」讀成
+    「檢查過了」。
     """
     # 續傳能力（B3）判斷邏輯本體在 scripts/tools/preflight.py 的
     # _has_resume()，這裡不重複實作一份——兩份 pattern 若之後改名/加條件
@@ -351,7 +364,7 @@ def _preflight_ok(label: str, cmd: str) -> bool:
         print(f"  注意：{script} 沒有續傳機制，中途被砍（重開機／卡死"
               f"重試）就得從頭重算——這台機器有非預期重開機的前科",
               flush=True)
-    if script != "fit_real.py":
+    if script not in PREFLIGHT_AWARE_SCRIPTS:
         return True
     try:
         # 子行程要用 UTF-8 輸出，否則中文 Windows 下它會寫 cp950 到管線，

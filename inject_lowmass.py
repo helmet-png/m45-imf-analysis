@@ -94,6 +94,11 @@ def main():
                     help="只測 P_TRUE_LIST 裡的其中一個真值（例如 1.3），"
                          "不是全部三個都跑。用於補測單一可疑結果，不用重跑"
                          "整批（見 LIMITATIONS.md D5）")
+    # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py）。
+    ap.add_argument("--preflight", action="store_true",
+                    help="只做開跑前檢查然後結束，不進行任何擬合")
+    ap.add_argument("--force", action="store_true",
+                    help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
     if args.trial_offset < 0:
         ap.error("--trial-offset must be non-negative")
@@ -126,6 +131,16 @@ def main():
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
+
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import preflight                                             # noqa: E402
+    if args.preflight:
+        preflight._force_utf8_stdout()
+    preflight.mandatory_gate(
+        base, grid, refines, script="inject_lowmass.py",
+        expected_overrides={"mh_prior_sigma": 0.0},
+        force=args.force, dry_run=args.preflight)
+
     sel = selmod.load(HERE / "data" / "selection.npz")
 
     dav_true = 0.30

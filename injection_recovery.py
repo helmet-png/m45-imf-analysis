@@ -329,6 +329,11 @@ def main():
                      "results/injection_recovery.npz（跟 fit_real.py／"
                      "inject_lowmass.py 同款式，見 LIMITATIONS.md D6："
                      "固定檔名被重跑覆寫過，這裡原本沒有這個防呆）")
+    # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py）。
+    ap.add_argument("--preflight", action="store_true",
+                    help="只做開跑前檢查然後結束，不進行任何擬合")
+    ap.add_argument("--force", action="store_true",
+                    help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
     if "/" in args.tag or "\\" in args.tag:
         ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
@@ -365,8 +370,18 @@ def main():
         base.draws = draw_randoms(base.n_syn,
                                   np.random.default_rng(args.model_seed))
         print(f"擬合模型的共用亂數改用種子 {args.model_seed}")
-    sel = selmod.load(HERE / "data" / "selection.npz")
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
+
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import preflight                                             # noqa: E402
+    if args.preflight:
+        preflight._force_utf8_stdout()
+    preflight.mandatory_gate(
+        base, grid, refines, script="injection_recovery.py",
+        expected_overrides={"mh_prior_sigma": 0.0},
+        force=args.force, dry_run=args.preflight)
+
+    sel = selmod.load(HERE / "data" / "selection.npz")
     npt = int(np.prod([len(a) for a in COARSE]))
     print(f"假觀測每批 {n_obs:,} 顆（與真實觀測相同）")
     print(f"粗網格 {npt:,} 點，三階段精修，{n_proc} 行程")
