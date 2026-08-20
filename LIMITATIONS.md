@@ -58,7 +58,17 @@ A4），上表其餘數字的精確值仍不可引用。alpha 的實際解析度
 一旦合併就代表 headline 數字定案**，串接檔案與正式更新頭條數字是合併
 之後才要做的下一步。
 
-### A2 `fit_real.py` 曾寫死關閉金屬量高斯先驗（重跑進度同 A1：9/10 次，未合併）
+**2026-08-20 headline `p2_final2_v3` 正式定案**：`rep9`（原本被 Kaggle
+取消，`rep9_retry` 重新派工）已完成，10/10 次重複到齊。10 個
+`rep*.npz` 的 `C` 陣列已沿 axis=0 串接存成 `results/fit_real_p2final_v3.npz`
+（見 `RESULTS_LOG.md` 2026-08-20 那行完整參數）。**正式 headline 數字：
+alpha=2.382±0.068**（population std，取代上面 A1 表格裡「只精修一階」
+分類下的舊 `p2_final`／`p2_final2`（α=2.387±0.060）——這兩個修正
+（精修 bug＋金屬量先驗）都已套用在這批重跑，A1／A2 兩項限制對
+headline 數字本身**已解除**，上方表格與問題描述保留作為歷史記錄，
+不要刪除或覆寫。
+
+### A2 `fit_real.py` 曾寫死關閉金屬量高斯先驗（重跑進度：headline `p2_final2_v3` 10/10 次已完成，見上方 A1 2026-08-20 更新）
 
 **問題**：`config.toml` 宣告 MH 高斯先驗（中心 −0.03、σ 0.10，取自 Gaia
 GSP-Spec／GSP-Phot），但 `fit_real.py` 曾經寫死
@@ -68,7 +78,9 @@ GSP-Spec／GSP-Phot），但 `fit_real.py` 曾經寫死
 **後果**：`p2_final2`（α=2.387±0.060）與所有先前的 `fit_real.py` 產出的
 數字，用的都是均勻先驗，不是文件記載的方法論，不能當最終值。跟 A1 是
 同一次重跑（`p2_final2_v3` 會一併套用兩個修正，不用分兩次跑），進度見
-上方 A1 的 2026-08-19 更新。
+上方 A1 的 2026-08-19 更新。**2026-08-20 更新：10/10 次重複已到齊並
+定案，正式數字 alpha=2.382±0.068，見上方 A1 2026-08-20 那段與
+`RESULTS_LOG.md` 同日期那行，本項限制已解除。**
 
 ### A3 低質量段冪次被固定，該段佔 59.5% 樣本（p2_free_lowmass 是、p6_lowmass_v2 否）
 
@@ -580,13 +592,27 @@ config C）先驗證流程能不能跑通：亮端截斷保留 1,017/1,078 顆�
 照原計畫跟 PARSEC 同設定（同一個 `--g-bright`）比較 alpha 與 logage。
 正式規模的重跑已排進 `queue.txt`（見下方，標記為診斷用途、非 headline）。
 
-### D2 未做過敏感度測試的設定（尚無認領工作）
+### D2 未做過敏感度測試的設定（**部分進行中，2026-08-19**，見下方）
 
 **問題**：`pca_dims` 本身（非開關）、`stars_per_cluster`、`clustering_method`、
 `inner_loop_runs`、`hess_color_range`／`hess_mag_range`、BP 訊噪比門檻 20
 這個值本身、成員機率門檻對 IMF 的影響。
 
 **後果**：這些設定的敏感度未知。
+
+**2026-08-19 進度**：新增 `scripts/diagnostics/sensitivity_sweep.py`，示範
+`membership_threshold`（重新套用 `baseline.dat` 門檻 -> 重跑第 2/3 步 ->
+config C 前向模型量 alpha）與 `stars_per_cluster`（需重跑 pyUPMASK 聚類，
+腳本先做可行性檢查）兩個影響面最廣的設定。流程本身已用小規模參數驗證可
+執行，**但還沒有真正的敏感度數字**——完整掃描需要原始 Gaia 查詢 CSV，這台
+機器當時沒有，補齊依賴（clone `github.com/helmet-png/gaia-dr3-export`）後
+重抓卡在 `fetch_gaia.py` 第一步的 `SELECT COUNT(*)` 查詢——手動重現並拿到
+完整錯誤內文，確認是 ESA 伺服器端主動取消：`SQL exception: ERROR:
+canceling statement due to statement timeout`（等 183 秒後被砍），不是
+本機網路或帳號問題，是這個查詢（5 度錐形 + G<=18 + parallax>=4，對 18
+億列做未加速的 COUNT）在伺服端太重。`stars_per_cluster` 則受限於這台
+機器沒有 `pyUPMASK/`，腳本確認會誠實回報做不到、不編造數字。詳細下一步
+（含可能的繞過法）見 `WORK_BOARD.md` D2 那行。
 
 ### D3 主序轉折點截斷對老星團會變成真限制（尚無認領工作）
 
@@ -638,7 +664,7 @@ p_recovered=1.367（偏差 +0.067）、alpha_rec=2.433（偏差 +0.083），量�
 **後果**：這幾次執行的參數落點永久遺失，只剩 log 裡的 alpha／dav／p_rec／lnP。
 需要事後核對邊界時無資料可查。
 
-### D8 PR #11（多星團驗證）有 4 個待確認的正確性問題（PR#11修正 否）
+### D8 PR #11（多星團驗證）有 4 個待確認的正確性問題（PR#11修正 程式碼查證完成，PR #11 尚未合併＋未重跑，現役缺陷維持）
 
 **問題**：PR #11（`codex/ngc3532-praesepe-generalization`，NGC 3532／
 Praesepe 多星團驗證，尚未合併）的程式碼審查發現：`cluster_forward_
@@ -652,6 +678,36 @@ Praesepe f_bin=1.000）會被當成收斂解寫進結果；`prepare_cluster_tier
 **後果**：只影響 PR #11 的 NGC 3532／Praesepe 結果（未合併，不影響 M45
 本身任何已引用數字），但現狀合併的話，α 值可能不可靠——尤其前兩點會讓
 角落解／有偏差的選擇函數被當成有效的多星團驗證結果寫進去。
+
+**2026-08-20 查證更新（僅程式碼查證，非實證結論——見下方限制）**：為了
+評估 Coma Berenices Tier 1（見 `WORK_BOARD.md` 起步條件）能不能起跑，逐項
+核對 PR #11 分支（`codex/ngc3532-praesepe-generalization`，commit `c631e73`）
+目前內容，發現 Codex 在留言之後已針對下列 4 點各自寫了對應的程式碼修法
+（不是這次新修的，是查證既有進度）——**這只確認「程式碼看起來已處理」，
+不等於「問題已解決」，PR #11 仍未合併、也還沒重跑資料驗證，D8 維持現役
+缺陷狀態，不降級、不結案**：
+1. `cluster_forward_validation.py:112` — `allowed_wall = (6,) if len(axes) > 6 else ()`，
+   只放行 dav（索引 6，已知不可辨識、貼牆是預期行為），其餘維度貼牆會被
+   `check_walls()` 標成 `wall_hits`、寫進機讀輸出（`fit_once()` 回傳
+   `bool(wall_hits)`），角落解不會再被當成有效解悄悄吃掉。
+2. `cluster_imf_tier1.py:189` — `nss_values = np.asarray(mem["NSS"], dtype=float)`
+   明確轉型，VizieR 的 `null` 會變成 `np.nan` 而不是 object dtype 的 `None`，
+   `np.isfinite()` 不會再崩潰（程式碼註解也記錄了修法原因）。
+3. `prepare_cluster_tier2.py:238`（`validate_selection()`）已有 `faint = g >= 17.0`
+   後的紅藍分色存活率差檢查（`red_minus_blue_error`），重現了
+   `build_selection.py` 講的關鍵檢查。
+4. `prepare_cluster_tier2.py:104`（`fetch_control_field()`）已實作抓場星樣本
+   （查詢星團周圍 1.5 度內、扣掉成員本身的 Gaia 星，至少 100 顆才視為有效），
+   且確認有接進 `main()`（第 330、348 行）餵給 SNR 迴歸與 `validate_selection`。
+
+**只用讀程式碼＋確認呼叫鏈有接上做的查證，沒有實際重跑 NGC 3532／Praesepe
+驗證資料確認數值結果**（例如貼牆偵測改了之後 Praesepe 的 f_bin 最終數字
+變成多少）——這一步是這則更新沒做到的部分，留給實際合併 PR #11、跑一次
+Tier 1 流程時順便確認，確認前不能排除程式碼看似修好、實際仍有其他未發現
+問題的可能。**Coma Berenices Tier 1 的起步前置條件（`WORK_BOARD.md`）視為
+「查證通過、可以開始起手式」，但不是「D8 已結案」**——D8 要等 PR #11 合併
+且跑過一次帶新資料的 Tier 1 驗證、確認角落解偵測與選擇函數檢查在真實資料
+上如預期運作後，才能改標記為已解決。
 
 ### D10 config C／D 的 alpha 一致性只在假資料上驗證過，真實資料沒有直接比較過（尚無認領工作）
 
@@ -736,7 +792,7 @@ alpha 貢獻最大的幾顆）。
 待認領工作範圍大，屬於架構層級的增修，建議先在 `docs/planning/` 開
 獨立子計畫評估成本再動工，不建議直接動 `pipeline/joint_fit.py`。
 
-### D14 system MF 與 stellar MF 的區分在文件與程式碼中未明確一致標註（尚無認領工作）
+### D14 system MF 與 stellar MF 的區分在文件與程式碼中未明確一致標註（**已完成**，2026-08-19）
 
 **問題**（2026-08-19，核對 Hobart et al. 2026 時發現）：Hobart et al.
 2026 明確區分「system MF」（單星＋聯星系統的主星，不含次星）與
@@ -757,13 +813,29 @@ alpha 貢獻最大的幾顆）。
 與相關程式碼註解裡明確加一句話說明我們的 alpha 對應哪個定義，避免
 之後寫論文或跟文獻比較時混淆。
 
-**2026-08-19 協調提醒**：分支 `claude/d14-system-mf-doc`（尚未合併）
-已經獨立做完這條的實質內容——逐行核對 `synthesise()` 抽樣邏輯確認
-`alpha` 對應 system MF、並用蒙地卡羅實算兩種定義差多少（stellar MF
-比 system MF 陡，量級 +0.05 到 +0.09，小於統計誤差但與多項系統誤差
-同量級），寫進 `PAPER_OUTLINE.md` 3.4 節與程式碼註解。**這條在
-main 上目前仍是待認領狀態，是因為那個分支還沒合併，不是沒人做**——
-下一個要處理 D14 的人請先看那個分支，不要重做一次。
+**已完成（2026-08-19）**：逐行核對 `JointModel.synthesise()` 的抽樣順序後
+確認：先抽 `n_syn` 個**主星**質量（冪次 = `alpha`），再獨立擲
+Bernoulli(`f_bin`) 決定誰帶伴星，伴星質量 `m2 = q·m1`（`q ~ q^q_gamma`，
+**不是抽自 IMF**），最後主星與伴星**流量相加**塌縮成同一個測光點。
+所以合成星團的一筆是一個**系統**，`alpha` 是**主星質量分布**的冪次，
+等價於以主星質量標記的 **system MF**；伴星從未進入被擬合的質量分布。
+說明已寫進 `PAPER_OUTLINE.md` 3.4 節、`fit_real.py` 檔頭、
+`pipeline/joint_fit.py` 抽樣段落三處。
+
+**兩種定義差多少（實算）**：`scripts/analysis/system_vs_stellar_mf.py`
+（本次新增，可重跑）用專案實際參數（alpha=2.35、q_gamma=−0.50、
+q_min=0.10、量測窗 0.5–2.5 M☉）做四百萬次蒙地卡羅，把伴星也放進同一個
+量測窗後重做截斷冪律 MLE：stellar MF 比 system MF **陡**，
+f_bin=0.30 → +0.046、0.45 → +0.066、0.60 → +0.085、0.75 → +0.102。
+我們擬合到的 `f_bin` 落在 0.45–0.62，所以量級是 **+0.05 到 +0.09**——
+小於統計誤差 0.144，但與好幾項系統誤差同量級。**這個數字本身不是新的
+系統誤差項**（我們報 system MF、內部一致），但拿去跟報 stellar MF 的
+文獻並排時必須先做這個換算，否則會被誤讀成物理差異。
+
+**順帶記下的已知簡化**：Bernoulli(`f_bin`) 那一步與 `m1` 獨立，等於假設
+**雙星比例不隨質量變化**。Torres+2025 對 Pleiades 觀測到雙星比例隨半徑
+是雙峰的，質量相依性同樣沒有理由預設為常數——這一項尚未量化，列在下面
+的待認領工作，不在本次範圍內。
 
 ---
 

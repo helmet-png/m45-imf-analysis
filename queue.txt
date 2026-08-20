@@ -165,7 +165,24 @@ p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 # 10 次裡的第 1 次，換算要 100+ 小時，遠超 Kaggle 免費 session 上限
 # （9-12 小時），見 KAGGLE_DIAGNOSIS.md。本機 8 核應該快很多，P9a-redo/
 # P9c v2 用同樣雙階精修（3,3，比這裡少一階）在 Kaggle 都幾小時內完成。=====
-p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
+#
+# ===== 2026-08-19：**這一項已停用，不要重新打開**（CodeRabbit PR #63 抓到）
+# 上面那段理由在 --repeat-offset 出現之前是對的，現在已經過時：headline 早就
+# 改用 Kaggle 拆片跑（kaggle_queue.txt 的 p2_final2_v3_rep5 ~ rep9，各
+# --repeats 1 --repeat-offset N --tag _p2final_v3_repN，rep0-4 是更早拆的），
+# rep0-8 已經完成並存進 results/，只剩 rep9 在跑。留著這一項有兩個問題：
+#   (1) **輸出路徑直接撞名**：這一項的 --tag _p2final_v3 會寫到
+#       results/fit_real_p2final_v3.npz，而那正是 rep0-9 串接後要存的正規
+#       檔名。兩邊都寫同一個檔案，最後留下哪一份看誰晚跑完，從檔案看不出來。
+#   (2) **重複算同一批工作**：同樣 10 次重複、同樣三階精修，本機再算一次是
+#       純浪費——本機 8 核也沒快到能無視，radial_r2 單次重複就跑了 285 分鐘。
+# 正規來源固定為 Kaggle 分片：rep0-9 全部拉回後依 offset 由小到大沿 axis=0
+# 串接成 results/fit_real_p2final_v3.npz，每個分片檔與這個正規產物都要記進
+# results/RESULTS_LOG.md。要重跑 headline 請改 kaggle_queue.txt，不要動這裡。
+# **2026-08-19 23:47 再次確認仍需停用**：PR #65 合併時這一項曾經在 main 上
+# 短暫恢復成未註解狀態（那個分支是從更早的 main 分岔出來的，沒有這次停用），
+# 合併後重新出現這個活躍條目，已再次確認並停用，理由不變。=====
+# p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refines 3,3,3 --tag _p2final_v3
 
 # ===== 2026-08-19：D1（BHAC15 比較）診斷用途，不是 headline 數字 =====
 # 煙霧測試規模（n_syn=5000, refines=3）在對稱亮端截斷 G>=8.9 下撞牆
@@ -176,3 +193,28 @@ p2_final2_v3|fit_real.py --procs 8 --n-syn 40000 --repeats 10 --configs C --refi
 #   若不撞牆 -> 照 D1 原計畫用同一個 --g-bright 跑一次 PARSEC 對照組比較
 # 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
 d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+
+# ===== 2026-08-19：B/C/D 待認領清單裡「純換參數重跑、不用寫新腳本」
+# 的兩項（見 WORK_BOARD.md「待認領工作：B/C/D 類補齊」表）=====
+
+# C13：注入回收的 alpha 偏差地板（目前 -0.050）是不是蒙地卡羅雜訊。
+# 把 --n-syn 從預設 40000 拉到 4 倍（160000），其餘設定與原本的 S1
+# 對照組完全相同，只動這一個變因。地板隨 n_syn 提高而縮小 -> 證實是
+# 有限合成星數的取樣產物；不縮小 -> 地板另有原因，要重新調查。
+# --tag 是 PR #63 幫 injection_recovery.py 加的，不會覆寫既有的
+# results/injection_recovery.npz（A1 統計誤差 0.144 的來源檔案）。
+c13_bias_floor_nsyn4x|injection_recovery.py --procs 8 --n-syn 160000 --trials 3 --refines 3,3 --scenarios S1 --tag _c13_nsyn4x
+
+# D10：config C 與 D 的 alpha 一致性目前只在注入回收的合成資料上驗證過，
+# 真實資料從來沒有直接比較過（見 LIMITATIONS.md D10）。C 與 D 的差別
+# 只有 dav 上界（0.6 vs 1.2），dav 已知不可辨識、會貼著上界跑，所以這是
+# 在問「headline 的 alpha 有沒有被 dav 貼牆位置間接污染」。同一批觀測、
+# 同一組 --repeats，只動 configs 這一個變因。
+d10_config_cd_real|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C,D --refines 3,3 --tag _d10_cd_compare
+
+# C19：自轉調製／前主序光變／黑子造成的額外亮度散布，對 alpha 的敏感度
+# 曲線（見 LIMITATIONS.md C19）。假資料帶散布、擬合模型沒有這一項——
+# 這正是「未建模物理」的定義。掃 0.05-0.40 mag：年輕疏散星團的自轉調製
+# 振幅文獻上多在 0.01-0.1 mag 量級，前主序光變可以到 0.2-0.3，掃到 0.40
+# 是為了讓曲線的斜率看得清楚，不是主張真的有那麼大。
+c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --extra-scatter-sweep 0.05,0.10,0.20,0.30,0.40 --tag _c19_scatter
