@@ -80,9 +80,42 @@
 # **退路（若這次再被砍就走這條，不要再無限重試）**：改用本機 8 核跑
 # 這一個 rep9（本機沒有 session 上限，核心數也多一倍，估 8-9 小時），
 # 指令與這行完全相同、只把 --procs 4 改成 8。=====
-verify_bprperr_off_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _bprperr_off_v2|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_on_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --refines 3,3 --tag _bprperr_on_v2|measure_overconfidence.py,injection_recovery.py|false|
+# verify_bprperr_off_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _bprperr_off_v2|measure_overconfidence.py,injection_recovery.py|false|
+# verify_bprperr_on_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --refines 3,3 --tag _bprperr_on_v2|measure_overconfidence.py,injection_recovery.py|false|
 p6b_inject_lowmass_v2_t0_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_t0|measure_overconfidence.py,injection_recovery.py|false|
 p6b_inject_lowmass_v2_t1_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_t1|measure_overconfidence.py,injection_recovery.py|false|
-p2_final2_v3_rep9_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 9 --tag _p2final_v3_rep9|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-08-20：COMPLETE，結果已拉回並串接成 results/fit_real_p2final_v3.npz
+# （見 PR #74，headline 10/10 次重複到齊，正式數字 alpha=2.382±0.068）。
+# p2_final2_v3_rep9_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 9 --tag _p2final_v3_rep9|measure_overconfidence.py,injection_recovery.py|false|
 p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_t2|measure_overconfidence.py,injection_recovery.py|false|
+
+# ===== 2026-08-19 22:23-22:29：verify_bprperr_off/on_v2_retry 兩個都在
+# ~13.1-13.2 小時（785.8／788.9 分）被 Kaggle 取消（CANCEL_ACKNOWLEDGED）。
+# 跟 p2_final2_v3 rep9／p6b t2 是同一個成因：--repeats 5 --refines 3,3
+# 這個 recipe 太重，逼近或超過 Kaggle 免費 session 上限。off 的部分結果
+# 已拉回、確認存了 1/5 次重複（`kaggle_results/verify_bprperr_off_v2_retry/
+# results/fit_real_bprperr_off_v2.npz` 的 C 陣列 shape=(1,7)，對應
+# --repeat-offset 0）；on 的結果正在拉回中，還沒確認存了幾次。
+# 比照 p2_final2_v3 的解法：拆成 --repeats 1 --repeat-offset N 的分片，
+# 用不同帳號平行跑，每片都在 Kaggle 上限內。off 的 offset 0 已經有了，
+# 只需要 1-4；on 目前結果未知，offset 0-4 全部排上，若 on 的部分結果
+# 拉回後發現 offset 0 也做完了，到時候手動去掉那一項即可，不影響其餘。
+# 全部跑完後把各分片檔的 C 陣列依 offset 由小到大沿 axis=0 串接成完整
+# 5 次重複的 fit_real_bprperr_off_v2.npz／fit_real_bprperr_on_v2.npz，
+# 不要直接覆寫任何分片檔案。
+# 2026-08-20：COMPLETE，已拉回（kaggle_results/verify_bprperr_off_v2_rep1/），
+# 尚未串接（還差 rep3/rep4，off_v2 全部 5 片到齊才串接，見待認領工作表）。
+# verify_bprperr_off_v2_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 1 --tag _bprperr_off_v2_rep1|measure_overconfidence.py,injection_recovery.py|false|
+# rep3 第一次 push 失敗（上傳 isochrones.zip 中途網速驟降到 433kB/s，比照
+# 08-19 08:54 那次網路瞬斷的模式，不是程式問題），22:36 補推重試。
+verify_bprperr_off_v2_rep3_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 3 --tag _bprperr_off_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-08-20：COMPLETE，已拉回（kaggle_results/verify_bprperr_off_v2_rep2/），
+# 尚未串接（同上，等 5 片到齊）。
+# verify_bprperr_off_v2_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 2 --tag _bprperr_off_v2_rep2|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_off_v2_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 3 --tag _bprperr_off_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_off_v2_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 4 --tag _bprperr_off_v2_rep4|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_on_v2_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 0 --tag _bprperr_on_v2_rep0|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_on_v2_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 1 --tag _bprperr_on_v2_rep1|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_on_v2_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 2 --tag _bprperr_on_v2_rep2|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_on_v2_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 3 --tag _bprperr_on_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_on_v2_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py|false|
