@@ -1,0 +1,157 @@
+{
+  "status": "bootstrap_for_spatial_smoking_test_not_final_imf",
+  "environment": {
+    "limepy_version": "1.3.0",
+    "scipy_version": "1.18.0",
+    "compatibility_patches": [
+      "cast_dopri5_nsteps_to_int",
+      "accept_extra_dopri5_solout_argument"
+    ]
+  },
+  "metadata": {
+    "n_members": 1078,
+    "center_ra_deg": 56.59137547202889,
+    "center_dec_deg": 24.119615396509012,
+    "median_parallax_mas": 7.3639255117977065,
+    "parallax_zero_point_mas": -0.017,
+    "distance_pc": 135.48436417649728
+  },
+  "parameters": {
+    "trials": 5000,
+    "seed": 20260813,
+    "n_resampled_stars": 694,
+    "n_structural_models": 735
+  },
+  "delta_alpha_spatial": {
+    "median": 0.0040000000000000036,
+    "p16": 0.0009999999999998899,
+    "p84": 0.0050000000000003375,
+    "p2p5": 0.0,
+    "p97p5": 0.013999999999999796
+  },
+  "fraction_delta_alpha_positive": 0.9156,
+  "fraction_abs_delta_alpha_below_0p02": 0.9864,
+  "most_frequent_models": [
+    {
+      "model_index": 156,
+      "count": 1691,
+      "fraction": 0.3382,
+      "phi0": 4.0,
+      "g": 1.0,
+      "delta": 0.3,
+      "rh_pc": 4.0,
+      "rt_pc": 19.726470053745476,
+      "inside_fraction_low_mass": 0.985338222564109,
+      "inside_fraction_high_mass": 0.9933769239699792
+    },
+    {
+      "model_index": 219,
+      "count": 1199,
+      "fraction": 0.2398,
+      "phi0": 5.0,
+      "g": 0.0,
+      "delta": 0.15,
+      "rh_pc": 4.0,
+      "rt_pc": 13.96674912522228,
+      "inside_fraction_low_mass": 0.9971999263904807,
+      "inside_fraction_high_mass": 0.9985004207159249
+    },
+    {
+      "model_index": 254,
+      "count": 599,
+      "fraction": 0.1198,
+      "phi0": 5.0,
+      "g": 1.0,
+      "delta": 0.15,
+      "rh_pc": 4.0,
+      "rt_pc": 22.81177341528723,
+      "inside_fraction_low_mass": 0.9755736293974839,
+      "inside_fraction_high_mass": 0.9847947882622051
+    },
+    {
+      "model_index": 93,
+      "count": 324,
+      "fraction": 0.0648,
+      "phi0": 3.0,
+      "g": 2.0,
+      "delta": 0.45,
+      "rh_pc": 4.0,
+      "rt_pc": 36.57367588777287,
+      "inside_fraction_low_mass": 0.9637647225640783,
+      "inside_fraction_high_mass": 0.9819879858858992
+    },
+    {
+      "model_index": 86,
+      "count": 286,
+      "fraction": 0.0572,
+      "phi0": 3.0,
+      "g": 2.0,
+      "delta": 0.3,
+      "rh_pc": 4.0,
+      "rt_pc": 32.24266343324787,
+      "inside_fraction_low_mass": 0.9750097765373138,
+      "inside_fraction_high_mass": 0.9835125812390212
+    },
+    {
+      "model_index": 149,
+      "count": 213,
+      "fraction": 0.0426,
+      "phi0": 4.0,
+      "g": 1.0,
+      "delta": 0.15,
+      "rh_pc": 4.0,
+      "rt_pc": 18.263534125613354,
+      "inside_fraction_low_mass": 0.9922753451005188,
+      "inside_fraction_high_mass": 0.9946645675483801
+    },
+    {
+      "model_index": 58,
+      "count": 175,
+      "fraction": 0.035,
+      "phi0": 3.0,
+      "g": 1.0,
+      "delta": 0.45,
+      "rh_pc": 4.0,
+      "rt_pc": 17.20520267224726,
+      "inside_fraction_low_mass": 0.9935722008025362,
+      "inside_fraction_high_mass": 0.997503709132548
+    },
+    {
+      "model_index": 184,
+      "count": 63,
+      "fraction": 0.0126,
+      "phi0": 4.0,
+      "g": 2.0,
+      "delta": 0.15,
+      "rh_pc": 4.0,
+      "rt_pc": 39.90182706802169,
+      "inside_fraction_low_mass": 0.963116795793913,
+      "inside_fraction_high_mass": 0.971921118136
+    },
+    {
+      "model_index": 191,
+      "count": 56,
+      "fraction": 0.0112,
+      "phi0": 4.0,
+      "g": 2.0,
+      "delta": 0.3,
+      "rh_pc": 4.0,
+      "rt_pc": 46.283348573725405,
+      "inside_fraction_low_mass": 0.9462266488435253,
+      "inside_fraction_high_mass": 0.9702860363328224
+    },
+    {
+      "model_index": 65,
+      "count": 52,
+      "fraction": 0.0104,
+      "phi0": 3.0,
+      "g": 1.0,
+      "delta": 0.6,
+      "rh_pc": 4.0,
+      "rt_pc": 19.170243812504182,
+      "inside_fraction_low_mass": 0.985108713531746,
+      "inside_fraction_high_mass": 0.9962955288623346
+    }
+  ],
+  "approximation": "The structural library holds component masses at their observed values; each bootstrap resamples stars and reselects the best model, but does not rebuild the multi-mass library."
+}

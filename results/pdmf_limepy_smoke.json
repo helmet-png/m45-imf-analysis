@@ -1,0 +1,168 @@
+{
+  "status": "smoking_test_not_final_imf",
+  "environment": {
+    "limepy_version": "1.3.0",
+    "scipy_version": "1.18.0",
+    "compatibility_patches": [
+      "cast_dopri5_nsteps_to_int",
+      "accept_extra_dopri5_solout_argument"
+    ]
+  },
+  "metadata": {
+    "n_members": 1078,
+    "center_ra_deg": 56.59137547202889,
+    "center_dec_deg": 24.119615396509012,
+    "median_parallax_mas": 7.3639255117977065,
+    "parallax_zero_point_mas": -0.017,
+    "distance_pc": 135.48436417649728
+  },
+  "mass_edges_msun": [
+    0.3,
+    0.5,
+    0.8,
+    1.2,
+    2.5
+  ],
+  "representative_mass_msun": [
+    0.3886350301530474,
+    0.601926732045467,
+    0.9582824789254157,
+    1.531583468264439
+  ],
+  "radial_edges_deg": [
+    0.0,
+    0.5,
+    1.0,
+    1.5,
+    2.0,
+    3.0,
+    4.0,
+    5.1
+  ],
+  "radial_edges_pc": [
+    0.0,
+    1.1823541338833081,
+    2.3648883734590367,
+    3.5477829341769174,
+    4.731218251143465,
+    7.100434654065045,
+    9.473989655056004,
+    12.091657370471706
+  ],
+  "observed_weighted_number": [
+    277.6255,
+    213.27339999999998,
+    121.85589999999999,
+    76.7163
+  ],
+  "corrected_global_number": [
+    281.7535984332659,
+    216.01061103219362,
+    123.08119163739622,
+    77.22679954700106
+  ],
+  "inside_fraction_at_5p1deg": [
+    0.985348551158811,
+    0.9873283491995415,
+    0.9900448507111793,
+    0.9933896063284305
+  ],
+  "observed_binned_pdmf": {
+    "alpha": 1.982,
+    "alpha_err_minus": 0.07099999999999995,
+    "alpha_err_plus": 0.07099999999999995,
+    "loglike": -894.2561728249193
+  },
+  "spatially_corrected_binned_pdmf": {
+    "alpha": 1.986,
+    "alpha_err_minus": 0.07000000000000006,
+    "alpha_err_plus": 0.07099999999999995,
+    "loglike": -904.6256261655783
+  },
+  "delta_alpha_spatial": 0.0040000000000000036,
+  "best_model": {
+    "phi0": 4.0,
+    "g": 1.0,
+    "delta": 0.3,
+    "rh_pc": 4.0,
+    "rt_pc": 19.725286122299686,
+    "nll": 1262.900495100341
+  },
+  "radial_goodness_of_fit": {
+    "pearson_chi2": 16.3587533016908,
+    "deviance": 18.28260983999734,
+    "degrees_of_freedom_approx": 20,
+    "max_absolute_standardized_residual": 2.041858290443145
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "phi0": 4.0,
+      "g": 1.0,
+      "delta": 0.3,
+      "rh_pc": 4.0,
+      "rt_pc": 19.726470053745476,
+      "nll": 1262.8922806935852,
+      "inside_fraction": [
+        0.985338222564109,
+        0.9873170190945009,
+        0.9900324458118439,
+        0.9933769239699792
+      ],
+      "global_number": [
+        281.7565518543932,
+        216.0130898944694,
+        123.08273381896694,
+        77.22778549496329
+      ]
+    },
+    {
+      "iteration": 2,
+      "phi0": 4.0,
+      "g": 1.0,
+      "delta": 0.3,
+      "rh_pc": 4.0,
+      "rt_pc": 19.725285871755315,
+      "nll": 1262.9004930061287,
+      "inside_fraction": [
+        0.9853485510431282,
+        0.9873283484259963,
+        0.9900448491068496,
+        0.9933896039809892
+      ],
+      "global_number": [
+        281.75359846634456,
+        216.0106112014321,
+        123.08119183684457,
+        77.22679972949278
+      ]
+    },
+    {
+      "iteration": 3,
+      "phi0": 4.0,
+      "g": 1.0,
+      "delta": 0.3,
+      "rh_pc": 4.0,
+      "rt_pc": 19.725286122299686,
+      "nll": 1262.900495100341,
+      "inside_fraction": [
+        0.985348551158811,
+        0.9873283491995415,
+        0.9900448507111793,
+        0.9933896063284305
+      ],
+      "global_number": [
+        281.7535984332659,
+        216.01061103219362,
+        123.08119163739622,
+        77.22679954700106
+      ]
+    }
+  ],
+  "caveats": [
+    "Uses unresolved-system masses from the traditional step-5 mapping.",
+    "Corrects only mass-dependent spatial coverage under equilibrium.",
+    "Does not correct binaries, stellar evolution, tidal tails, or membership selection.",
+    "LIMEPY is an equilibrium model; potential escapers can bias the extrapolation."
+  ]
+}

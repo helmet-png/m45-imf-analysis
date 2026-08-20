@@ -1,0 +1,156 @@
+{
+  "status": "preflight_ensemble_not_production_cluster_model",
+  "environment": {
+    "rebound_version": "5.1.1"
+  },
+  "parameters": {
+    "n_stars": [
+      128,
+      256,
+      512
+    ],
+    "softening_rh": [
+      0.005,
+      0.01,
+      0.02
+    ],
+    "replicates": 8,
+    "input_alpha": 2.3,
+    "time_end_crossing": 10.0,
+    "dt_crossing": 0.001,
+    "seed_base": 2026081300
+  },
+  "overall": {
+    "n_stars": "all",
+    "softening_rh": "all",
+    "n_runs": 72,
+    "median_delta_alpha_contrast": 0.33350000000000013,
+    "p16_delta_alpha_contrast": 0.07475999999999995,
+    "p84_delta_alpha_contrast": 0.6689600000000006,
+    "fraction_positive_delta_alpha_contrast": 0.9166666666666666,
+    "median_delta_radius_ratio": 0.09798778083324816,
+    "fraction_positive_delta_radius_ratio": 0.8333333333333334,
+    "max_absolute_energy_error": 0.008289313260765286,
+    "fraction_energy_pass": 0.7638888888888888
+  },
+  "groups": [
+    {
+      "n_stars": 128,
+      "softening_rh": 0.005,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.6575000000000001,
+      "p16_delta_alpha_contrast": 0.0899599999999999,
+      "p84_delta_alpha_contrast": 1.0885599999999998,
+      "fraction_positive_delta_alpha_contrast": 0.875,
+      "median_delta_radius_ratio": 0.5517788538456465,
+      "fraction_positive_delta_radius_ratio": 0.875,
+      "max_absolute_energy_error": 0.005571439513490076,
+      "fraction_energy_pass": 0.875
+    },
+    {
+      "n_stars": 128,
+      "softening_rh": 0.01,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.26549999999999996,
+      "p16_delta_alpha_contrast": 0.1613199999999999,
+      "p84_delta_alpha_contrast": 0.6647999999999998,
+      "fraction_positive_delta_alpha_contrast": 0.875,
+      "median_delta_radius_ratio": 0.15305651561582012,
+      "fraction_positive_delta_radius_ratio": 0.75,
+      "max_absolute_energy_error": 0.008289313260765286,
+      "fraction_energy_pass": 0.75
+    },
+    {
+      "n_stars": 128,
+      "softening_rh": 0.02,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.3530000000000001,
+      "p16_delta_alpha_contrast": 0.26492000000000043,
+      "p84_delta_alpha_contrast": 0.5883999999999999,
+      "fraction_positive_delta_alpha_contrast": 1.0,
+      "median_delta_radius_ratio": 0.04050545425902985,
+      "fraction_positive_delta_radius_ratio": 0.75,
+      "max_absolute_energy_error": 0.005418148497030821,
+      "fraction_energy_pass": 0.625
+    },
+    {
+      "n_stars": 256,
+      "softening_rh": 0.005,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.2809999999999999,
+      "p16_delta_alpha_contrast": 0.14072000000000018,
+      "p84_delta_alpha_contrast": 0.4779599999999996,
+      "fraction_positive_delta_alpha_contrast": 1.0,
+      "median_delta_radius_ratio": 0.07885837430465487,
+      "fraction_positive_delta_radius_ratio": 0.75,
+      "max_absolute_energy_error": 0.005758250824977454,
+      "fraction_energy_pass": 0.75
+    },
+    {
+      "n_stars": 256,
+      "softening_rh": 0.01,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.4290000000000004,
+      "p16_delta_alpha_contrast": 0.06119999999999952,
+      "p84_delta_alpha_contrast": 0.7947200000000005,
+      "fraction_positive_delta_alpha_contrast": 0.875,
+      "median_delta_radius_ratio": 0.1992385947776249,
+      "fraction_positive_delta_radius_ratio": 0.875,
+      "max_absolute_energy_error": 0.0011976386688768896,
+      "fraction_energy_pass": 0.875
+    },
+    {
+      "n_stars": 256,
+      "softening_rh": 0.02,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.4995000000000003,
+      "p16_delta_alpha_contrast": 0.2601999999999998,
+      "p84_delta_alpha_contrast": 0.8148799999999998,
+      "fraction_positive_delta_alpha_contrast": 0.875,
+      "median_delta_radius_ratio": 0.13861088636205626,
+      "fraction_positive_delta_radius_ratio": 1.0,
+      "max_absolute_energy_error": 0.0033674312957863712,
+      "fraction_energy_pass": 0.375
+    },
+    {
+      "n_stars": 512,
+      "softening_rh": 0.005,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.33650000000000047,
+      "p16_delta_alpha_contrast": 0.13344000000000014,
+      "p84_delta_alpha_contrast": 0.44688000000000005,
+      "fraction_positive_delta_alpha_contrast": 1.0,
+      "median_delta_radius_ratio": 0.06787202722517288,
+      "fraction_positive_delta_radius_ratio": 0.875,
+      "max_absolute_energy_error": 0.0002972595488914725,
+      "fraction_energy_pass": 1.0
+    },
+    {
+      "n_stars": 512,
+      "softening_rh": 0.01,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.1815,
+      "p16_delta_alpha_contrast": 0.14232000000000003,
+      "p84_delta_alpha_contrast": 0.41875999999999985,
+      "fraction_positive_delta_alpha_contrast": 1.0,
+      "median_delta_radius_ratio": 0.05523683395880413,
+      "fraction_positive_delta_radius_ratio": 0.875,
+      "max_absolute_energy_error": 0.0008562716184039897,
+      "fraction_energy_pass": 1.0
+    },
+    {
+      "n_stars": 512,
+      "softening_rh": 0.02,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.11850000000000005,
+      "p16_delta_alpha_contrast": 0.001479999999999378,
+      "p84_delta_alpha_contrast": 0.41392000000000007,
+      "fraction_positive_delta_alpha_contrast": 0.75,
+      "median_delta_radius_ratio": 0.09482798497342088,
+      "fraction_positive_delta_radius_ratio": 0.75,
+      "max_absolute_energy_error": 0.005025651339857945,
+      "fraction_energy_pass": 0.625
+    }
+  ],
+  "interpretation_rule": "A robust pre-flight signal requires positive median changes in both radial-alpha contrast and low/high-mass radius ratio, plus acceptable energy conservation. It does not quantify the M45 correction."
+}

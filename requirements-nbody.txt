@@ -1,0 +1,2 @@
+# Native-Windows fallback used only for the N-body smoking test.
+rebound>=4.4
