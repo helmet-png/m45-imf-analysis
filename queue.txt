@@ -218,3 +218,14 @@ d10_config_cd_real|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C,D
 # 振幅文獻上多在 0.01-0.1 mag 量級，前主序光變可以到 0.2-0.3，掃到 0.40
 # 是為了讓曲線的斜率看得清楚，不是主張真的有那麼大。
 c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --extra-scatter-sweep 0.05,0.10,0.20,0.30,0.40 --tag _c19_scatter
+
+# ===== 2026-08-19：D1（BHAC15 比較）診斷用途，不是 headline 數字 =====
+# 煙霧測試規模（n_syn=5000, refines=3）在對稱亮端截斷 G>=8.9 下撞牆
+# （f_bin 貼上界 0.950、alpha 貼下界 1.500），詳見 LIMITATIONS.md D1。
+# 這裡用正式規模重跑一次，確認撞牆是蒙地卡羅雜訊還是真實簡併：
+#   若還撞牆 -> 是真實效應，D1 完成條件需要重新評估（放寬範圍或接受
+#              「亮端截斷後的 BHAC15 比較做不出可信數字」這個結論）
+#   若不撞牆 -> 照 D1 原計畫用同一個 --g-bright 跑一次 PARSEC 對照組比較
+# 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
+# 需要 fit_real.py 的 --g-bright 旗標（PR #65 分支，尚未合併進 main）。
+d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
