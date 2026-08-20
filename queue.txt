@@ -229,3 +229,22 @@ c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3
 # 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
 # 需要 fit_real.py 的 --g-bright 旗標（PR #65 分支，尚未合併進 main）。
 d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+
+# ===== 2026-08-21：extinction_form_test（C5，**現役缺陷．優先度 高**）=====
+# C5 的完成條件第 1 項：「兩種 dav_distribution 各跑一次注入回收，涵蓋
+# dav ∈ {0.10, ..., 1.20}」。切換分布的程式碼（joint_fit.py 的
+# dav_distribution、injection_recovery.py 的 --dav-distribution）**已經
+# 在 main 上並過了 CodeRabbit review**，缺的只是實際跑這兩趟。
+#
+# 為什麼是現役缺陷而不是一般敏感度測試：對數常態在大 dav 時中位數遠低於
+# 平均值，不含 dav 的模型只能壓低 A_V 去配合大多數幾乎沒被紅化的星——
+# 實測注入 dav >= 0.20 時 A_V 在 15 次擬合裡有 12 次被壓到 0.000。
+# item4_davsweep 那條曲線在 dav >= 0.20 的每一點都受影響，而那條曲線
+# 正是「+0.178 差異消光修正量是不是只是 dav=0.30 的一點值」的判讀依據。
+#
+# 兩趟除了 --dav-distribution 之外**所有設定完全相同**（同樣的 dav 點、
+# trials、refines、n-syn、scenarios），這是「一次只動一個變因」的要求；
+# 兩者的 A_V 系統誤差差值就是「分布形式選擇」這一項的代價。
+# dav 點涵蓋到 1.20（既有的 item4_davsweep 只到 0.60，C5 明確要求到 1.20）。
+c5_davform_lognormal|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution lognormal --tag _c5_lognormal
+c5_davform_truncexp|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution trunc_exp --tag _c5_truncexp
