@@ -84,8 +84,13 @@ def main():
     # 2026-08-20：B3（續傳）—— 同 profile_lowmass.py，原本只在全部掃描點
     # 跑完後 np.savez 一次，中途被砍就得從頭重算。改用 checkpoint.py。
     out_path = HERE / "results" / "profile_outlierfrac.npz"
+    # fracs 不放進 manifest——同 profile_lowmass.py 的理由（這支腳本也
+    # 沒有 --tag，把掃描點清單放進 manifest 會讓擴大 --fracs 範圍時被
+    # check_manifest() 擋下，還叫使用者去用一個不存在的旗標；每個掃描點
+    # 各自有獨立的 scan_key，不需要 manifest 擋，2026-08-20 CodeRabbit
+    # review）。fracs 仍透過下面迴圈的 extra_arrays 存進輸出檔。
     manifest = {"n_syn": args.n_syn, "refines": args.refines,
-                "dav_max": args.dav_max, "fracs": fracs}
+                "dav_max": args.dav_max}
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
     import checkpoint                                            # noqa: E402
     import preflight                                             # noqa: E402

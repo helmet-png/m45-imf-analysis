@@ -57,6 +57,29 @@ import numpy as np
 MANIFEST_KEY = "__manifest__"
 
 
+def _retry_permission_error(fn, *, attempts: int = 12):
+    """對 `fn()` 做有上限的重試，只吞 `PermissionError`（Windows 上防毒／
+    索引服務對剛寫完／剛要讀的檔案短暫佔用的已知現象，見 `atomic_savez()`
+    的說明）。重試次數用完仍失敗就把最後一次的例外原樣往上拋，不會無限期
+    忽略；任何非 `PermissionError` 的例外直接原樣拋出、不重試——那類錯誤
+    重試沒有意義，只會拖慢真正失敗的訊號。
+
+    **重試預算（12 次、每次間隔遞增到最多 1 秒，總計最壞情況約 6.5 秒）
+    是實測調出來的，不是隨手訂的數字**：一開始用 6 次、每次最多 0.5 秒
+    （總計約 1.5 秒），在這台機器背景同時跑著其他計算工作（CPU 滿載）
+    時仍然重現到重試次數用完仍失敗——代表防毒／索引服務在系統忙碌時
+    掃描一個剛寫完的小檔案，可能需要比 1.5 秒更長。6.5 秒對單次擬合
+    動輒數分鐘的真實產線來說仍然可忽略，但給了明顯更多餘裕撐過系統
+    忙碌的窗口。"""
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(min(0.1 * (attempt + 1), 1.0))
+
+
 def atomic_savez(out_path: Path, **arrays) -> None:
     """np.savez 不是原子操作——寫到一半被中斷（斷電、被砍行程）會留下
     截斷或空的檔案，蓋掉前一次跑成功的 checkpoint。改成寫到同目錄的
@@ -83,14 +106,7 @@ def atomic_savez(out_path: Path, **arrays) -> None:
     tmp_path = out_path.with_name(out_path.stem + ".tmp.npz")
     try:
         np.savez(tmp_path, **arrays)
-        for attempt in range(6):
-            try:
-                os.replace(tmp_path, out_path)
-                break
-            except PermissionError:
-                if attempt == 5:
-                    raise
-                time.sleep(0.1 * (attempt + 1))
+        _retry_permission_error(lambda: os.replace(tmp_path, out_path))
     except BaseException:
         try:
             tmp_path.unlink()
@@ -132,8 +148,11 @@ def release_write_lock(lock_path: Path) -> None:
         pass
 
 
-def load_partial(out_path: Path) -> dict:
-    """載入上次中斷前已經存檔的部分結果（不含 MANIFEST_KEY）。
+def _read_npz_dict(out_path: Path) -> dict:
+    """實際讀檔的共用邏輯：回傳 out_path 裡除了 MANIFEST_KEY 以外的全部
+    鍵值。呼叫端必須自己處理「檔案不存在」（這裡不判斷）與讀取例外——
+    寬鬆版本（`load_partial()`）跟嚴格版本（`_load_partial_strict()`）
+    對這兩種情況的處置完全不同，見兩者各自的說明。
 
     **一定要用 `with` 關掉 `np.load()` 回傳的 `NpzFile`**：實測踩到的
     Windows 專屬 bug——`NpzFile` 內部持有的 `zipfile.ZipFile` 有循環參照，
@@ -146,15 +165,47 @@ def load_partial(out_path: Path) -> dict:
     `PermissionError: [WinError 5] 存取被拒`（2026-08-20 用高速迴圈重複
     存檔的自動化測試重現到，實機上跑得比較慢、GC 有更多機會介入，
     平常不容易踩到，但這是真實存在的競態，不是測試環境特有的假象）。"""
+    with np.load(out_path, allow_pickle=False) as d:
+        return {k: np.asarray(d[k]) for k in d.files if k != MANIFEST_KEY}
+
+
+def load_partial(out_path: Path) -> dict:
+    """載入上次中斷前已經存檔的部分結果（不含 MANIFEST_KEY），供「只是
+    想看一眼跑到哪裡」的呼叫端用（例如 `preflight.workload_audit()` 要
+    印進度、或腳本要決定跳過哪些已完成的重複）。**讀取失敗（不管是檔案
+    真的不存在，還是存在但讀不出來）一律印警告、回傳 `{}`，視為沒有
+    進度可續傳**——這個寬鬆行為只適用於「讀」的情境，不能被拿去給
+    `save_progress()` 內部判斷要不要覆寫檔案用，見
+    `_load_partial_strict()` 的說明為什麼那裡需要嚴格版本。"""
     if not out_path.exists():
         return {}
     try:
-        with np.load(out_path, allow_pickle=False) as d:
-            return {k: np.asarray(d[k]) for k in d.files if k != MANIFEST_KEY}
+        return _read_npz_dict(out_path)
     except Exception as e:                                        # noqa: BLE001
         print(f"警告：讀取既有部分結果 {out_path} 失敗（{e}），"
               f"視為沒有可續傳的進度，從頭開始。", flush=True)
         return {}
+
+
+def _load_partial_strict(out_path: Path) -> dict:
+    """`save_progress()` 專用的嚴格版本：檔案不存在回傳 `{}`（合法情況，
+    第一次存檔本來就沒有舊檔），但**檔案存在卻讀不出來時直接把例外往上
+    拋，不吞掉**（對 `PermissionError` 先重試幾次，見
+    `_retry_permission_error()`，重試用完仍失敗才真的拋出）。
+
+    這跟 `load_partial()` 刻意不同：`save_progress()` 讀完 `fresh` 之後，
+    會拿讀到的內容當「磁碟上其餘 scan_key 的既有結果」原封不動寫回去
+    （只覆寫自己這次要存的那個 key）。如果讀取失敗被吞成 `{}`（跟
+    `load_partial()` 一樣的寬鬆行為），`save_progress()` 會誤判成
+    「磁碟上什麼都沒有」，接著用「只含當前這一個 scan_key」的內容原子性
+    覆蓋掉整個檔案——磁碟上其他 scan_key 已經算完的結果就永久消失了。
+    這正是這整個 PREFLIGHT／checkpoint 機制想防的「看起來成功（`exit
+    0`、有寫出檔案），資料卻不是我們以為的那樣」的失敗形狀，換個地方在
+    自己身上重演一次，所以這裡必須用會出聲的嚴格版本
+    （2026-08-20 CodeRabbit review）。"""
+    if not out_path.exists():
+        return {}
+    return _retry_permission_error(lambda: _read_npz_dict(out_path))
 
 
 def load_manifest(out_path: Path) -> dict | None:
@@ -245,7 +296,12 @@ def save_progress(out_path: Path, key: str, results: list, manifest: dict,
     att_key = f"__attempted_{key}"
     lock_path = acquire_write_lock(out_path)
     try:
-        fresh = load_partial(out_path)
+        # 用嚴格版本，不是 load_partial()：讀取失敗（不管是暫時的
+        # PermissionError 還是真的損毀）在這裡絕對不能被吞成「當作沒有
+        # 進度」——那會讓下面的 atomic_savez() 拿只含這個 key 的內容
+        # 覆蓋掉磁碟上其他 scan_key 已經算完的結果，見
+        # _load_partial_strict() 的說明。
+        fresh = _load_partial_strict(out_path)
         disk_attempted = int(np.asarray(fresh[att_key]).reshape(-1)[-1]) \
             if att_key in fresh else len(fresh.get(key, []))
         if disk_attempted > attempted:

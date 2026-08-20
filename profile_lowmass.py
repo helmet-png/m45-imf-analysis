@@ -94,8 +94,16 @@ def main():
     # 四次）就得從頭重算，即使前面已經跑完的冪次本身沒有問題。改用
     # scripts/tools/checkpoint.py 的共用續傳機制，跟 fit_real.py 同一套。
     out_path = HERE / "results" / "profile_lowmass.npz"
+    # slopes 不放進 manifest：這支腳本沒有 --tag（輸出檔名固定），若把
+    # 掃描點清單也拿去比對，擴大 --slopes 範圍就會被 check_manifest()
+    # 判定成「設定不同」而 sys.exit(1)，錯誤訊息還會叫使用者「換一個
+    # --tag」——但這支腳本根本沒有這個旗標，使用者只能手動刪掉整個
+    # 既有結果檔，前面已經跑完的掃描點全部作廢。每個掃描點各自有獨立
+    # 的 scan_key（f"p{p}"），互不污染，不需要靠 manifest 擋這個
+    # （2026-08-20 CodeRabbit review）。slopes 本身仍會透過下面迴圈裡
+    # 的 extra_arrays 存進輸出檔，事後查得到這批掃過哪些點。
     manifest = {"n_syn": args.n_syn, "refines": args.refines,
-                "dav_max": args.dav_max, "slopes": slopes}
+                "dav_max": args.dav_max}
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
     import checkpoint                                            # noqa: E402
     import preflight                                             # noqa: E402

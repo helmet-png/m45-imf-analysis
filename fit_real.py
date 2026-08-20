@@ -363,6 +363,16 @@ def main():
     partial = checkpoint.load_partial(out_path)
     checkpoint.check_manifest(out_path, manifest, partial,
                               legacy_defaults=MANIFEST_LEGACY_DEFAULTS)
+    # `__attempted_*` 是 checkpoint.py 內部的記帳鍵（每個 config 存一份，
+    # 記「已嘗試次數」，供 inject_lowmass.py 這類會遇到貼牆例外的腳本
+    # 續傳時判斷哪些試驗不用重跑），不是這裡要的「設定名稱 -> 結果陣列」
+    # ——fit_real.py 一律成功、不需要那層區分，但 checkpoint.save_progress()
+    # 仍然統一會寫這個鍵。load_partial() 只排除 MANIFEST_KEY，不排除它，
+    # 混進 out 會讓下面 for key in out 的總表迴圈把它當成一個 config 去
+    # 取 [:,3]，丟 IndexError／KeyError（2026-08-20 CodeRabbit review 抓到：
+    # 續傳時才會觸發，第一次跑因為還沒有既有檔案不會發作）。跟
+    # preflight.gate_c() 用同一條 startswith("__") 排除規則。
+    partial = {k: v for k, v in partial.items() if not k.startswith("__")}
     if partial:
         n_done = {k: len(v) for k, v in partial.items()}
         print(f"讀到既有部分結果 {out_path.name}：{n_done}"
@@ -464,7 +474,15 @@ def main():
             # save_progress()（原本這裡自己拿鎖、重讀磁碟、合併寫回的一段，
             # 2026-08-20 收斂成共用函式，另外四支診斷腳本直接沿用）。
             reps = checkpoint.save_progress(out_path, key, reps, manifest)
-            out[key] = np.array(reps)
+        # 迴圈外無條件轉成 ndarray，不能只在迴圈內「有算新的一次」才轉
+        # ——若這個 key 的全部 repeats 都被續傳跳過（rep < len(reps) 對
+        # 每一次都成立），迴圈本體一次都不會執行，`out[key]` 會停在最初
+        # `out = {k: list(v) for k, v in partial.items()}` 那行給的原始
+        # list，下面 `arr[:,3]` 這種 ndarray 用法就會丟
+        # `TypeError: list indices must be integers or slices, not tuple`
+        # （這是既有 bug，續傳測試時發現，跟這次的 checkpoint 重構本身
+        # 無關但同一條路徑上，一併修掉）。
+        out[key] = np.array(reps)
         arr = out[key]
         if args.repeats > 1:
             print(f"{key} 跨 {args.repeats} 次：alpha 平均 {arr[:,3].mean():.3f}"
