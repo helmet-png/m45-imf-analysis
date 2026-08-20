@@ -408,6 +408,11 @@ def _postflight(label: str, cmd: str) -> None:
     tag = m.group(1) if m else ""
     npz = HERE / "results" / f"fit_real{tag}.npz"
     if not npz.exists():
+        # **2026-08-20 CodeRabbit review**：原本這裡靜默 return——一個
+        # 狀態回報 "ok" 但沒有真的產出預期 npz 檔案的工作（例如腳本邏輯
+        # 分支問題、寫到了別的路徑），Gate C 完全不會印任何東西，跟
+        # 「驗收通過、沒問題」長得一樣，實際是「根本沒驗收到」。
+        print(f"  產出驗收警告：找不到預期輸出檔：{npz}", flush=True)
         return
     try:
         tools_dir = str(HERE / "scripts" / "tools")
