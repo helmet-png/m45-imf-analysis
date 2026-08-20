@@ -177,6 +177,171 @@ def load_partial(out_path: Path) -> dict:
         return {}
 
 
+def _preflight_report(args, model, grid, refines, configs,
+                      out_path, partial, n_obs) -> int:
+    """`--preflight` 的內容：把「這次到底會算什麼」攤開來，回傳退出碼。
+
+    只讀不寫，不碰任何結果檔。回傳 0 代表通過、非 0 代表有阻擋級問題。
+
+    分三段對應三類實際發生過的損失（數字見 `docs/reference/PREFLIGHT.md`）：
+      解析度   對應 A1（75 機時）——精修階數宣稱與實際達成的解析度
+      設定對帳 對應 A2——模型實際生效的值 vs `config.toml` 宣告的值
+      工作量   對應 radial_r1 漏帶 `--configs C`（6 機時）——把「實際會算
+               幾套模型、幾次重複」印出來，跟意圖不符一眼看得出來
+    """
+    import tomllib
+    from injection_recovery import COARSE
+    fails, warns = [], []
+    P = lambda s="": print(s, flush=True)                    # noqa: E731
+
+    P("=" * 74)
+    P("開跑前檢查（--preflight）：只檢查，不擬合")
+    P("=" * 74)
+
+    # --- 1. 這次實際會算什麼（意圖對帳）---
+    keys = [k.strip().upper() for k in args.configs.split(",")]
+    valid = [k for k in keys if k in configs]
+    unknown = [k for k in keys if k not in configs]
+    if unknown:
+        # main() L~560 對打錯的設定名稱是靜默用交集過濾掉（同樣的邏輯
+        # 這裡的 valid 也是）——`--configs A,X` 會讓 X 被無聲丟棄，preflight
+        # 通過、擬合照跑，但算出來的設定跟意圖不同。這正是本段「意圖
+        # 對帳」要抓的形狀，所以升級成阻擋，不能只當警告放行
+        #（2026-08-20 CodeRabbit review）。
+        fails.append(f"--configs 有不存在的設定名稱 {unknown}"
+                     f"（可用：{', '.join(configs)}），它們會被靜默略過，"
+                     f"實際只會算 {valid}")
+    n_new = sum(max(0, args.repeats - len(partial.get(k, []))) for k in valid)
+    P("\n【工作量】")
+    P(f"  設定（--configs）  {', '.join(valid)}"
+      f"（{len(valid)} 套）")
+    P(f"  每套重複           {args.repeats} 次"
+      f"（offset {args.repeat_offset}）")
+    P(f"  已完成、會跳過     "
+      f"{ {k: len(v) for k, v in partial.items()} or '無'}")
+    P(f"  這次實際要算       {n_new} 次擬合")
+    P(f"  精修階數           {refines}"
+      f"（粗網格 + {len(refines)} 階精修）")
+    P(f"  合成星數 n_syn     {args.n_syn:,}")
+    P(f"  觀測星數           {n_obs:,}")
+    if len(valid) > 1:
+        warns.append(f"會算 {len(valid)} 套設定（{', '.join(valid)}），"
+                     f"耗時約為單一設定的 {len(valid)} 倍——"
+                     f"若只要 config C，記得帶 --configs C"
+                     f"（radial_r1 就是漏帶這個白算了 6 機時）")
+    if n_new == 0:
+        warns.append("這次沒有任何新的擬合要算（既有結果已滿足 --repeats），"
+                     "跑起來會立刻結束")
+
+    # --- 2. 解析度：宣稱 vs 實際達成 ---
+    # A1 的形狀是「旗標帶了，但旗標的意思跟以為的不一樣」，所以這裡不檢查
+    # 旗標本身，而是把旗標換算成實際會達到的格距，讓它跟「可報告的精度」
+    # 直接對照。真正驗證搜尋演算法有沒有照這個格距收斂的，是
+    # scripts/tools/preflight.py 的 A1 自我測試（那支才會實際跑一次搜尋）。
+    span = float(COARSE[3][1] - COARSE[3][0])                # alpha 粗格距
+    final = span
+    for r in refines:
+        final /= r
+    P("\n【解析度】")
+    P(f"  alpha 粗網格格距   {span:.4f}")
+    P(f"  精修後實際格距     {final:.4f}"
+      f"（{span:.2f} / {' / '.join(str(r) for r in refines) or '1'}）")
+    if not refines:
+        fails.append("--refines 是空的，等於完全不精修，alpha 只會落在"
+                     f"{span:.2f} 間距的粗網格點上")
+    elif len(refines) < 2:
+        warns.append(f"只精修 {len(refines)} 階，alpha 實際解析度 "
+                     f"{final:.4f}。要當最終數字報請用 --refines 3,3"
+                     f"（0.022）——`_prelim` 系列就是單階，只能看方向")
+
+    # --- 3. 設定對帳：模型實際生效的值 vs config.toml 宣告的值 ---
+    # **刻意重新讀原始檔案，不吃 main() 已經解析好的 cfg 物件**：A2 那個
+    # bug 的形狀正是「cfg 讀進來之後，程式碼又用 cfg._data[...]=... 動態
+    # 覆寫掉某個值」。如果這裡改成跟 model 一樣的 cfg 物件比對，兩邊
+    # 用的會是同一份已經被覆寫過的值，永遠對得起來，等於讓這段檢查
+    # 失去意義。只有直接重讀檔案本身，才能看到「檔案上寫的」跟「程式碼
+    # 實際生效的」是否一致（2026-08-20 CodeRabbit review：原本這裡收了
+    # 一個沒用到的 cfg 參數，看起來像是要拿它比對，其實不是——移除它，
+    # 靠這段註解把「為什麼刻意不用 cfg」講清楚，不要留下疑似遺漏的參數）。
+    with open(HERE / "config.toml", "rb") as fh:
+        raw = tomllib.load(fh)
+    jf = raw.get("joint_fit", {})
+    P("\n【設定對帳】模型實際生效 vs config.toml 宣告")
+    pairs = [
+        ("mh_prior_mean", model._mh_mean, jf.get("mh_prior_mean")),
+        ("mh_prior_sigma", model._mh_sigma, jf.get("mh_prior_sigma")),
+        ("logage_min", model.bounds[0][0], jf.get("logage_min")),
+        ("logage_max", model.bounds[0][1], jf.get("logage_max")),
+        ("av_max", model.bounds[1][1], jf.get("av_max")),
+        ("fbin_max", model.bounds[2][1], jf.get("fbin_max")),
+        ("alpha_min", model.bounds[3][0], jf.get("alpha_min")),
+        ("alpha_max", model.bounds[3][1], jf.get("alpha_max")),
+        ("mh_min", model.bounds[4][0], jf.get("mh_min")),
+        ("mh_max", model.bounds[4][1], jf.get("mh_max")),
+    ]
+    for name, eff, decl in pairs:
+        if decl is None:
+            continue
+        same = abs(float(eff) - float(decl)) < 1e-9
+        P(f"  {'  ' if same else '!!'} {name:16s} 生效 {float(eff):+8.3f}"
+          f"   宣告 {float(decl):+8.3f}")
+        if not same:
+            fails.append(f"{name}：模型實際用 {float(eff):+.3f}，但 "
+                         f"config.toml 宣告 {float(decl):+.3f}"
+                         f"——程式碼裡有覆寫（A2 就是這樣把高斯先驗"
+                         f"悄悄關成均勻先驗的）")
+    # 沒有 config 對應、但會改變數字意義的執行期設定，一律印出來備查
+    P(f"     低質量段冪次     {model.low_mass_slope:+.3f}"
+      f"{'（自由參數）' if args.free_lowmass else '（固定）'}")
+    P(f"     離群成分比例     {model.outlier_frac:.4f}")
+    P(f"     BP/RP 誤差來源   "
+      f"{'各波段自身星等' if model.use_native_bprp_err else 'G 星等（見 B1）'}")
+    P(f"     額外亮度散布     {model.extra_scatter:.3f}")
+    P(f"     差異消光分布     {model.dav_distribution}")
+    P(f"     亮端截斷 g_bright {model.g_bright:.2f}")
+    if args.fix_mh is not None:
+        P(f"     金屬量鎖定       {args.fix_mh:+.3f}")
+
+    # --- 4. 搜尋軸 vs 等時線網格實際涵蓋 ---
+    # JointModel 建構時就會印警告，但那兩行淹在啟動輸出裡沒人看
+    #（p6_lowmass_v2 現在的 log 裡就有）。這裡換算成「幾個粗格點是幽靈」，
+    # 讓它變成一個要正面回答的數字。
+    ages = np.unique(np.asarray(grid["logAge"], float))
+    mhs = np.unique(np.asarray(grid["MH"], float))
+    P("\n【搜尋軸 vs 網格涵蓋】")
+    for label, axis, cov in (("logage", COARSE[0], ages),
+                             ("MH", COARSE[4], mhs)):
+        ghost = int(((axis < cov.min() - 1e-9)
+                     | (axis > cov.max() + 1e-9)).sum())
+        P(f"  {label:7s} 搜尋 [{axis.min():+.2f}, {axis.max():+.2f}]"
+          f"   網格涵蓋 [{cov.min():+.3f}, {cov.max():+.3f}]"
+          f"   幽靈格點 {ghost}/{len(axis)}")
+        if ghost:
+            warns.append(
+                f"{label} 有 {ghost}/{len(axis)} 個粗格點落在網格涵蓋之外，"
+                f"會被最近鄰吸附到邊界等時線——不是獨立的模型。"
+                f"argmax 若落在邊界上要當成網格覆蓋不足的假象，不是訊號")
+
+    # --- 5. 輸出檔狀態 ---
+    # manifest 不相容的情況在上游已經 sys.exit(1) 擋掉了，走到這裡只會是
+    # 「沒有舊檔」或「舊檔相容」，所以這段是報告不是判斷。
+    P("\n【輸出】")
+    P(f"  檔案               results/{out_path.name}")
+    P(f"  目前狀態           "
+      f"{'已存在，設定相容，會續傳' if partial else '不存在，從頭開始'}")
+    P(f"  續傳保護           有（每次重複算完立刻存檔＋寫入鎖）")
+
+    P("\n" + "=" * 74)
+    for w in warns:
+        P(f"  注意：{w}")
+    for f in fails:
+        P(f"  阻擋：{f}")
+    P(f"結論：{'不通過' if fails else '通過'}"
+      f"（阻擋 {len(fails)}、注意 {len(warns)}）")
+    P("=" * 74)
+    return 1 if fails else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--procs", type=int, default=None)
@@ -203,6 +368,22 @@ def main():
                     help="isochrone 網格檔名（在 isochrones/ 底下）。"
                          "換成 MIST 的檔案即可量出等時線模型造成的系統誤差")
     ap.add_argument("--tag", default="", help="輸出檔名後綴，避免覆蓋")
+    # --- 開跑前檢查（2026-08-20 新增）---
+    # 動機見 docs/reference/PREFLIGHT.md：本機佇列累計 103.1 機時裡有 86.6h
+    # （84%）是白跑的，而其中 74.9h 是「exit 0、檔案寫出來、數字看起來正常，
+    # 但算法不是我們以為的那個」——A1 精修 bug 一個人就吃掉 75 小時。
+    # **為什麼這個旗標放在 fit_real.py 裡、而不是另外寫一支檢查腳本**：
+    # 檢查腳本必須自己複製一份 argparse 預設值與模型建構流程，兩邊會各自
+    # 演化然後不同步——那正是 A1（旗標是對的、旗標的意思變了）與 A2
+    # （config.toml 宣告高斯先驗、程式碼寫死關掉）這兩個 bug 的形狀。
+    # 用同一支程式的同一個 parser、同一段模型建構，檢查到的就必然是
+    # 真正會跑的那組設定，不可能對不上。
+    ap.add_argument("--preflight", action="store_true",
+                    help="只做開跑前檢查然後結束，不進行任何擬合："
+                         "印出解析後的完整參數、模型實際生效的設定"
+                         "（對帳 config.toml）、搜尋軸 vs 網格涵蓋、"
+                         "輸出檔／manifest 衝突狀態。通過回傳 0，"
+                         "有阻擋級問題回傳非 0")
     # 精修階數。預設單階（格距 1/3）會讓 alpha 只落在 2.1/2.3/2.5 這種粗格點上；
     # 要當最終數字報時用 3,3（格距 1/9 = 0.022）才不會被量化污染。
     ap.add_argument("--refines", default="3")
@@ -372,9 +553,23 @@ def main():
         print(f"讀到既有部分結果 {out_path.name}：{n_done}"
               f"（會跳過已經算完的重複，不是從頭重算）\n", flush=True)
     out = {k: list(v) for k, v in partial.items()}
-    for key in [k.strip().upper() for k in args.configs.split(",")]:
-        if key not in CONFIGS:
-            continue
+    if args.preflight:
+        sys.exit(_preflight_report(args, base, grid, refines,
+                                   CONFIGS, out_path, out, len(color)))
+    # 打錯的設定名稱要當場中止，不能像下面迴圈那樣用 `if key not in
+    # CONFIGS: continue` 靜默略過——`--configs A,X` 打錯字時，沒有這段
+    # 驗證的話會悄悄只算 A，結果檔看起來正常，只是少了一個誰都不知道
+    # 該存在的設定，跟 `--preflight` 那份「意圖對帳」要防的是同一種錯
+    #（2026-08-20 CodeRabbit review：這裡跟 `_preflight_report()` 各自
+    # 過濾一次，preflight 那份只用來報告不影響真正執行，這裡才是真正
+    # 會不會跑錯的把關）。
+    requested = [k.strip().upper() for k in args.configs.split(",")]
+    unknown = [k for k in requested if k not in CONFIGS]
+    if unknown:
+        print(f"錯誤：--configs 有不存在的設定名稱 {unknown}"
+              f"（可用：{', '.join(CONFIGS)}）", flush=True)
+        sys.exit(1)
+    for key in requested:
         desc, s, extra, allow = CONFIGS[key]
         print(f"{'='*74}\n{key}：{desc}\n{'='*74}", flush=True)
         reps = out.get(key, [])

@@ -19,8 +19,10 @@ queue.txt 格式，每行一個工作：
 """
 from __future__ import annotations
 
+import csv
 import ctypes
 import os
+import re
 import subprocess
 import sys
 import time
@@ -32,6 +34,7 @@ QUEUE = HERE / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
 LOCK = HERE / "logs" / "run_queue.lock"
 STALL_RETRIES = HERE / "logs" / "stall_retries.txt"
+TICK_LOG = HERE / "logs" / "watchdog_ticks.log"
 
 # 2026-08-15：radial_r3 第一次執行卡死了 83 分鐘——行程活著、但完全零
 # CPU 時間增量、一個 multiprocessing worker 都沒 spawn 出來，得靠人工
@@ -125,15 +128,48 @@ def _pid_alive(pid: int) -> bool | None:
     int(LOCK.read_text()) 解析出來的整數，不存在 shell injection 的
     問題——自動掃描工具的 CWE-78 標記是這個模式的通用誤判，不是真的
     有可控字串被組進 shell 命令。"""
+    # **2026-08-20 修**：原本用 text=True 讓 subprocess 自己決定編碼。
+    # 這台是中文 Windows，`tasklist` 輸出 cp950（Big5）——平常剛好能解，
+    # 但只要環境有 PYTHONUTF8=1（用 UTF-8 去解 Big5 位元組），解碼會在
+    # subprocess 內部的讀取執行緒炸掉，`out.stdout` 變成 None，接著
+    # `str(pid) in None` 丟 TypeError。**後果比看起來嚴重**：這個函式的
+    # 整份設計是「探測失敗要回傳 None 讓呼叫端 fail closed」，但未捕捉的
+    # 例外會直接讓 run_queue.py 整個崩掉，fail-closed 完全沒生效——實際
+    # 就這樣發生過一次，佇列啟動後立刻死掉、什麼都沒跑。
+    # 改成讀 bytes 自己解碼（errors="replace" 保證不會因為編碼失敗），
+    # 並把 stdout 是 None 的情況明確當成探測失敗。
+    # **2026-08-20 CodeRabbit review 再抓到一個**：解碼修好之後，剩下的
+    # 風險在子字串比對本身——用 UTF-8 去解 cp950 時，雙位元組字元的尾
+    # 位元組若落在 ASCII 數字範圍，解出來的文字可能剛好含有跟 pid 相符
+    # 的數字序列，但那串數字其實不屬於任何欄位（是某個中文字被錯誤解碼
+    # 的殘骸）。後果：acquire_lock() 誤判鎖還被別的行程持有而直接
+    # sys.exit(1)，整條佇列被無故擋住。改成 `/FO CSV /NH` 拿結構化輸出，
+    # 只比對 PID 那一欄，跟主控台語言／編碼完全無關。
     try:
         out = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True,
-            text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            capture_output=True, timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception:                                 # noqa: BLE001
         return None
-    if out.returncode != 0:
+    if out.returncode != 0 or out.stdout is None:
         return None
-    return str(pid) in out.stdout
+    text = out.stdout.decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        # **2026-08-20 CodeRabbit review 訂正**：原本用 line.split(",")
+        # 天真切欄，Windows 映像檔名稱可以含逗號（服務／容器行程常見），
+        # 那種情況下 PID 欄會位移，讓這裡誤判成 False——後果是
+        # acquire_lock() 以為鎖已經沒人持有，直接刪掉還在被別的 runner
+        # 用的鎖檔案。改用 csv.reader 正確處理引號欄位裡的逗號。
+        parts = next(csv.reader([line]))
+        # 沒有相符行程時 tasklist 印的是一行資訊訊息（不是 CSV 資料列，
+        # 欄位數不對），所以只認「欄位數對、且 PID 欄能解析成整數」的行。
+        if len(parts) >= 2 and parts[1].strip().isdigit() \
+                and int(parts[1].strip()) == pid:
+            return True
+    return False
 
 
 def _process_tree_cpu_ticks(root_pid: int) -> int | None:
@@ -154,13 +190,19 @@ def _process_tree_cpu_ticks(root_pid: int) -> int | None:
              "Get-CimInstance Win32_Process | "
              "Select-Object ProcessId,ParentProcessId,KernelModeTime,"
              "UserModeTime | ConvertTo-Csv -NoTypeInformation"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, timeout=30,
             creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception:                                     # noqa: BLE001
         return None
-    if out.returncode != 0 or not out.stdout.strip():
+    # 同 _pid_alive() 的理由（見那邊 2026-08-20 的說明）：自己解碼，
+    # 不讓編碼問題把「回傳 None＝探測失敗」變成未捕捉例外。這支函式
+    # 崩掉會連帶把整個卡死監看迴圈帶走，而它正是用來讓長跑工作可靠的。
+    if out.returncode != 0 or out.stdout is None:
         return None
-    rows = out.stdout.strip().splitlines()
+    text = out.stdout.decode("utf-8", errors="replace").strip()
+    if not text:
+        return None
+    rows = text.splitlines()
     if len(rows) < 2:
         return None
     children: dict[int, list[int]] = {}
@@ -261,6 +303,132 @@ def _kill_process_tree(pid: int):
         pass
 
 
+def _log_tick(label: str, ticks, delta, note: str = "") -> None:
+    """把每次輪詢量到的 CPU tick 附加寫進 logs/watchdog_ticks.log。
+
+    2026-08-20 加入：稍早追查 radial_r3 反覆卡死時，發現完全沒有留下
+    輪詢過程的數值記錄，只有「判定卡死」那一行結論，事後沒辦法回頭看
+    卡死前 tick 是怎麼變化的（是真的長時間持平、還是踩到 2026-08-16
+    修掉的那個「下降誤判」bug）。這支函式本身不影響卡死判斷邏輯，純粹
+    留痕，讓下次真的卡死時能回頭看趨勢，不用只靠猜。用純 append 寫入，
+    這個檔案會持續長大，不做輪替——量不大（一行約 60-80 bytes，一個
+    多小時的工作撐死幾百行），需要時再手動清。"""
+    try:
+        TICK_LOG.parent.mkdir(exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        delta_str = "?" if delta is None else str(delta)
+        with open(TICK_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{ts}\t{label}\tticks={ticks}\tdelta={delta_str}"
+                    f"\t{note}\n")
+    except OSError:
+        pass                    # 留痕是輔助功能，寫檔失敗不該讓監看中止
+
+
+def _preflight_ok(label: str, cmd: str) -> bool:
+    """派工前先讓目標腳本自己做一次開跑前檢查（見 scripts/tools/preflight.py）。
+
+    只對已經支援 `--preflight` 的腳本生效；其他腳本一律放行（回傳 True），
+    **不是因為它們安全，是因為還沒有幫它們做這個功能**——涵蓋差異寫在
+    `docs/reference/PREFLIGHT.md`，不要把「放行」讀成「檢查過了」。
+    """
+    # 續傳能力（B3）判斷邏輯本體在 scripts/tools/preflight.py 的
+    # _has_resume()，這裡不重複實作一份——兩份 pattern 若之後改名/加條件
+    # 會不同步，其中一份會給出錯誤的「有續傳保護」結論（2026-08-20
+    # CodeRabbit review）。延後到函式內才 import（不放模組層級）是為了
+    # 避開循環匯入：preflight.py 的 gate_b() 也會 `import run_queue`。
+    tools_dir = str(HERE / "scripts" / "tools")
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import preflight                                         # noqa: PLC0415
+
+    script = cmd.split()[0]
+    if not preflight._has_resume(script):
+        # 警告不阻擋：這類腳本在沒被中斷時是會正常跑完的，直接擋掉
+        # 等於永遠不讓它跑。但這台機器過去四天被強制重開機 4 次，
+        # p6_lowmass_v2 因此連續四天每次都從頭重算、一次都沒完成，
+        # 所以派工的人要知道自己在賭什麼。根治是幫這些腳本補上
+        # fit_real.py 那套逐次存檔＋manifest 續傳。
+        print(f"  注意：{script} 沒有續傳機制，中途被砍（重開機／卡死"
+              f"重試）就得從頭重算——這台機器有非預期重開機的前科",
+              flush=True)
+    if script != "fit_real.py":
+        return True
+    try:
+        # 子行程要用 UTF-8 輸出，否則中文 Windows 下它會寫 cp950 到管線，
+        # 這邊以 utf-8 解出來全是亂碼，下面用開頭字串挑警告行就全部挑不到
+        #（訊息沒消失，但沒人看得懂＝等於沒有警告）。只影響這個子行程，
+        # 不會像整個 process 設 PYTHONUTF8 那樣連帶弄壞 tasklist 的解碼。
+        env = {**os.environ, "PYTHONUTF8": "1"}
+        r = subprocess.run([sys.executable, script, *cmd.split()[1:],
+                            "--preflight"], cwd=str(HERE), env=env,
+                           capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=1800)
+    except Exception as e:                                   # noqa: BLE001
+        # **2026-08-20 CodeRabbit review 訂正**：原本這裡是 fail open
+        # （「檢查本身壞掉不該擋住正事」，回傳 True 照常開跑），但這正好
+        # 是整個 Gate B 想防的事——preflight 逾時或啟動失敗時放行，等於
+        # 讓一個完全沒驗證過的設定直接跑好幾小時，跟「跑完 exit 0 但
+        # 算法不對」是同一種「悄悄不對」的形狀，只是失敗點往前挪了一層。
+        # 改成 fail closed，跟 acquire_lock() 探測失敗時「不確定就當作
+        # 可能還活著」的既有慣例一致：preflight.py 只做網格建構跟極小量
+        # 計算，逾時（1800 秒）本身就是異常訊號，值得停下來查，不是
+        # 悄悄放行的理由。
+        print(f"  開跑前檢查無法執行（{type(e).__name__}: {e}），跳過 {label}"
+              f"（fail closed；preflight_fail 不會永久噤聲，下次重啟"
+              f"run_queue.py 會自動再給一次機會，見 read_done()）",
+              flush=True)
+        return False
+    for ln in (r.stdout or "").splitlines():
+        if ln.strip().startswith(preflight.STATUS_PREFIXES):
+            print(f"  {ln.strip()}", flush=True)
+    if r.returncode != 0:
+        print(f"  開跑前檢查不通過（退出碼 {r.returncode}），跳過 {label}，"
+              f"不浪費機時。修好後把 logs/queue_done.txt 裡那一行刪掉即可"
+              f"重新排隊。", flush=True)
+        return False
+    return True
+
+
+def _postflight(label: str, cmd: str) -> None:
+    """跑完立刻驗收產出（Gate C）。只印警告、不改變佇列流程——結果檔已經
+    寫出來了，這裡的價值是「當天就看到問題」而不是幾週後才發現（P11 那
+    12 次全部等於 2.500 的簽章在檔案裡躺了很久沒人看）。"""
+    if cmd.split()[0] != "fit_real.py":
+        return
+    # 同時吃 `--tag value` 與 `--tag=value` 兩種 argparse 都接受的形式，
+    # 原本只吃空白分隔那種，`=` 形式會讓 m 是 None 而整支函式靜默 return——
+    # 使用者會以為「這次沒有 Gate C 警告」，其實是驗收根本沒有跑
+    # （2026-08-20 CodeRabbit review 第一輪）。
+    # **第二輪又抓到**：`fit_real.py` 的 `--tag` 預設值是空字串，完全
+    # 沒帶這個旗標時 m 一樣是 None，但那不是「沒有輸出檔」，是「輸出檔
+    # 沒有後綴」（`results/fit_real.npz`）——原本的 `or not m` 會把這種
+    # 合法情況也當成跳過，讓沒帶 --tag 的每一個成功工作都漏掉 Gate C。
+    # 改成 m 沒對到就當空字串，不再用「有沒有對到」判斷要不要驗收。
+    m = re.search(r"--tag[=\s]+(\S+)", cmd)
+    tag = m.group(1) if m else ""
+    npz = HERE / "results" / f"fit_real{tag}.npz"
+    if not npz.exists():
+        # **2026-08-20 CodeRabbit review**：原本這裡靜默 return——一個
+        # 狀態回報 "ok" 但沒有真的產出預期 npz 檔案的工作（例如腳本邏輯
+        # 分支問題、寫到了別的路徑），Gate C 完全不會印任何東西，跟
+        # 「驗收通過、沒問題」長得一樣，實際是「根本沒驗收到」。
+        print(f"  產出驗收警告：找不到預期輸出檔：{npz}", flush=True)
+        return
+    try:
+        tools_dir = str(HERE / "scripts" / "tools")
+        if tools_dir not in sys.path:
+            sys.path.insert(0, tools_dir)
+        import preflight                                     # noqa: PLC0415
+        fails = preflight.gate_c(npz, verbose=False)
+    except Exception as e:                                   # noqa: BLE001
+        print(f"  產出驗收無法執行（{type(e).__name__}: {e}）", flush=True)
+        return
+    for f in fails:
+        print(f"  產出驗收警告：{f}", flush=True)
+    if not fails:
+        print(f"  產出驗收通過：{npz.name}", flush=True)
+
+
 def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
     """跑一個子行程，定期量整棵行程樹的 CPU 時間，長時間零增量就判定
     卡死、砍掉重試（見檔案開頭 STALL_* 常數與 2026-08-15 的說明）。
@@ -296,6 +464,7 @@ def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
                 # `None`，讓下一次量到的結果重新走「初始化基準」那條路
                 # （見下面 `if last_ticks is None or ...`），需要之後再
                 # 連續 STALL_WINDOW_S 秒量到不變的值才會判定卡死。
+                _log_tick(label, None, None, "量不到（行程剛結束或 PowerShell 呼叫失敗）")
                 last_ticks = None
                 continue
             # **2026-08-16 CodeRabbit review 抓到的真 bug**：原本
@@ -311,9 +480,13 @@ def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
             # ticks 連續 `STALL_WINDOW_S` 秒完全沒變（不是「沒有增加」）
             # 才判定卡死——這才是註解原本講的「CPU 時間真的不動」。
             if last_ticks is None or ticks != last_ticks:
+                delta = None if last_ticks is None else ticks - last_ticks
+                _log_tick(label, ticks, delta, "初始化基準" if last_ticks is None else "")
                 last_ticks, last_check = ticks, now
                 continue
-            if now - last_check >= STALL_WINDOW_S:
+            flat_s = now - last_check
+            _log_tick(label, ticks, 0, f"持平 {flat_s:.0f}s")
+            if flat_s >= STALL_WINDOW_S:
                 print(f"  警告：{label} 過去 {STALL_WINDOW_S/60:.0f} 分鐘"
                       f"整棵行程樹 CPU 時間零增量，判定卡死，砍掉。",
                       flush=True)
@@ -409,7 +582,15 @@ def read_queue():
         if not line or line.startswith("#") or "|" not in line:
             continue
         label, cmd = line.split("|", 1)
-        out.append((label.strip(), cmd.strip()))
+        label, cmd = label.strip(), cmd.strip()
+        # `label|`（沒有指令）會讓下游 cmd.split()[0] IndexError——
+        # 在來源這裡一次擋掉，兩個呼叫端（_preflight_ok／_postflight）
+        # 都不用各自防禦（2026-08-20 CodeRabbit review）。
+        if not cmd:
+            print(f"警告：queue.txt 裡 {label!r} 這行沒有指令，略過。",
+                  flush=True)
+            continue
+        out.append((label, cmd))
     return out
 
 
@@ -426,7 +607,15 @@ def read_done():
     只有 stalled_giveup 這個特例排除在外，讓它留在 pending 讓下次重啟
     自然重跑（配合 mark_stall_giveup() 把重試次數計數器歸零，重跑時
     有完整的 MAX_STALL_RETRIES 次數可用，不會因為計數器沒重置而一卡
-    就立刻又放棄）。"""
+    就立刻又放棄）。
+
+    **2026-08-20 加入 preflight_fail 同一個理由**：開跑前檢查沒過（設定
+    寫錯、依賴檔案缺失這類）常常是人工修好設定或補齊檔案就能解決的，
+    跟 exit1（程式碼本身邏輯或資料真的有問題）不是同一類。若也永久噤聲，
+    修好之後還得手動去 logs/queue_done.txt 刪那一行才會重跑，等於重新
+    製造一次「隱形失敗」。這一輪迴圈裡不會無窮重試——main() 的
+    skip_this_run 已經擋住同一輪重新選中同一個標籤，這裡只影響「下次
+    重啟」會不會再給機會（2026-08-20 CodeRabbit review）。"""
     if not DONE.exists():
         return set()
     out = set()
@@ -436,7 +625,7 @@ def read_done():
         parts = l.split("\t")
         label = parts[0]
         status = parts[1] if len(parts) > 1 else ""
-        if status == "stalled_giveup":
+        if status in ("stalled_giveup", "preflight_fail"):
             continue
         out.add(label)
     return out
@@ -487,6 +676,15 @@ def main():
             log = HERE / "logs" / f"{label}.log"
             print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] 開始 {label}\n"
                   f"  python {cmd}\n  輸出 -> {log.name}\n{'='*70}", flush=True)
+            if not _preflight_ok(label, cmd):
+                # 開跑前檢查沒過就不要燒好幾個小時（動機見 scripts/tools/
+                # preflight.py 檔頭：白跑的 86.6 機時裡有 74.9h 是「跑完
+                # exit 0 但算法不是我們以為的那個」）。記一筆 preflight_fail
+                # 讓它不會在這一輪迴圈裡被重新選中，人工修好設定後
+                # 從 logs/queue_done.txt 刪掉那一行就會重新排進 pending。
+                mark_done(label, "preflight_fail", 0.0)
+                skip_this_run.add(label)
+                continue
             try:
                 status, secs, stalled = run_with_stall_watchdog(
                     [sys.executable, "-u"] + cmd.split(), HERE, log, label)
@@ -515,6 +713,8 @@ def main():
             mark_done(label, status, secs)
             print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
                   f"（{secs/60:.1f} 分）", flush=True)
+            if status == "ok":
+                _postflight(label, cmd)
     finally:
         release_system_awake()
         release_lock()
