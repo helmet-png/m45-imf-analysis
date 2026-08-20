@@ -177,7 +177,7 @@ def load_partial(out_path: Path) -> dict:
         return {}
 
 
-def _preflight_report(args, model, cfg, grid, refines, configs,
+def _preflight_report(args, model, grid, refines, configs,
                       out_path, partial, n_obs) -> int:
     """`--preflight` 的內容：把「這次到底會算什麼」攤開來，回傳退出碼。
 
@@ -201,6 +201,16 @@ def _preflight_report(args, model, cfg, grid, refines, configs,
     # --- 1. 這次實際會算什麼（意圖對帳）---
     keys = [k.strip().upper() for k in args.configs.split(",")]
     valid = [k for k in keys if k in configs]
+    unknown = [k for k in keys if k not in configs]
+    if unknown:
+        # main() L~560 對打錯的設定名稱是靜默用交集過濾掉（同樣的邏輯
+        # 這裡的 valid 也是）——`--configs A,X` 會讓 X 被無聲丟棄，preflight
+        # 通過、擬合照跑，但算出來的設定跟意圖不同。這正是本段「意圖
+        # 對帳」要抓的形狀，所以升級成阻擋，不能只當警告放行
+        #（2026-08-20 CodeRabbit review）。
+        fails.append(f"--configs 有不存在的設定名稱 {unknown}"
+                     f"（可用：{', '.join(configs)}），它們會被靜默略過，"
+                     f"實際只會算 {valid}")
     n_new = sum(max(0, args.repeats - len(partial.get(k, []))) for k in valid)
     P("\n【工作量】")
     P(f"  設定（--configs）  {', '.join(valid)}"
@@ -245,7 +255,16 @@ def _preflight_report(args, model, cfg, grid, refines, configs,
                      f"（0.022）——`_prelim` 系列就是單階，只能看方向")
 
     # --- 3. 設定對帳：模型實際生效的值 vs config.toml 宣告的值 ---
-    raw = tomllib.load(open(HERE / "config.toml", "rb"))
+    # **刻意重新讀原始檔案，不吃 main() 已經解析好的 cfg 物件**：A2 那個
+    # bug 的形狀正是「cfg 讀進來之後，程式碼又用 cfg._data[...]=... 動態
+    # 覆寫掉某個值」。如果這裡改成跟 model 一樣的 cfg 物件比對，兩邊
+    # 用的會是同一份已經被覆寫過的值，永遠對得起來，等於讓這段檢查
+    # 失去意義。只有直接重讀檔案本身，才能看到「檔案上寫的」跟「程式碼
+    # 實際生效的」是否一致（2026-08-20 CodeRabbit review：原本這裡收了
+    # 一個沒用到的 cfg 參數，看起來像是要拿它比對，其實不是——移除它，
+    # 靠這段註解把「為什麼刻意不用 cfg」講清楚，不要留下疑似遺漏的參數）。
+    with open(HERE / "config.toml", "rb") as fh:
+        raw = tomllib.load(fh)
     jf = raw.get("joint_fit", {})
     P("\n【設定對帳】模型實際生效 vs config.toml 宣告")
     pairs = [
@@ -535,11 +554,22 @@ def main():
               f"（會跳過已經算完的重複，不是從頭重算）\n", flush=True)
     out = {k: list(v) for k, v in partial.items()}
     if args.preflight:
-        sys.exit(_preflight_report(args, base, cfg, grid, refines,
+        sys.exit(_preflight_report(args, base, grid, refines,
                                    CONFIGS, out_path, out, len(color)))
-    for key in [k.strip().upper() for k in args.configs.split(",")]:
-        if key not in CONFIGS:
-            continue
+    # 打錯的設定名稱要當場中止，不能像下面迴圈那樣用 `if key not in
+    # CONFIGS: continue` 靜默略過——`--configs A,X` 打錯字時，沒有這段
+    # 驗證的話會悄悄只算 A，結果檔看起來正常，只是少了一個誰都不知道
+    # 該存在的設定，跟 `--preflight` 那份「意圖對帳」要防的是同一種錯
+    #（2026-08-20 CodeRabbit review：這裡跟 `_preflight_report()` 各自
+    # 過濾一次，preflight 那份只用來報告不影響真正執行，這裡才是真正
+    # 會不會跑錯的把關）。
+    requested = [k.strip().upper() for k in args.configs.split(",")]
+    unknown = [k for k in requested if k not in CONFIGS]
+    if unknown:
+        print(f"錯誤：--configs 有不存在的設定名稱 {unknown}"
+              f"（可用：{', '.join(CONFIGS)}）", flush=True)
+        sys.exit(1)
+    for key in requested:
         desc, s, extra, allow = CONFIGS[key]
         print(f"{'='*74}\n{key}：{desc}\n{'='*74}", flush=True)
         reps = out.get(key, [])

@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -38,8 +39,15 @@ import numpy as np
 HERE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(HERE))
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")       # Windows 主控台預設 cp950
+
+def _force_utf8_stdout() -> None:
+    """Windows 主控台預設 cp950。**只能在直接執行這支腳本時呼叫**——
+    `run_queue.py` 的 `_postflight()` 會 `import preflight` 在同一個
+    process 裡呼叫 `gate_c()`；如果這段留在模組層級（匯入就執行），
+    會連帶把 `run_queue.py` 自己的 stdout 編碼改掉，副作用跑到呼叫端
+    身上（2026-08-20 CodeRabbit review 抓到）。"""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
 
 
 # ---------------------------------------------------------------- Gate A1
@@ -151,6 +159,14 @@ def gate_a1(verbose=True) -> list[str]:
 
 # ----------------------------------------------------------------- Gate B
 
+# 判斷 fit_real.py --preflight 子行程輸出裡哪些行是「這裡要看的」。
+# 集中成一個常數，run_queue.py 直接匯入這個，不要各自維護一份會漏同步
+# 的複本——`fit_real.py` 的 manifest 不相容時只印「錯誤：...」就
+# sys.exit(1)（見 main() 開頭），漏了這個前綴就只看得到退出碼、看不到
+# 原因（2026-08-20 CodeRabbit review 抓到這個漏項）。
+STATUS_PREFIXES = ("注意：", "阻擋：", "結論：", "錯誤：")
+
+
 def _has_resume(script: str) -> bool:
     """這支腳本撐不撐得過中途被砍（重開機／卡死重試）。
 
@@ -193,12 +209,16 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
                 f"從頭重算。這台機器過去四天被 Windows 強制重開機至少 4 次，"
                 f"p6_lowmass_v2 因此空轉了四天一次都沒跑完")
         if script == "fit_real.py":
+            # 見 run_queue.py 的 _preflight_ok() 同一段註解：子行程要用
+            # UTF-8 輸出，否則中文 Windows 下寫 cp950、這邊解出來是亂碼，
+            # 下面挑警告行的字串比對會全部挑不到。
+            env = {**os.environ, "PYTHONUTF8": "1"}
             r = subprocess.run([sys.executable, script, *cmd.split()[1:],
-                                "--preflight"], cwd=str(HERE),
+                                "--preflight"], cwd=str(HERE), env=env,
                                capture_output=True, text=True,
                                encoding="utf-8", errors="replace")
             tail = [ln for ln in (r.stdout or "").splitlines()
-                    if ln.strip().startswith(("注意：", "阻擋：", "結論："))]
+                    if ln.strip().startswith(STATUS_PREFIXES)]
             if verbose:
                 for ln in tail:
                     print(f"     {ln.strip()}")
@@ -226,7 +246,11 @@ def gate_c(npz_path: Path, verbose=True) -> list[str]:
     from injection_recovery import COARSE
     import json
     fails = []
-    d = np.load(npz_path, allow_pickle=True)
+    # allow_pickle=False：manifest 存的是 np.array(json.dumps(...))，
+    # 純 unicode 陣列，其餘鍵都是數值陣列，都不需要 pickle。Gate C 由
+    # 無人監看的 run_queue.py 自動呼叫，開 allow_pickle 等於讓惡意/損毀
+    # 的 npz 有機會在讀取時執行任意程式碼（2026-08-20 CodeRabbit review）。
+    d = np.load(npz_path, allow_pickle=False)
     names = ["logage", "A_V", "f_bin", "alpha", "MH", "q_gamma", "dav"]
     if verbose:
         print(f"【Gate C】{npz_path.name}")
@@ -270,7 +294,7 @@ def gate_c(npz_path: Path, verbose=True) -> list[str]:
                 f"{npz_path.name}[{key}]：宣稱精修 {len(refines)} 階，但"
                 f"最佳點在全部 {n_on} 個維度都精確落在粗網格節點上——"
                 f"精修很可能沒有生效（A1 的簽章）")
-        if scatter is not None and arr.shape[0] >= 3 \
+        if scatter is not None and nd > 3 and arr.shape[0] >= 3 \
                 and float(scatter[3]) == 0.0:
             fails.append(
                 f"{npz_path.name}[{key}]：{arr.shape[0]} 次重複的 alpha "
@@ -289,6 +313,13 @@ def main():
     ap.add_argument("--all", action="store_true", help="跑 Gate A + B")
     ap.add_argument("npz", nargs="*", type=Path, help="Gate C 要驗收的結果檔")
     a = ap.parse_args()
+    # 沒選任何關卡時，原本 fails 是空 list，會印「結論：通過」——但一項
+    # 檢查都沒做，呼叫端（人工或腳本）會把這個 0 誤讀成「查過了、沒問題」。
+    # 2026-08-20 CodeRabbit review 抓到。
+    if not a.all and not a.gate:
+        ap.error("要指定 --gate a/b/c 或 --all，否則不會執行任何檢查")
+    if a.gate == "c" and not a.npz:
+        ap.error("--gate c 需要至少一個結果檔路徑")
     fails = []
     if a.all or a.gate == "a":
         fails += gate_a1()
@@ -308,4 +339,5 @@ def main():
 
 
 if __name__ == "__main__":
+    _force_utf8_stdout()
     sys.exit(main())

@@ -137,15 +137,30 @@ def _pid_alive(pid: int) -> bool | None:
     # 就這樣發生過一次，佇列啟動後立刻死掉、什麼都沒跑。
     # 改成讀 bytes 自己解碼（errors="replace" 保證不會因為編碼失敗），
     # 並把 stdout 是 None 的情況明確當成探測失敗。
+    # **2026-08-20 CodeRabbit review 再抓到一個**：解碼修好之後，剩下的
+    # 風險在子字串比對本身——用 UTF-8 去解 cp950 時，雙位元組字元的尾
+    # 位元組若落在 ASCII 數字範圍，解出來的文字可能剛好含有跟 pid 相符
+    # 的數字序列，但那串數字其實不屬於任何欄位（是某個中文字被錯誤解碼
+    # 的殘骸）。後果：acquire_lock() 誤判鎖還被別的行程持有而直接
+    # sys.exit(1)，整條佇列被無故擋住。改成 `/FO CSV /NH` 拿結構化輸出，
+    # 只比對 PID 那一欄，跟主控台語言／編碼完全無關。
     try:
         out = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True,
-            timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            capture_output=True, timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception:                                 # noqa: BLE001
         return None
     if out.returncode != 0 or out.stdout is None:
         return None
-    return str(pid) in out.stdout.decode("utf-8", errors="replace")
+    text = out.stdout.decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        parts = [p.strip().strip('"') for p in line.split(",")]
+        # 沒有相符行程時 tasklist 印的是一行資訊訊息（不是 CSV 資料列，
+        # 欄位數不對），所以只認「欄位數對、且 PID 欄能解析成整數」的行。
+        if len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) == pid:
+            return True
+    return False
 
 
 def _process_tree_cpu_ticks(root_pid: int) -> int | None:
@@ -307,19 +322,26 @@ def _preflight_ok(label: str, cmd: str) -> bool:
     **不是因為它們安全，是因為還沒有幫它們做這個功能**——涵蓋差異寫在
     `docs/reference/PREFLIGHT.md`，不要把「放行」讀成「檢查過了」。
     """
+    # 續傳能力（B3）判斷邏輯本體在 scripts/tools/preflight.py 的
+    # _has_resume()，這裡不重複實作一份——兩份 pattern 若之後改名/加條件
+    # 會不同步，其中一份會給出錯誤的「有續傳保護」結論（2026-08-20
+    # CodeRabbit review）。延後到函式內才 import（不放模組層級）是為了
+    # 避開循環匯入：preflight.py 的 gate_b() 也會 `import run_queue`。
+    tools_dir = str(HERE / "scripts" / "tools")
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import preflight                                         # noqa: PLC0415
+
     script = cmd.split()[0]
-    src = (HERE / script)
-    if src.exists():
-        t = src.read_text(encoding="utf-8", errors="replace")
-        if not ("load_partial" in t and "MANIFEST_KEY" in t):
-            # 警告不阻擋：這類腳本在沒被中斷時是會正常跑完的，直接擋掉
-            # 等於永遠不讓它跑。但這台機器過去四天被強制重開機 4 次，
-            # p6_lowmass_v2 因此連續四天每次都從頭重算、一次都沒完成，
-            # 所以派工的人要知道自己在賭什麼。根治是幫這些腳本補上
-            # fit_real.py 那套逐次存檔＋manifest 續傳。
-            print(f"  注意：{script} 沒有續傳機制，中途被砍（重開機／卡死"
-                  f"重試）就得從頭重算——這台機器有非預期重開機的前科",
-                  flush=True)
+    if not preflight._has_resume(script):
+        # 警告不阻擋：這類腳本在沒被中斷時是會正常跑完的，直接擋掉
+        # 等於永遠不讓它跑。但這台機器過去四天被強制重開機 4 次，
+        # p6_lowmass_v2 因此連續四天每次都從頭重算、一次都沒完成，
+        # 所以派工的人要知道自己在賭什麼。根治是幫這些腳本補上
+        # fit_real.py 那套逐次存檔＋manifest 續傳。
+        print(f"  注意：{script} 沒有續傳機制，中途被砍（重開機／卡死"
+              f"重試）就得從頭重算——這台機器有非預期重開機的前科",
+              flush=True)
     if script != "fit_real.py":
         return True
     try:
@@ -338,7 +360,7 @@ def _preflight_ok(label: str, cmd: str) -> bool:
               flush=True)
         return True
     for ln in (r.stdout or "").splitlines():
-        if ln.strip().startswith(("注意：", "阻擋：", "結論：")):
+        if ln.strip().startswith(preflight.STATUS_PREFIXES):
             print(f"  {ln.strip()}", flush=True)
     if r.returncode != 0:
         print(f"  開跑前檢查不通過（退出碼 {r.returncode}），跳過 {label}，"
@@ -352,14 +374,20 @@ def _postflight(label: str, cmd: str) -> None:
     """跑完立刻驗收產出（Gate C）。只印警告、不改變佇列流程——結果檔已經
     寫出來了，這裡的價值是「當天就看到問題」而不是幾週後才發現（P11 那
     12 次全部等於 2.500 的簽章在檔案裡躺了很久沒人看）。"""
-    m = re.search(r"--tag\s+(\S+)", cmd)
+    # 同時吃 `--tag value` 與 `--tag=value` 兩種 argparse 都接受的形式，
+    # 原本只吃空白分隔那種，`=` 形式會讓 m 是 None 而整支函式靜默 return——
+    # 使用者會以為「這次沒有 Gate C 警告」，其實是驗收根本沒有跑
+    # （2026-08-20 CodeRabbit review）。
+    m = re.search(r"--tag[=\s]+(\S+)", cmd)
     if cmd.split()[0] != "fit_real.py" or not m:
         return
     npz = HERE / "results" / f"fit_real{m.group(1)}.npz"
     if not npz.exists():
         return
     try:
-        sys.path.insert(0, str(HERE / "scripts" / "tools"))
+        tools_dir = str(HERE / "scripts" / "tools")
+        if tools_dir not in sys.path:
+            sys.path.insert(0, tools_dir)
         import preflight                                     # noqa: PLC0415
         fails = preflight.gate_c(npz, verbose=False)
     except Exception as e:                                   # noqa: BLE001
@@ -524,7 +552,15 @@ def read_queue():
         if not line or line.startswith("#") or "|" not in line:
             continue
         label, cmd = line.split("|", 1)
-        out.append((label.strip(), cmd.strip()))
+        label, cmd = label.strip(), cmd.strip()
+        # `label|`（沒有指令）會讓下游 cmd.split()[0] IndexError——
+        # 在來源這裡一次擋掉，兩個呼叫端（_preflight_ok／_postflight）
+        # 都不用各自防禦（2026-08-20 CodeRabbit review）。
+        if not cmd:
+            print(f"警告：queue.txt 裡 {label!r} 這行沒有指令，略過。",
+                  flush=True)
+            continue
+        out.append((label, cmd))
     return out
 
 
@@ -541,7 +577,15 @@ def read_done():
     只有 stalled_giveup 這個特例排除在外，讓它留在 pending 讓下次重啟
     自然重跑（配合 mark_stall_giveup() 把重試次數計數器歸零，重跑時
     有完整的 MAX_STALL_RETRIES 次數可用，不會因為計數器沒重置而一卡
-    就立刻又放棄）。"""
+    就立刻又放棄）。
+
+    **2026-08-20 加入 preflight_fail 同一個理由**：開跑前檢查沒過（設定
+    寫錯、依賴檔案缺失這類）常常是人工修好設定或補齊檔案就能解決的，
+    跟 exit1（程式碼本身邏輯或資料真的有問題）不是同一類。若也永久噤聲，
+    修好之後還得手動去 logs/queue_done.txt 刪那一行才會重跑，等於重新
+    製造一次「隱形失敗」。這一輪迴圈裡不會無窮重試——main() 的
+    skip_this_run 已經擋住同一輪重新選中同一個標籤，這裡只影響「下次
+    重啟」會不會再給機會（2026-08-20 CodeRabbit review）。"""
     if not DONE.exists():
         return set()
     out = set()
@@ -551,7 +595,7 @@ def read_done():
         parts = l.split("\t")
         label = parts[0]
         status = parts[1] if len(parts) > 1 else ""
-        if status == "stalled_giveup":
+        if status in ("stalled_giveup", "preflight_fail"):
             continue
         out.add(label)
     return out

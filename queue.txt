@@ -185,6 +185,14 @@ radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --config
 radial_r1_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final
 radial_r2_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final
 radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,3 --tag _radial_r3_final
+# rall 刻意不帶 --radius-range：這是四項裡唯一的「真正全樣本」對照組，
+# 不是「0-5.1 度」這個切片。文件裡寫的「0-5.1 度」是描述目前樣本的
+# 實際涵蓋範圍（cone 搜尋半徑 5.0 度，見 config.toml 的 radius_deg），
+# 不是一個要靠 --radius-range 主動執行的裁切——5.1 這個數字沒有對應到
+# 任何設定值，寫死進來反而會在樣本涵蓋範圍改變時（例如之後真的放大
+# 搜尋半徑）悄悄變成錯誤的裁切，讓 rall 不再是真正的「全部」
+# （2026-08-20 CodeRabbit review 建議加這個旗標，評估後決定不採用，
+# 理由記在這裡）。
 radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
 
 p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
