@@ -497,13 +497,32 @@ def main():
         # `TypeError: list indices must be integers or slices, not tuple`
         # （這是既有 bug，續傳測試時發現，跟這次的 checkpoint 重構本身
         # 無關但同一條路徑上，一併修掉）。
-        out[key] = np.array(reps)
+        #
+        # 再截一次 [:args.repeats]：`checkpoint.save_progress()` 偵測到
+        # 磁碟上有另一個行程寫入更新的版本時，會直接回傳磁碟上的完整
+        # `reps`（見該函式「改沿用磁碟版本繼續」那段）——那份完整版本
+        # 可能比這次 `args.repeats` 要求的多，不截斷的話跨行程競態下
+        # 統計筆數又會跟這次要求的次數對不上，同一顆問題（見上面
+        # 主迴圈前 `out = {...}[:args.repeats]` 那次修正）在跨行程續傳
+        # 這條路徑上重演一次（2026-08-20 CodeRabbit review）。
+        out[key] = np.array(reps[:args.repeats])
         arr = out[key]
         if args.repeats > 1:
             print(f"{key} 跨 {args.repeats} 次：alpha 平均 {arr[:,3].mean():.3f}"
                   f"、散布 {arr[:,3].std():.3f}"
                   f"（{'  '.join(f'{v:.3f}' for v in arr[:,3])}）\n", flush=True)
 
+    # 上面 `out[key] = np.array(...)` 的轉型只發生在 `for key in
+    # requested:` 迴圈內，只碰得到這次 `--configs` 選到的設定——`out`
+    # 裡若還混著這次沒選、只是沿用舊 checkpoint 殘留的設定（例如上例的
+    # A），那些鍵仍停在最初 `out = {k: list(v)[:args.repeats] for ...}`
+    # 給的原始 list，下面 `out[key][:, 3]` 會丟
+    # `TypeError: list indices must be integers or slices, not tuple`
+    # ——跟前面那個「全部 repeats 都被續傳跳過」的既有 bug 同一個形狀，
+    # 換成「這個 key 這次根本沒被主迴圈碰過」這個變體，一併在這裡收尾
+    # 統一轉型修掉，不用在每個可能少碰到某個 key 的分支各自補一次
+    # （2026-08-20 CodeRabbit review 抓到「A 混進 C 的統計」才發現）。
+    out = {k: np.asarray(v) for k, v in out.items()}
     print(f"{'='*74}\nalpha 隨模型設定的變化\n{'='*74}")
     print(f"{'設定':<6}{'說明':<34}{'alpha 平均':>11}{'散布':>8}{'相對 A':>10}")
     a0 = out["A"][:, 3].mean() if "A" in out else np.nan
@@ -511,7 +530,15 @@ def main():
         a = out[key][:, 3]
         print(f"{key:<6}{CONFIGS[key][0]:<34}{a.mean():>11.3f}"
               f"{a.std():>8.3f}{a.mean()-a0:>+10.3f}")
-    if "A" in out and "C" in out and args.repeats > 1:
+    # 除了 args.repeats > 1，還要求 A／C 兩邊「這次手上的筆數」本身
+    # 都 > 1：`out` 裡可能混著這次沒被 --configs 選到、只是沿用舊
+    # checkpoint 殘留筆數的設定（例如舊檔只有 A 的 1 筆結果，這次跑
+    # `--configs C --repeats 2`，A 完全沒被這次的主迴圈碰過，`out["A"]`
+    # 停在 1 筆）——用 `args.repeats > 1` 判斷不出這種情況，`len(out["A"])`
+    # 只有 1 時 `var(ddof=1)` 除以 (1-1)=0 會靜默產生 nan，混進看起來
+    # 正常的位移報表裡（2026-08-20 CodeRabbit review）。
+    if "A" in out and "C" in out and args.repeats > 1 \
+            and len(out["A"]) > 1 and len(out["C"]) > 1:
         # 位移要與重現性比較才有意義。兩組各自的散布合併成位移的標準誤。
         na, nc = len(out["A"]), len(out["C"])
         se = np.sqrt(out["A"][:, 3].var(ddof=1) / na
