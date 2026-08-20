@@ -54,6 +54,13 @@ HOBART_PLEIADES = {
     "PDMF（未修雙星／動力學）": dict(mx1=0.24, mx2=0.91, a_med=1.62, a_high=3.04),
     "stellar IMF（已修雙星＋動力學）": dict(mx1=0.24, mx2=0.91, a_med=1.67, a_high=3.33),
 }
+# 修正鏈的中繼值：只修雙星、還沒做動力學回推的 alpha_high。取自該文
+# Table 4「Binary corrected cluster IMF properties」的 h,bin 欄（Pleiades
+# 那一列）。這個中繼值不在 HOBART_PLEIADES 裡（那組是分段冪律的完整
+# 參數，Table 4 只給高質量段單一數字，沒有斷點/中質量段可以重建完整
+# 分段冪律），只用來拆解 PDMF→stellar IMF 這段落差裡雙星修正跟動力學
+# 修正各自的貢獻。
+HOBART_PLEIADES_ALPHA_HIGH_BINARY_CORRECTED = 3.11
 
 # --- 要拿來重新擬合的質量範圍 -------------------------------------------
 RANGES = [
@@ -63,17 +70,20 @@ RANGES = [
 ]
 
 # --- 對照用的實際數字 ---------------------------------------------------
-# 每一筆都標明來源與可信度狀態，不要在這裡放沒出處的數字。
-REFERENCE_VALUES = [
-    ("Pang+2024 M45（單一冪律，**擬合質量範圍未查證**）", "2.01 +/- 0.09",
-     "Pang et al. 2024 Table 1，本專案解析；質量範圍待核對原文"),
-    ("本專案 alpha_naive（0.30-2.50 單一冪律）", "1.978 +/- 0.069",
-     "x64 機器獨立重跑驗證，見 WORK_BOARD.md 2026-08-12 條目"),
-    ("本專案 alpha_forward（>0.5 Kroupa 段，已修雙星）", "2.382 +/- 0.068",
-     "headline p2_final2_v3 正式版（10/10 次重複，2026-08-20 定案，A1/A2 已解除）"),
-    ("Hobart+2026 alpha_high（>0.91）", "PDMF 3.04 / stellar IMF 3.33",
-     "arXiv:2607.17300 Table 2 / Table 5"),
-]
+# 每一筆都標明來源與可信度狀態，不要在這裡放沒出處的數字。alpha/err 是
+# 數值（不是字串），下面的比較與判讀文字全部從這裡算出來，不要另外
+#手動抄一份數字進 print 字串——避免上面的常數改了、下面判讀文字忘記
+#跟著動，兩邊silently 不一致（2026-08-20 CodeRabbit review 提醒）。
+PANG_M45 = {"label": "Pang+2024 M45（單一冪律，**擬合質量範圍未查證**）",
+            "alpha": 2.01, "err": 0.09,
+            "provenance": "Pang et al. 2024 Table 1，本專案解析；質量範圍待核對原文"}
+OUR_NAIVE = {"label": "本專案 alpha_naive（0.30-2.50 單一冪律）",
+             "alpha": 1.978, "err": 0.069,
+             "provenance": "x64 機器獨立重跑驗證，見 WORK_BOARD.md 2026-08-12 條目"}
+OUR_FORWARD = {"label": "本專案 alpha_forward（>0.5 Kroupa 段，已修雙星）",
+               "alpha": 2.382, "err": 0.068,
+               "provenance": "headline p2_final2_v3 正式版（10/10 次重複，2026-08-20 定案，A1/A2 已解除）"}
+REFERENCE_VALUES = [PANG_M45, OUR_NAIVE, OUR_FORWARD]
 
 
 def sample_broken(mx1: float, mx2: float, a_med: float, a_high: float,
@@ -150,16 +160,72 @@ def main() -> None:
 
     print("對照（實際文獻／本專案數字，含可信度狀態）")
     print("-" * 96)
-    for label, value, provenance in REFERENCE_VALUES:
-        print(f"  {label}")
-        print(f"      alpha = {value}")
-        print(f"      來源／狀態：{provenance}")
+    for ref in REFERENCE_VALUES:
+        print(f"  {ref['label']}")
+        print(f"      alpha = {ref['alpha']:.3f} +/- {ref['err']:.3f}")
+        print(f"      來源／狀態：{ref['provenance']}")
     print()
+
+    # 下面所有差值都從 recovered（上面表格算出來的）與具名常數計算，
+    # 不要手動抄一份數字進判讀文字——常數改了，這裡會自動跟著動。
+    pdmf_030 = recovered[("PDMF（未修雙星／動力學）", 0.30)]
+    pdmf_050 = recovered[("PDMF（未修雙星／動力學）", 0.50)]
+    imf_050 = recovered[("stellar IMF（已修雙星＋動力學）", 0.50)]
+    pdmf_high = HOBART_PLEIADES["PDMF（未修雙星／動力學）"]["a_high"]
+    imf_high = HOBART_PLEIADES["stellar IMF（已修雙星＋動力學）"]["a_high"]
+
+    diff_naive = OUR_NAIVE["alpha"] - pdmf_030
+    diff_forward_vs_pdmf = OUR_FORWARD["alpha"] - pdmf_050
+    diff_forward_vs_imf = OUR_FORWARD["alpha"] - imf_050
+    # 不報告差異顯著度（sigma）：Hobart 的 PDMF 參數、我們重擬合的抽樣
+    # 誤差、蒙地卡羅抽樣本身的誤差都沒有量化與傳播，只除以我們自己的
+    # 統計誤差不能代表兩組測量的差異顯著度（2026-08-20 CodeRabbit 提醒）。
+    hobart_pdmf_to_imf_gap = imf_050 - pdmf_050
+    binary_corrected_high = HOBART_PLEIADES_ALPHA_HIGH_BINARY_CORRECTED
+    hobart_binary_step = binary_corrected_high - pdmf_high
+    hobart_dynamic_step = imf_high - binary_corrected_high
+
+    # 一致性檢查：確保 Table 4 的雙星修正中繼值真的落在 PDMF 與
+    # stellar IMF 兩個高質量段端點之間，不是筆誤或抄錯欄位——直接比較
+    # 三個高質量段值本身，不要拿階段差跟整體擬合落差比較（後者只保證
+    # 量級相符，沒辦法保證真的落在區間內，2026-08-20 CodeRabbit 提醒）。
+    assert pdmf_high < binary_corrected_high < imf_high, (
+        f"一致性檢查失敗：雙星修正中繼值 {binary_corrected_high} 不在 "
+        f"PDMF({pdmf_high}) 與 stellar IMF({imf_high}) 之間，需要重新核對 Hobart 原文 Table 4"
+    )
+
     print("初步判讀（不是定案）：把三方數字換算到同一個質量範圍之後，原本 1.3 的")
-    print("跨度大幅收斂。這支援「文獻間 alpha 差異主要來自口徑而非物理」這個假說，")
-    print("但 Pang+2024 的質量範圍尚未查證、且本專案 alpha_forward（2.382）是修過雙星的卻")
-    print("對上 Hobart 未修雙星的數字（差 ~0.15，約他們動力學修正的量級），這兩點")
-    print("都還沒理清，不能當已驗證的結論。")
+    print("跨度大幅收斂。這支持「質量範圍這項口徑因素可能解釋部分 alpha 差異」這個")
+    print("假說——**這支腳本只隔離了質量範圍一個變因，沒有測 Pang+2024 的實際質量")
+    print("範圍、選擇函數、觀測誤差、未解析雙星或動力學修正，不足以支持「主要來自")
+    print("口徑而非物理」這種更廣的判讀，也不排除還有其他變因造成剩下的差距**。")
+    print()
+    print("兩組比較要分開講，不要混成一個數字：")
+    print(f"  [未修雙星 vs 未修雙星] alpha_naive {OUR_NAIVE['alpha']:.3f} vs "
+          f"Hobart PDMF@0.30-2.50 = {pdmf_030:.3f}")
+    print(f"      差 {diff_naive:+.3f}。Hobart 參數不確定度尚未傳播，"
+          f"不報告差異顯著度。兩邊都沒修雙星，是目前最接近同口徑的一組。")
+    print(f"  [已修雙星 vs 未修雙星] alpha_forward {OUR_FORWARD['alpha']:.3f} vs "
+          f"Hobart PDMF@0.50-2.50 = {pdmf_050:.3f}")
+    print(f"      差 {diff_forward_vs_pdmf:+.3f}。數字幾乎一樣，但**口徑不對等**："
+          f"我們修了雙星、他們沒修。")
+    print(f"      對上他們已修雙星＋動力學的 stellar IMF@0.50-2.50 = {imf_050:.3f} "
+          f"則差 {diff_forward_vs_imf:+.3f}。")
+    print()
+    print(f"那個約 {hobart_pdmf_to_imf_gap:.2f} 是 Hobart 自己 PDMF -> stellar IMF 的落差"
+          f"（{pdmf_050:.3f} -> {imf_050:.3f} = {hobart_pdmf_to_imf_gap:+.3f}），")
+    print("不是我們跟他們的差距；而且這段落差同時含雙星修正與動力學修正兩者")
+    print(f"（他們在 >0.91 的鏈是 PDMF {pdmf_high:.2f} -> 修雙星 {binary_corrected_high:.2f} -> "
+          f"stellar IMF {imf_high:.2f}，")
+    print(f"雙星貢獻 {hobart_binary_step:+.2f}、動力學貢獻 {hobart_dynamic_step:+.2f}），"
+          f"不能只叫它動力學修正。")
+    print()
+    print("還沒理清、不能當已驗證結論的地方：")
+    print("  1. Pang+2024 的擬合質量範圍尚未查證，上面的並排是假設不是核對結果。")
+    print(f"  2. 我們的 alpha_forward 已修雙星，理應落在 Hobart 未修({pdmf_050:.3f})與")
+    print(f"     已修({imf_050:.3f})之間，實際卻落在 {pdmf_050:.3f} 稍下方"
+          f"——為什麼雙星修正沒有把")
+    print("     我們的值推高，這個問題本身還沒有解釋。")
 
 
 if __name__ == "__main__":
