@@ -147,7 +147,7 @@ rall(全樣本)=2.43。r1→r3 遞增支持核心到外圍的分層方向（跟�
 
 ## B 類
 
-### B1 測光誤差模型用 G 查 BP/RP 誤差（verify_bprperr_v2 否）
+### B1 測光誤差模型用 G 查 BP/RP 誤差（verify_bprperr_v2 off 半邊 5/5 完成、on 半邊 0/5，尚不能下結論）
 
 **問題**：`_interp_err(g, errmodel, "e_bp")` 用 G 星等查 BP/RP 誤差。同一個 G
 之下紅星的 BP 暗得多，因此低估紅星的 BP 誤差。選擇函數那一側已改用各波段
@@ -171,6 +171,17 @@ rall(全樣本)=2.43。r1→r3 遞增支持核心到外圍的分層方向（跟�
 方向上支持「BP/RP 誤差模型選擇對 alpha 影響很小」，但不能當成已驗證的
 結論——真正乾淨的比較要兩邊都用 `--refines 3,3` 重跑一次（`verify_bprperr_v2`），
 兩次用完全相同的精修程度才能排除是精修差異造成的巧合。
+
+**2026-08-20 `verify_bprperr_v2` off 半邊 5 個分片全部到齊並串接完成**
+（`results/fit_real_bprperr_off_v2.npz`，見 `RESULTS_LOG.md` 同日期行）：
+**α=2.384±0.079**（5 次重複，雙階精修 `--refines 3,3`，`--repeat-offset
+0–4` 分成 5 個 Kaggle kernel 跑完後沿 axis=0 串接）。logage 五次完全
+一致 8.033（106.2 Myr）、MH 五次完全一致 −0.017，散布只出現在 A_V／
+f_bin／alpha／q_gamma／dav 上。**這個數字取代舊的 `verify_bprperr_off`
+（α=2.420±0.098）**——舊的是精修 bug 修好前跑的純粗網格 argmax，不是
+同一個精修程度，兩者不能混用或並排比較。**on 半邊（`--native-bprp-err`）
+的 5 個分片還沒有任何一片完成，B1 的 A/B 對照結論仍不能下**：現在只有
+一半的乾淨數字，沒有可比較的對照組。
 
 **後果**：所有 `fit_real.py`／`injection_recovery.py` 的數字共用這個誤差模型。
 方向上會讓紅星在 Hess 圖裡看起來比實際精確，模型可能過度信任紅端形狀。
