@@ -121,7 +121,10 @@ def main():
     results = {}
     for frac in fracs:
         key = f"f{frac}"
-        outs = list(partial.get(key, []))
+        # 截到 args.repeats：理由同 profile_lowmass.py 的同一處修正
+        # （2026-08-20 CodeRabbit review）——既有結果比這次要求的
+        # --repeats 多時，不截斷會讓統計筆數跟印出來的次數對不上。
+        outs = list(partial.get(key, []))[:args.repeats]
         for rep in range(args.repeats):
             if rep < len(outs):
                 print(f"  frac={frac:.3f} 第{rep+1}次：沿用既有結果，跳過重算",

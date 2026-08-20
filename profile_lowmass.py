@@ -138,7 +138,14 @@ def main():
     results = {}
     for p in slopes:
         key = f"p{p}"
-        outs = list(partial.get(key, []))
+        # 截到 args.repeats：既有結果比這次要求的 --repeats 多時（例如
+        # 磁碟上已有 3 次、這次只要 2 次），不截斷的話下面的迴圈會因為
+        # rep < len(outs) 全部跳過、outs 卻仍帶著全部 3 筆，讓「跨 2 次」
+        # 的平均/散布統計實際上是用 3 筆算出來的，跟印出來的次數對不上
+        # （2026-08-20 CodeRabbit review）。不把 repeats 放進 manifest 就是
+        # 為了讓「加大 --repeats」保持可續傳，這裡只是不讓「縮小
+        # --repeats」意外地用了太多筆。
+        outs = list(partial.get(key, []))[:args.repeats]
         for rep in range(args.repeats):
             if rep < len(outs):
                 print(f"  p={p:.1f} 第{rep+1}次：沿用既有結果，跳過重算",

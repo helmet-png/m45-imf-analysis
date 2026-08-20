@@ -279,6 +279,14 @@ def main():
                          "且不砍觀測端，行為與加入這個旗標前完全相同。"
                          "用於等時線網格質量涵蓋不足時做同基準比較（D1）")
     args = ap.parse_args()
+    if args.repeats < 1:
+        # --repeats 0（或負數）讓 for rep in range(args.repeats) 完全不
+        # 執行，reps 停在空 list，np.array([]) 是 shape (0,) 的一維陣列。
+        # 沒有既有部分結果時，後面「alpha 隨模型設定的變化」總表對它做
+        # out[key][:, 3] 會丟 IndexError（2026-08-20 CodeRabbit review）。
+        # 這是結構性輸入錯誤，不是「已知風險、確認要略過」，--force 不
+        # 應該放行。
+        ap.error("--repeats must be positive")
     if args.repeat_offset < 0:
         ap.error("--repeat-offset must be non-negative")
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
