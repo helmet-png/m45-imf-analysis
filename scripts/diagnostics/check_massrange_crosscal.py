@@ -212,7 +212,7 @@ def main() -> None:
     print(f"      對上他們已修雙星＋動力學的 stellar IMF@0.50-2.50 = {imf_050:.3f} "
           f"則差 {diff_forward_vs_imf:+.3f}。")
     print()
-    print(f"那個 ~0.15 是 Hobart 自己 PDMF -> stellar IMF 的落差"
+    print(f"那個約 {hobart_pdmf_to_imf_gap:.2f} 是 Hobart 自己 PDMF -> stellar IMF 的落差"
           f"（{pdmf_050:.3f} -> {imf_050:.3f} = {hobart_pdmf_to_imf_gap:+.3f}），")
     print("不是我們跟他們的差距；而且這段落差同時含雙星修正與動力學修正兩者")
     print(f"（他們在 >0.91 的鏈是 PDMF {pdmf_high:.2f} -> 修雙星 {binary_corrected_high:.2f} -> "
