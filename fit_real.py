@@ -385,7 +385,14 @@ def main():
         n_done = {k: len(v) for k, v in partial.items()}
         print(f"讀到既有部分結果 {out_path.name}：{n_done}"
               f"（會跳過已經算完的重複，不是從頭重算）\n", flush=True)
-    out = {k: list(v) for k, v in partial.items()}
+    # 截到 args.repeats：既有結果比這次要求的 --repeats 多時（例如磁碟
+    # 已有 3 次、這次只要 2 次），不截斷的話下面主迴圈會因為
+    # rep < len(reps) 全部跳過、out[key] 卻仍帶著全部 3 筆，讓「跨 2 次」
+    # 的平均/散布統計、還有 _preflight_gate() 的工作量報表都用了 3 筆，
+    # 跟這次實際要求的次數對不上（2026-08-20 CodeRabbit review）。只截
+    # 記憶體中這份拷貝，磁碟上的完整結果不動，也不影響「加大 --repeats」
+    # 的續傳能力（那是从磁碟重新 load_partial() 讀，不會被這裡截斷過）。
+    out = {k: list(v)[:args.repeats] for k, v in partial.items()}
     # **2026-08-20 改成無條件執行，不再只有 --preflight 才做**：這份檢查
     # 原本只在有人記得多打一個旗標時才會發生，但實際會呼叫這支腳本的
     # 地方不只 run_queue.py（那邊確實有記得先呼叫 --preflight）——Kaggle
