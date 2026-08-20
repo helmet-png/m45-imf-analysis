@@ -52,6 +52,12 @@ def main():
     ap.add_argument("--dav-max", type=float, default=0.6)
     ap.add_argument("--fracs", default=None,
                     help="逗號分隔，覆寫預設的 OUTLIER_FRACS 掃描點")
+    # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py）——這支腳本
+    # 沒有續傳機制，設定錯了會白跑好幾小時，跟 fit_real.py 同等重要。
+    ap.add_argument("--preflight", action="store_true",
+                    help="只做開跑前檢查然後結束，不進行任何擬合")
+    ap.add_argument("--force", action="store_true",
+                    help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
@@ -74,6 +80,16 @@ def main():
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
+
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import preflight                                             # noqa: E402
+    if args.preflight:
+        preflight._force_utf8_stdout()
+    preflight.mandatory_gate(
+        base, grid, refines, script="profile_outlierfrac.py",
+        expected_overrides={"mh_prior_sigma": 0.0},
+        force=args.force, dry_run=args.preflight)
+
     sel = selmod.load(HERE / "data" / "selection.npz")
     print(f"真實觀測 {n_obs:,} 顆，config C（選擇函數 + 差異消光），"
           f"n_synthetic {args.n_syn:,}")

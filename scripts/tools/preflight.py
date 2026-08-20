@@ -157,6 +157,151 @@ def gate_a1(verbose=True) -> list[str]:
     return fails
 
 
+# --------------------------------------------------------- Gate A2/A3 共用
+
+def audit_common(model, grid, refines, *, script: str,
+                 expected_overrides: dict | None = None) -> tuple[list, list]:
+    """A2（設定對帳）＋ A3（網格涵蓋）的通用實作，回傳 (fails, warns)。
+
+    2026-08-20：`fit_real.py` 有自己專屬的 `--preflight`，但其餘四支計算
+    腳本（`profile_lowmass.py`／`profile_outlierfrac.py`／
+    `inject_lowmass.py`／`injection_recovery.py`）完全沒有這層保護——
+    只要不透過 `run_queue.py` 派工（例如在 Kaggle 筆記本或 x64 協作機
+    上直接執行），就完全沒人檢查過設定。這支函式讓五支腳本共用同一套
+    對帳邏輯，任何一支的模型建構方式改變，五支一起受益，不會有第六支
+    腳本重新發明一次又跟其他五支不同步。
+
+    **`expected_overrides` 存在的理由**：`profile_lowmass.py` 等四支
+    診斷腳本會刻意 `cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0`
+    關掉金屬量高斯先驗——這是設計上的正確行為（先驗會污染這些腳本要
+    測的東西），不是 A2 那種「該用先驗卻被悄悄關掉」的 bug。如果直接
+    拿這裡跟 `config.toml` 宣告值比對，會對這四支腳本的每一次呼叫都
+    誤報成阻擋，訓練使用者養成「看到阻擋就忽略」的習慣，反而讓真正的
+    A2 抓不到人注意。傳 `expected_overrides={"mh_prior_sigma": 0.0}`
+    這類參數，讓對帳邏輯知道「這個鍵本來就該是這個值」，但仍然檢查
+    模型實際生效的值有沒有精確等於這個刻意值——如果哪天覆寫那行被
+    不小心刪掉、或值被改動，這裡還是抓得到。
+    """
+    import tomllib
+    from injection_recovery import COARSE
+    fails, warns = [], []
+    overrides = expected_overrides or {}
+    P = lambda s="": print(s, flush=True)                    # noqa: E731
+
+    # --- 解析度：宣稱 vs 實際達成 ---
+    span = float(COARSE[3][1] - COARSE[3][0])
+    final = span
+    for r in refines:
+        final /= r
+    P("\n【解析度】")
+    P(f"  alpha 粗網格格距   {span:.4f}")
+    P(f"  精修後實際格距     {final:.4f}"
+      f"（{span:.2f} / {' / '.join(str(r) for r in refines) or '1'}）")
+    if not refines:
+        fails.append("--refines 是空的，等於完全不精修，alpha 只會落在"
+                     f"{span:.2f} 間距的粗網格點上")
+    elif len(refines) < 2:
+        warns.append(f"只精修 {len(refines)} 階，alpha 實際解析度 "
+                     f"{final:.4f}——要當最終數字報請確認是否需要更多階")
+
+    # --- 設定對帳：模型實際生效的值 vs config.toml 宣告值（或刻意覆寫值）---
+    with open(HERE / "config.toml", "rb") as fh:
+        raw = tomllib.load(fh)
+    jf = raw.get("joint_fit", {})
+    P(f"\n【設定對帳】{script} 模型實際生效 vs config.toml 宣告")
+    pairs = [
+        ("mh_prior_mean", model._mh_mean, jf.get("mh_prior_mean")),
+        ("mh_prior_sigma", model._mh_sigma, jf.get("mh_prior_sigma")),
+        ("logage_min", model.bounds[0][0], jf.get("logage_min")),
+        ("logage_max", model.bounds[0][1], jf.get("logage_max")),
+        ("av_max", model.bounds[1][1], jf.get("av_max")),
+        ("fbin_max", model.bounds[2][1], jf.get("fbin_max")),
+        ("alpha_min", model.bounds[3][0], jf.get("alpha_min")),
+        ("alpha_max", model.bounds[3][1], jf.get("alpha_max")),
+        ("mh_min", model.bounds[4][0], jf.get("mh_min")),
+        ("mh_max", model.bounds[4][1], jf.get("mh_max")),
+    ]
+    for name, eff, decl in pairs:
+        expect = overrides.get(name)
+        if expect is not None:
+            same = abs(float(eff) - float(expect)) < 1e-9
+            P(f"  {'  ' if same else '!!'} {name:16s} 生效 {float(eff):+8.3f}"
+              f"   刻意覆寫為 {float(expect):+8.3f}")
+            if not same:
+                fails.append(f"{name}：這支腳本應該刻意覆寫成 "
+                             f"{float(expect):+.3f}，但模型實際生效值是 "
+                             f"{float(eff):+.3f}——覆寫可能被移除或改動了")
+            continue
+        if decl is None:
+            continue
+        same = abs(float(eff) - float(decl)) < 1e-9
+        P(f"  {'  ' if same else '!!'} {name:16s} 生效 {float(eff):+8.3f}"
+          f"   宣告 {float(decl):+8.3f}")
+        if not same:
+            fails.append(f"{name}：模型實際用 {float(eff):+.3f}，但 "
+                         f"config.toml 宣告 {float(decl):+.3f}"
+                         f"——程式碼裡有覆寫，且沒有在 expected_overrides "
+                         f"裡登記成刻意行為")
+
+    # --- 搜尋軸 vs 等時線網格實際涵蓋 ---
+    ages = np.unique(np.asarray(grid["logAge"], float))
+    mhs = np.unique(np.asarray(grid["MH"], float))
+    P("\n【搜尋軸 vs 網格涵蓋】")
+    for label, axis, cov in (("logage", COARSE[0], ages),
+                             ("MH", COARSE[4], mhs)):
+        ghost = int(((axis < cov.min() - 1e-9)
+                     | (axis > cov.max() + 1e-9)).sum())
+        P(f"  {label:7s} 搜尋 [{axis.min():+.2f}, {axis.max():+.2f}]"
+          f"   網格涵蓋 [{cov.min():+.3f}, {cov.max():+.3f}]"
+          f"   幽靈格點 {ghost}/{len(axis)}")
+        if ghost:
+            warns.append(
+                f"{label} 有 {ghost}/{len(axis)} 個粗格點落在網格涵蓋之外，"
+                f"會被最近鄰吸附到邊界等時線——不是獨立的模型")
+    return fails, warns
+
+
+def mandatory_gate(model, grid, refines, *, script: str,
+                   expected_overrides: dict | None = None,
+                   force: bool = False, dry_run: bool = False) -> None:
+    """五支計算腳本的 `main()` 都在建好 `model`（`JointModel`）之後、開始
+    真正計算之前，無條件呼叫這支函式一次——不是選用旗標，是預設行為。
+    這樣不管從哪台機器、用什麼方式呼叫（`run_queue.py`、Kaggle 筆記本、
+    x64 協作機手動下指令），檢查都會發生，不依賴呼叫端記得先跑
+    `--preflight`。
+
+    `dry_run=True`（對應各腳本的 `--preflight` 旗標）：印完報告就結束，
+    不管有沒有阻擋都不會繼續往下跑，回傳碼視結果而定——這是「只檢查」
+    模式，給 `run_queue.py` 的 Gate B 或人工手動確認用。
+
+    `dry_run=False`（正常執行路徑，預設）：有阻擋級問題時 `sys.exit(1)`
+    直接中止，不進入真正的計算，除非 `force=True`（對應 `--force` 旗標，
+    僅供已經看過警告、確認要略過的情況使用，不是日常流程）。"""
+    print("=" * 74, flush=True)
+    print(f"開跑前檢查（{script}"
+          f"{' --preflight，只檢查不計算' if dry_run else ' 自動執行，不是選用步驟'}）",
+          flush=True)
+    print("=" * 74, flush=True)
+    fails, warns = audit_common(model, grid, refines, script=script,
+                                expected_overrides=expected_overrides)
+    print("\n" + "=" * 74, flush=True)
+    for w in warns:
+        print(f"  注意：{w}", flush=True)
+    for f in fails:
+        print(f"  阻擋：{f}", flush=True)
+    print(f"結論：{'不通過' if fails else '通過'}"
+          f"（阻擋 {len(fails)}、注意 {len(warns)}）", flush=True)
+    print("=" * 74 + "\n", flush=True)
+    if dry_run:
+        sys.exit(1 if fails else 0)
+    if fails and not force:
+        print("開跑前檢查沒通過，中止（用 --force 可以略過，"
+              "但要先確認上面每一條阻擋的理由）", flush=True)
+        sys.exit(1)
+    if fails and force:
+        print("警告：用 --force 略過了上面的阻擋，繼續執行", flush=True)
+
+
 # ----------------------------------------------------------------- Gate B
 
 # 判斷 fit_real.py --preflight 子行程輸出裡哪些行是「這裡要看的」。
@@ -208,7 +353,7 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
                 f"{label}（{script}）沒有逐次存檔／續傳機制，中途被砍就得"
                 f"從頭重算。這台機器過去四天被 Windows 強制重開機至少 4 次，"
                 f"p6_lowmass_v2 因此空轉了四天一次都沒跑完")
-        if script == "fit_real.py":
+        if script in rq.PREFLIGHT_AWARE_SCRIPTS:
             # 見 run_queue.py 的 _preflight_ok() 同一段註解：子行程要用
             # UTF-8 輸出，否則中文 Windows 下寫 cp950、這邊解出來是亂碼，
             # 下面挑警告行的字串比對會全部挑不到。
@@ -223,7 +368,7 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
                 for ln in tail:
                     print(f"     {ln.strip()}")
             if r.returncode != 0:
-                fails.append(f"{label}：fit_real.py --preflight 不通過"
+                fails.append(f"{label}：{script} --preflight 不通過"
                              f"（退出碼 {r.returncode}）")
         elif verbose:
             print("     （這支腳本還沒有 --preflight，只做了續傳檢查，"
