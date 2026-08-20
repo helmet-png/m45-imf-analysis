@@ -62,9 +62,9 @@ P11 十二次跑出來的 alpha 全部精確等於 2.500、散布 0.000 ——**
 | **A1** 解析度自我測試 | 峰值放在已知位置實跑一次搜尋，量它有沒有照宣稱的階數收斂；含反向對照與平行路徑一致性 | `scripts/tools/preflight.py --gate a` |
 | **A2** 設定對帳 | 模型實際生效的值 vs `config.toml` 宣告的值，逐項比對 | 五支計算腳本各自的 `--preflight` |
 | **A3** 網格涵蓋 | 搜尋軸有幾個粗格點落在等時線網格涵蓋之外（會被吸附成幽靈格點） | 同上 |
-| **B1** 意圖對帳 | 這次實際會算幾套設定、幾次重複、幾階精修、實際格距 | 同上（`fit_real.py` 專屬，其餘四支還沒有） |
-| **B2** 輸出衝突 | `--tag` 對應的檔案是否已存在、manifest 設定是否相容 | 同上（`fit_real.py` 專屬） |
-| **B3** 續傳能力 | 這支腳本撐不撐得過中途被砍 | `preflight.py --gate b` |
+| **B1** 意圖對帳 | 這次實際會算幾項掃描（設定／冪次／污染比例／真值／情境）、幾次重複、幾階精修、實際格距 | 同上（五支都有，`preflight.workload_audit()`） |
+| **B2** 輸出衝突 | `--tag` 對應的檔案是否已存在、manifest 設定是否相容 | 同上（五支都有，`preflight.output_audit()`） |
+| **B3** 續傳能力 | 這支腳本撐不撐得過中途被砍 | `preflight.py --gate b`（五支都有，`scripts/tools/checkpoint.py`） |
 | **C1** 量化簽章 | 最佳點是否全落在粗網格節點（可疑訊號，需搭配實際解析度或搜尋軌跡判定，不是必然＝沒精修）、重複間散布是否精確 0、有無貼牆 | `preflight.py --gate c` |
 | **C2** manifest 完整性 | 沒有 manifest 的結果檔無法事後查證設定 | 同上 |
 
@@ -86,15 +86,15 @@ x64 協作機都是直接執行 `python fit_real.py ...`，完全不經過
 `sys.exit(1)`，除非帶 `--force`（僅供已經看過警告、確認要略過的情況
 使用，不是日常流程）。
 
-**五支腳本現在的涵蓋範圍**：
+**五支腳本現在的涵蓋範圍**（2026-08-20 補上 B1／B2／B3 之後）：
 
 | 腳本 | A1 演算法本身 | A2 設定對帳 | A3 網格涵蓋 | B1／B2 意圖對帳／輸出衝突 | B3 續傳 |
 |---|---|---|---|---|---|
 | `fit_real.py` | 共用（`preflight.py --gate a`） | 有 | 有 | 有 | 有 |
-| `profile_lowmass.py` | 共用 | 有 | 有 | 無 | **無** |
-| `profile_outlierfrac.py` | 共用 | 有 | 有 | 無 | **無** |
-| `inject_lowmass.py` | 共用 | 有 | 有 | 無 | **無** |
-| `injection_recovery.py` | 共用 | 有 | 有 | 無 | **無** |
+| `profile_lowmass.py` | 共用 | 有 | 有 | 有 | 有 |
+| `profile_outlierfrac.py` | 共用 | 有 | 有 | 有 | 有 |
+| `inject_lowmass.py` | 共用 | 有 | 有 | 有 | 有 |
+| `injection_recovery.py` | 共用 | 有 | 有 | 有 | 有 |
 
 A1 是共用的：`multi_stage_best()` 是這五支腳本都在用的同一份搜尋演算法，
 驗證它本身的正確性只需要做一次，不需要每支腳本各自重複。A2／A3 集中在
@@ -116,15 +116,72 @@ A1 是共用的：`multi_stage_best()` 是這五支腳本都在用的同一份�
 （`_preflight_ok()`）跟 `preflight.py` 的 `gate_b()` 都改吃這個常數，
 不再只認 `fit_real.py`。
 
-**這輪沒做的部分，誠實記在這裡**：
-- **B1／B2（意圖對帳、輸出衝突）還只有 `fit_real.py` 有**——其餘四支
-  的旗標介面互不相同（`--trials` vs `--repeats`、`--scenarios` vs
-  `--slopes`／`--fracs` 等），沒有硬套同一份邏輯，需要各自設計才能做，
-  這次沒做。
-- **B3（續傳）本身沒有解決，只是多了 A2／A3 這層保護**——四支診斷腳本
-  仍然只在最後 `np.savez` 一次，中途被砍一樣得從頭重算。這是完全不同
-  的兩個問題：A2／A3 防的是「設定錯了但沒人發現」，B3 防的是「設定
-  對，但被外力（Windows 重開機）中斷後浪費掉」。這次只做了前者。
+## 2026-08-20（同日稍晚）：B1／B2 推廣到五支腳本、B3 補齊四支診斷腳本
+
+上面那節寫完後留了兩個誠實記錄的缺口，同一天內都補上了：
+
+**B1／B2（意圖對帳、輸出衝突）不再是 `fit_real.py` 專屬**：原本卡住的
+理由是「五支腳本旗標介面互不相同（`--configs` vs `--slopes`／`--fracs`
+vs `--trials`+`--only` vs `--scenarios`），沒辦法硬套同一份邏輯」。
+解法不是讓共用函式認得每支腳本的旗標名稱，而是反過來——
+`preflight.workload_audit()`／`output_audit()` 只認一組共同形狀
+（`scan_keys`＋每個 key 重複幾次），每支腳本自己把旗標轉換成這組形狀
+再呼叫。`fit_real.py` 也一併重構成呼叫這兩支共用函式（原本它自己手寫
+一份幾乎一樣的邏輯），不是只有新加入的四支在用，同一套實作沒有分裂
+成「舊的一份、新的一份」。連帶把 `injection_recovery.py` 原本
+「未知情境靜默略過、只印一行」的行為升級成跟 `fit_real.py` 打錯
+`--configs` 名稱一樣的處理：先在 `workload_audit()` 報成可被
+`--force` 略過的阻擋，再加一道不能被 `--force` 繞過的硬 `sys.exit(1)`。
+
+**B3（續傳）補齊 `profile_lowmass.py`／`profile_outlierfrac.py`／
+`inject_lowmass.py`／`injection_recovery.py`**：抽出新模組
+`scripts/tools/checkpoint.py`，把 `fit_real.py` 原本自己的
+`atomic_savez()`／存取鎖／`load_partial()`／manifest 比對整組邏輯收斂
+成共用實作（`fit_real.py` 自己也改成呼叫這份，不再維護複本——這正是
+上一節「檢查程式不要自己複製一份」那條原則，這次換到續傳邏輯上重演，
+提前收斂掉）。四支診斷腳本原本要嘛完全沒有（`profile_lowmass.py`／
+`profile_outlierfrac.py`／`injection_recovery.py`，只在全部掃描點跑完
+後 `np.savez` 一次），要嘛做到一半（`inject_lowmass.py` 每個注入真值
+存一次，但重啟不會讀回既有進度，一樣會重算），現在全部改成每算完
+一次（`inject_lowmass.py`／`injection_recovery.py` 是每次試驗，
+`profile_lowmass.py`／`profile_outlierfrac.py` 是每次重複）就存一次。
+
+`checkpoint.save_progress()` 另外用一個 `attempted`（已嘗試次數，跟
+`len(results)`／已成功次數分開記）處理 `inject_lowmass.py` 會遇到的
+貼牆例外——某次試驗因為 `WallError`／`CornerError`失敗，那個試驗索引
+真的跑過一次，續傳時不該重跑（重跑只會用同一組亂數種子再得到同一個
+失敗結果，白工）。`injection_recovery.py` 的 `multi_stage_best()`
+呼叫帶 `raise_on_wall=False`（貼牆只印警告不丟例外），每次嘗試必定
+成功，不需要這層區分，用法上比 `inject_lowmass.py` 簡單。
+
+**過程中連帶抓到一個真實的 Windows bug**：用高速迴圈測試連續存檔時，
+`os.replace()` 偶發 `PermissionError: [WinError 5]`——根因是
+`np.load()` 回傳的 `NpzFile` 沒有用 `with` 關閉，refcount 歸零不保證
+CPython 立刻真的關掉底層檔案控制代碼，短時間內連續呼叫會讓控制代碼
+卡住後續的 `os.replace()`。已修正 `load_partial()`／`load_manifest()`
+一律用 `with` 讀取。修完之後在同一支測試腳本上又用不同情境重現一次
+（這次無關檔案控制代碼——三次一模一樣的呼叫裡有一次還是炸掉），判斷是
+Windows 上防毒軟體／索引服務對剛寫完的暫存檔做即時掃描造成的短暫佔用，
+不是程式碼邏輯錯誤；改成對 `os.replace()` 的 `PermissionError` 做有
+上限（6 次、每次間隔遞增）的重試，跟 `acquire_write_lock()` 對付另一個
+行程持有鎖檔是同一類「等一下再試」的處置，重試次數用完仍失敗才真的
+往上拋。真實產線的兩次存檔間隔是幾分鐘（一次完整的擬合），這個窗口
+在實機上幾乎不可能撞到，但既然用自動化測試踩過就照實修掉，不留著
+當僥倖。
+
+**驗證方式**：五支腳本各自 `--preflight` dry-run 過（含故意給不存在的
+設定／情境名稱、確認阻擋正確觸發）；`checkpoint.py` 的
+`save_progress()`／`load_progress()`／`check_manifest()` 直接單元測試過
+（含跨行程競態、legacy 檔案相容性、`gate_c()` 對 `__attempted_*` 記帳鍵
+的排除）；`inject_lowmass.py`／`injection_recovery.py`／
+`profile_lowmass.py` 各自用假的 `multi_stage_best()`／`make_fake()`
+（跳過真正的合成星團運算，只驗證存檔／續傳這條路徑本身）跑過完整的
+「執行一次→中斷→重啟」流程，確認第二次執行時已完成的項目一律被跳過、
+不會重算。沒有花機時去真正等一次完整的診斷腳本跑完（`inject_lowmass.py`
+單一次試驗 `--procs 1` 實測要 385 分鐘），這條路徑目前只驗證到「存檔／
+續傳的機制本身正確」，不含「真正的擬合流程跑完全程不出錯」——那個
+信心來自這些函式本來就是 `fit_real.py` 已經在生產環境跑了幾天的同一套
+邏輯（`checkpoint.py` 是從它抽出來的），不是全新未驗證的東西。
 
 ## 建立當下就抓到的東西
 
@@ -147,25 +204,31 @@ A1 是共用的：`multi_stage_best()` 是這五支腳本都在用的同一份�
    分不出來，因為輸出只記最佳點、沒記達成的解析度。而 `r1 = 2.10` 正是
    「α 由核心往外圍上升」這個梯度主張的錨點。`radial_r1_final`
    （`--refines 3,3 --repeats 5`）會重跑它，這個疑慮會自然解掉。
-4. **四支腳本沒有續傳**——`profile_lowmass.py`、`profile_outlierfrac.py`、
-   `injection_recovery.py`、`inject_lowmass.py` 都只在最後 `np.savez`
-   一次，只有 `fit_real.py` 有逐次存檔＋manifest 續傳。而這台機器過去
-   四天被 Windows 強制重開機至少 4 次（`Get-WinEvent` 的 1074/109 事件，
-   多半是「其他（不在計劃之中）」，8/19 21:11 那次還是非正常關機），
-   `p6_lowmass_v2` 因此從 8/16 起連續四天每次都從頭重算、一次都沒跑完。
+4. **四支腳本沒有續傳**（**已在同日稍晚補上，見上方「B1／B2 推廣到
+   五支腳本、B3 補齊四支診斷腳本」一節**）——`profile_lowmass.py`、
+   `profile_outlierfrac.py`、`injection_recovery.py`、`inject_lowmass.py`
+   原本都只在最後 `np.savez` 一次，只有 `fit_real.py` 有逐次存檔＋
+   manifest 續傳。而這台機器過去四天被 Windows 強制重開機至少 4 次
+   （`Get-WinEvent` 的 1074/109 事件，多半是「其他（不在計劃之中）」，
+   8/19 21:11 那次還是非正常關機），`p6_lowmass_v2` 因此從 8/16 起
+   連續四天每次都從頭重算、一次都沒跑完。
 
 ## 已知涵蓋缺口（不要把「放行」讀成「檢查過了」）
 
-- **B1／B2 只有 `fit_real.py` 有**（意圖對帳、輸出衝突），其餘四支
-  只有 A2／A3。`preflight.py --gate b` 會逐行印出每一項待跑工作實際
-  受到哪一種等級的檢查。
-- **B3（續傳）在 `run_queue.py` 裡是警告不是阻擋，且四支診斷腳本本身
-  仍然沒有續傳機制。** A2／A3 現在會自動跑，但跑到一半被 Windows 強制
-  重開機一樣會歸零重算——這是完全不同的兩個問題（見上一節結尾），
-  這次只解決了「設定錯了沒人發現」，沒解決「設定對但被中斷就浪費掉」。
-  根治要幫這四支腳本補上 `fit_real.py` 那套逐次存檔＋manifest 續傳。
-- **Windows 非預期重開機本身沒有處理。** 這是上面那條的另一半，屬於
-  機器設定不是程式碼。
+- **B1／B2／B3 現在五支腳本都有**（2026-08-20 同日稍晚補齊，見上方
+  對應章節）。`preflight.py --gate b` 仍然會逐行印出每一項待跑工作
+  實際受到哪一種等級的檢查——五支現在應該全部顯示齊全，如果哪天新增
+  第六支計算腳本忘了接上這套機制，這裡會照實顯示出涵蓋缺口，不會
+  誤報成「查過了」。
+- **B3 續傳目前只驗證到機制本身（存檔／續傳邏輯），沒有跑過一次完整
+  的真實擬合流程去確認「續傳後接著跑的真實計算不出錯」。** 驗證方式
+  是用假的 `multi_stage_best()` 跳過真正的合成星團運算（見上方章節
+  的「驗證方式」小節），信心來自這套邏輯是從已經在生產環境跑了幾天的
+  `fit_real.py` 抽出來的共用模組，不是全新沒被驗證過的東西，但誠實
+  記錄「還沒有一次端到端的真實續傳＋算完全程」這件事沒有發生過。
+- **Windows 非預期重開機本身沒有處理。** 這是造成 B3 需求的根本原因，
+  屬於機器設定不是程式碼，這次的修法是讓程式撐得過中斷，不是讓中斷
+  不發生。
 - **A1 只測搜尋演算法本身。** 它驗證 `multi_stage_best()` 會照宣稱的
   階數收斂，不驗證概似函數、合成星團生成、選擇函數這些的正確性——
   那些要靠注入回收，而注入回收測不到等時線的物理誤差（見

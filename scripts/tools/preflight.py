@@ -278,14 +278,82 @@ def audit_common(model, grid, refines, *, script: str,
     return fails, warns
 
 
+def workload_audit(*, scan_keys: list[str], repeats: int, n_syn: int,
+                   n_obs: int, refines: list[int], partial_counts: dict,
+                   unit: str = "次重複", unknown: list[str] | None = None,
+                   known: list[str] | None = None,
+                   scan_label: str = "掃描項目") -> tuple[list[str], list[str]]:
+    """B1（意圖對帳）的通用實作，回傳 (fails, warns)，印【工作量】段落。
+
+    2026-08-20：原本 B1 只有 `fit_real.py` 有（`_preflight_report()` 裡
+    手寫的一段），其餘四支診斷腳本旗標介面互不相同（`--configs` vs
+    `--slopes`／`--fracs` vs `--trials`+`--only` vs `--scenarios`），
+    沒有共用同一套邏輯。這裡不去認得每支腳本的旗標名稱，而是要求呼叫端
+    先把自己的旗標解析成同一組共同形狀——「一串 scan_key（設定名稱、
+    冪次、污染比例、真值、情境……字串化後的鍵）＋ 每個 key 重複幾次」，
+    這組形狀所有五支腳本都套得上，不用再各寫一份印報表／算 n_new 的
+    邏輯（那正是 B1/B2 遲遲沒有推廣的原因——覺得每支腳本都要重寫一份
+    不划算，這裡把「重寫」的部分收斂成「轉換成共同形狀」）。
+
+    `partial_counts`：`{scan_key: 已嘗試次數}`，用 `checkpoint.load_progress()`
+    算出來的 attempted（不是純成功次數——已經跑過但失敗的也不該重跑，
+    見 checkpoint.py 的說明）。"""
+    fails, warns = [], []
+    if unknown:
+        fails.append(f"{scan_label}有不存在的名稱 {unknown}"
+                     f"（可用：{', '.join(known or [])}），"
+                     f"它們會被靜默略過，實際只會處理已知的那些")
+    n_new = sum(max(0, repeats - partial_counts.get(k, 0)) for k in scan_keys)
+    print("\n【工作量】", flush=True)
+    print(f"  {scan_label}          {', '.join(scan_keys) or '(無)'}"
+          f"（{len(scan_keys)} 項）", flush=True)
+    print(f"  每項重複           {repeats} {unit}", flush=True)
+    print(f"  已完成、會跳過     {partial_counts or '無'}", flush=True)
+    print(f"  這次實際要算       {n_new} {unit}", flush=True)
+    print(f"  精修階數           {refines}"
+          f"（粗網格 + {len(refines)} 階精修）", flush=True)
+    print(f"  合成星數 n_syn     {n_syn:,}", flush=True)
+    print(f"  觀測星數           {n_obs:,}", flush=True)
+    if n_new == 0 and scan_keys:
+        warns.append("這次沒有任何新的工作要算（既有結果已滿足重複次數），"
+                     "跑起來會立刻結束")
+    return fails, warns
+
+
+def output_audit(out_path: Path, partial: dict,
+                 resume_desc: str = "有（每次嘗試算完立刻存檔＋寫入鎖，"
+                                    "見 scripts/tools/checkpoint.py）") -> None:
+    """B2（輸出狀態）的通用實作，只印報告，不產生 fails——manifest 不相容
+    的情況在呼叫這支函式之前，`checkpoint.check_manifest()` 就已經
+    `sys.exit(1)` 擋掉了，走到這裡只會是「沒有舊檔」或「舊檔相容」，
+    是報告不是判斷（跟 fit_real.py 原本 `_preflight_report()` 的【輸出】
+    段落同一個道理）。"""
+    print("\n【輸出】", flush=True)
+    print(f"  檔案               results/{out_path.name}", flush=True)
+    print(f"  目前狀態           "
+          f"{'已存在，設定相容，會續傳' if partial else '不存在，從頭開始'}",
+          flush=True)
+    print(f"  續傳保護           {resume_desc}", flush=True)
+
+
 def mandatory_gate(model, grid, refines, *, script: str,
                    expected_overrides: dict | None = None,
-                   force: bool = False, dry_run: bool = False) -> None:
+                   force: bool = False, dry_run: bool = False,
+                   extra_fails: list[str] | None = None,
+                   extra_warns: list[str] | None = None) -> None:
     """五支計算腳本的 `main()` 都在建好 `model`（`JointModel`）之後、開始
     真正計算之前，無條件呼叫這支函式一次——不是選用旗標，是預設行為。
     這樣不管從哪台機器、用什麼方式呼叫（`run_queue.py`、Kaggle 筆記本、
     x64 協作機手動下指令），檢查都會發生，不依賴呼叫端記得先跑
     `--preflight`。
+
+    `extra_fails`／`extra_warns`：呼叫端先跑過 `workload_audit()`（B1）
+    算出的 fails/warns，併入這裡的最終判定與印出的摘要——B1 沒有阻擋
+    級問題就不該讓計算被 A2/A3 以外的原因擋下來，反過來也一樣，兩邊
+    的 fails 是同一個「通不通過」判定的兩個來源，不能分開判。呼叫端
+    應該在呼叫這支函式之前先印好【工作量】／【輸出】兩節（見
+    `workload_audit()`／`output_audit()`），這裡只接手 A2/A3 那段報告
+    與最終摘要，不重複印一次。
 
     `dry_run=True`（對應各腳本的 `--preflight` 旗標）：印完報告就結束，
     不管有沒有阻擋都不會繼續往下跑，回傳碼視結果而定——這是「只檢查」
@@ -301,6 +369,8 @@ def mandatory_gate(model, grid, refines, *, script: str,
     print("=" * 74, flush=True)
     fails, warns = audit_common(model, grid, refines, script=script,
                                 expected_overrides=expected_overrides)
+    fails = list(fails) + list(extra_fails or [])
+    warns = list(warns) + list(extra_warns or [])
     print("\n" + "=" * 74, flush=True)
     for w in warns:
         print(f"  注意：{w}", flush=True)
@@ -333,13 +403,21 @@ def _has_resume(script: str) -> bool:
     """這支腳本撐不撐得過中途被砍（重開機／卡死重試）。
 
     用讀原始碼判斷而不是維護一份名單：名單會過期，而且新腳本加進來時
-    不會有人記得回來更新。找的是 `load_partial`／`MANIFEST_KEY` 這組
-    `fit_real.py` 既有的續傳 pattern。
+    不會有人記得回來更新。
+
+    2026-08-20：續傳邏輯統一搬進 `scripts/tools/checkpoint.py` 共用模組
+    （原本只有 `fit_real.py` 自己一份，`inject_lowmass.py` 部分做到一半，
+    `profile_lowmass.py`／`profile_outlierfrac.py`／`injection_recovery.py`
+    完全沒有）。找的是有沒有 `import checkpoint`；`load_partial`／
+    `MANIFEST_KEY` 這組舊 pattern 留著當備援，涵蓋還沒改用共用模組、
+    但自己重新實作了同一套邏輯的腳本。
     """
     p = HERE / script
     if not p.exists():
         return False
     src = p.read_text(encoding="utf-8", errors="replace")
+    if re.search(r"^\s*import checkpoint\b", src, re.MULTILINE):
+        return True
     return "load_partial" in src and "MANIFEST_KEY" in src
 
 
@@ -350,12 +428,14 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
     `profile_lowmass.py`／`profile_outlierfrac.py`／`inject_lowmass.py`／
     `injection_recovery.py`，五支計算腳本全部）的行都會實際呼叫
     `--preflight` 代跑一次（用它自己的 parser 與模型建構，不會跟本體
-    不同步），拿到 A2（設定對帳）／A3（網格涵蓋）的完整檢查——但只有
-    `fit_real.py` 有 B1（意圖對帳）／B2（輸出衝突），其餘四支的旗標
-    介面互不相同，沒有硬套同一份邏輯。名單外的腳本只做得到 B3
-    （續傳能力）這層靜態檢查——**這個涵蓋差異會照實印出來，不會讓人
-    以為每一行都受到同等程度的檢查**（CodeRabbit review 抓到這裡的
-    docstring 沒跟上實作，五支腳本擴充後忘記回來更新）。
+    不同步），拿到 A2（設定對帳）／A3（網格涵蓋）／B1（意圖對帳）／
+    B2（輸出衝突）的完整檢查——五支腳本旗標介面互不相同，但透過
+    `preflight.workload_audit()`／`output_audit()` 共用同一套邏輯（見
+    該函式說明），不是各自硬寫一份。B3（續傳能力）另外用 `_has_resume()`
+    讀原始碼判斷，五支現在都用 `scripts/tools/checkpoint.py`，全部為真。
+    名單外（不在 `PREFLIGHT_AWARE_SCRIPTS`）的腳本只做得到 B3 這層靜態
+    檢查——**這個涵蓋差異會照實印出來，不會讓人以為每一行都受到同等
+    程度的檢查**。
     """
     import run_queue as rq
     items = rq.read_queue()

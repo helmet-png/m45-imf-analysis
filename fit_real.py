@@ -41,7 +41,6 @@ system MF **陡**：f_bin=0.30 -> +0.046、0.45 -> +0.066、0.60 -> +0.085、
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import time
@@ -49,10 +48,19 @@ from pathlib import Path
 
 import numpy as np
 
-# 存在輸出 npz 裡的一個保留鍵，記錄「這批部分結果是用什麼設定算出來的」
-# （見 build_manifest() / main() 裡的比對邏輯）。用雙底線包住避免跟
-# CONFIGS 的單字母鍵（A/B/C/D）或未來可能加的設定名稱撞名。
-MANIFEST_KEY = "__manifest__"
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE / "scripts" / "tools"))
+import checkpoint                                                 # noqa: E402
+
+# 沿用 checkpoint.py 的保留鍵名（雙底線包住避免跟 CONFIGS 的單字母鍵
+# A/B/C/D 或未來可能加的設定名稱撞名）。2026-08-20 起續傳的底層機制
+# （atomic_savez／存取鎖／load_partial）搬進 scripts/tools/checkpoint.py
+# 共用模組，這裡不再自己維護一份——這支腳本原本是唯一有這套機制的，
+# 抽成共用模組後，另外四支診斷腳本才有辦法直接沿用同一套，不用各自
+# 重新發明（同一個道理已經在 preflight.audit_common() 上發生過一次：
+# fit_real.py 自己另外維護的一份跟共用版本不同步過，見下面
+# _preflight_report() 的說明）。
+MANIFEST_KEY = checkpoint.MANIFEST_KEY
 
 
 def build_manifest(args) -> dict:
@@ -91,7 +99,6 @@ MANIFEST_LEGACY_DEFAULTS = {
     "repeat_offset": 0,
 }
 
-HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
@@ -101,147 +108,57 @@ from measure_overconfidence import GRID                       # noqa: E402
 from injection_recovery import COARSE, multi_stage_best       # noqa: E402
 
 
-def atomic_savez(out_path: Path, **arrays):
-    """np.savez 不是原子操作，寫到一半被中斷會留下截斷或空檔案。改成寫到
-    同目錄的暫存檔，成功才用 os.replace() 原子性換過去（跟
-    inject_lowmass.py 的 atomic_savez() 同一個理由、同一套寫法）。"""
-    tmp_path = out_path.with_name(out_path.stem + ".tmp.npz")
-    try:
-        np.savez(tmp_path, **arrays)
-        os.replace(tmp_path, out_path)
-    except BaseException:
-        try:
-            tmp_path.unlink()
-        except FileNotFoundError:
-            pass
-        raise
+def _preflight_gate(args, model, grid, refines, configs,
+                    out_path, partial, n_obs) -> None:
+    """開跑前檢查：把「這次到底會算什麼」攤開來。只讀不寫，不碰任何
+    結果檔。有阻擋級問題時視 `args.force`／`args.preflight` 決定要不要
+    中止（實際的中止/繼續邏輯在 `preflight.mandatory_gate()` 裡，見下）。
 
-
-def _acquire_write_lock(out_path: Path, timeout_s: float = 1800.0):
-    """對 out_path 的存檔操作加互斥鎖，避免兩個用同一個 --tag 的行程同時
-    讀-改-寫同一份 npz（2026-08-15 CodeRabbit review：atomic_savez() 只
-    保證單次 os.replace() 不會留下半檔，不保護 load_partial() 到
-    atomic_savez() 之間的整段讀-改-寫——兩個行程各自讀到舊快照、各自
-    加上自己新算出的重複再存檔，後存的會整批覆蓋掉先存的那些新結果）。
-
-    做法跟 run_queue.py 的 acquire_lock() 同一套 O_CREAT|O_EXCL 原子建立
-    模式（該檔已用這個模式解決過同一類競態，這裡不重新發明）。**這只解決
-    「檔案不會被覆蓋壞掉」，不解決「兩個行程各算了一份 rep 0 卻只留得住
-    一份」**——要跨機器/帳號真正平行擴充同一批 repeats，還是要搭配不重疊
-    的 repeat 索引（例如各自用不同 --tag 各出一個分片檔，跑完再手動合併），
-    不是這個鎖能單獨補上的，見 fit_real.py 開頭這段留言與 PR #53 review。
-    """
-    lock_path = out_path.with_name(out_path.name + ".lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    t0 = time.time()
-    while True:
-        try:
-            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.close(fd)
-            return lock_path
-        except FileExistsError:
-            if time.time() - t0 > timeout_s:
-                print(f"警告：等待 {lock_path.name} 超過 {timeout_s:.0f} 秒"
-                      f"（可能是上一個行程異常結束沒清掉鎖檔），強制視為"
-                      f"可以繼續，手動確認沒有另一個行程還在寫這個檔案。",
-                      flush=True)
-                try:
-                    lock_path.unlink()
-                except FileNotFoundError:
-                    pass
-                continue
-            time.sleep(0.5)
-
-
-def _release_write_lock(lock_path: Path):
-    try:
-        lock_path.unlink()
-    except FileNotFoundError:
-        pass
-
-
-def load_partial(out_path: Path) -> dict:
-    """載入上次中斷前已經存檔的部分結果，讓 main() 可以跳過已經算完的
-    (config, rep) 組合，不必整批重算（2026-08-15：run_queue.py 需要重啟
-    套用電源管理修正時，發現原本的存檔邏輯要等全部 configs/repeats 都跑完
-    才存一次，中途被砍全部白工，即使每一次重複本身花好幾小時。改成每跑完
-    一次重複就存一次，重跑時先讀回已有的部分結果）。"""
-    if not out_path.exists():
-        return {}
-    try:
-        d = np.load(out_path)
-        return {k: np.asarray(d[k]) for k in d.files}
-    except Exception as e:                                    # noqa: BLE001
-        print(f"警告：讀取既有部分結果 {out_path} 失敗（{e}），"
-              f"視為沒有可續傳的進度，從頭開始。", flush=True)
-        return {}
-
-
-def _preflight_report(args, model, grid, refines, configs,
-                      out_path, partial, n_obs) -> int:
-    """`--preflight` 的內容：把「這次到底會算什麼」攤開來，回傳退出碼。
-
-    只讀不寫，不碰任何結果檔。回傳 0 代表通過、非 0 代表有阻擋級問題。
-
-    分兩部分：
-      工作量   對應 radial_r1 漏帶 `--configs C`（6 機時）——把「實際會算
-               幾套模型、幾次重複」印出來，跟意圖不符一眼看得出來，是
-               fit_real.py 專屬的 B1（意圖對帳）／B2（輸出衝突），其餘
-               四支腳本旗標介面互不相同沒有共用
-      解析度／設定對帳／網格涵蓋 對應 A1/A2/A3——**2026-08-20 起改成呼叫
-      `preflight.audit_common()`，不再自己維護一份**：這三段原本在這裡
-      跟 `scripts/tools/preflight.py` 的 `audit_common()` 各自獨立實作
-      同一套邏輯，結果 CodeRabbit review 抓到「`--refines 1` 沒有實際
-      精修效果卻只被當警告放行」這個 bug 時，我只修了 `audit_common()`
-      那一份，這裡的複本沒有跟著修——兩份會各自演化然後不同步，正是
-      這整個 PREFLIGHT 機制想防的那種問題形狀，換個地方在自己身上重演。
-      改成直接呼叫共用函式，不可能再發生「修一邊漏一邊」。
+    2026-08-20 起分兩段，都改成呼叫共用函式，不再自己維護實作：
+      B1（意圖對帳）／B2（輸出衝突） 原本是 fit_real.py 專屬（其餘四支
+          腳本旗標介面互不相同，沒有共用），現在透過
+          `preflight.workload_audit()`／`output_audit()` 收斂成同一套
+          邏輯——那兩支函式不需要認得每支腳本的旗標名稱，呼叫端只要把
+          自己的旗標轉換成同一組共同形狀（scan_keys＋repeats）即可，
+          fit_real.py 是第一個套用者，另外四支腳本比照辦理。
+      A1/A2/A3（解析度／設定對帳／網格涵蓋） 呼叫
+          `preflight.mandatory_gate()`（內部呼叫 `audit_common()`）。
+          這三段原本在這裡跟 `scripts/tools/preflight.py` 各自獨立實作
+          同一套邏輯，CodeRabbit review 抓到「`--refines 1` 沒有實際
+          精修效果卻只被當警告放行」這個 bug 時，我只修了共用版本，
+          這裡的複本沒有跟著修——兩份各自演化然後不同步，正是這整個
+          PREFLIGHT 機制想防的問題形狀，換個地方在自己身上重演。
+          `mandatory_gate()` 同時接手中止/繼續/`--force` 的判定，這裡
+          不用再自己重複一次同樣的邏輯。
     """
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
     import preflight                                          # noqa: E402
-    fails, warns = [], []
-    P = lambda s="": print(s, flush=True)                    # noqa: E731
 
-    P("=" * 74)
-    P("開跑前檢查（--preflight）：只檢查，不擬合")
-    P("=" * 74)
-
-    # --- 1. 這次實際會算什麼（意圖對帳）---
+    # --- B1：這次實際會算什麼（意圖對帳）---
     keys = [k.strip().upper() for k in args.configs.split(",")]
     valid = [k for k in keys if k in configs]
     unknown = [k for k in keys if k not in configs]
-    if unknown:
-        # main() L~560 對打錯的設定名稱是靜默用交集過濾掉（同樣的邏輯
-        # 這裡的 valid 也是）——`--configs A,X` 會讓 X 被無聲丟棄，preflight
-        # 通過、擬合照跑，但算出來的設定跟意圖不同。這正是本段「意圖
-        # 對帳」要抓的形狀，所以升級成阻擋，不能只當警告放行
-        #（2026-08-20 CodeRabbit review）。
-        fails.append(f"--configs 有不存在的設定名稱 {unknown}"
-                     f"（可用：{', '.join(configs)}），它們會被靜默略過，"
-                     f"實際只會算 {valid}")
-    n_new = sum(max(0, args.repeats - len(partial.get(k, []))) for k in valid)
-    P("\n【工作量】")
-    P(f"  設定（--configs）  {', '.join(valid)}"
-      f"（{len(valid)} 套）")
-    P(f"  每套重複           {args.repeats} 次"
-      f"（offset {args.repeat_offset}）")
-    P(f"  已完成、會跳過     "
-      f"{ {k: len(v) for k, v in partial.items()} or '無'}")
-    P(f"  這次實際要算       {n_new} 次擬合")
-    P(f"  精修階數           {refines}"
-      f"（粗網格 + {len(refines)} 階精修）")
-    P(f"  合成星數 n_syn     {args.n_syn:,}")
-    P(f"  觀測星數           {n_obs:,}")
+    # main() 對打錯的設定名稱另外還有一道不能被 --force 繞過的硬阻擋
+    # （見 main() 該處註解）；這裡的 unknown 只影響 workload_audit 的
+    # fails，走的是跟其餘 A2/A3 問題一樣「可以 --force 略過」的路徑，
+    # 兩者用途不同、都要留著。
+    partial_counts = {k: len(v) for k, v in partial.items()}
+    w_fails, w_warns = preflight.workload_audit(
+        scan_keys=valid, repeats=args.repeats, n_syn=args.n_syn,
+        n_obs=n_obs, refines=refines, partial_counts=partial_counts,
+        unit="次重複", unknown=unknown, known=list(configs),
+        scan_label="設定（--configs）")
     if len(valid) > 1:
-        warns.append(f"會算 {len(valid)} 套設定（{', '.join(valid)}），"
-                     f"耗時約為單一設定的 {len(valid)} 倍——"
-                     f"若只要 config C，記得帶 --configs C"
-                     f"（radial_r1 就是漏帶這個白算了 6 機時）")
-    if n_new == 0:
-        warns.append("這次沒有任何新的擬合要算（既有結果已滿足 --repeats），"
-                     "跑起來會立刻結束")
+        w_warns.append(f"會算 {len(valid)} 套設定（{', '.join(valid)}），"
+                       f"耗時約為單一設定的 {len(valid)} 倍——"
+                       f"若只要 config C，記得帶 --configs C"
+                       f"（radial_r1 就是漏帶這個白算了 6 機時）")
 
-    # --- 2/3/4. 解析度／設定對帳／網格涵蓋：共用邏輯 ---
+    # --- B2：輸出檔狀態 ---
+    preflight.output_audit(out_path, partial)
+
+    # --- A1/A2/A3：解析度／設定對帳／網格涵蓋，併入 B1 算出的 fails/warns
+    # 一起判定 ---
     # **刻意讓 audit_common() 直接重讀 config.toml 原始檔案，不是傳
     # main() 已經解析好的 cfg 物件**：A2 那個 bug 的形狀正是「cfg 讀進來
     # 之後，程式碼又用 cfg._data[...]=... 動態覆寫掉某個值」。如果改成
@@ -249,29 +166,10 @@ def _preflight_report(args, model, grid, refines, configs,
     # 永遠對得起來，等於讓這段檢查失去意義。fit_real.py 不像其餘四支
     # 診斷腳本那樣刻意覆寫 mh_prior_sigma，所以不傳 expected_overrides
     # ——如果哪天 fit_real.py 也悄悄多了一行覆寫，這裡會如實抓到。
-    audit_fails, audit_warns = preflight.audit_common(
-        model, grid, refines, script="fit_real.py")
-    fails.extend(audit_fails)
-    warns.extend(audit_warns)
-
-    # --- 5. 輸出檔狀態 ---
-    # manifest 不相容的情況在上游已經 sys.exit(1) 擋掉了，走到這裡只會是
-    # 「沒有舊檔」或「舊檔相容」，所以這段是報告不是判斷。
-    P("\n【輸出】")
-    P(f"  檔案               results/{out_path.name}")
-    P(f"  目前狀態           "
-      f"{'已存在，設定相容，會續傳' if partial else '不存在，從頭開始'}")
-    P(f"  續傳保護           有（每次重複算完立刻存檔＋寫入鎖）")
-
-    P("\n" + "=" * 74)
-    for w in warns:
-        P(f"  注意：{w}")
-    for f in fails:
-        P(f"  阻擋：{f}")
-    P(f"結論：{'不通過' if fails else '通過'}"
-      f"（阻擋 {len(fails)}、注意 {len(warns)}）")
-    P("=" * 74)
-    return 1 if fails else 0
+    preflight.mandatory_gate(
+        model, grid, refines, script="fit_real.py",
+        force=args.force, dry_run=args.preflight,
+        extra_fails=w_fails, extra_warns=w_warns)
 
 
 def main():
@@ -381,6 +279,14 @@ def main():
                          "且不砍觀測端，行為與加入這個旗標前完全相同。"
                          "用於等時線網格質量涵蓋不足時做同基準比較（D1）")
     args = ap.parse_args()
+    if args.repeats < 1:
+        # --repeats 0（或負數）讓 for rep in range(args.repeats) 完全不
+        # 執行，reps 停在空 list，np.array([]) 是 shape (0,) 的一維陣列。
+        # 沒有既有部分結果時，後面「alpha 隨模型設定的變化」總表對它做
+        # out[key][:, 3] 會丟 IndexError（2026-08-20 CodeRabbit review）。
+        # 這是結構性輸入錯誤，不是「已知風險、確認要略過」，--force 不
+        # 應該放行。
+        ap.error("--repeats must be positive")
     if args.repeat_offset < 0:
         ap.error("--repeat-offset must be non-negative")
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
@@ -462,60 +368,48 @@ def main():
     from pipeline.step3_age import draw_randoms
     out_path = HERE / "results" / f"fit_real{args.tag}.npz"
     manifest = build_manifest(args)
-    partial_raw = load_partial(out_path)
-    old_manifest_arr = partial_raw.pop(MANIFEST_KEY, None)
-    partial = partial_raw
+    partial = checkpoint.load_partial(out_path)
+    checkpoint.check_manifest(out_path, manifest, partial,
+                              legacy_defaults=MANIFEST_LEGACY_DEFAULTS)
+    # `__attempted_*` 是 checkpoint.py 內部的記帳鍵（每個 config 存一份，
+    # 記「已嘗試次數」，供 inject_lowmass.py 這類會遇到貼牆例外的腳本
+    # 續傳時判斷哪些試驗不用重跑），不是這裡要的「設定名稱 -> 結果陣列」
+    # ——fit_real.py 一律成功、不需要那層區分，但 checkpoint.save_progress()
+    # 仍然統一會寫這個鍵。load_partial() 只排除 MANIFEST_KEY，不排除它，
+    # 混進 out 會讓下面 for key in out 的總表迴圈把它當成一個 config 去
+    # 取 [:,3]，丟 IndexError／KeyError（2026-08-20 CodeRabbit review 抓到：
+    # 續傳時才會觸發，第一次跑因為還沒有既有檔案不會發作）。跟
+    # preflight.gate_c() 用同一條 startswith("__") 排除規則。
+    partial = {k: v for k, v in partial.items() if not k.startswith("__")}
     if partial:
-        if old_manifest_arr is None:
-            # 舊檔案沒存過 manifest（這個檢查是 2026-08-15 才加的），沒有
-            # 東西可比對——信任沿用，不因為缺 manifest 就拒絕續傳既有進度。
-            print(f"警告：{out_path.name} 是加 manifest 檢查前存的舊檔，"
-                  f"無法自動確認這次的設定跟它一致，視為信任沿用。",
-                  flush=True)
-        else:
-            old_manifest = json.loads(str(old_manifest_arr))
-
-            def _old(k):
-                return old_manifest.get(k, MANIFEST_LEGACY_DEFAULTS.get(k))
-
-            diffs = {k: (_old(k), v) for k, v in manifest.items()
-                     if _old(k) != v}
-            if diffs:
-                print(f"錯誤：{out_path.name} 已有部分結果，但執行設定跟"
-                      f"這次不同（{diffs}）。沿用會把兩種不可比的設定混進"
-                      f"同一個檔案——換一個 --tag，或確認要不要刪掉舊檔"
-                      f"重跑。", flush=True)
-                sys.exit(1)
         n_done = {k: len(v) for k, v in partial.items()}
         print(f"讀到既有部分結果 {out_path.name}：{n_done}"
               f"（會跳過已經算完的重複，不是從頭重算）\n", flush=True)
-    out = {k: list(v) for k, v in partial.items()}
-    if args.preflight:
-        sys.exit(_preflight_report(args, base, grid, refines,
-                                   CONFIGS, out_path, out, len(color)))
+    # 截到 args.repeats：既有結果比這次要求的 --repeats 多時（例如磁碟
+    # 已有 3 次、這次只要 2 次），不截斷的話下面主迴圈會因為
+    # rep < len(reps) 全部跳過、out[key] 卻仍帶著全部 3 筆，讓「跨 2 次」
+    # 的平均/散布統計、還有 _preflight_gate() 的工作量報表都用了 3 筆，
+    # 跟這次實際要求的次數對不上（2026-08-20 CodeRabbit review）。只截
+    # 記憶體中這份拷貝，磁碟上的完整結果不動，也不影響「加大 --repeats」
+    # 的續傳能力（那是从磁碟重新 load_partial() 讀，不會被這裡截斷過）。
+    out = {k: list(v)[:args.repeats] for k, v in partial.items()}
     # **2026-08-20 改成無條件執行，不再只有 --preflight 才做**：這份檢查
     # 原本只在有人記得多打一個旗標時才會發生，但實際會呼叫這支腳本的
     # 地方不只 run_queue.py（那邊確實有記得先呼叫 --preflight）——Kaggle
     # 筆記本、x64 協作機手動下指令，都是直接跑 `python fit_real.py ...`，
     # 完全不經過任何會記得先檢查的中介層。讓檢查本身變成 main() 一部分，
     # 不管從哪台機器、哪種方式呼叫，都跑得到，不依賴呼叫端的記性。
-    # 有阻擋級問題就中止，除非 --force（僅供已經看過警告、確認要略過的
-    # 情況使用，不是日常流程）。
-    rc = _preflight_report(args, base, grid, refines, CONFIGS, out_path,
-                           out, len(color))
-    if rc and not args.force:
-        print("開跑前檢查沒通過，中止（用 --force 可以略過，但要先確認"
-              "上面每一條阻擋的理由）", flush=True)
-        sys.exit(rc)
-    if rc and args.force:
-        print("警告：用 --force 略過了上面的阻擋，繼續執行", flush=True)
+    # 中止/繼續/--force 的判定都在 preflight.mandatory_gate() 裡（見
+    # _preflight_gate()），這裡不用再自己重複一次。
+    _preflight_gate(args, base, grid, refines, CONFIGS, out_path, out,
+                    len(color))
     # 打錯的設定名稱要當場中止，不能像下面迴圈那樣用 `if key not in
     # CONFIGS: continue` 靜默略過——`--configs A,X` 打錯字時，沒有這段
     # 驗證的話會悄悄只算 A，結果檔看起來正常，只是少了一個誰都不知道
-    # 該存在的設定，跟 `--preflight` 那份「意圖對帳」要防的是同一種錯
-    #（2026-08-20 CodeRabbit review：這裡跟 `_preflight_report()` 各自
-    # 過濾一次，preflight 那份只用來報告不影響真正執行，這裡才是真正
-    # 會不會跑錯的把關）。
+    # 該存在的設定，跟 `_preflight_gate()` 那份「意圖對帳」要防的是同一種
+    # 錯（2026-08-20 CodeRabbit review：這裡跟 `_preflight_gate()` 各自
+    # 過濾一次，preflight 那份只用來報告、可以被 --force 略過，這裡才是
+    # 真正會不會跑錯的把關，不能被 --force 繞過）。
     requested = [k.strip().upper() for k in args.configs.split(",")]
     unknown = [k for k in requested if k not in CONFIGS]
     if unknown:
@@ -590,38 +484,45 @@ def main():
             # 跑完一次重複就存一次，不等這個 config 的全部 repeats 或
             # 全部 configs 都跑完——中途被砍（不管是意外還是像這次一樣
             # 為了套用別的修正主動重啟），已經算完的每一次重複都保得住，
-            # 重跑時 load_partial() 會讀回來跳過，不會白工。
-            #
-            # 存檔前先拿鎖、重新讀一次磁碟上的最新版本再合併——如果磁碟上
-            # 這個 key 的重複數已經比我們手上這份多（代表有另一個行程用
-            # 同一個 --tag 平行在跑，且比我們快），採用磁碟版本，不要用
-            # 自己比較舊的覆蓋過去。這解決的是「檔案被覆蓋壞掉／新結果
-            # 被舊結果蓋掉」，不解決「兩個行程各自算了一份同樣的 rep 卻
-            # 只留得住一份」——真要跨機器平行擴充同一批 repeats，必須用
-            # 不重疊的 repeat 索引分開跑（每個行程各自的 --tag），這裡的
-            # 鎖只是最後一道防線，見 _acquire_write_lock() 的說明。
-            lock_path = _acquire_write_lock(out_path)
-            try:
-                fresh = {k: v for k, v in load_partial(out_path).items()
-                         if k != MANIFEST_KEY}
-                if len(fresh.get(key, [])) > len(reps):
-                    print(f"  [注意] 磁碟上 {key} 已有 "
-                          f"{len(fresh[key])} 次重複，比這個行程手上的 "
-                          f"{len(reps)} 次多（可能有另一個行程平行在跑同一個 "
-                          f"--tag），改沿用磁碟版本繼續。", flush=True)
-                    reps = list(fresh[key])
-                out.update({k: v for k, v in fresh.items() if k != key})
-                out[key] = np.array(reps)
-                manifest_arr = np.array(json.dumps(manifest, sort_keys=True))
-                atomic_savez(out_path, **out, **{MANIFEST_KEY: manifest_arr})
-            finally:
-                _release_write_lock(lock_path)
+            # 重跑時 checkpoint.load_partial() 會讀回來跳過，不會白工。
+            # 存檔／跨行程競態保護見 scripts/tools/checkpoint.py 的
+            # save_progress()（原本這裡自己拿鎖、重讀磁碟、合併寫回的一段，
+            # 2026-08-20 收斂成共用函式，另外四支診斷腳本直接沿用）。
+            reps = checkpoint.save_progress(out_path, key, reps, manifest)
+        # 迴圈外無條件轉成 ndarray，不能只在迴圈內「有算新的一次」才轉
+        # ——若這個 key 的全部 repeats 都被續傳跳過（rep < len(reps) 對
+        # 每一次都成立），迴圈本體一次都不會執行，`out[key]` 會停在最初
+        # `out = {k: list(v) for k, v in partial.items()}` 那行給的原始
+        # list，下面 `arr[:,3]` 這種 ndarray 用法就會丟
+        # `TypeError: list indices must be integers or slices, not tuple`
+        # （這是既有 bug，續傳測試時發現，跟這次的 checkpoint 重構本身
+        # 無關但同一條路徑上，一併修掉）。
+        #
+        # 再截一次 [:args.repeats]：`checkpoint.save_progress()` 偵測到
+        # 磁碟上有另一個行程寫入更新的版本時，會直接回傳磁碟上的完整
+        # `reps`（見該函式「改沿用磁碟版本繼續」那段）——那份完整版本
+        # 可能比這次 `args.repeats` 要求的多，不截斷的話跨行程競態下
+        # 統計筆數又會跟這次要求的次數對不上，同一顆問題（見上面
+        # 主迴圈前 `out = {...}[:args.repeats]` 那次修正）在跨行程續傳
+        # 這條路徑上重演一次（2026-08-20 CodeRabbit review）。
+        out[key] = np.array(reps[:args.repeats])
         arr = out[key]
         if args.repeats > 1:
             print(f"{key} 跨 {args.repeats} 次：alpha 平均 {arr[:,3].mean():.3f}"
                   f"、散布 {arr[:,3].std():.3f}"
                   f"（{'  '.join(f'{v:.3f}' for v in arr[:,3])}）\n", flush=True)
 
+    # 上面 `out[key] = np.array(...)` 的轉型只發生在 `for key in
+    # requested:` 迴圈內，只碰得到這次 `--configs` 選到的設定——`out`
+    # 裡若還混著這次沒選、只是沿用舊 checkpoint 殘留的設定（例如上例的
+    # A），那些鍵仍停在最初 `out = {k: list(v)[:args.repeats] for ...}`
+    # 給的原始 list，下面 `out[key][:, 3]` 會丟
+    # `TypeError: list indices must be integers or slices, not tuple`
+    # ——跟前面那個「全部 repeats 都被續傳跳過」的既有 bug 同一個形狀，
+    # 換成「這個 key 這次根本沒被主迴圈碰過」這個變體，一併在這裡收尾
+    # 統一轉型修掉，不用在每個可能少碰到某個 key 的分支各自補一次
+    # （2026-08-20 CodeRabbit review 抓到「A 混進 C 的統計」才發現）。
+    out = {k: np.asarray(v) for k, v in out.items()}
     print(f"{'='*74}\nalpha 隨模型設定的變化\n{'='*74}")
     print(f"{'設定':<6}{'說明':<34}{'alpha 平均':>11}{'散布':>8}{'相對 A':>10}")
     a0 = out["A"][:, 3].mean() if "A" in out else np.nan
@@ -629,7 +530,15 @@ def main():
         a = out[key][:, 3]
         print(f"{key:<6}{CONFIGS[key][0]:<34}{a.mean():>11.3f}"
               f"{a.std():>8.3f}{a.mean()-a0:>+10.3f}")
-    if "A" in out and "C" in out and args.repeats > 1:
+    # 除了 args.repeats > 1，還要求 A／C 兩邊「這次手上的筆數」本身
+    # 都 > 1：`out` 裡可能混著這次沒被 --configs 選到、只是沿用舊
+    # checkpoint 殘留筆數的設定（例如舊檔只有 A 的 1 筆結果，這次跑
+    # `--configs C --repeats 2`，A 完全沒被這次的主迴圈碰過，`out["A"]`
+    # 停在 1 筆）——用 `args.repeats > 1` 判斷不出這種情況，`len(out["A"])`
+    # 只有 1 時 `var(ddof=1)` 除以 (1-1)=0 會靜默產生 nan，混進看起來
+    # 正常的位移報表裡（2026-08-20 CodeRabbit review）。
+    if "A" in out and "C" in out and args.repeats > 1 \
+            and len(out["A"]) > 1 and len(out["C"]) > 1:
         # 位移要與重現性比較才有意義。兩組各自的散布合併成位移的標準誤。
         na, nc = len(out["A"]), len(out["C"])
         se = np.sqrt(out["A"][:, 3].var(ddof=1) / na
