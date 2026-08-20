@@ -268,3 +268,14 @@ c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3
 # 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
 # 需要 fit_real.py 的 --g-bright 旗標（PR #65 分支，尚未合併進 main）。
 d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+
+# ===== 2026-08-20：mass_dependent_fbin（D14 衍生，見 WORK_BOARD.md
+# 「對照 Hobart et al. 2026 的鞏固工作」表）=====
+# synthesise() 裡決定「誰帶伴星」的 Bernoulli(f_bin) 跟主星質量完全獨立，
+# 等於假設雙星比例不隨質量變化——已知簡化但從沒量化過代價。
+# 注入端讓 f_bin 隨質量分兩段（重星段減輕星段相差 contrast，**整體雙星
+# 比例固定不變**，只動質量相依性這一個變因），擬合端用現有的常數 f_bin
+# 模型，量 alpha 被推歪多少。contrast=0 是對照組，用來扣掉這套注入回收
+# 本身的偏差地板（C13 記錄約 -0.050，跟要測的量級接近，不扣不能判讀）。
+# 驗收：淨偏移遠小於統計誤差 0.144 -> 記為可忽略並結案，不升格成自由參數。
+massdep_fbin|inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3
