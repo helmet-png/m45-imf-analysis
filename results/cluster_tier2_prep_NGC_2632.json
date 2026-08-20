@@ -10,7 +10,10 @@
   "n_hr23": 434,
   "n_gaia_crossmatch": 434,
   "n_g_le_18": 394,
+  "n_control_field": 966,
+  "n_selection_calibration": 1360,
   "n_clean": 381,
+  "gaia_tap_endpoint": "https://gaia.ari.uni-heidelberg.de/tap/sync",
   "quality_cut_stats": {
     "亮端飽和": 0,
     "G 訊噪比": 0,
@@ -22,17 +25,26 @@
   },
   "selection_validation": {
     "observed_survival": 0.9670050761421319,
-    "predicted_survival": 0.9663959390862944,
-    "overall_error": -0.0006091370558375386,
-    "worst_mag_bin_error": 0.009868421052631637,
+    "predicted_survival": 0.9661928934010154,
+    "overall_error": -0.0008121827411164961,
+    "worst_mag_bin_error": 0.009736842105263377,
     "n_validation_bins": 9,
     "pass_overall": true,
-    "pass_mag_bins": true
+    "pass_mag_bins": true,
+    "faint_colour_split_bp_rp": 2.9924289999999996,
+    "observed_survival_red": 0.8620689655172413,
+    "observed_survival_blue": 0.9310344827586207,
+    "predicted_survival_red": 0.8210344827586207,
+    "predicted_survival_blue": 0.9596551724137932,
+    "red_minus_blue_error": -0.06965517241379315,
+    "pass_faint_colour_split": true,
+    "passed": true
   },
   "files": {
     "raw": "cluster_NGC_2632_gaia.csv",
     "clean": "cluster_NGC_2632_cmd_members.csv",
     "errmodel": "cluster_NGC_2632_errmodel.npz",
-    "selection": "cluster_NGC_2632_selection.npz"
+    "selection": "cluster_NGC_2632_selection.npz",
+    "control_field": "cluster_NGC_2632_control_field.csv"
   }
 }

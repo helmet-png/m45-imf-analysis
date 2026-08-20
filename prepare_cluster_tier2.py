@@ -15,6 +15,7 @@ import argparse
 import csv
 import io
 import json
+import os
 import ssl
 import sys
 import time
@@ -44,7 +45,11 @@ from pipeline.step2_cmd import (                            # noqa: E402
 
 Table = _CompatTable
 
-GAIA_TAP = "https://gea.esac.esa.int/tap-server/tap/sync"
+# The official archive can be temporarily unstable during archive maintenance.
+# A documented Gaia DR3 TAP mirror can be selected per run without changing
+# the scientific query or silently overwriting the default endpoint.
+GAIA_TAP = os.environ.get(
+    "M45_GAIA_TAP", "https://gea.esac.esa.int/tap-server/tap/sync")
 GAIA_COLUMNS = (
     "source_id", "ra", "dec", "parallax", "parallax_error",
     "phot_g_mean_mag", "phot_g_mean_flux_over_error",
@@ -113,7 +118,12 @@ def fetch_control_field(raw: Table, max_rows: int = 1000) -> Table:
         "FROM gaiadr3.gaia_source "
         "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), "
         f"CIRCLE('ICRS', {ra0:.8f}, {dec0:.8f}, 1.5)) "
-        "AND phot_g_mean_mag <= 18 ORDER BY source_id")
+        "AND phot_g_mean_mag <= 18")
+    # Sorting a dense cone by source_id before applying TOP requires a full
+    # server-side sort and repeatedly timed out on both TAP services.  The
+    # returned sample is written as a checked-in cache, so a completed run is
+    # still exactly reproducible without asking the remote database to repeat
+    # that expensive sort.
     rows = _post_csv(query)
     member_ids = set(np.asarray(raw["source_id"], np.int64).tolist())
     rows = [row for row in rows if int(row["source_id"]) not in member_ids]
@@ -350,6 +360,7 @@ def main():
         "n_control_field": len(control),
         "n_selection_calibration": len(calibration),
         "n_clean": len(clean),
+        "gaia_tap_endpoint": GAIA_TAP,
         "quality_cut_stats": cut_stats,
         "selection_validation": validation,
         "files": {"raw": raw_path.name, "clean": clean_path.name,
