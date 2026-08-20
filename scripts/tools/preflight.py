@@ -36,7 +36,32 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parents[2]
+def _find_repo_root() -> Path:
+    """找出專案根目錄（放 config.toml 的那一層）。
+
+    平常這支檔案在 `scripts/tools/preflight.py`，往上兩層就是根目錄。
+    **但 Kaggle 派工會把附加檔案的路徑壓平**（`kaggle_sync.py` 的
+    `build_payload()` 用 `shutil.copy(src, work_dir / Path(f).name)`，
+    kernel 端也是複製到 cwd），所以在 Kaggle 上這支檔案會躺在
+    `/kaggle/working/preflight.py`，`parents[2]` 算出來是 `/`，接著
+    `open(HERE / "config.toml")` 就會 FileNotFoundError: '/config.toml'。
+
+    2026-08-21 實測踩到：radial_r1_final_rep3/rep4、radial_r2_final_rep0~3
+    等 6 個 Kaggle 工作連續在 187-213 秒失敗，錯誤都是這一行。
+
+    改法是「按實際找得到 config.toml 的那一層為準」，依序試：
+    往上兩層（正常安裝）-> 這支檔案自己所在的目錄（Kaggle 壓平後）->
+    目前工作目錄。全都找不到時退回原本的 parents[2]，讓錯誤訊息維持
+    原樣，不要靜默用一個猜的路徑繼續跑。
+    """
+    here = Path(__file__).resolve()
+    for cand in (here.parents[2], here.parent, Path.cwd()):
+        if (cand / "config.toml").is_file():
+            return cand
+    return here.parents[2]
+
+
+HERE = _find_repo_root()
 sys.path.insert(0, str(HERE))
 
 
