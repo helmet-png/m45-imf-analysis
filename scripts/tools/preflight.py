@@ -190,17 +190,20 @@ def audit_common(model, grid, refines, *, script: str,
 
     # --- 解析度：宣稱 vs 實際達成 ---
     span = float(COARSE[3][1] - COARSE[3][0])
-    # **2026-08-20 CodeRabbit review 抓到**：原本只檢查「有沒有精修階段」
-    # （`len(refines) < 2` 觸發警告），沒檢查每一階的倍率本身有沒有效果。
-    # `multi_stage_best()` 用 `step/r` 算下一輪的格距——`--refines 1`
-    # 通過「有帶精修」這個檢查，但 `step/1 == step`，格距完全沒有縮小，
-    # 效果等同 `--refines ""`（完全不精修），卻只被當成警告放行，繞過了
-    # 空 `--refines` 的阻擋。而且 `r<=0` 會在除法時丟例外或算出負格距，
-    # 必須先擋掉，不能等除完才發現。
-    bad_r = [r for r in refines if r <= 0]
+    # **2026-08-20 CodeRabbit review 抓到，第二輪又追加**：原本只擋
+    # `r<=0`、再靠比較整體 final 跟 span 抓「完全沒精修」，但那只擋得住
+    # *全部*倍率加起來都沒效果的情況——`--refines 1,3` 這種**只有其中
+    # 一階**是無效倍率（r=1，`step/1==step` 格距完全沒縮小）的情況會被
+    # 放過，因為後面那階（r=3）的效果會把整體 final 拉到小於 span，
+    # 通過整體比較，但那一階本身是白算的，等於謊報「精修了兩階」。
+    # 改成逐一擋每個 `r<=1` 的倍率——不只是排除會除以零或算出負格距的
+    # r<=0，`r==1` 本身也不構成精修，兩者都要在計算 final 前一次擋掉。
+    bad_r = [r for r in refines if r <= 1]
     if bad_r:
-        fails.append(f"--refines 裡有非正值 {bad_r}，multi_stage_best() "
-                     f"用 step/r 算下一輪格距，非正值會除以零或算出負格距")
+        fails.append(f"--refines 裡有不會精修的倍率 {bad_r}——"
+                     f"multi_stage_best() 用 step/r 算下一輪格距，"
+                     f"r<=0 會除以零或算出負格距，r==1 則格距完全不縮小，"
+                     f"兩者都等於那一階白算，每個倍率都必須 > 1")
         final = span
     else:
         final = span
@@ -211,11 +214,9 @@ def audit_common(model, grid, refines, *, script: str,
     P(f"  精修後實際格距     {final:.4f}"
       f"（{span:.2f} / {' / '.join(str(r) for r in refines) or '1'}）")
     if not bad_r:
-        if final >= span - 1e-12:
-            fails.append(f"--refines={refines} 沒有讓格距變細於粗網格 "
-                         f"{span:.2f}（換算後仍是 {final:.4f}）——refines "
-                         f"裡每個倍率都要 >1 才有實際精修效果，倍率恰好是 1 "
-                         f"時那一階等於白算，跟完全不精修同一種後果")
+        if not refines:
+            fails.append(f"--refines 是空的，等於完全不精修，alpha 只會"
+                         f"落在 {span:.2f} 間距的粗網格點上")
         elif len(refines) < 2:
             warns.append(f"只精修 {len(refines)} 階，alpha 實際解析度 "
                          f"{final:.4f}——要當最終數字報請確認是否需要更多階")
