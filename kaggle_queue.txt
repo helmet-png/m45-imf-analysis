@@ -131,6 +131,13 @@ verify_bprperr_on_v2_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --conf
 verify_bprperr_on_v2_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 2 --tag _bprperr_on_v2_rep2|measure_overconfidence.py,injection_recovery.py|false|
 verify_bprperr_on_v2_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 3 --tag _bprperr_on_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
 verify_bprperr_on_v2_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-08-20 22:49：上面那項 push 失敗（push_failed，網路問題，跟 08-19
+# off_v2_rep3 那次同一個模式）。push_failed 會被寫進 kaggle_queue_done.txt，
+# 而派工是用「label 不在 done 裡」篩選的，所以**失敗的項目不會自動重試**，
+# 必須像這樣手動補一個不同 label 的重試項目（--tag 保持不變，輸出檔名
+# 一樣是 fit_real_bprperr_on_v2_rep4.npz，種子由 --repeat-offset 4 決定，
+# 跟原本那次完全相同，不是重算不同的東西）。
+verify_bprperr_on_v2_rep4_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py|false|
 
 # ===== 2026-08-20：radial_final_reruns（A5，WORK_BOARD 標「最優先」）=====
 # 第 2 步的四個徑向切片目前只有 _prelim 版（單次重複、單階精修、沒有誤差
