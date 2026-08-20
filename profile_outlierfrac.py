@@ -59,6 +59,11 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
+    if args.repeats < 1:
+        # 理由同 profile_lowmass.py 的同一處檢查（2026-08-20 CodeRabbit
+        # review）：--repeats 0（或負數）會讓 outs 截成空 list，後面
+        # arr[:, 3] 丟 IndexError，且沒有被 --force 保護。
+        ap.error("--repeats must be positive")
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     fracs = ([float(x) for x in args.fracs.split(",")] if args.fracs

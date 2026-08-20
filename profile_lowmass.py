@@ -67,6 +67,12 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
+    if args.repeats < 1:
+        # --repeats 0（或負數）會讓 outs 被截成空 list（見下面
+        # [:args.repeats] 那行），np.array([]) 是 shape (0,) 的一維陣列，
+        # 後面 arr[:, 3] 直接丟 IndexError；且這段沒有被 --force 保護的
+        # 條件包住，屬於結構性輸入錯誤（2026-08-20 CodeRabbit review）。
+        ap.error("--repeats must be positive")
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     slopes = ([float(x) for x in args.slopes.split(",")] if args.slopes
