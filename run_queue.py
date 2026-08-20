@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import subprocess
 import sys
 import time
@@ -32,6 +33,7 @@ QUEUE = HERE / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
 LOCK = HERE / "logs" / "run_queue.lock"
 STALL_RETRIES = HERE / "logs" / "stall_retries.txt"
+TICK_LOG = HERE / "logs" / "watchdog_ticks.log"
 
 # 2026-08-15：radial_r3 第一次執行卡死了 83 分鐘——行程活著、但完全零
 # CPU 時間增量、一個 multiprocessing worker 都沒 spawn 出來，得靠人工
@@ -261,6 +263,93 @@ def _kill_process_tree(pid: int):
         pass
 
 
+def _log_tick(label: str, ticks, delta, note: str = "") -> None:
+    """把每次輪詢量到的 CPU tick 附加寫進 logs/watchdog_ticks.log。
+
+    2026-08-20 加入：稍早追查 radial_r3 反覆卡死時，發現完全沒有留下
+    輪詢過程的數值記錄，只有「判定卡死」那一行結論，事後沒辦法回頭看
+    卡死前 tick 是怎麼變化的（是真的長時間持平、還是踩到 2026-08-16
+    修掉的那個「下降誤判」bug）。這支函式本身不影響卡死判斷邏輯，純粹
+    留痕，讓下次真的卡死時能回頭看趨勢，不用只靠猜。用純 append 寫入，
+    這個檔案會持續長大，不做輪替——量不大（一行約 60-80 bytes，一個
+    多小時的工作撐死幾百行），需要時再手動清。"""
+    try:
+        TICK_LOG.parent.mkdir(exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        delta_str = "?" if delta is None else str(delta)
+        with open(TICK_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{ts}\t{label}\tticks={ticks}\tdelta={delta_str}"
+                    f"\t{note}\n")
+    except OSError:
+        pass                    # 留痕是輔助功能，寫檔失敗不該讓監看中止
+
+
+def _preflight_ok(label: str, cmd: str) -> bool:
+    """派工前先讓目標腳本自己做一次開跑前檢查（見 scripts/tools/preflight.py）。
+
+    只對已經支援 `--preflight` 的腳本生效；其他腳本一律放行（回傳 True），
+    **不是因為它們安全，是因為還沒有幫它們做這個功能**——涵蓋差異寫在
+    `docs/reference/PREFLIGHT.md`，不要把「放行」讀成「檢查過了」。
+    """
+    script = cmd.split()[0]
+    src = (HERE / script)
+    if src.exists():
+        t = src.read_text(encoding="utf-8", errors="replace")
+        if not ("load_partial" in t and "MANIFEST_KEY" in t):
+            # 警告不阻擋：這類腳本在沒被中斷時是會正常跑完的，直接擋掉
+            # 等於永遠不讓它跑。但這台機器過去四天被強制重開機 4 次，
+            # p6_lowmass_v2 因此連續四天每次都從頭重算、一次都沒完成，
+            # 所以派工的人要知道自己在賭什麼。根治是幫這些腳本補上
+            # fit_real.py 那套逐次存檔＋manifest 續傳。
+            print(f"  注意：{script} 沒有續傳機制，中途被砍（重開機／卡死"
+                  f"重試）就得從頭重算——這台機器有非預期重開機的前科",
+                  flush=True)
+    if script != "fit_real.py":
+        return True
+    try:
+        r = subprocess.run([sys.executable, script, *cmd.split()[1:],
+                            "--preflight"], cwd=str(HERE),
+                           capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=1800)
+    except Exception as e:                                   # noqa: BLE001
+        # 檢查本身壞掉不該擋住正事——印出來讓人看到，然後照常跑。
+        print(f"  開跑前檢查無法執行（{type(e).__name__}: {e}），照常開跑",
+              flush=True)
+        return True
+    for ln in (r.stdout or "").splitlines():
+        if ln.strip().startswith(("注意：", "阻擋：", "結論：")):
+            print(f"  {ln.strip()}", flush=True)
+    if r.returncode != 0:
+        print(f"  開跑前檢查不通過（退出碼 {r.returncode}），跳過 {label}，"
+              f"不浪費機時。修好後把 logs/queue_done.txt 裡那一行刪掉即可"
+              f"重新排隊。", flush=True)
+        return False
+    return True
+
+
+def _postflight(label: str, cmd: str) -> None:
+    """跑完立刻驗收產出（Gate C）。只印警告、不改變佇列流程——結果檔已經
+    寫出來了，這裡的價值是「當天就看到問題」而不是幾週後才發現（P11 那
+    12 次全部等於 2.500 的簽章在檔案裡躺了很久沒人看）。"""
+    m = re.search(r"--tag\s+(\S+)", cmd)
+    if cmd.split()[0] != "fit_real.py" or not m:
+        return
+    npz = HERE / "results" / f"fit_real{m.group(1)}.npz"
+    if not npz.exists():
+        return
+    try:
+        sys.path.insert(0, str(HERE / "scripts" / "tools"))
+        import preflight                                     # noqa: PLC0415
+        fails = preflight.gate_c(npz, verbose=False)
+    except Exception as e:                                   # noqa: BLE001
+        print(f"  產出驗收無法執行（{type(e).__name__}: {e}）", flush=True)
+        return
+    for f in fails:
+        print(f"  產出驗收警告：{f}", flush=True)
+    if not fails:
+        print(f"  產出驗收通過：{npz.name}", flush=True)
+
+
 def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
     """跑一個子行程，定期量整棵行程樹的 CPU 時間，長時間零增量就判定
     卡死、砍掉重試（見檔案開頭 STALL_* 常數與 2026-08-15 的說明）。
@@ -296,6 +385,7 @@ def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
                 # `None`，讓下一次量到的結果重新走「初始化基準」那條路
                 # （見下面 `if last_ticks is None or ...`），需要之後再
                 # 連續 STALL_WINDOW_S 秒量到不變的值才會判定卡死。
+                _log_tick(label, None, None, "量不到（行程剛結束或 PowerShell 呼叫失敗）")
                 last_ticks = None
                 continue
             # **2026-08-16 CodeRabbit review 抓到的真 bug**：原本
@@ -311,9 +401,13 @@ def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
             # ticks 連續 `STALL_WINDOW_S` 秒完全沒變（不是「沒有增加」）
             # 才判定卡死——這才是註解原本講的「CPU 時間真的不動」。
             if last_ticks is None or ticks != last_ticks:
+                delta = None if last_ticks is None else ticks - last_ticks
+                _log_tick(label, ticks, delta, "初始化基準" if last_ticks is None else "")
                 last_ticks, last_check = ticks, now
                 continue
-            if now - last_check >= STALL_WINDOW_S:
+            flat_s = now - last_check
+            _log_tick(label, ticks, 0, f"持平 {flat_s:.0f}s")
+            if flat_s >= STALL_WINDOW_S:
                 print(f"  警告：{label} 過去 {STALL_WINDOW_S/60:.0f} 分鐘"
                       f"整棵行程樹 CPU 時間零增量，判定卡死，砍掉。",
                       flush=True)
@@ -487,6 +581,15 @@ def main():
             log = HERE / "logs" / f"{label}.log"
             print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] 開始 {label}\n"
                   f"  python {cmd}\n  輸出 -> {log.name}\n{'='*70}", flush=True)
+            if not _preflight_ok(label, cmd):
+                # 開跑前檢查沒過就不要燒好幾個小時（動機見 scripts/tools/
+                # preflight.py 檔頭：白跑的 86.6 機時裡有 74.9h 是「跑完
+                # exit 0 但算法不是我們以為的那個」）。記一筆 preflight_fail
+                # 讓它不會在這一輪迴圈裡被重新選中，人工修好設定後
+                # 從 logs/queue_done.txt 刪掉那一行就會重新排進 pending。
+                mark_done(label, "preflight_fail", 0.0)
+                skip_this_run.add(label)
+                continue
             try:
                 status, secs, stalled = run_with_stall_watchdog(
                     [sys.executable, "-u"] + cmd.split(), HERE, log, label)
@@ -515,6 +618,8 @@ def main():
             mark_done(label, status, secs)
             print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
                   f"（{secs/60:.1f} 分）", flush=True)
+            if status == "ok":
+                _postflight(label, cmd)
     finally:
         release_system_awake()
         release_lock()

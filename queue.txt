@@ -156,6 +156,37 @@ radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --config
 # p6_lowmass 是全專案第二重要的數字（0.248 系統誤差），profile_outlierfrac
 # 是這次發現 bug 的源頭。其餘受影響項目（P9a-redo/P9c/P6b/P12）先記在
 # LIMITATIONS.md／WORK_BOARD.md 待認領清單，優先度較低，之後再排。=====
+#
+# 2026-08-20：p6_lowmass_v2 插隊到這裡之前，先誠實記一筆——它其實
+# 從 2026-08-16 20:48 就在跑，但這台機器四天內被 Windows 強制重開機
+# 至少 4 次（`Get-WinEvent` 查到 1074/109 事件，多半是「其他（不在
+# 計劃之中）」由 StartMenuExperienceHost 發起，疑似 Windows Update
+# 累積更新到期自動重開，8/15 那次是明確的 OS 升級；8/19 21:11 那次
+# 還有一筆 41/6008「非正常關機」），每次重開後開機自動重啟腳本
+# （`M45-QueueRunner-AutoRestart`）都正確把 run_queue.py 叫回來，
+# 但 `profile_lowmass.py` 沒有像 `fit_real.py` 那樣的逐次重複續傳
+# 機制（只在最後 `np.savez` 一次），所以每次重開機都等於把 p6_lowmass_v2
+# 歸零重跑，四天來一次都沒跑完。這不是這次才發現的新任務失敗，是把
+# 已經卡住的東西誠實標記出來，不是隱藏它——完整記錄見對話與
+# `LIMITATIONS.md`（待補一條）。**根治需要兩件事都做**：(1) 幫
+# `profile_lowmass.py` 補上跟 `fit_real.py` 一樣的 manifest／逐次
+# 存檔機制，(2) 查清楚並處理 Windows 自動重開機（多半是待處理的
+# Windows Update，`sconfig`／群組原則或 `UxSettings` 可以關掉自動
+# 重開），這裡先不動——只是把它從佇列最前面挪開，讓下面優先度更高
+# 的 radial_final_reruns 先跑（它用的 `fit_real.py` 已經有續傳保護，
+# 不怕重開機）。
+#
+# ===== 2026-08-20：radial_final_reruns（WORK_BOARD.md「第 2 步四項
+# 到齊後新解鎖的工作」，A5，最優先）。四項合計單次 prelim 已知耗時
+# 5,298–29,319 秒，乘上 5 次重複，數十小時等級——`fit_real.py` 有
+# manifest＋逐次重複續傳保護，就算再被 Windows 強制重開機也不會歸零。
+# 目標：確認 r3(2.50) > rall(2.43) 這個非單調現象是真實訊號還是統計
+# 雜訊（prelim 版單次無誤差棒，這批要看誤差棒重不重疊）。=====
+radial_r1_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final
+radial_r2_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final
+radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,3 --tag _radial_r3_final
+radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
+
 p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
