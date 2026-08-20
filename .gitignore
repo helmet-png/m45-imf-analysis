@@ -43,6 +43,7 @@ prepared/
 # astro-limepy 需要的 scipy 舊版（1.16.3，不能跟本專案主環境共用，見
 # scripts/diagnostics/limepy_multimass.py 開頭說明），本機獨立 venv 不進版控
 .venv_limepy/
+.venv_forward/
 
 # ============================================================
 # 憑證與機敏檔案：絕不進版控
