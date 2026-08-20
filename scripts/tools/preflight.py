@@ -190,19 +190,35 @@ def audit_common(model, grid, refines, *, script: str,
 
     # --- 解析度：宣稱 vs 實際達成 ---
     span = float(COARSE[3][1] - COARSE[3][0])
-    final = span
-    for r in refines:
-        final /= r
+    # **2026-08-20 CodeRabbit review 抓到**：原本只檢查「有沒有精修階段」
+    # （`len(refines) < 2` 觸發警告），沒檢查每一階的倍率本身有沒有效果。
+    # `multi_stage_best()` 用 `step/r` 算下一輪的格距——`--refines 1`
+    # 通過「有帶精修」這個檢查，但 `step/1 == step`，格距完全沒有縮小，
+    # 效果等同 `--refines ""`（完全不精修），卻只被當成警告放行，繞過了
+    # 空 `--refines` 的阻擋。而且 `r<=0` 會在除法時丟例外或算出負格距，
+    # 必須先擋掉，不能等除完才發現。
+    bad_r = [r for r in refines if r <= 0]
+    if bad_r:
+        fails.append(f"--refines 裡有非正值 {bad_r}，multi_stage_best() "
+                     f"用 step/r 算下一輪格距，非正值會除以零或算出負格距")
+        final = span
+    else:
+        final = span
+        for r in refines:
+            final /= r
     P("\n【解析度】")
     P(f"  alpha 粗網格格距   {span:.4f}")
     P(f"  精修後實際格距     {final:.4f}"
       f"（{span:.2f} / {' / '.join(str(r) for r in refines) or '1'}）")
-    if not refines:
-        fails.append("--refines 是空的，等於完全不精修，alpha 只會落在"
-                     f"{span:.2f} 間距的粗網格點上")
-    elif len(refines) < 2:
-        warns.append(f"只精修 {len(refines)} 階，alpha 實際解析度 "
-                     f"{final:.4f}——要當最終數字報請確認是否需要更多階")
+    if not bad_r:
+        if final >= span - 1e-12:
+            fails.append(f"--refines={refines} 沒有讓格距變細於粗網格 "
+                         f"{span:.2f}（換算後仍是 {final:.4f}）——refines "
+                         f"裡每個倍率都要 >1 才有實際精修效果，倍率恰好是 1 "
+                         f"時那一階等於白算，跟完全不精修同一種後果")
+        elif len(refines) < 2:
+            warns.append(f"只精修 {len(refines)} 階，alpha 實際解析度 "
+                         f"{final:.4f}——要當最終數字報請確認是否需要更多階")
 
     # --- 設定對帳：模型實際生效的值 vs config.toml 宣告值（或刻意覆寫值）---
     with open(HERE / "config.toml", "rb") as fh:
@@ -329,10 +345,16 @@ def _has_resume(script: str) -> bool:
 def gate_b(only_pending=True, verbose=True) -> list[str]:
     """B1/B2/B3：對 queue.txt 裡待跑的每一行做檢查。
 
-    `fit_real.py` 的行會實際呼叫 `--preflight` 代跑一次（用它自己的
-    parser 與模型建構，不會跟本體不同步）；其他腳本目前沒有 `--preflight`，
-    只做得到 B3（續傳能力）這層靜態檢查——**這個涵蓋差異會照實印出來，
-    不會讓人以為每一行都受到同等程度的檢查**。
+    **2026-08-20 更新**：`PREFLIGHT_AWARE_SCRIPTS`（`fit_real.py`／
+    `profile_lowmass.py`／`profile_outlierfrac.py`／`inject_lowmass.py`／
+    `injection_recovery.py`，五支計算腳本全部）的行都會實際呼叫
+    `--preflight` 代跑一次（用它自己的 parser 與模型建構，不會跟本體
+    不同步），拿到 A2（設定對帳）／A3（網格涵蓋）的完整檢查——但只有
+    `fit_real.py` 有 B1（意圖對帳）／B2（輸出衝突），其餘四支的旗標
+    介面互不相同，沒有硬套同一份邏輯。名單外的腳本只做得到 B3
+    （續傳能力）這層靜態檢查——**這個涵蓋差異會照實印出來，不會讓人
+    以為每一行都受到同等程度的檢查**（CodeRabbit review 抓到這裡的
+    docstring 沒跟上實作，五支腳本擴充後忘記回來更新）。
     """
     import run_queue as rq
     items = rq.read_queue()

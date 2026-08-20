@@ -183,14 +183,22 @@ def _preflight_report(args, model, grid, refines, configs,
 
     只讀不寫，不碰任何結果檔。回傳 0 代表通過、非 0 代表有阻擋級問題。
 
-    分三段對應三類實際發生過的損失（數字見 `docs/reference/PREFLIGHT.md`）：
-      解析度   對應 A1（75 機時）——精修階數宣稱與實際達成的解析度
-      設定對帳 對應 A2——模型實際生效的值 vs `config.toml` 宣告的值
+    分兩部分：
       工作量   對應 radial_r1 漏帶 `--configs C`（6 機時）——把「實際會算
-               幾套模型、幾次重複」印出來，跟意圖不符一眼看得出來
+               幾套模型、幾次重複」印出來，跟意圖不符一眼看得出來，是
+               fit_real.py 專屬的 B1（意圖對帳）／B2（輸出衝突），其餘
+               四支腳本旗標介面互不相同沒有共用
+      解析度／設定對帳／網格涵蓋 對應 A1/A2/A3——**2026-08-20 起改成呼叫
+      `preflight.audit_common()`，不再自己維護一份**：這三段原本在這裡
+      跟 `scripts/tools/preflight.py` 的 `audit_common()` 各自獨立實作
+      同一套邏輯，結果 CodeRabbit review 抓到「`--refines 1` 沒有實際
+      精修效果卻只被當警告放行」這個 bug 時，我只修了 `audit_common()`
+      那一份，這裡的複本沒有跟著修——兩份會各自演化然後不同步，正是
+      這整個 PREFLIGHT 機制想防的那種問題形狀，換個地方在自己身上重演。
+      改成直接呼叫共用函式，不可能再發生「修一邊漏一邊」。
     """
-    import tomllib
-    from injection_recovery import COARSE
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import preflight                                          # noqa: E402
     fails, warns = [], []
     P = lambda s="": print(s, flush=True)                    # noqa: E731
 
@@ -233,94 +241,18 @@ def _preflight_report(args, model, grid, refines, configs,
         warns.append("這次沒有任何新的擬合要算（既有結果已滿足 --repeats），"
                      "跑起來會立刻結束")
 
-    # --- 2. 解析度：宣稱 vs 實際達成 ---
-    # A1 的形狀是「旗標帶了，但旗標的意思跟以為的不一樣」，所以這裡不檢查
-    # 旗標本身，而是把旗標換算成實際會達到的格距，讓它跟「可報告的精度」
-    # 直接對照。真正驗證搜尋演算法有沒有照這個格距收斂的，是
-    # scripts/tools/preflight.py 的 A1 自我測試（那支才會實際跑一次搜尋）。
-    span = float(COARSE[3][1] - COARSE[3][0])                # alpha 粗格距
-    final = span
-    for r in refines:
-        final /= r
-    P("\n【解析度】")
-    P(f"  alpha 粗網格格距   {span:.4f}")
-    P(f"  精修後實際格距     {final:.4f}"
-      f"（{span:.2f} / {' / '.join(str(r) for r in refines) or '1'}）")
-    if not refines:
-        fails.append("--refines 是空的，等於完全不精修，alpha 只會落在"
-                     f"{span:.2f} 間距的粗網格點上")
-    elif len(refines) < 2:
-        warns.append(f"只精修 {len(refines)} 階，alpha 實際解析度 "
-                     f"{final:.4f}。要當最終數字報請用 --refines 3,3"
-                     f"（0.022）——`_prelim` 系列就是單階，只能看方向")
-
-    # --- 3. 設定對帳：模型實際生效的值 vs config.toml 宣告的值 ---
-    # **刻意重新讀原始檔案，不吃 main() 已經解析好的 cfg 物件**：A2 那個
-    # bug 的形狀正是「cfg 讀進來之後，程式碼又用 cfg._data[...]=... 動態
-    # 覆寫掉某個值」。如果這裡改成跟 model 一樣的 cfg 物件比對，兩邊
-    # 用的會是同一份已經被覆寫過的值，永遠對得起來，等於讓這段檢查
-    # 失去意義。只有直接重讀檔案本身，才能看到「檔案上寫的」跟「程式碼
-    # 實際生效的」是否一致（2026-08-20 CodeRabbit review：原本這裡收了
-    # 一個沒用到的 cfg 參數，看起來像是要拿它比對，其實不是——移除它，
-    # 靠這段註解把「為什麼刻意不用 cfg」講清楚，不要留下疑似遺漏的參數）。
-    with open(HERE / "config.toml", "rb") as fh:
-        raw = tomllib.load(fh)
-    jf = raw.get("joint_fit", {})
-    P("\n【設定對帳】模型實際生效 vs config.toml 宣告")
-    pairs = [
-        ("mh_prior_mean", model._mh_mean, jf.get("mh_prior_mean")),
-        ("mh_prior_sigma", model._mh_sigma, jf.get("mh_prior_sigma")),
-        ("logage_min", model.bounds[0][0], jf.get("logage_min")),
-        ("logage_max", model.bounds[0][1], jf.get("logage_max")),
-        ("av_max", model.bounds[1][1], jf.get("av_max")),
-        ("fbin_max", model.bounds[2][1], jf.get("fbin_max")),
-        ("alpha_min", model.bounds[3][0], jf.get("alpha_min")),
-        ("alpha_max", model.bounds[3][1], jf.get("alpha_max")),
-        ("mh_min", model.bounds[4][0], jf.get("mh_min")),
-        ("mh_max", model.bounds[4][1], jf.get("mh_max")),
-    ]
-    for name, eff, decl in pairs:
-        if decl is None:
-            continue
-        same = abs(float(eff) - float(decl)) < 1e-9
-        P(f"  {'  ' if same else '!!'} {name:16s} 生效 {float(eff):+8.3f}"
-          f"   宣告 {float(decl):+8.3f}")
-        if not same:
-            fails.append(f"{name}：模型實際用 {float(eff):+.3f}，但 "
-                         f"config.toml 宣告 {float(decl):+.3f}"
-                         f"——程式碼裡有覆寫（A2 就是這樣把高斯先驗"
-                         f"悄悄關成均勻先驗的）")
-    # 沒有 config 對應、但會改變數字意義的執行期設定，一律印出來備查
-    P(f"     低質量段冪次     {model.low_mass_slope:+.3f}"
-      f"{'（自由參數）' if args.free_lowmass else '（固定）'}")
-    P(f"     離群成分比例     {model.outlier_frac:.4f}")
-    P(f"     BP/RP 誤差來源   "
-      f"{'各波段自身星等' if model.use_native_bprp_err else 'G 星等（見 B1）'}")
-    P(f"     額外亮度散布     {model.extra_scatter:.3f}")
-    P(f"     差異消光分布     {model.dav_distribution}")
-    P(f"     亮端截斷 g_bright {model.g_bright:.2f}")
-    if args.fix_mh is not None:
-        P(f"     金屬量鎖定       {args.fix_mh:+.3f}")
-
-    # --- 4. 搜尋軸 vs 等時線網格實際涵蓋 ---
-    # JointModel 建構時就會印警告，但那兩行淹在啟動輸出裡沒人看
-    #（p6_lowmass_v2 現在的 log 裡就有）。這裡換算成「幾個粗格點是幽靈」，
-    # 讓它變成一個要正面回答的數字。
-    ages = np.unique(np.asarray(grid["logAge"], float))
-    mhs = np.unique(np.asarray(grid["MH"], float))
-    P("\n【搜尋軸 vs 網格涵蓋】")
-    for label, axis, cov in (("logage", COARSE[0], ages),
-                             ("MH", COARSE[4], mhs)):
-        ghost = int(((axis < cov.min() - 1e-9)
-                     | (axis > cov.max() + 1e-9)).sum())
-        P(f"  {label:7s} 搜尋 [{axis.min():+.2f}, {axis.max():+.2f}]"
-          f"   網格涵蓋 [{cov.min():+.3f}, {cov.max():+.3f}]"
-          f"   幽靈格點 {ghost}/{len(axis)}")
-        if ghost:
-            warns.append(
-                f"{label} 有 {ghost}/{len(axis)} 個粗格點落在網格涵蓋之外，"
-                f"會被最近鄰吸附到邊界等時線——不是獨立的模型。"
-                f"argmax 若落在邊界上要當成網格覆蓋不足的假象，不是訊號")
+    # --- 2/3/4. 解析度／設定對帳／網格涵蓋：共用邏輯 ---
+    # **刻意讓 audit_common() 直接重讀 config.toml 原始檔案，不是傳
+    # main() 已經解析好的 cfg 物件**：A2 那個 bug 的形狀正是「cfg 讀進來
+    # 之後，程式碼又用 cfg._data[...]=... 動態覆寫掉某個值」。如果改成
+    # 跟 model 一樣的 cfg 物件比對，兩邊用的會是同一份已經被覆寫過的值，
+    # 永遠對得起來，等於讓這段檢查失去意義。fit_real.py 不像其餘四支
+    # 診斷腳本那樣刻意覆寫 mh_prior_sigma，所以不傳 expected_overrides
+    # ——如果哪天 fit_real.py 也悄悄多了一行覆寫，這裡會如實抓到。
+    audit_fails, audit_warns = preflight.audit_common(
+        model, grid, refines, script="fit_real.py")
+    fails.extend(audit_fails)
+    warns.extend(audit_warns)
 
     # --- 5. 輸出檔狀態 ---
     # manifest 不相容的情況在上游已經 sys.exit(1) 擋掉了，走到這裡只會是
