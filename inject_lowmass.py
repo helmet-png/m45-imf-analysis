@@ -45,30 +45,6 @@ P_TRUE_LIST = [0.9, 1.3, 1.7]
 P_MIN, P_MAX = 0.3, 2.3
 
 
-def atomic_savez(out_path: Path, **arrays):
-    """np.savez 不是原子操作——寫到一半被中斷（斷電、被砍行程）會留下
-    截斷或空的檔案，蓋掉前一次跑成功的 checkpoint（2026-08-13 CodeRabbit
-    review 指出：這支腳本每跑完一個 p_true 就存一次，是刻意設計成「前面
-    跑完的不該陪葬」，但直接 np.savez(out_path,...) 寫入中斷時反而會
-    毀掉這個保證本身）。改成寫到同目錄的暫存檔，成功才用 os.replace()
-    原子性地換過去；`os.replace()` 在 POSIX 與 Windows 都保證是單一
-    系統呼叫等級的原子操作，不會有「新檔案寫一半、舊檔案已經被砍」的
-    中間狀態。寫入中途失敗時清掉暫存檔，不留半成品在 results/ 底下。"""
-    # 檔名一定要用 .npz 結尾——np.savez() 對不是以 .npz 結尾的路徑會自動
-    # 補一個 .npz 副檔名（實測過：傳 "x.npz.tmp" 會真的寫成
-    # "x.npz.tmp.npz"），沒注意到這個行為的話 os.replace() 會找錯檔案。
-    tmp_path = out_path.with_name(out_path.stem + ".tmp.npz")
-    try:
-        np.savez(tmp_path, **arrays)
-        os.replace(tmp_path, out_path)
-    except BaseException:
-        try:
-            tmp_path.unlink()
-        except FileNotFoundError:
-            pass
-        raise
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--procs", type=int, default=None)
@@ -132,14 +108,38 @@ def main():
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
 
+    # 2026-08-20：B3（續傳）—— 這支腳本原本每跑完一個 p_true 才存一次，
+    # 但重啟時不會讀回既有進度，一樣會重算已經跑完的 p_true。改用
+    # checkpoint.py，顆粒度細到「每一次試驗」（不是每個 p_true），且用
+    # attempted 計數區分「已嘗試」跟「已成功」——貼牆例外會跳過某次試驗
+    # 不計入結果，但那個試驗索引真的跑過一次，續傳時不該重跑
+    # （見 scripts/tools/checkpoint.py 的 load_progress() 說明）。
+    manifest = {"n_syn": args.n_syn, "refines": args.refines,
+                "dav_max": args.dav_max, "trial_offset": args.trial_offset,
+                "p_true_list": p_true_list}
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import checkpoint                                            # noqa: E402
     import preflight                                             # noqa: E402
+    partial = checkpoint.load_partial(out_path)
+    checkpoint.check_manifest(out_path, manifest, partial)
+
     if args.preflight:
         preflight._force_utf8_stdout()
+    scan_keys = [f"p{p}" for p in p_true_list]
+    partial_counts = {}
+    for p in p_true_list:
+        _, att = checkpoint.load_progress(partial, f"p{p}")
+        partial_counts[f"p{p}"] = att
+    w_fails, w_warns = preflight.workload_audit(
+        scan_keys=scan_keys, repeats=args.trials, n_syn=args.n_syn,
+        n_obs=n_obs, refines=refines, partial_counts=partial_counts,
+        unit="次試驗", scan_label="注入真值（P_TRUE_LIST／--only）")
+    preflight.output_audit(out_path, partial)
     preflight.mandatory_gate(
         base, grid, refines, script="inject_lowmass.py",
         expected_overrides={"mh_prior_sigma": 0.0},
-        force=args.force, dry_run=args.preflight)
+        force=args.force, dry_run=args.preflight,
+        extra_fails=w_fails, extra_warns=w_warns)
 
     sel = selmod.load(HERE / "data" / "selection.npz")
 
@@ -177,8 +177,14 @@ def main():
     results = {}
 
     for p_true in p_true_list:
-        outs = []
+        key = f"p{p_true}"
+        outs, attempted = checkpoint.load_progress(partial, key)
         for t in range(args.trials):
+            if t < attempted:
+                print(f"  p_true={p_true:.1f} trial{t+1}：已嘗試過，跳過"
+                      f"（不管當時成功或失敗，重跑只會用同一組亂數種子"
+                      f"再得到同一個結果）", flush=True)
+                continue
             # 生成假資料：注入指定的低質量段冪次
             gen = base.with_observations(color, mag)
             gen.selection = sel
@@ -215,12 +221,20 @@ def main():
                       f"不影響其餘試驗）：{type(e).__name__}: "
                       f"{str(e).splitlines()[1] if len(str(e).splitlines()) > 1 else e}",
                       flush=True)
+                attempted = t + 1
+                outs = checkpoint.save_progress(out_path, key, outs, manifest,
+                                                attempted=attempted)
                 continue
             outs.append(best)
+            attempted = t + 1
             print(f"  p_true={p_true:.1f} trial{t+1}  "
                   f"p_rec={best[7]:.3f}  alpha={best[3]:.3f}  "
                   f"dav={best[6]:.3f}  lnP={lp:.1f}  "
                   f"({time.time()-t0:.0f}s)", flush=True)
+            # 跑完一次試驗就存一次（不管成功或失敗），不等這個 p_true 的
+            # 全部 trials 都跑完——中途被砍，已經算完的每一次試驗都保得住。
+            outs = checkpoint.save_progress(out_path, key, outs, manifest,
+                                            attempted=attempted)
         if not outs:
             print(f"  p_true={p_true:.1f} 全部 {args.trials} 次試驗都失敗，"
                   "略過（見上方各次的失敗原因）", flush=True)
@@ -229,11 +243,12 @@ def main():
             print(f"  p_true={p_true:.1f}：{len(outs)}/{args.trials} 次成功，"
                   "其餘見上方失敗紀錄", flush=True)
         results[p_true] = np.array(outs)
-        # 每跑完一個 p_true 就存一次 —— 之後的 p_true 若整批失敗，
-        # 這裡已經算出來的結果不會跟著陪葬。
-        atomic_savez(out_path,
-                     p_true=np.array(list(results.keys())),
-                     **{f"p{p}": v for p, v in results.items()})
+        # 補記 p_true 摘要陣列（試驗層級的存檔在上面迴圈已經逐次做了，
+        # 這裡只是把「目前有哪些 p_true 已經有成功結果」這個摘要寫回去，
+        # 跟原本「每跑完一個 p_true 就存一次」同一個顆粒度）。
+        outs = checkpoint.save_progress(
+            out_path, key, outs, manifest, attempted=attempted,
+            extra_arrays={"p_true": np.array(list(results.keys()))})
 
     print(f"\n{'='*70}")
     print("identifiability of low-mass slope")
@@ -255,9 +270,8 @@ def main():
     if len(p_recs) < 2:
         print("\n少於兩個 p_true 有成功資料，無法判斷可辨識性（條件 3 需要"
               "跨多個真值比較），僅供參考個別數字。")
-        atomic_savez(out_path,
-                     p_true=np.array(list(results.keys())),
-                     **{f"p{p}": v for p, v in results.items()})
+        # 每一次試驗跑完就已經存過檔了（見上面迴圈裡的
+        # checkpoint.save_progress()），這裡不用再存一次。
         return
 
     p_recs = np.array(p_recs)
@@ -273,9 +287,8 @@ def main():
     print("  ratio near 1 = identifiable; near 0 = unconstrained "
           "(recovers same value regardless of truth)")
 
-    atomic_savez(out_path,
-                 p_true=np.array(p_true_ok),
-                 **{f"p{p}": v for p, v in results.items()})
+    # 每一次試驗跑完就已經存過檔了（見上面迴圈裡的
+    # checkpoint.save_progress()），這裡不用再存一次，只是印出最終確認訊息。
     print(f"\nwrote {out_path.relative_to(HERE)}")
 
 

@@ -81,14 +81,31 @@ def main():
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
 
+    # 2026-08-20：B3（續傳）—— 同 profile_lowmass.py，原本只在全部掃描點
+    # 跑完後 np.savez 一次，中途被砍就得從頭重算。改用 checkpoint.py。
+    out_path = HERE / "results" / "profile_outlierfrac.npz"
+    manifest = {"n_syn": args.n_syn, "refines": args.refines,
+                "dav_max": args.dav_max, "fracs": fracs}
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import checkpoint                                            # noqa: E402
     import preflight                                             # noqa: E402
+    partial = checkpoint.load_partial(out_path)
+    checkpoint.check_manifest(out_path, manifest, partial)
+
     if args.preflight:
         preflight._force_utf8_stdout()
+    scan_keys = [f"f{frac}" for frac in fracs]
+    partial_counts = {k: len(partial.get(k, [])) for k in scan_keys}
+    w_fails, w_warns = preflight.workload_audit(
+        scan_keys=scan_keys, repeats=args.repeats, n_syn=args.n_syn,
+        n_obs=n_obs, refines=refines, partial_counts=partial_counts,
+        unit="次重複", scan_label="殘留場星污染比例（--fracs）")
+    preflight.output_audit(out_path, partial)
     preflight.mandatory_gate(
         base, grid, refines, script="profile_outlierfrac.py",
         expected_overrides={"mh_prior_sigma": 0.0},
-        force=args.force, dry_run=args.preflight)
+        force=args.force, dry_run=args.preflight,
+        extra_fails=w_fails, extra_warns=w_warns)
 
     sel = selmod.load(HERE / "data" / "selection.npz")
     print(f"真實觀測 {n_obs:,} 顆，config C（選擇函數 + 差異消光），"
@@ -98,8 +115,13 @@ def main():
     from pipeline.step3_age import draw_randoms
     results = {}
     for frac in fracs:
-        outs = []
+        key = f"f{frac}"
+        outs = list(partial.get(key, []))
         for rep in range(args.repeats):
+            if rep < len(outs):
+                print(f"  frac={frac:.3f} 第{rep+1}次：沿用既有結果，跳過重算",
+                      flush=True)
+                continue
             import copy
             m = copy.copy(base)
             m.obs_h = joint_fit.hess(color, mag, base.nb_c, base.nb_m,
@@ -125,6 +147,9 @@ def main():
             print(f"  frac={frac:.3f} 第{rep+1}次  alpha={best[3]:.3f}  "
                   f"A_V={best[1]:.3f}  logage={best[0]:.3f}  "
                   f"lnP={lp:.1f}  ({time.time()-t0:.0f}s)", flush=True)
+            outs = checkpoint.save_progress(
+                out_path, key, outs, manifest,
+                extra_arrays={"fracs": np.array(fracs)})
         arr = np.array(outs)
         results[frac] = arr
         print(f"  -> frac={frac:.3f} 跨 {args.repeats} 次：alpha 平均 "
@@ -147,10 +172,9 @@ def main():
     print("      倍數接近或小於 1，代表目前固定 0.01 不是主要誤差來源，")
     print("      LIMITATIONS.md 裡「現役假設」的標記可以降級為「已驗證安全」。")
 
-    np.savez(HERE / "results" / "profile_outlierfrac.npz",
-             fracs=np.array(fracs),
-             **{f"f{frac}": v for frac, v in results.items()})
-    print("\n寫入 results/profile_outlierfrac.npz")
+    # 每一次重複跑完就已經存過檔了（見上面迴圈裡的 checkpoint.save_progress()），
+    # 這裡不用再存一次，只是印出最終確認訊息。
+    print(f"\n已寫入 {out_path.relative_to(HERE)}")
 
 
 if __name__ == "__main__":
