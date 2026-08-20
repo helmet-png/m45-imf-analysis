@@ -19,6 +19,7 @@ queue.txt 格式，每行一個工作：
 """
 from __future__ import annotations
 
+import csv
 import ctypes
 import os
 import re
@@ -155,10 +156,18 @@ def _pid_alive(pid: int) -> bool | None:
         return None
     text = out.stdout.decode("utf-8", errors="replace")
     for line in text.splitlines():
-        parts = [p.strip().strip('"') for p in line.split(",")]
+        if not line.strip():
+            continue
+        # **2026-08-20 CodeRabbit review 訂正**：原本用 line.split(",")
+        # 天真切欄，Windows 映像檔名稱可以含逗號（服務／容器行程常見），
+        # 那種情況下 PID 欄會位移，讓這裡誤判成 False——後果是
+        # acquire_lock() 以為鎖已經沒人持有，直接刪掉還在被別的 runner
+        # 用的鎖檔案。改用 csv.reader 正確處理引號欄位裡的逗號。
+        parts = next(csv.reader([line]))
         # 沒有相符行程時 tasklist 印的是一行資訊訊息（不是 CSV 資料列，
         # 欄位數不對），所以只認「欄位數對、且 PID 欄能解析成整數」的行。
-        if len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) == pid:
+        if len(parts) >= 2 and parts[1].strip().isdigit() \
+                and int(parts[1].strip()) == pid:
             return True
     return False
 
@@ -355,10 +364,20 @@ def _preflight_ok(label: str, cmd: str) -> bool:
                            capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=1800)
     except Exception as e:                                   # noqa: BLE001
-        # 檢查本身壞掉不該擋住正事——印出來讓人看到，然後照常跑。
-        print(f"  開跑前檢查無法執行（{type(e).__name__}: {e}），照常開跑",
+        # **2026-08-20 CodeRabbit review 訂正**：原本這裡是 fail open
+        # （「檢查本身壞掉不該擋住正事」，回傳 True 照常開跑），但這正好
+        # 是整個 Gate B 想防的事——preflight 逾時或啟動失敗時放行，等於
+        # 讓一個完全沒驗證過的設定直接跑好幾小時，跟「跑完 exit 0 但
+        # 算法不對」是同一種「悄悄不對」的形狀，只是失敗點往前挪了一層。
+        # 改成 fail closed，跟 acquire_lock() 探測失敗時「不確定就當作
+        # 可能還活著」的既有慣例一致：preflight.py 只做網格建構跟極小量
+        # 計算，逾時（1800 秒）本身就是異常訊號，值得停下來查，不是
+        # 悄悄放行的理由。
+        print(f"  開跑前檢查無法執行（{type(e).__name__}: {e}），跳過 {label}"
+              f"（fail closed；preflight_fail 不會永久噤聲，下次重啟"
+              f"run_queue.py 會自動再給一次機會，見 read_done()）",
               flush=True)
-        return True
+        return False
     for ln in (r.stdout or "").splitlines():
         if ln.strip().startswith(preflight.STATUS_PREFIXES):
             print(f"  {ln.strip()}", flush=True)
@@ -374,14 +393,20 @@ def _postflight(label: str, cmd: str) -> None:
     """跑完立刻驗收產出（Gate C）。只印警告、不改變佇列流程——結果檔已經
     寫出來了，這裡的價值是「當天就看到問題」而不是幾週後才發現（P11 那
     12 次全部等於 2.500 的簽章在檔案裡躺了很久沒人看）。"""
+    if cmd.split()[0] != "fit_real.py":
+        return
     # 同時吃 `--tag value` 與 `--tag=value` 兩種 argparse 都接受的形式，
     # 原本只吃空白分隔那種，`=` 形式會讓 m 是 None 而整支函式靜默 return——
     # 使用者會以為「這次沒有 Gate C 警告」，其實是驗收根本沒有跑
-    # （2026-08-20 CodeRabbit review）。
+    # （2026-08-20 CodeRabbit review 第一輪）。
+    # **第二輪又抓到**：`fit_real.py` 的 `--tag` 預設值是空字串，完全
+    # 沒帶這個旗標時 m 一樣是 None，但那不是「沒有輸出檔」，是「輸出檔
+    # 沒有後綴」（`results/fit_real.npz`）——原本的 `or not m` 會把這種
+    # 合法情況也當成跳過，讓沒帶 --tag 的每一個成功工作都漏掉 Gate C。
+    # 改成 m 沒對到就當空字串，不再用「有沒有對到」判斷要不要驗收。
     m = re.search(r"--tag[=\s]+(\S+)", cmd)
-    if cmd.split()[0] != "fit_real.py" or not m:
-        return
-    npz = HERE / "results" / f"fit_real{m.group(1)}.npz"
+    tag = m.group(1) if m else ""
+    npz = HERE / "results" / f"fit_real{tag}.npz"
     if not npz.exists():
         return
     try:
