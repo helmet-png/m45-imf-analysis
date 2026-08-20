@@ -25,6 +25,14 @@
 已改用 Gaia 天體物理參數表）、`download_fine_grid.py` / `download_wide_grid.py`
 （一次性 isochrone 下載腳本，功能已併入 `pipeline/isochrones.py`）。
 
+## run_m45.log（2026-08-13 歸檔，最初一次 baseline 執行的完整 log）
+
+專案最早一筆 commit 就有的純文字檔，不是程式——是第 1 步成員判定
+（`run_variant.py`）第一次成功執行時的完整終端機輸出：random seed 42、
+6,956 顆 Gaia 星、25 輪外圈聚類迭代逐輪記錄，結尾的成員機率門檻統計
+（`P>(.5, .75, .9, .95, .99): 1318, 1293, 1264, 1237, 1188`）至今仍是
+README 記錄的基準結果來源。沒有任何程式讀取這個檔案，純粹是存證用途。
+
 ## 沒有歸檔的（刻意保留在根目錄）
 
 - **E 類（核心 pipeline）**：`config.toml`、`run_pipeline.py`、`pipeline/*`、

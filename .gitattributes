@@ -1,0 +1,3 @@
+nbody_setup/*.sh text eol=lf
+nbody_setup/*.patch text eol=lf
+nbody_setup/*.py text eol=lf

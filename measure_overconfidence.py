@@ -85,8 +85,41 @@ _G_MODEL = None
 _G_AXES = None
 
 
+def _keep_worker_awake():
+    """2026-08-16：radial_r3 卡死好幾次的根因追查——run_queue.py 的
+    keep_system_awake() 只在**它自己這個 process** 呼叫 SetThreadExecutionState，
+    這個宣告不會傳給它用 subprocess 開出來的 fit_real.py，更不會傳給
+    fit_real.py 底下這些用 multiprocessing.Pool 另外開的工人行程（Windows
+    的這個 API 是 per-thread/per-process 的，不會沿行程樹往下繼承）。
+    也就是說：真正在燒 CPU 的 8 個工人，一個都沒有跟系統宣告過「別把我
+    當閒置」，run_queue.py 的宣告只保護了它自己這個幾乎不耗 CPU 的協調行程。
+    而且 multi_stage_best() 的架構是**每一個精修階段都重開一次 Pool**
+    （粗網格一次、每個 refine 各一次），代表這個「剛開新行程、還沒宣告
+    保護」的空窗期不是只在 watchdog 重試時出現一次，是整支程式跑的過程中
+    反覆發生好幾次——這比原本只懷疑「防毒掃描卡住重啟後的新行程」的假設
+    涵蓋的觸發窗口更廣，且是可以直接從程式碼結構確認的落差，不只是猜測。
+    在 Pool 的 initializer 裡讓每個工人一啟動就自己宣告，補上這個缺口。
+    失敗只印警告不中斷——這是可用性優化，不是正確性前提。"""
+    try:
+        import ctypes
+        ES_CONTINUOUS = 0x80000000
+        ES_SYSTEM_REQUIRED = 0x00000001
+        ES_AWAYMODE_REQUIRED = 0x00000040
+        prev = ctypes.windll.kernel32.SetThreadExecutionState(
+            ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)
+        if not prev:
+            # 跟 run_queue.py 的 keep_system_awake() 用同一種處理方式：
+            # 回傳 0 代表宣告失敗，印警告但不中斷這個工人——保持滿速是
+            # 最佳化，不是能不能跑的前提。
+            print("警告：worker 呼叫 SetThreadExecutionState 失敗"
+                  "（回傳 0），可能還是會被系統當閒置節流。", flush=True)
+    except (AttributeError, OSError, ImportError):
+        pass                      # 非 Windows／OEM 電源管理不接受這個旗標
+
+
 def _init_grid_worker(model, axes):
     global _G_MODEL, _G_AXES
+    _keep_worker_awake()
     _G_MODEL, _G_AXES = model, axes
 
 

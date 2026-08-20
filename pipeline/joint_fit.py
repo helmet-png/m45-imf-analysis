@@ -19,6 +19,7 @@ IMF 斜率改變主序上的星數分布、雙星比例改變主序上方的展�
 from __future__ import annotations
 
 import numpy as np
+from scipy.stats import norm
 
 from . import isochrones as iso_mod
 from .step3_age import (IMF_BREAKS, _Ext, _interp_err, draw_randoms, hess,
@@ -74,6 +75,17 @@ class JointModel:
         # 預設 False 與原本行為一致；build_verify_bprperr.py 會把它
         # 打開來跟舊行為 A/B 比較 alpha 有沒有變。
         self.use_native_bprp_err = False
+        # C19：自轉調製／前主序光變／黑子造成的額外亮度散布（星等）。
+        # 模型完全沒有這一項，這個屬性是為了量「有這種未建模的物理時
+        # alpha 會偏多少」的敏感度測試用（見 synthesise() 裡的說明與
+        # LIMITATIONS.md C19）。預設 0.0 = 不啟用，行為與加入前
+        # 逐位元相同。
+        self.extra_scatter = 0.0
+        # 差異消光的分布形式（見 synthesise() 裡的完整說明）。**這是猜的
+        # 選擇，從未跟其他合理的分布形式比較過代價**（C5，2026-08-14）。
+        # 預設 "lognormal" 與原本行為一致；extinction_form_test 會覆寫成
+        # "trunc_exp"（截尾指數分布）來跟舊行為 A/B 比較 A_V 系統誤差。
+        self.dav_distribution = "lognormal"
         # 共用亂數：整條 MCMC 鏈共用同一批，概似才是參數的確定性函數
         self.draws = draw_randoms(
             self.n_syn, np.random.default_rng(cfg.step1_membership.random_seed))
@@ -258,6 +270,11 @@ class JointModel:
             # 這正是 2026-08-08 讓 p2_final 中途失敗的原因。
             # low_mass 已在函式開頭決定（可能來自 theta[7] 或物件屬性）。
             IMF_BREAKS["kroupa"] = (orig[0], [orig[1][0], low_mass, -alpha])
+            # **這裡抽的是「主星」質量，不是「所有恆星」的質量**（D14，
+            # 見下面 is_bin 那段與本方法末尾的說明）。抽樣範圍是等時線網格
+            # 實際涵蓋的質量區間（mi.min()–mi.max()），不是 config 設定值——
+            # 換一份質量涵蓋較窄的網格（例如 BHAC15 只到 1.4 Msun）會連帶
+            # 改變被抽樣的質量上限，比較不同網格的結果時要記得這一點。
             m1 = sample_imf(d["u_mass"][:n], "kroupa", mi.min(), mi.max())
         finally:
             IMF_BREAKS["kroupa"] = orig
@@ -266,6 +283,17 @@ class JointModel:
         bp = np.interp(m1, mi, bpi)
         rp = np.interp(m1, mi, rpi)
 
+        # **合成星團的一「筆」是一個系統，不是一顆恆星**（D14）。抽樣順序是：
+        #   (1) 抽 n_syn 個主星質量 m1（冪次由 alpha 決定，見上面）
+        #   (2) 獨立地擲 Bernoulli(f_bin) 決定哪些主星帶伴星
+        #   (3) 伴星質量 m2 = q*m1，q 抽自 p(q) ∝ q^qgamma，**不是抽自 IMF**
+        #   (4) 主星與伴星的**流量相加**，塌縮成同一筆測光點
+        # 所以 alpha 是**主星質量分布**的冪次（等價於以主星質量標記的
+        # system MF），不是把伴星也算進去的 stellar／single-star MF。
+        # 要換算成 stellar MF 必須把 f_bin 與 q 分布一起摺積回去，那是
+        # 一個後處理步驟，這裡沒有做，報出來的 alpha 也不是那個東西。
+        # 另外第 (2) 步與 m1 獨立，等於假設**雙星比例不隨質量變化**——
+        # 這是已知的簡化，不是疏忽（見 LIMITATIONS.md）。
         is_bin = d["u_bin"][:n] < fbin
         if is_bin.any():
             u = d["u_q"][:n][is_bin]
@@ -292,8 +320,53 @@ class JointModel:
         # 關鍵是 A_V -> 0 時整個分布跟著 -> 0，dav 再大也變不出消光來，
         # 這在結構上就切斷了那條簡併。物理上也合理：塵埃是沿視線的
         # 乘性遮蔽，對數常態比常態更貼近。
+        # 用 getattr 而非 self.dav_distribution 直接讀，理由跟上面
+        # low_mass_slope 那段一樣（2026-08-08 讓 p2_final 中途失敗的
+        # AttributeError race condition）：多行程 worker unpickle 到的
+        # 物件屬性值來自主行程 pickle 當時的 __dict__，若這個屬性是背景
+        # 工作跑到一半時才新增的，舊物件的 __dict__ 裡沒有它，直接讀會
+        # 拋 AttributeError。2026-08-14 的 p6b4 補測任務就是撞到這個
+        # class 的 bug（見 WORK_BOARD.md），當時是另一個屬性但同一個
+        # 成因，這裡順手把 dav_distribution 也改成防禦性寫法。
+        dav_distribution = getattr(self, "dav_distribution", "lognormal")
         if dav <= 0 or av < 1e-6:
             av_i = av
+        elif dav_distribution == "trunc_exp":
+            # C5 替代分布（系統誤差比較用，見 LIMITATIONS.md C5）：截尾
+            # 指數分布，scale **恆為 dav**（不像 2026-08-14 第一版那樣在
+            # av<dav 時偷偷把 scale 換成 av——那個版本會讓「dav 這個展寬
+            # 參數」在 av<dav 時完全不影響生成的樣本，等於在測試最想看的
+            # 「dav 遠大於 av」這個區間時，trunc_exp 這條線根本沒有真的
+            # 用到那個 dav，比較會失去意義。CodeRabbit review 抓到這個
+            # 問題，這裡改成一律 scale=dav、location 可以是負的，對負值做
+            # 真正的截尾（夾到 0），這才是「截尾指數分布」字面上的意思。
+            # 用同一個 z_av（標準常態）先轉成 U(0,1) 再反解指數分布的 CDF，
+            # 維持「同一組共用亂數 -> 概似是參數的確定性函數」這個前提，
+            # 不能另外重新抽樣。
+            #
+            # **location 要做均值校正**（2026-08-19 CodeRabbit PR #63）：
+            # 第二版一律用 loc = av - dav，av >= dav 時沒問題（沒有任何值
+            # 被截到，平均恰為 av），但 av < dav 時有一部分機率質量被截到
+            # 剛好 0，平均會**高於** av。當時的註解把這說成「物理上合理」，
+            # 那個說法在單獨看一條分布時成立，放進 C5 這個比較裡卻是錯的：
+            # C5 要量的是「分布形狀」造成的系統誤差，若 trunc_exp 與
+            # lognormal 在同一組 (av, dav) 下平均 A_V 不同，量到的差就混進
+            # 了「平均消光不同」這個混淆因子，分不出哪一部分是形狀造成的。
+            # 實測偏差不小：av=0.15、dav=1.20 時舊寫法的平均是 0.50 而非
+            # 0.15，等於把 dav 掃描偷偷變成平均消光掃描。
+            #
+            # 令 X = loc + Exp(scale=dav)、Y = max(X, 0)，解 E[Y] = av：
+            #   loc >= 0：整條分布都在正半軸，E[Y] = loc + dav
+            #             -> loc = av - dav（av >= dav 時適用，與舊版相同）
+            #   loc <  0：P(X>0) = exp(loc/dav)，指數分布無記憶性使得
+            #             (X | X>0) ~ Exp(dav)，故 E[Y] = dav*exp(loc/dav)
+            #             -> loc = dav*ln(av/dav)（av < dav 時適用）
+            # 兩式在 av == dav 交會於 loc = 0，連續；av >= dav 的既有結果
+            # 逐位元不變，只有 av < dav 那一段被修正。0 這個離散質量點仍然
+            # 保留（消光本來就不能是負的），只是不再連帶把平均推高。
+            u = norm.cdf(d["z_av"][:n])
+            loc = av - dav if av >= dav else dav * np.log(av / dav)
+            av_i = np.clip(loc - dav * np.log1p(-u), 0.0, None)
         else:
             s2 = np.log1p((dav / av) ** 2)
             av_i = np.exp(np.log(av) - 0.5 * s2
@@ -301,6 +374,32 @@ class JointModel:
         g += self.dm + self.ext.g * av_i
         bp += self.dm + self.ext.bp * av_i
         rp += self.dm + self.ext.rp * av_i
+
+        # C19 敏感度測試：自轉調製／前主序光變／黑子造成的額外亮度散布。
+        # 模型本身完全沒有這一項（見 LIMITATIONS.md C19），這裡不是要
+        # 「把它建模進去」，而是要量「真的存在這種未建模物理時，alpha
+        # 會被推多少」——掃過幾個散布量級跑注入回收，得到敏感度曲線。
+        #
+        # **刻意用同一個 z_var 加到三個波段**（消色差、純垂直方向的
+        # CMD 模糊化），不是三個波段各抽一次：黑子/自轉調製的實際效應
+        # 確實有顏色相依（變暗時偏紅），但那需要多一個「顏色振幅比」
+        # 參數，而這個測試要回答的是「光度散布本身對冪律 MLE 的影響」——
+        # IMF 斜率是從光度分布量出來的，垂直方向的模糊化才是主效應。
+        # **這個簡化是已知限制，不是疏漏**：這條敏感度曲線只涵蓋消色差
+        # 那一半，顏色方向的效應沒有測到，解讀時不能宣稱涵蓋全部。
+        #
+        # 加在測光誤差**之前**：光變是天體本身的亮度變化，Gaia 的測光
+        # 誤差是在那之上再疊加的觀測誤差，次序反過來在物理上說不通
+        # （雖然兩個都是高斯、對最終散布量級的影響相同，但選擇函數與
+        # g_faint 截斷是對「觀測到的星等」作用的，次序會影響哪些星被
+        # 截掉，所以不是純粹的形式問題）。
+        extra_scatter = getattr(self, "extra_scatter", 0.0)
+        if extra_scatter > 0:
+            dvar = d["z_var"][:n] * extra_scatter
+            g += dvar
+            bp += dvar
+            rp += dvar
+
         g += d["z_g"][:n] * _interp_err(g, self.errmodel, "e_g")
         # **已知現役缺陷**：用 G 查 BP/RP 的誤差。同一個 G 之下紅星的 BP
         # 暗得多，用 G 查等於用一個比真實 BP 星等亮的值去查，會低估紅星

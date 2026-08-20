@@ -296,6 +296,12 @@ def main():
                          "用來判定「兩個偏差剛好抵消」是不是巧合："
                          "若 alpha 偏差隨 dav 平滑變化並通過原點，"
                          "0.178 就只是曲線在 dav=0.30 這一點的值")
+    ap.add_argument("--extra-scatter-sweep", default=None,
+                    help="逗號分隔的多個額外亮度散布量級（星等），對每個值"
+                         "各跑一次 S1 變體：假資料帶這個散布、擬合模型沒有"
+                         "（模型本身就沒有這一項，見 LIMITATIONS.md C19）。"
+                         "用來量自轉調製／前主序光變／黑子這類未建模物理"
+                         "對 alpha 的敏感度曲線")
     ap.add_argument("--refines", default="3,3",
                     help="各精修階段的縮小倍率。七維時用單階段以免格點爆炸")
     ap.add_argument("--n-syn", type=int, default=None,
@@ -304,7 +310,23 @@ def main():
     ap.add_argument("--model-seed", type=int, default=None,
                     help="改掉擬合模型的共用亂數種子。"
                          "用來判定 S1 的殘餘偏差是不是蒙地卡羅產物")
+    ap.add_argument("--dav-distribution", default="lognormal",
+                    choices=["lognormal", "trunc_exp"],
+                    help="差異消光的分布形式（見 LIMITATIONS.md C5）。"
+                         "預設 lognormal 與原本行為一致。設在 base 上，"
+                         "透過 make_fake()/with_observations() 的淺複製"
+                         "自動傳給注入與擬合兩側，不需要另外改動")
+    ap.add_argument("--tag", default="", help="輸出檔名後綴，避免覆蓋"
+                     "results/injection_recovery.npz（跟 fit_real.py／"
+                     "inject_lowmass.py 同款式，見 LIMITATIONS.md D6："
+                     "固定檔名被重跑覆寫過，這裡原本沒有這個防呆）")
     args = ap.parse_args()
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
+    if args.dav_distribution != "lognormal" and not args.tag:
+        ap.error("--dav-distribution 不是 lognormal 時必須給 --tag，"
+                 "避免覆寫 results/injection_recovery.npz（A1 統計誤差 "
+                 "0.144 的來源檔案，見 LIMITATIONS.md D6 記錄過的同類事故）")
     n_proc = args.procs or (os.cpu_count() or 1)
     want = [s.strip().upper() for s in args.scenarios.split(",")]
 
@@ -324,6 +346,9 @@ def main():
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0   # 測流程本身，關掉先驗
 
     base = joint_fit.JointModel(cfg, color[ok], mag[ok], grid, errmodel, dm)
+    base.dav_distribution = args.dav_distribution
+    if args.dav_distribution != "lognormal":
+        print(f"差異消光分布形式改用 {args.dav_distribution}（C5 系統誤差比較）")
     if args.model_seed is not None:
         # 擬合模型的共用亂數是固定的一批，n_synthetic 有限就會留下一個
         # 與參數無關的蒙地卡羅偏移。換種子重跑，偏差若跟著變，
@@ -366,6 +391,21 @@ def main():
                                  v, None, 0.0, None, None)
         want = [k for k in want if k != "S2"] + [f"S2@{v:g}" for v in vals]
 
+    # C19 額外亮度散布掃描：情境本身跟 S1 對照組完全一樣（有選擇函數、
+    # 有差異消光），唯一差別是假資料多帶一個未被模型描述的亮度散布。
+    # 用一個獨立的 dict 記「這個情境要注入多少散布」，而不是擴充 SCEN
+    # 的 tuple——SCEN 的六元組在下面迴圈裡被拆解使用，多加一個欄位要
+    # 動到所有既有情境，改動面大且容易出錯。
+    var_inject = {}
+    if args.extra_scatter_sweep:
+        vals = [float(x) for x in args.extra_scatter_sweep.split(",")]
+        for v in vals:
+            key = f"S1var@{v:g}"
+            SCEN[key] = (f"額外亮度散布 {v:g} mag（模型沒有這一項，C19）",
+                         0.0, None, 0.0, None, None)
+            var_inject[key] = v
+        want = want + [f"S1var@{v:g}" for v in vals]
+
     results = {}
     for key in want:
         if key not in SCEN:
@@ -376,10 +416,19 @@ def main():
         got_all = []
         for t in range(args.trials):
             t0 = time.time()
-            fc, fm = make_fake(base, THETA_TRUE, n_obs, seed=1000 + 17 * t,
-                               dav=dav_in, selection=sel_in)
+            # C19：只有生成端帶額外亮度散布，擬合端一律 0——這正是要測的
+            # 「模型沒有這一項」的情境。用 try/finally 還原，避免某次試驗
+            # 中途丟例外時把污染留給後面的情境（base 是所有情境共用的）。
+            var_in = var_inject.get(key, 0.0)
+            base.extra_scatter = var_in
+            try:
+                fc, fm = make_fake(base, THETA_TRUE, n_obs, seed=1000 + 17 * t,
+                                   dav=dav_in, selection=sel_in)
+            finally:
+                base.extra_scatter = 0.0
             m = base.with_observations(fc, fm)
             m.dav, m.selection = dav_fit, sel_fit
+            m.extra_scatter = 0.0   # 擬合模型明確不帶這一項
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             # dav（索引 6）已由注入回收證實不可辨識，貼牆是預期行為；
@@ -421,13 +470,19 @@ def main():
                   f"{b.std():>9.3f}")
         print("\n判讀：若偏差隨 dav 平滑變化且外推到 dav=0 時趨近 0，")
         print("      代表 +0.178 只是曲線在 dav=0.30 這一點的值，")
-        print("      與選擇函數的 −0.178 相等純屬巧合（因為 0.30 是我挑的）。")
+        print("      與選擇函數的 -0.178 相等純屬巧合（因為 0.30 是我挑的）。")
 
-    np.savez(HERE / "results" / "injection_recovery.npz",
+    out_path = HERE / "results" / f"injection_recovery{args.tag}.npz"
+    # dav_distribution 一起存進檔案（2026-08-19 CodeRabbit PR #63）：
+    # 它會改變假資料的生成方式，兩種分布跑出來的結果不可互比，但檔名只由
+    # --tag 決定。不存的話，事後拿到 npz 無從判斷這批是 lognormal 還是
+    # trunc_exp 算的——C5 這個比較的重點正是兩者的差，認錯來源就整個作廢。
+    np.savez(out_path,
              theta_true=THETA_TRUE,
+             dav_distribution=args.dav_distribution,
              **{k.replace("@", "_at_").replace(".", "p"): v
                 for k, v in results.items()})
-    print("\n寫入 results/injection_recovery.npz")
+    print(f"\n寫入 {out_path}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,12 @@
+diff --git a/main.c b/main.c
+index 76c1b1a..cab40a3 100644
+--- a/main.c
++++ b/main.c
+@@ -46,6 +46,7 @@
+ #include<sys/stat.h>
+ #include<getopt.h>
+ #include<assert.h>
++#include"mingw_compat.h"
+ #ifdef GPU
+ #include <cuda.h>
+ #include <cuda_runtime.h>

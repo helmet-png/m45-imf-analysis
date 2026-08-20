@@ -63,23 +63,23 @@ pyUPMASK 可以用兩種方式給出成員機率，由 `KDEP_flag` 切換。兩�
 
 ```bash
 # 一次性：修復 PARSEC 服務的憑證鏈問題（見下方說明）
-powershell -ExecutionPolicy Bypass -File setup_ca.ps1
+powershell -ExecutionPolicy Bypass -File setup\setup_ca.ps1
 
 # 抓資料
-python fetch_gaia.py --target M45 --radius 5 --gmax 18 --plxmin 4
+python scripts/data_prep/fetch_gaia.py --target M45 --radius 5 --gmax 18 --plxmin 4
 
 # 前處理成 pyUPMASK 輸入
-python prep.py data/m45_r5_g18_plx4.csv --target M45 --name m45_raw
+python scripts/data_prep/prep.py data/m45_r5_g18_plx4.csv --target M45 --name m45_raw
 
 # 第 1 步：成員判定
-python run_variant.py --name baseline --input m45_raw.dat
+python scripts/drivers/run_variant.py --name baseline --input m45_raw.dat
 
 # 第 1–3 步
-python run_pipeline.py
+python scripts/drivers/run_pipeline.py
 
 # 圖
-python plots.py            # 第 1 步的六格驗證圖
-python plot_step3.py       # 第 3 步的年齡擬合圖
+python scripts/plotting/plots.py            # 第 1 步的六格驗證圖
+python scripts/plotting/plot_step3.py       # 第 3 步的年齡擬合圖
 ```
 
 ---
@@ -571,13 +571,13 @@ A_V 報出 ±0.001 的誤差棒是明顯警訊 —— 網格搜尋在不同設�
 
 ---
 
-## PARSEC 憑證問題（為什麼需要 `setup_ca.ps1`）
+## PARSEC 憑證問題（為什麼需要 `setup/setup_ca.ps1`）
 
 `stev.oapd.inaf.it` 沒有送出中繼憑證。Windows 的 schannel 會自動下載缺少的
 中繼憑證（AIA chasing），所以瀏覽器與 PowerShell 連得上；OpenSSL（Python 用的）
 不會，於是 Python 報 `CERTIFICATE_VERIFY_FAILED`。
 
-`setup_ca.ps1` 用 Windows 建立完整憑證鏈，存成 `certs/parsec_chain.pem`，
+`setup/setup_ca.ps1` 用 Windows 建立完整憑證鏈，存成 `certs/parsec_chain.pem`，
 再與 certifi 的根憑證合併成 bundle 給 Python 用。**這是為了讓憑證驗證能通過，
 不是關掉驗證。** 只需執行一次。
 
@@ -586,25 +586,31 @@ A_V 報出 ±0.001 的誤差棒是明顯警訊 —— 網格搜尋在不同設�
 ## 檔案結構
 
 ```
-config.toml           所有可調參數
-run_pipeline.py       第 1–3 步的驅動腳本
+config.toml                    所有可調參數
 pipeline/
-  config.py           設定檔讀取
-  net.py              網路存取與 TLS bundle
-  isochrones.py       PARSEC 下載、快取、查詢
-  step2_cmd.py        測光品質篩選、消光、測光誤差模型
-  step3_age.py        前向模型與擬合
-fetch_gaia.py         Gaia 資料擷取（沿用 gaia-export 專案的 TAP 層）
-prep.py               座標投影與欄位改名
-run_variant.py        跑單一組 pyUPMASK 變因
-validate.py           對 HR23 交叉驗證
-disagree.py           拆解不一致的星
-investigate.py        追查 inrt 定義與爭議星
-compare_variants.py   比較各變因的成員名單
-ladder.py             視差切階梯的可行性評估
-plots.py              第 1 步六格驗證圖
-plot_step3.py         第 3 步年齡擬合圖
-setup_ca.ps1          一次性憑證修復
-METHODS.md            完整的方法與修正記錄
-COMPARISON.md         與前人方法的逐項對照、完整參數表
+  config.py                    設定檔讀取
+  net.py                       網路存取與 TLS bundle
+  isochrones.py                PARSEC 下載、快取、查詢
+  step2_cmd.py                 測光品質篩選、消光、測光誤差模型
+  step3_age.py                 前向模型與擬合
+scripts/
+  data_prep/
+    fetch_gaia.py               Gaia 資料擷取（沿用 gaia-export 專案的 TAP 層）
+    prep.py                     座標投影與欄位改名
+  drivers/
+    run_pipeline.py             第 1–3 步的驅動腳本
+    run_variant.py               跑單一組 pyUPMASK 變因
+  plotting/
+    plots.py                    第 1 步六格驗證圖
+    plot_step3.py                第 3 步年齡擬合圖
+setup/
+  setup_ca.ps1                  一次性憑證修復
+  setup_arm64.bat                ARM64 原生 Python 安裝與效能比較
+PAPER_OUTLINE.md                論文範圍凍結文件
+docs/reference/METHODS.md      完整的方法與修正記錄
+docs/reference/COMPARISON.md   與前人方法的逐項對照、完整參數表
 ```
+
+（`_archive/` 底下是已完成階段性任務、不再主動維護的舊腳本，如
+`validate.py`／`disagree.py`／`investigate.py`／`compare_variants.py`／
+`ladder.py`——歷史脈絡見 `_archive/README.md`，不列在上面的現役結構裡。）

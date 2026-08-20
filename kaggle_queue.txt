@@ -7,3 +7,82 @@
 # 這行的帳號名稱換成你在 kaggle_accounts.json 裡登記的名稱即可用。
 # label 用你自己的識別名，避免跟其他人跑過的 label 撞名。
 # mount_fix_probe|kaggle_smoketest.py|||true|你的帳號名稱
+
+# ===== 2026-08-17（新機器，Acer AI 16）：P9a-redo v2／P9c v2 已在
+# 2026-08-14 完成並定案（見 RESULTS_LOG.md／LIMITATIONS.md A4），從這裡
+# 移除，避免重推浪費算力。headline p2_final2_v3 還差 5 次重複，
+# p6b_inject_lowmass_v2 用新加的 --trial-offset 拆分（見 PR #62，之前
+# 一直失敗是因為 --trials 3 三個 trial 加起來超過 Kaggle 12 小時
+# CellTimeoutError 上限，只完成 2/3 就被砍）。verify_bprperr_off_v2／
+# on_v2 是待認領工作表裡還沒人推過的兩項，--repeats 5 --refines 3,3
+# 這個精修程度比照 P9a/P9c v2 應該幾小時內完成，不需要拆分。
+# --procs 用 4（Kaggle 免費 CPU-only notebook 核心數）。帳號欄留空，
+# 讓 kaggle_queue.py 自動指派給閒置帳號。
+
+# ===== 以下到「2026-08-19 這批全部是重試」之前，全部是**已定案的歷史項目，
+# 一律註解掉**（2026-08-19 CodeRabbit PR #64／#67）。
+# 為什麼要註解而不是靠 logs/kaggle_queue_done.txt 擋：**那個檔案被
+# .gitignore，不會跟著 git clone／git pull 過去**。換一台機器或重建環境時
+# 它是空的，這些行會整批重推一次——rep5-8 是各 17.4 小時、結果早就拉回來
+# 存進 results/ 的工作，重推是純浪費且會覆蓋 kaggle_results/ 下的既有輸出。
+# 這個坑在本機佇列（queue.txt / logs/queue_done.txt）已經踩過一次，當時是
+# 靠人工把 28 個歷史標籤補進 done 檔才擋下來。保留成註解當作派工紀錄。
+#
+# headline p2_final2_v3 rep5-9（rep0-4 由 PR #57 更早拉回）：
+#   rep5/6/7/8 -> COMPLETE，結果已拉回並存進 results/（PR #67）
+#   rep9       -> 被 Kaggle 取消（CANCEL_ACKNOWLEDGED），由下面的
+#                 p2_final2_v3_rep9_retry 接手
+# p2_final2_v3_rep5|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 5 --tag _p2final_v3_rep5|measure_overconfidence.py,injection_recovery.py|false|
+# p2_final2_v3_rep6|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 6 --tag _p2final_v3_rep6|measure_overconfidence.py,injection_recovery.py|false|
+# p2_final2_v3_rep7|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 7 --tag _p2final_v3_rep7|measure_overconfidence.py,injection_recovery.py|false|
+# p2_final2_v3_rep8|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 8 --tag _p2final_v3_rep8|measure_overconfidence.py,injection_recovery.py|false|
+# p2_final2_v3_rep9|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 9 --tag _p2final_v3_rep9|measure_overconfidence.py,injection_recovery.py|false|
+
+# P6b v2（低質量段冪次可辨識性）第一次派工：t0/t1 撞上本機切 git 分支，
+# 打包到沒有 --trial-offset 的舊版腳本、argparse 直接報錯；t2 被 Kaggle
+# 取消。三個都由下面的 retry 項目接手。
+# p6b_inject_lowmass_v2_t0|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_t0|measure_overconfidence.py,injection_recovery.py|false|
+# p6b_inject_lowmass_v2_t1|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_t1|measure_overconfidence.py,injection_recovery.py|false|
+# p6b_inject_lowmass_v2_t2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_t2|measure_overconfidence.py,injection_recovery.py|false|
+
+# verify_bprperr_v2（off/on 用相同精修程度重跑，見 WORK_BOARD.md 待認領
+# 工作表）第一次派工：08:54 本機網路瞬斷（DNS 解析失敗）導致 push 失敗，
+# 由下面的 _retry 項目接手。
+# verify_bprperr_off_v2|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _bprperr_off_v2|measure_overconfidence.py,injection_recovery.py|false|
+# verify_bprperr_on_v2|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --refines 3,3 --tag _bprperr_on_v2|measure_overconfidence.py,injection_recovery.py|false|
+
+# 2026-08-18：t0/t1 的第一次重試，同樣被 08:54 那次網路瞬斷打掉（push
+# 失敗），由下面的 _retry2 接手。
+# p6b_inject_lowmass_v2_t0_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_t0|measure_overconfidence.py,injection_recovery.py|false|
+# p6b_inject_lowmass_v2_t1_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_t1|measure_overconfidence.py,injection_recovery.py|false|
+
+# 2026-08-19：這批全部是重試，原因各自不同——
+# verify_bprperr_off/on_v2、t0/t1_retry 是 08:54 本機網路瞬斷（DNS 解析
+# 失敗）導致 push 失敗，不是程式或 Kaggle 端問題，直接重推即可。
+# rep9、t2 是本機輪詢器 MAX_WAIT_HOURS=11 判定逾時放棄追蹤時，Kaggle
+# 端確實已經被系統取消（CANCEL_ACKNOWLEDGED，跟這個 recipe 單次重複
+# 動輒 17 小時、逼近或超過 Kaggle 免費 session 上限一致），要重跑。
+# t0/t1 更早那次（08-18）失敗的原因不同：Kaggle 派工背景執行時本機切了
+# git 分支，kaggle_sync.py 打包到還沒有 --trial-offset 的舊版
+# inject_lowmass.py，Kaggle 端 argparse 直接報錯。
+#
+# ===== rep9／t2 為什麼用「一模一樣的參數」重試（2026-08-19 CodeRabbit PR #64）
+# CodeRabbit 提醒「不要用相同的執行計畫重試已因時限取消的工作」。取消原因已
+# 直接查證屬實：原本的 `...-rep9` 與 `...-v2-t2` 兩個 kernel 目前狀態都是
+# CANCEL_ACKNOWLEDGED，是 Kaggle 端砍的，不是本機輪詢器誤判。
+# **但這裡不能改小參數，理由是可比性**：rep0-rep9 是同一個 headline 數字的
+# 10 次重複，唯一該不同的是亂數種子；把 rep9 的 --n-syn 或 --refines 調小，
+# 它就不再是同一批的第 10 個樣本，串接起來的散布會是假的。p6b 的 t0/t1/t2
+# 同理。所以「降規格重試」在這個位置等於用壞掉的數字換一次成功。
+# **可行性有實測支撐**：同樣的 recipe，rep5/6/7/8 四個都在 ~62,600 秒
+# （17.4 小時）真的跑完並 COMPLETE，只有 rep9/t2 被砍——不是必定超時，
+# 是卡在 Kaggle 免費 session 上限附近的機率問題（實測 4/6 成功）。
+# **退路（若這次再被砍就走這條，不要再無限重試）**：改用本機 8 核跑
+# 這一個 rep9（本機沒有 session 上限，核心數也多一倍，估 8-9 小時），
+# 指令與這行完全相同、只把 --procs 4 改成 8。=====
+verify_bprperr_off_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _bprperr_off_v2|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_on_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --refines 3,3 --tag _bprperr_on_v2|measure_overconfidence.py,injection_recovery.py|false|
+p6b_inject_lowmass_v2_t0_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_t0|measure_overconfidence.py,injection_recovery.py|false|
+p6b_inject_lowmass_v2_t1_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_t1|measure_overconfidence.py,injection_recovery.py|false|
+p2_final2_v3_rep9_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 9 --tag _p2final_v3_rep9|measure_overconfidence.py,injection_recovery.py|false|
+p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_t2|measure_overconfidence.py,injection_recovery.py|false|

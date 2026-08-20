@@ -8,6 +8,12 @@
 #   pipeline/isochrones.py 會自動下載 PARSEC EDR3 網格
 isochrones/
 
+# 文獻 PDF（zotero_literature_sync.py 從 arXiv 下載，92 MB）：本體已經
+# 同步進 Zotero，這裡只是下載時的本機快取（重跑腳本會跳過已存在的
+# 檔案，不用每次重下）。不進版控——公開 repo 重新散布論文全文不合適，
+# 也會讓 repo 體積暴增。
+literature/
+
 # Kaggle 執行的暫存與回傳結果（353 MB，多數是上傳資料的回傳副本）
 kaggle_work/
 kaggle_results/
@@ -34,12 +40,18 @@ prepared/
 .pdmf-local/
 .nbody-local/
 
+# astro-limepy 需要的 scipy 舊版（1.16.3，不能跟本專案主環境共用，見
+# scripts/diagnostics/limepy_multimass.py 開頭說明），本機獨立 venv 不進版控
+.venv_limepy/
+
 # ============================================================
 # 憑證與機敏檔案：絕不進版控
 # ============================================================
 # PARSEC 的 CA 鏈，由 setup_ca.ps1 在本機重新產生
 certs/
 *.pem
+# Zotero API key（zotero_sync.py 讀這個檔案的 ZOTERO_API_KEY/ZOTERO_LIBRARY_ID）
+.env
 kaggle.json
 access_token
 # 多帳號憑證登記檔（每位成員一個 token），只有範本 kaggle_accounts.json.example
@@ -49,7 +61,7 @@ kaggle_accounts.json
 # ============================================================
 # 第三方原始碼：用 clone 取得，不納入本 repo
 # ============================================================
-# pyUPMASK 來自 https://github.com/msl/pyUPMASK
+# pyUPMASK 來自 https://github.com/msolpera/pyUPMASK
 # 我們對它的修改記錄在 README.md，不直接夾帶對方的程式碼
 pyUPMASK/
 

@@ -45,14 +45,68 @@ P_TRUE_LIST = [0.9, 1.3, 1.7]
 P_MIN, P_MAX = 0.3, 2.3
 
 
+def atomic_savez(out_path: Path, **arrays):
+    """np.savez 不是原子操作——寫到一半被中斷（斷電、被砍行程）會留下
+    截斷或空的檔案，蓋掉前一次跑成功的 checkpoint（2026-08-13 CodeRabbit
+    review 指出：這支腳本每跑完一個 p_true 就存一次，是刻意設計成「前面
+    跑完的不該陪葬」，但直接 np.savez(out_path,...) 寫入中斷時反而會
+    毀掉這個保證本身）。改成寫到同目錄的暫存檔，成功才用 os.replace()
+    原子性地換過去；`os.replace()` 在 POSIX 與 Windows 都保證是單一
+    系統呼叫等級的原子操作，不會有「新檔案寫一半、舊檔案已經被砍」的
+    中間狀態。寫入中途失敗時清掉暫存檔，不留半成品在 results/ 底下。"""
+    # 檔名一定要用 .npz 結尾——np.savez() 對不是以 .npz 結尾的路徑會自動
+    # 補一個 .npz 副檔名（實測過：傳 "x.npz.tmp" 會真的寫成
+    # "x.npz.tmp.npz"），沒注意到這個行為的話 os.replace() 會找錯檔案。
+    tmp_path = out_path.with_name(out_path.stem + ".tmp.npz")
+    try:
+        np.savez(tmp_path, **arrays)
+        os.replace(tmp_path, out_path)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--procs", type=int, default=None)
     ap.add_argument("--n-syn", type=int, default=40000)
     ap.add_argument("--trials", type=int, default=2)
+    ap.add_argument("--trial-offset", type=int, default=0,
+                    help="試驗次數的起始索引偏移（假資料種子 = 7000+37*(t+offset)，"
+                         "擬合種子 = 4000+11*(t+offset)）。只吃單一整數，不接受逗號"
+                         "清單。用來把同一組 --trials N 拆到不同機器/帳號各跑一部分："
+                         "3 個帳號各跑一次時，是各自下 --trials 1 --trial-offset 0 / "
+                         "1 / 2 三道獨立指令。**每個分片必須配一個唯一的 --tag**"
+                         "（例如 _p6b_v2_t0 / _t1 / _t2）——輸出路徑只由 --tag 決定，"
+                         "共用同一個 --tag 的分片會互相覆寫，atomic_savez() 不會幫忙"
+                         "合併。全部跑完後把各檔案依 offset 由小到大沿 axis=0 串接，"
+                         "即等於一次跑完。預設 0，不影響既有行為（比照 fit_real.py 的"
+                         "--repeat-offset，見 PR #55）")
     ap.add_argument("--refines", default="3")
     ap.add_argument("--dav-max", type=float, default=0.6)
+    ap.add_argument("--tag", default="", help="輸出檔名後綴，避免覆蓋前一次跑的"
+                     "完整參數向量（見 LIMITATIONS.md D6：p6b/p6b2/p6b3 的中間"
+                     "結果曾經因為固定檔名被後續跑覆寫，永久遺失）")
+    ap.add_argument("--only", type=float, default=None,
+                    help="只測 P_TRUE_LIST 裡的其中一個真值（例如 1.3），"
+                         "不是全部三個都跑。用於補測單一可疑結果，不用重跑"
+                         "整批（見 LIMITATIONS.md D5）")
     args = ap.parse_args()
+    if args.trial_offset < 0:
+        ap.error("--trial-offset must be non-negative")
+    p_true_list = P_TRUE_LIST
+    if args.only is not None:
+        if args.only not in P_TRUE_LIST:
+            ap.error(f"--only {args.only} 不在 P_TRUE_LIST={P_TRUE_LIST} 裡")
+        p_true_list = [args.only]
+    # --tag 只能是檔名後綴，不能是路徑（CodeRabbit 2026-08-13 抓到：不擋的話
+    # --tag "/../../tmp/x" 能把輸出導到 results/ 之外，覆寫任意 .npz）。
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
+    out_path = HERE / "results" / f"inject_lowmass{args.tag}.npz"
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
 
@@ -77,7 +131,7 @@ def main():
     dav_true = 0.30
     print(f"assumed n_obs={n_obs}, alpha_true={THETA_TRUE[3]}, "
           f"dav_true={dav_true}")
-    print(f"injecting p_lowmass = {P_TRUE_LIST}, "
+    print(f"injecting p_lowmass = {p_true_list}, "
           f"fit range {P_MIN}-{P_MAX}\n", flush=True)
 
     # 八維全掃會爆炸（粗掃 240 萬點、精修 7^8 = 576 萬點），必須收窄。
@@ -107,14 +161,15 @@ def main():
           f"(~{n_pts*0.015/n_proc/60:.0f} min per fit)\n", flush=True)
     results = {}
 
-    for p_true in P_TRUE_LIST:
+    for p_true in p_true_list:
         outs = []
         for t in range(args.trials):
             # 生成假資料：注入指定的低質量段冪次
             gen = base.with_observations(color, mag)
             gen.selection = sel
             gen.low_mass_slope = -p_true
-            fc, fm = make_fake(gen, THETA_TRUE, n_obs, seed=7000 + 37 * t,
+            fc, fm = make_fake(gen, THETA_TRUE, n_obs,
+                               seed=7000 + 37 * (t + args.trial_offset),
                                dav=dav_true, selection=sel)
 
             # 擬合：八參數，低質量段冪次自由
@@ -123,8 +178,9 @@ def main():
             m.bounds = base.bounds[:6].copy()
             m.enable_dav_fit(0.0, args.dav_max)
             m.enable_lowmass_fit(P_MIN, P_MAX)
-            m.draws = draw_randoms(m.n_syn,
-                                   np.random.default_rng(4000 + 11 * t))
+            m.draws = draw_randoms(
+                m.n_syn,
+                np.random.default_rng(4000 + 11 * (t + args.trial_offset)))
             t0 = time.time()
             # q_gamma(5) 與 dav(6) 是已知的 nuisance，貼牆放行；
             # p_lowmass(7) **不放行** —— 它貼牆正是我們要偵測的失敗模式。
@@ -160,9 +216,9 @@ def main():
         results[p_true] = np.array(outs)
         # 每跑完一個 p_true 就存一次 —— 之後的 p_true 若整批失敗，
         # 這裡已經算出來的結果不會跟著陪葬。
-        np.savez(HERE / "results" / "inject_lowmass.npz",
-                 p_true=np.array(list(results.keys())),
-                 **{f"p{p}": v for p, v in results.items()})
+        atomic_savez(out_path,
+                     p_true=np.array(list(results.keys())),
+                     **{f"p{p}": v for p, v in results.items()})
 
     print(f"\n{'='*70}")
     print("identifiability of low-mass slope")
@@ -170,7 +226,7 @@ def main():
     print(f"{'p_true':>8}{'p_recovered':>14}{'bias':>9}"
           f"{'alpha_rec':>11}{'alpha_bias':>11}")
     p_recs, p_true_ok = [], []
-    for p_true in P_TRUE_LIST:
+    for p_true in p_true_list:
         if p_true not in results:
             print(f"{p_true:>8.1f}  (全部試驗失敗，無資料)")
             continue
@@ -184,9 +240,9 @@ def main():
     if len(p_recs) < 2:
         print("\n少於兩個 p_true 有成功資料，無法判斷可辨識性（條件 3 需要"
               "跨多個真值比較），僅供參考個別數字。")
-        np.savez(HERE / "results" / "inject_lowmass.npz",
-                 p_true=np.array(list(results.keys())),
-                 **{f"p{p}": v for p, v in results.items()})
+        atomic_savez(out_path,
+                     p_true=np.array(list(results.keys())),
+                     **{f"p{p}": v for p, v in results.items()})
         return
 
     p_recs = np.array(p_recs)
@@ -202,10 +258,10 @@ def main():
     print("  ratio near 1 = identifiable; near 0 = unconstrained "
           "(recovers same value regardless of truth)")
 
-    np.savez(HERE / "results" / "inject_lowmass.npz",
-             p_true=np.array(p_true_ok),
-             **{f"p{p}": v for p, v in results.items()})
-    print("\nwrote results/inject_lowmass.npz")
+    atomic_savez(out_path,
+                 p_true=np.array(p_true_ok),
+                 **{f"p{p}": v for p, v in results.items()})
+    print(f"\nwrote {out_path.relative_to(HERE)}")
 
 
 if __name__ == "__main__":
