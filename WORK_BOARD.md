@@ -187,6 +187,7 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 | 2026-08-19 | Claude session（本機） | 訂正 2026-08-17/18 那行的一句話：headline `p2_final2_v3` 的本機版與 Kaggle 分片版**並非「互不衝突」** | **狀態訂正，非新工作** | `queue.txt`（本機 `p2_final2_v3` 那筆註解停用，PR #69） | CodeRabbit review 抓到。上一行寫「本機完整 10 次重複版本，跟 Kaggle 拆分版本並行，互不衝突」——**這句已作廢**。兩者確實不會互相覆寫對方的**分片**檔案，但本機那筆的 `--tag _p2final_v3` 會寫到 `results/fit_real_p2final_v3.npz`，而那正是 Kaggle `rep0`–`rep9` 串接後要存的**正規產物**檔名，兩邊寫同一個檔案、最後留下哪一份取決於誰晚跑完，從檔案本身看不出來；且兩者是同樣 10 次重複、同樣三階精修的同一批工作，本機再算一次純浪費（本機 8 核並沒有快到能無視——`radial_r2` 單次重複就跑了 285 分鐘）。**headline 的正規來源自此固定為 Kaggle 分片**：`rep0`–`rep9` 全部拉回後依 offset 由小到大沿 axis=0 串接成 `results/fit_real_p2final_v3.npz`，每個分片檔與這個正規產物都要記進 `results/RESULTS_LOG.md`。`queue.txt` 那筆改成註解（不是刪除）並寫明理由，避免之後有人看到「headline 沒排在本機佇列」又把它加回來。要重跑 headline 改 `kaggle_queue.txt` |
 | 2026-08-19 | Claude session（本機） | D14：確認並標註 `alpha` 對應 system MF 還是 stellar MF | **完成，純文件＋一支診斷腳本，未動任何模型行為** | `PAPER_OUTLINE.md`（新增 3.4 節）、`fit_real.py`（檔頭）、`pipeline/joint_fit.py`（抽樣段落註解）、`LIMITATIONS.md` D14、`scripts/diagnostics/system_vs_stellar_mf.py`（新增），分支 `claude/d14-system-mf-doc` | 逐行核對 `JointModel.synthesise()` 的抽樣順序才下結論，不是照文獻推測：先抽 `n_syn` 個**主星**質量（冪次 = `alpha`，抽樣範圍是等時線網格實際涵蓋的質量區間、不是 config 值），再**獨立**擲 Bernoulli(`f_bin`) 決定誰帶伴星，伴星質量 `m2 = q·m1`（`q ~ q^q_gamma`，**不是抽自 IMF**），最後主星與伴星**流量相加**塌縮成同一個測光點。所以合成星團的一筆是一個**系統**，`alpha` 是 **system MF**（以主星質量標記）的冪次，伴星從未進入被擬合的質量分布。**另外實算了兩種定義的差**（原本只想寫「有小幅差異」，但那種說法對論文比對沒有用）：四百萬次蒙地卡羅、用專案實際參數，stellar MF 恆較陡，f_bin=0.30→+0.046、0.45→+0.066、0.60→+0.085、0.75→+0.102；我們的 `f_bin` 落在 0.45–0.62，量級 +0.05～+0.09，小於統計誤差 0.144 但與數項系統誤差同量級。健全性檢查（只算主星時要把注入的 2.35 原樣量回來）先過了才採信差值。**順帶發現一個沒人記過的簡化**：擲 Bernoulli 那步與質量獨立 = 假設雙星比例不隨質量變化，已新增 `mass_dependent_fbin` 到上面的待認領表 |
 | 2026-08-20 | Claude session（本機，Kaggle：teammate2 補跑 `rep9_retry`） | headline `p2_final2_v3`（A1、A2，接續 2026-08-19 那兩行）：`rep9_retry` 完成，10/10 次重複到齊，串接成正規產物 | **完成，headline 數字正式定案** | `results/fit_real_p2final_v3_rep9.npz`（新增，從 Kaggle 拉回）、`results/fit_real_p2final_v3.npz`（新增，10 個 rep 串接後的正規產物）、`results/RESULTS_LOG.md`、`LIMITATIONS.md`（A1／A2 補上 2026-08-20 解除段落） | 依照上方 2026-08-19（CodeRabbit 訂正那行）記錄的正規流程操作：10 個 `rep*.npz` 的 `C` 陣列依 offset 0→9 沿 axis=0 串接、另存成 `fit_real_p2final_v3.npz`（未覆寫任何 `rep*.npz`）。**正式 headline 數字：alpha=2.382±0.068**（population std），logage=8.026（106.2 Myr，10 次完全一致），A_V=0.386±0.032、f_bin=0.568±0.022、dav=0.557±0.048（貼牆於 0.6 附近，預期行為，不是異常）。跟舊版有瑕疵的 headline（α=2.387±0.060）中心值差 0.005，遠小於誤差棒，方向上原本引用的數字沒有被推翻，但這次才是精修 bug＋金屬量先驗兩個修正都套用後的乾淨版本，A1／A2 兩項限制對 headline 本身正式解除 |
+| 2026-08-20 | Claude session（本機） | 多星團擴展方向定案（使用者決定）：採用校驗軸 A＋B、放棄正交設計、Praesepe 做、Coma Ber 做、Hyades 先查文獻 | **決定已記錄＋A 的第一個診斷已完成，兩顆星團的執行尚未開始** | 新增 `scripts/diagnostics/check_massrange_crosscal.py`（純診斷不寫檔）、`docs/planning/PLAN_多星團擴展.md`（新增第十二節定案）、`WORK_BOARD.md`（本行＋下方新表），分支 `claude/multicluster-decision-2026-08-20` | 使用者定案內容與完整推理見 `PLAN_多星團擴展.md` 第十二節。**三個查證出來、會影響執行順序的事實**：(1) **放棄正交反而讓共線性變好**——舊四星團組合（含 IC 2602）logage 與 [Fe/H] 的 r=0.784、VIF=2.59，本次選定的 M45＋Praesepe＋Coma Ber 是 r=0.422、VIF=1.22，因為被拿掉的 IC 2602 正是把年齡與金屬量綁在一起那顆；代價是金屬量跨度從 0.32 縮到 0.17 dex、且三顆星團的殘差自由度是 0（**本輪不能宣稱任何 alpha–金屬量迴歸結果**，能做的是 Praesepe vs Coma Ber 的同齡配對比較，兩者年齡只差 0.032 dex(logage)、金屬量差 0.17 dex）。(2) **Praesepe 不是從零開始**——PR #11（Codex，未合併）已跑完 Praesepe 的 Tier1＋Tier2 全套，「Praesepe 做」實際上是審查／修好／重跑／合併 PR #11。(3) **Praesepe 與 Coma Ber 卡在同一張骨牌**——兩者走同一套共用程式碼，也就是 D8 那 4 個正確性問題所在；2026-08-20 查證顯示 Codex 已在 PR #11 分支寫好 4 點修法，但未合併也未重跑，D8 仍是現役缺陷，**整條線的第一張骨牌是 PR #11 而不是任何一顆星團**。A 的第一個數字已經算出來（見下方新表與第十二節 12.6）：把 Hobart+2026 的 Pleiades 分段冪律換算到別人的質量範圍後，M45 文獻間原本 2.01→3.33（跨度 1.3）的分歧大幅收斂，支持「跨研究差異主要來自口徑而非物理」這個假說，但 Pang+2024 的質量範圍尚未查證，不能當已驗證結論 |
 
 ## 待認領工作：對照 Hobart et al. 2026 的鞏固工作（2026-08-19，完整比較見 `docs/planning/PLAN_文獻對照_Hobart2026.md`）
 
@@ -200,15 +201,45 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 **另外**：`WORK_BOARD.md` 前面「PDMF → IMF 第 5 步（N-body）」條目的做法設想（目前偏向「直接模擬＋等第 2 步結果再定初始條件」）建議加入 **Hobart et al. 2026 的模擬器路線**當優先評估的候選方案——用中等規模的 N-body 模擬網格（不需要到他們的 550–942 次，先抓幾十到百來次評估可行性）訓練一個機器學習模擬器（Python 生態可用 `scikit-learn` 的 `GaussianProcessRegressor`，或找 `AUTOEMULATE`（Stoffel et al. 2025）本身是否能裝），再用既有的 `emcee` 或改用 HMC 套件（如 `numpyro`）抽初始條件的後驗分布，取代暴力網格搜尋（他們自己算過暴力法對這個維度的參數空間要一個世紀）。這個做法概念上適合我們的算力限制（單台 ARM64 8 核桌機），但實際可行性（訓練資料要多少組模擬才夠、模擬器預測誤差多大）還沒驗證過，先當第 5 步「正式跑」設想中優先評估的候選方案，不是已確定要採用的定論，也不是另開新工作項，是補充第 5 步原本「正式模擬」規劃的一個選項。
 
+## 待認領工作：多星團校驗軸 A＋B（2026-08-20 使用者定案，完整背景見 `PLAN_多星團擴展.md` 第十二節）
+
+**執行順序有硬相依**：`praesepe_pr11_close_out` 是整條線的第一張骨牌
+——D8 那 4 個正確性問題的修法目前只存在於 PR #11 分支、不在 `main`。
+在它合併之前，任何要真的呼叫共用 pipeline 的工作（Praesepe、Coma Ber
+的 Tier 執行）**都不能用 `main`**，必須照 Coma Ber 條目 2026-08-20
+那段的規定明確 pin 住 PR #11 的 commit 並在產出裡記錄用的是哪個
+commit。`crosscal_massrange_table` 與 `hyades_literature_check` 不碰
+共用程式碼、也幾乎不吃算力，可以立刻平行做。
+
+**算力歸屬**：沿用 2026-08-19 那條指示（本機 ARM64 8 核桌機的
+`queue.txt` 留給既有排隊項目），下面需要跑 pipeline 的兩項請排到
+其他機器（x64 協作機、Kaggle、或雲算力）。這是延續前一輪的假設，
+使用者若要改回本機跑可以直接推翻這條。
+
+| 任務 | 對應 | 起手式 | 驗收標準 |
+|---|---|---|---|
+| `crosscal_massrange_table`（選項 A，可立刻開始，幾乎不吃算力） | D11 相關、`PLAN_文獻對照_Hobart2026.md` 第五節 | 已有 `scripts/diagnostics/check_massrange_crosscal.py` 做完質量範圍換算（結果見第十二節 12.6）。**剩下的是原文口徑核對**：讀 Pang et al. (2024) 原文，查出他們 M45 那筆 α=2.01±0.09 的擬合質量範圍、MF 定義（`dN/dm` 或 `dN/dlog m`）、雙星處理、估計器、完整度修正，比照本專案對 Tang et al. (2019) 做過的那張表逐欄填 | 交出一張「同一顆 M45、Pang+2024／本專案／Hobart+2026 三方」的口徑對照表，每一欄都標明是查證過還是推測；並明確回答「換算到同一質量範圍後，三方還剩多少差距、那些差距各自對應哪個方法論選擇」。**若查出 Pang 的質量範圍跟 0.30–2.50 差很多，12.6 那個「大幅收斂」的初步判讀要回頭訂正，不是既定結論** |
+| `praesepe_pr11_close_out`（選項 B 的第一張骨牌，**其餘兩項星團工作的前置條件**） | D8、A5 | 審查 PR #11（`codex/ngc3532-praesepe-generalization`）目前分支內容，確認 D8 那 4 點的既有修法真的有效（不是只看程式碼，要實際重跑 Praesepe 的 Tier1＋Tier2 驗證），然後合併。注意 PR #11 同時含 NGC 3532，本輪只需要 Praesepe 的部分正確，NGC 3532 可以標記為未驗證但不阻擋合併 | PR #11 合併，且 D8 在 `LIMITATIONS.md` 標記解決（含重跑證據，不是只有程式碼查證）；Praesepe 交出一組可引用的 Tier1／Tier2 數字，並跟 Hobart+2026（α_high PDMF 2.53）、Pang+2024（1.92±0.10）、Khalaj & Baumgardt (2013) 做過口徑對照——**口徑對照是驗收標準的一部分，不是選配** |
+| `comaber_tier1`（選項 B，已有獨立條目） | A5、D8 | 見下方「待認領工作：Coma Berenices（Melotte 111）Tier 1 起步」條目的完整起手式，本表不重複。可在 PR #11 合併前起跑，但必須 pin 住 PR #11 的 commit（見該條目 2026-08-20 那段），不能用 `main` | 見該條目 |
+| `hyades_literature_check`（選項 B 的候選評估，**只查文獻不執行 pipeline**，可立刻開始） | A5 | 使用者明確指示 Hyades「先查文獻確認」再決定要不要排執行。要查的最少項目：(1) 年齡與其定年法（是否有 LDB 等較模型獨立的量測）；(2) **金屬量與出處**——本專案候選表這一欄目前是「未查」，而第十二節 12.3 的兩個 Hyades 情境用的是假設值不是採用值；(3) 既有 PDMF／MF 測定與其口徑（質量範圍、雙星處理）；(4) Hyades 距離最近（~47 pc）帶來的特殊問題（角展開極大、成員判定與選擇函數是否還適用本專案現有流程） | 交出一份跟第五節候選表同格式的 Hyades 資料列（每格標明出處與是否查證），外加一段明確建議：**排執行 or 不排**，附理由。若建議排執行，要說明它在 M45＋Praesepe＋Coma Ber 之外多帶來什麼（第十二節 12.3 顯示它主要是把殘差自由度從 0 變成 1，金屬量跨度幾乎沒變） |
+
 ## 待認領工作：Coma Berenices（Melotte 111）Tier 1 起步（2026-08-19，見 `docs/planning/PLAN_多星團擴展.md` 第五、七節、`docs/planning/PDMF_TO_IMF_PLAN.md` 第八節分層協定）
 
 **背景**：`PLAN_多星團擴展.md` 已把 Coma Ber 列為候選星團（動機一：第三個老年齡星團對照；動機二：金屬量接近太陽），但尚未實際起跑。核對 Hobart et al. 2026 時發現這篇論文的引言直接點名 Coma Ber 是「老年齡疏散星團次太陽質量段變平」的代表案例（引用 Kraus & Hillenbrand 2007、Tang et al. 2019），這兩篇文獻值得當作 Coma Ber 的既有 PDMF 基準線（比照 `PDMF_TO_IMF_PLAN.md` 第一步「文獻基準線」的做法）。**這項工作本次核對只做到規劃，沒有實際查詢 HR23 目錄或跑任何 pipeline**，交給認領的 session 執行。
 
-**前置阻擋條件（必須先完成，不能邊做 Coma Ber 邊順手修）**：`LIMITATIONS.md`
-D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆偵測被關掉、選擇
-函數驗證漏掉紅藍分色檢查、SNR 迴歸沒有獨立場星樣本、`--refresh` 遇
-NSS 為 null 會崩潰）**必須先各自獨立認領、修好、補回歸測試，D8 標記
-全部解決之後才能開始 Coma Ber 的 Tier 1 執行**——這四個問題都在共用
+**前置阻擋條件（2026-08-20 收斂成一項待辦，實際可否起跑以下方同日期
+「起手式可以開始」那段為準）**：原本這裡寫「4 個問題各自獨立認領、
+修好、補回歸測試」；2026-08-20 查證發現 Codex 已在 PR #11 分支上為這
+4 點各寫好對應修法，所以**要做的事收斂成一項：完成
+`praesepe_pr11_close_out`（見上一個表）——重跑驗證那些修法有效、
+合併 PR #11、D8 在 `LIMITATIONS.md` 標記解決**。在 PR #11 合併之前，
+Coma Ber 若要先起跑，必須照下方那段的規定明確 pin 住 PR #11 的
+commit，不能用 `main`。
+
+`LIMITATIONS.md` D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆
+偵測被關掉、選擇函數驗證漏掉紅藍分色檢查、SNR 迴歸沒有獨立場星樣本、
+`--refresh` 遇 NSS 為 null 會崩潰）**在 D8 標記解決之前，不要用 `main`
+跑 Coma Ber 的 Tier 1**——這四個問題都在共用
 的 pipeline 程式碼（`cluster_imf_tier1.py`／`prepare_cluster_tier2.py`／
 `cluster_forward_validation.py`）裡，若邊跑 Coma Ber 邊修，之後沒辦法
 可靠判斷 Coma Ber 的結果差異是星團本身的物理差異，還是同一輪意外
