@@ -383,7 +383,12 @@ def main():
                          "印出解析後的完整參數、模型實際生效的設定"
                          "（對帳 config.toml）、搜尋軸 vs 網格涵蓋、"
                          "輸出檔／manifest 衝突狀態。通過回傳 0，"
-                         "有阻擋級問題回傳非 0")
+                         "有阻擋級問題回傳非 0。**不加這個旗標時，開跑前"
+                         "檢查一樣會跑**（2026-08-20 起無條件執行），這個"
+                         "旗標只是「只檢查、不要真的算」的乾跑模式")
+    ap.add_argument("--force", action="store_true",
+                    help="開跑前檢查有阻擋級問題時仍然強行開跑（不建議，"
+                         "僅供已經看過警告、確認要略過的情況使用）")
     # 精修階數。預設單階（格距 1/3）會讓 alpha 只落在 2.1/2.3/2.5 這種粗格點上；
     # 要當最終數字報時用 3,3（格距 1/9 = 0.022）才不會被量化污染。
     ap.add_argument("--refines", default="3")
@@ -556,6 +561,22 @@ def main():
     if args.preflight:
         sys.exit(_preflight_report(args, base, grid, refines,
                                    CONFIGS, out_path, out, len(color)))
+    # **2026-08-20 改成無條件執行，不再只有 --preflight 才做**：這份檢查
+    # 原本只在有人記得多打一個旗標時才會發生，但實際會呼叫這支腳本的
+    # 地方不只 run_queue.py（那邊確實有記得先呼叫 --preflight）——Kaggle
+    # 筆記本、x64 協作機手動下指令，都是直接跑 `python fit_real.py ...`，
+    # 完全不經過任何會記得先檢查的中介層。讓檢查本身變成 main() 一部分，
+    # 不管從哪台機器、哪種方式呼叫，都跑得到，不依賴呼叫端的記性。
+    # 有阻擋級問題就中止，除非 --force（僅供已經看過警告、確認要略過的
+    # 情況使用，不是日常流程）。
+    rc = _preflight_report(args, base, grid, refines, CONFIGS, out_path,
+                           out, len(color))
+    if rc and not args.force:
+        print("開跑前檢查沒通過，中止（用 --force 可以略過，但要先確認"
+              "上面每一條阻擋的理由）", flush=True)
+        sys.exit(rc)
+    if rc and args.force:
+        print("警告：用 --force 略過了上面的阻擋，繼續執行", flush=True)
     # 打錯的設定名稱要當場中止，不能像下面迴圈那樣用 `if key not in
     # CONFIGS: continue` 靜默略過——`--configs A,X` 打錯字時，沒有這段
     # 驗證的話會悄悄只算 A，結果檔看起來正常，只是少了一個誰都不知道
