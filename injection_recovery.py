@@ -195,7 +195,8 @@ def wall_message(hits):
 
 
 def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
-                     allow_wall=(), raise_on_wall=True, names=None):
+                     allow_wall=(), raise_on_wall=True, names=None,
+                     no_refine=()):
     """多階段網格搜尋：每一階在上一階的最佳點附近縮小格距重掃。
 
     比兩階段多一階，是因為這裡的網格開得很寬（為了避免貼牆），
@@ -243,6 +244,14 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
     for r in refines:
         nxt = []
         for i, ax in enumerate(cur):
+            # Some parameters select a discrete physical model (for example an
+            # isochrone age or metallicity).  Refining between downloaded grid
+            # values only creates a more precise-looking theta that is silently
+            # snapped back to the same model.  Callers can freeze those axes at
+            # the best actually evaluated grid point after the coarse search.
+            if i in no_refine:
+                nxt.append(np.array([best[i]]))
+                continue
             if len(ax) < 2:
                 nxt.append(ax)
                 continue
@@ -320,6 +329,11 @@ def main():
                      "results/injection_recovery.npz（跟 fit_real.py／"
                      "inject_lowmass.py 同款式，見 LIMITATIONS.md D6："
                      "固定檔名被重跑覆寫過，這裡原本沒有這個防呆）")
+    # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py）。
+    ap.add_argument("--preflight", action="store_true",
+                    help="只做開跑前檢查然後結束，不進行任何擬合")
+    ap.add_argument("--force", action="store_true",
+                    help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
     if "/" in args.tag or "\\" in args.tag:
         ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
@@ -328,7 +342,41 @@ def main():
                  "避免覆寫 results/injection_recovery.npz（A1 統計誤差 "
                  "0.144 的來源檔案，見 LIMITATIONS.md D6 記錄過的同類事故）")
     n_proc = args.procs or (os.cpu_count() or 1)
+    out_path = HERE / "results" / f"injection_recovery{args.tag}.npz"
+
+    # **B1（意圖對帳）要用的「已知情境名稱」必須在這裡（模型建構之前）就
+    # 算出來**：dav_sweep／extra_scatter_sweep 兩個旗標會動態追加
+    # S2@<v>／S1var@<v> 這種情境名稱，原本這段邏輯（連同 want 的更新）
+    # 寫在 SCEN 字典旁邊，比模型建構晚很多——但 preflight 的 gate 要在
+    # 建好模型後、真正開始擬合前就跑，所以「這次到底會處理哪些情境」
+    # 必須先算好。SCEN 字典本體（含每個情境的實際定義）仍留在原本位置
+    # 建構，因為它需要 sel（選擇函數，稍後才載入）；這裡只需要「名稱」。
     want = [s.strip().upper() for s in args.scenarios.split(",")]
+    known_scenarios = {"S1", "S2", "S3", "S3F", "S4"}
+    var_inject = {}
+    if args.dav_sweep:
+        dav_sweep_vals = [float(x) for x in args.dav_sweep.split(",")]
+        want = [k for k in want if k != "S2"] \
+            + [f"S2@{v:g}" for v in dav_sweep_vals]
+        known_scenarios |= {f"S2@{v:g}" for v in dav_sweep_vals}
+    if args.extra_scatter_sweep:
+        scatter_vals = [float(x) for x in args.extra_scatter_sweep.split(",")]
+        want = want + [f"S1var@{v:g}" for v in scatter_vals]
+        for v in scatter_vals:
+            key = f"S1var@{v:g}"
+            known_scenarios.add(key)
+            var_inject[key] = v
+    # 原本這裡是 `if key not in SCEN: print("未知情境", key, "，略過")`——
+    # 靜默略過，preflight 通過、擬合照跑，但實際處理的情境跟意圖不同，
+    # 是跟 fit_real.py 打錯 --configs 名稱一模一樣的錯誤形狀（見 main()
+    # 下方那道不能被 --force 繞過的硬阻擋，跟 workload_audit 那道可以
+    # 被 --force 繞過的阻擋，兩者都要有，理由同 fit_real.py 的註解）。
+    unknown_scenarios = [k for k in want if k not in known_scenarios]
+
+    def _store_key(k: str) -> str:
+        """情境名稱轉成存檔用的鍵——`@`／`.` 不是合法的 npz 鍵字元，跟
+        main() 最後寫檔時原本用的轉換規則一致（S2@0.3 -> S2_at_0p3）。"""
+        return k.replace("@", "_at_").replace(".", "p")
 
     cfg = cfgmod.load()
     c3, cj = cfg.step3_age, cfg.joint_fit
@@ -342,7 +390,8 @@ def main():
     ok = np.isfinite(color) & np.isfinite(mag)
     n_obs = int(ok.sum())
 
-    cfg._data["step3_age"]["n_synthetic"] = args.n_syn or cj.n_synthetic
+    effective_n_syn = args.n_syn or cj.n_synthetic
+    cfg._data["step3_age"]["n_synthetic"] = effective_n_syn
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0   # 測流程本身，關掉先驗
 
     base = joint_fit.JointModel(cfg, color[ok], mag[ok], grid, errmodel, dm)
@@ -356,8 +405,47 @@ def main():
         base.draws = draw_randoms(base.n_syn,
                                   np.random.default_rng(args.model_seed))
         print(f"擬合模型的共用亂數改用種子 {args.model_seed}")
-    sel = selmod.load(HERE / "data" / "selection.npz")
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
+
+    # 2026-08-20：B3（續傳）—— 這支腳本原本完全沒有續傳機制，只在全部
+    # 情境跑完後 np.savez 一次，中途被砍就整批白工。改用 checkpoint.py，
+    # 顆粒度到「每個情境的每一次試驗」。這支腳本的 multi_stage_best() 呼叫
+    # 帶 raise_on_wall=False（貼牆只印警告、不丟例外），跟 inject_lowmass.py
+    # 不同，不需要 attempted 計數區分「已嘗試」跟「已成功」——每次嘗試
+    # 必定成功，跟 profile_lowmass.py 同一種情況。
+    manifest = {"n_syn": effective_n_syn, "refines": args.refines,
+                "dav_true": args.dav_true, "model_seed": args.model_seed,
+                "dav_distribution": args.dav_distribution}
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import checkpoint                                            # noqa: E402
+    import preflight                                             # noqa: E402
+    partial = checkpoint.load_partial(out_path)
+    checkpoint.check_manifest(out_path, manifest, partial)
+
+    if args.preflight:
+        preflight._force_utf8_stdout()
+    scan_keys = [k for k in want if k in known_scenarios]
+    partial_counts = {k: len(partial.get(_store_key(k), [])) for k in scan_keys}
+    w_fails, w_warns = preflight.workload_audit(
+        scan_keys=scan_keys, repeats=args.trials, n_syn=effective_n_syn,
+        n_obs=n_obs, refines=refines, partial_counts=partial_counts,
+        unit="次試驗", unknown=unknown_scenarios,
+        known=sorted(known_scenarios), scan_label="情境（--scenarios）")
+    preflight.output_audit(out_path, partial)
+    preflight.mandatory_gate(
+        base, grid, refines, script="injection_recovery.py",
+        expected_overrides={"mh_prior_sigma": 0.0},
+        force=args.force, dry_run=args.preflight,
+        extra_fails=w_fails, extra_warns=w_warns)
+    # 打錯的情境名稱要當場中止，不能像下面迴圈那樣靜默略過——理由跟
+    # fit_real.py 對 --configs 的處理完全一樣（見該檔案 main() 裡的
+    # 註解）：workload_audit 那道阻擋可以被 --force 繞過，這裡不行。
+    if unknown_scenarios:
+        print(f"錯誤：--scenarios 有不存在的情境名稱 {unknown_scenarios}"
+              f"（可用：{', '.join(sorted(known_scenarios))}）", flush=True)
+        sys.exit(1)
+
+    sel = selmod.load(HERE / "data" / "selection.npz")
     npt = int(np.prod([len(a) for a in COARSE]))
     print(f"假觀測每批 {n_obs:,} 顆（與真實觀測相同）")
     print(f"粗網格 {npt:,} 點，三階段精修，{n_proc} 行程")
@@ -383,38 +471,41 @@ def main():
                args.dav_true, None, 0.0, None, np.arange(0.0, 1.21, 0.20)),
     }
 
-    # dav 掃描：把 S2 換成一系列不同注入值的情境
+    # dav 掃描：把 S2 換成一系列不同注入值的情境。`want` 的更新（S2 換成
+    # S2@<v> 一系列）已經在檔案上面（模型建構之前，preflight 需要用到
+    # 完整的 want 清單）做過一次，這裡只需要把對應的 SCEN 定義補上。
     if args.dav_sweep:
-        vals = [float(x) for x in args.dav_sweep.split(",")]
-        for v in vals:
+        for v in dav_sweep_vals:
             SCEN[f"S2@{v:g}"] = (f"漏掉差異消光（注入 dav={v:g}，擬合當作 0）",
                                  v, None, 0.0, None, None)
-        want = [k for k in want if k != "S2"] + [f"S2@{v:g}" for v in vals]
 
     # C19 額外亮度散布掃描：情境本身跟 S1 對照組完全一樣（有選擇函數、
     # 有差異消光），唯一差別是假資料多帶一個未被模型描述的亮度散布。
-    # 用一個獨立的 dict 記「這個情境要注入多少散布」，而不是擴充 SCEN
-    # 的 tuple——SCEN 的六元組在下面迴圈裡被拆解使用，多加一個欄位要
-    # 動到所有既有情境，改動面大且容易出錯。
-    var_inject = {}
+    # `var_inject`（「這個情境要注入多少散布」）跟 `want` 的更新同樣已經
+    # 在檔案上面做過，這裡只補 SCEN 定義——不擴充 SCEN 的六元組本身，
+    # 那個元組在下面迴圈裡被拆解使用，多加一個欄位要動到所有既有情境，
+    # 改動面大且容易出錯。
     if args.extra_scatter_sweep:
-        vals = [float(x) for x in args.extra_scatter_sweep.split(",")]
-        for v in vals:
-            key = f"S1var@{v:g}"
-            SCEN[key] = (f"額外亮度散布 {v:g} mag（模型沒有這一項，C19）",
-                         0.0, None, 0.0, None, None)
-            var_inject[key] = v
-        want = want + [f"S1var@{v:g}" for v in vals]
+        for v in scatter_vals:
+            SCEN[f"S1var@{v:g}"] = (f"額外亮度散布 {v:g} mag（模型沒有這一項，C19）",
+                                    0.0, None, 0.0, None, None)
 
     results = {}
     for key in want:
         if key not in SCEN:
+            # 走到這裡代表用了 --force 略過上面的硬阻擋；仍然略過，不要
+            # 假裝算過這個情境。
             print(f"未知情境 {key}，略過")
             continue
+        skey = _store_key(key)
         desc, dav_in, sel_in, dav_fit, sel_fit, extra = SCEN[key]
         print(f"\n{'='*74}\n{key}：{desc}\n{'='*74}")
-        got_all = []
+        got_all = list(partial.get(skey, []))
         for t in range(args.trials):
+            if t < len(got_all):
+                print(f"  {key} 第 {t+1} 次：沿用既有結果，跳過重算",
+                      flush=True)
+                continue
             t0 = time.time()
             # C19：只有生成端帶額外亮度散布，擬合端一律 0——這正是要測的
             # 「模型沒有這一項」的情境。用 try/finally 還原，避免某次試驗
@@ -433,7 +524,9 @@ def main():
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             # dav（索引 6）已由注入回收證實不可辨識，貼牆是預期行為；
             # 其餘維度貼牆會印出警告（診斷用的跑法不中止，
-            # 產出科學數字的 fit_real.py 則設成直接報錯）。
+            # 產出科學數字的 fit_real.py 則設成直接報錯）。raise_on_wall=
+            # False 代表這裡不會丟例外，每次嘗試必定成功，不需要像
+            # inject_lowmass.py 那樣另外追蹤「已嘗試」跟「已成功」的差別。
             best, lp, bounds = multi_stage_best(
                 m, COARSE, refines, n_proc, extra_axis=extra,
                 allow_wall=(6,) if extra is not None else (),
@@ -443,6 +536,12 @@ def main():
             report(f"{key} 第 {t+1} 次  lnP={lp:.1f}", truth, best, bounds,
                    time.time() - t0)
             got_all.append(best)
+            # 跑完一次試驗就存一次，不等這個情境或全部情境都跑完——
+            # 中途被砍，已經算完的每一次試驗都保得住，重跑時讀回來跳過。
+            got_all = checkpoint.save_progress(
+                out_path, skey, got_all, manifest,
+                extra_arrays={"theta_true": THETA_TRUE,
+                             "dav_distribution": args.dav_distribution})
         got_all = np.array(got_all)
         results[key] = got_all
         if len(got_all) > 1:
@@ -472,16 +571,10 @@ def main():
         print("      代表 +0.178 只是曲線在 dav=0.30 這一點的值，")
         print("      與選擇函數的 -0.178 相等純屬巧合（因為 0.30 是我挑的）。")
 
-    out_path = HERE / "results" / f"injection_recovery{args.tag}.npz"
-    # dav_distribution 一起存進檔案（2026-08-19 CodeRabbit PR #63）：
-    # 它會改變假資料的生成方式，兩種分布跑出來的結果不可互比，但檔名只由
-    # --tag 決定。不存的話，事後拿到 npz 無從判斷這批是 lognormal 還是
-    # trunc_exp 算的——C5 這個比較的重點正是兩者的差，認錯來源就整個作廢。
-    np.savez(out_path,
-             theta_true=THETA_TRUE,
-             dav_distribution=args.dav_distribution,
-             **{k.replace("@", "_at_").replace(".", "p"): v
-                for k, v in results.items()})
+    # 每一次試驗跑完就已經存過檔了（見上面迴圈裡的
+    # checkpoint.save_progress()，含 theta_true／dav_distribution 這兩個
+    # metadata——2026-08-19 CodeRabbit PR #63 要求存的欄位，現在每次存檔
+    # 都會寫，不用等到最後），這裡不用再存一次，只是印出最終確認訊息。
     print(f"\n寫入 {out_path}")
 
 
