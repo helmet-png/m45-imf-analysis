@@ -580,13 +580,27 @@ config C）先驗證流程能不能跑通：亮端截斷保留 1,017/1,078 顆�
 照原計畫跟 PARSEC 同設定（同一個 `--g-bright`）比較 alpha 與 logage。
 正式規模的重跑已排進 `queue.txt`（見下方，標記為診斷用途、非 headline）。
 
-### D2 未做過敏感度測試的設定（尚無認領工作）
+### D2 未做過敏感度測試的設定（**部分進行中，2026-08-19**，見下方）
 
 **問題**：`pca_dims` 本身（非開關）、`stars_per_cluster`、`clustering_method`、
 `inner_loop_runs`、`hess_color_range`／`hess_mag_range`、BP 訊噪比門檻 20
 這個值本身、成員機率門檻對 IMF 的影響。
 
 **後果**：這些設定的敏感度未知。
+
+**2026-08-19 進度**：新增 `scripts/diagnostics/sensitivity_sweep.py`，示範
+`membership_threshold`（重新套用 `baseline.dat` 門檻 -> 重跑第 2/3 步 ->
+config C 前向模型量 alpha）與 `stars_per_cluster`（需重跑 pyUPMASK 聚類，
+腳本先做可行性檢查）兩個影響面最廣的設定。流程本身已用小規模參數驗證可
+執行，**但還沒有真正的敏感度數字**——完整掃描需要原始 Gaia 查詢 CSV，這台
+機器當時沒有，補齊依賴（clone `github.com/helmet-png/gaia-dr3-export`）後
+重抓卡在 `fetch_gaia.py` 第一步的 `SELECT COUNT(*)` 查詢——手動重現並拿到
+完整錯誤內文，確認是 ESA 伺服器端主動取消：`SQL exception: ERROR:
+canceling statement due to statement timeout`（等 183 秒後被砍），不是
+本機網路或帳號問題，是這個查詢（5 度錐形 + G<=18 + parallax>=4，對 18
+億列做未加速的 COUNT）在伺服端太重。`stars_per_cluster` 則受限於這台
+機器沒有 `pyUPMASK/`，腳本確認會誠實回報做不到、不編造數字。詳細下一步
+（含可能的繞過法）見 `WORK_BOARD.md` D2 那行。
 
 ### D3 主序轉折點截斷對老星團會變成真限制（尚無認領工作）
 
