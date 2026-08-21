@@ -38,6 +38,23 @@ CodeRabbit 的審查是**輔助**，不是取代 `WORK_BOARD.md`／PR review 流
 它抓程式面的問題（bug、重複實作、效率），跑不動這個專案的實際計算，
 數字對不對還是要靠 `results/RESULTS_LOG.md` 跟人／其他 agent 交叉核對。
 
+**2026-08-21 起：CodeRabbit 的留言沒回覆／沒 resolve，PR 合併按鈕會被鎖住**
+（起因：查了當時開著的 11 個 PR，42 則 CodeRabbit 留言裡 41 則完全沒人
+回覆——不是有人查過覺得不重要，是真的沒人看過）。機制是兩個設定疊起來：
+`.coderabbit.yaml` 開了 `reviews.request_changes_workflow: true`（CodeRabbit
+會用正式的「Request changes」狀態卡住 PR，直到全部留言 resolved、最新
+commit 已重新審過才自動轉 Approved），加上 GitHub branch protection 把
+main 分支的 required approving review count 提高到至少 1（原本是 0，
+CodeRabbit 卡在 Changes Requested 也不會真的擋合併）。
+
+**這不是自動修**——CodeRabbit 本身沒有辦法設定成自動觸發 autofix（官方
+文件明講一定要手動下 `@coderabbitai autofix` 或按 checkbox），這個機制
+只保證「沒處理就合併不了」，不保證有人幫你處理。收到 CodeRabbit 留言時
+還是要照這個檔案下面的流程回覆＋resolve（或確認站不住腳就說明理由），
+PR 才會解鎖。如果 CodeRabbit 誤判某則已經處理好的留言、卡住不放，找
+不到問題就在該討論串留言 `@coderabbitai resolve` 或直接在 GitHub UI
+手動 resolve。
+
 ---
 
 ## 零之二、寫進文件（跟對話）裡的判斷，預設是「當下的想法」不是「決議」
