@@ -152,6 +152,19 @@ verify_bprperr_on_v2_rep4_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 
 # 32,935-35,569 秒，在上限內）。四項的 --tag 各自獨立，不會覆寫 _prelim
 # 版本（那些是 _radial_*_prelim，這裡是 _radial_*_final）。
 #
+# **同一組的 5 個分片刻意共用同一個 --tag**（2026-08-21 CodeRabbit
+# review 建議改成每片一個唯一 tag，評估後決定不改，理由記在這裡）：
+#   1. 每個分片是獨立的 Kaggle kernel，結果各自拉回
+#      kaggle_results/<label>/ 底下（label 已含 rep0..rep4），**在磁碟上
+#      本來就是分開的**，不會互相覆寫。
+#   2. scripts/tools/concat_radial_final.py 就是照這個約定寫的——它靠
+#      目錄名對應 offset，並**逐片核對 manifest 裡的 repeat_offset 與所在
+#      目錄相符**，正是為了補上「檔名相同」這件事的風險。
+#   3. r3 那一組已經用這個約定跑完並串接（見 PR #94），現在改約定會讓
+#      r3 與其餘三組不一致，反而更容易出錯。
+# **但要注意**：這個安全性來自「每片在自己的目錄」，所以**不要把兩個
+# 分片的輸出放進同一個 results/ 目錄**，那樣才會真的互相覆寫。
+#
 # 全部到齊後：每一項的 5 個分片依 offset 由小到大沿 axis=0 串接成
 # fit_real_radial_r1_final.npz 等四個檔案，再回答那個非單調問題——
 # 誤差棒明顯重疊就是雜訊，不重疊就是需要解釋的真實現象。

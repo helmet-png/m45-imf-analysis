@@ -508,6 +508,20 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
 
 # ----------------------------------------------------------------- Gate C
 
+# checkpoint.save_progress() 的 extra_arrays 會把掃描點清單、注入真值這類
+# metadata 寫成一般鍵（不能加 "__" 前綴——下游分析程式是用這些名字讀的）。
+# gate_c 逐鍵做「落在粗網格節點上沒有」的判定時要跳過它們，否則會對一個
+# 根本不是參數向量的陣列做落點判定，產生跟結果無關的假阻擋
+# （2026-08-21 CodeRabbit review；同一個修正也在 PR #96）。
+METADATA_KEYS = frozenset({
+    "slopes",          # profile_lowmass.py
+    "fracs",           # profile_outlierfrac.py
+    "p_true",          # inject_lowmass.py
+    "theta_true",      # injection_recovery.py
+    "dav_distribution",
+})
+
+
 def gate_c(npz_path: Path, verbose=True) -> list[str]:
     """C1/C2：跑完的結果檔驗收。
 
@@ -516,14 +530,25 @@ def gate_c(npz_path: Path, verbose=True) -> list[str]:
     0.000，那個簽章一直在檔案裡，只是沒有人系統性地去看——十八個機時
     之後才靠人眼發現。
     """
-    from injection_recovery import COARSE
-    import json
-    fails = []
     # allow_pickle=False：manifest 存的是 np.array(json.dumps(...))，
     # 純 unicode 陣列，其餘鍵都是數值陣列，都不需要 pickle。Gate C 由
     # 無人監看的 run_queue.py 自動呼叫，開 allow_pickle 等於讓惡意/損毀
     # 的 npz 有機會在讀取時執行任意程式碼（2026-08-20 CodeRabbit review）。
-    d = np.load(npz_path, allow_pickle=False)
+    # 用 with 關閉 NpzFile——`scripts/tools/checkpoint.py` 的
+    # `_read_npz_dict()` 明文記錄過這條規則：NpzFile 內部 zipfile 的循環
+    # 參照會讓底層檔案控制代碼延遲關閉，後續對同一路徑的 os.replace() 在
+    # Windows 上丟 PermissionError。gate_c 由 run_queue.py 的 _postflight()
+    # 在跑完之後呼叫，緊接著佇列下一項就可能寫同一個檔案，屬於會踩到的
+    # 情境（2026-08-21 CodeRabbit review）。
+    with np.load(npz_path, allow_pickle=False) as d:
+        return _gate_c_body(d, npz_path, verbose)
+
+
+def _gate_c_body(d, npz_path: Path, verbose: bool) -> list[str]:
+    """gate_c() 的本體，拆出來只是為了讓上面那層 `with` 包住整段。"""
+    from injection_recovery import COARSE
+    import json
+    fails = []
     names = ["logage", "A_V", "f_bin", "alpha", "MH", "q_gamma", "dav"]
     if verbose:
         print(f"【Gate C】{npz_path.name}")
@@ -544,6 +569,8 @@ def gate_c(npz_path: Path, verbose=True) -> list[str]:
                   f"radius={m.get('radius_range')}")
 
     for key in [k for k in d.files if not k.startswith("__")]:
+        if key in METADATA_KEYS:
+            continue
         arr = np.atleast_2d(d[key])
         nd = arr.shape[1]
         # 每個維度：最佳值是否精確落在粗網格節點上

@@ -137,6 +137,14 @@ def acquire_write_lock(out_path: Path, timeout_s: float = 1800.0) -> Path:
                     lock_path.unlink()
                 except FileNotFoundError:
                     pass
+                # **一定要重設 t0**（2026-08-21 CodeRabbit review）：不重設
+                # 的話，逾時之後每一輪迴圈的 `time.time() - t0 > timeout_s`
+                # 都仍然成立——若另一個行程在我們刪掉鎖檔後立刻建立它，
+                # 這裡會馬上再刪一次，而且完全不等待。互斥保護在第一次
+                # 逾時之後就永久失效，兩個行程可以同時進入 save_progress()
+                # 的讀-改-寫區段，正是這個鎖要防的事。重設之後每次強制
+                # 接管都重新計時，最壞情況是慢，不是失去保護。
+                t0 = time.time()
                 continue
             time.sleep(0.5)
 

@@ -116,8 +116,15 @@ def main():
     # 不計入結果，但那個試驗索引真的跑過一次，續傳時不該重跑
     # （見 scripts/tools/checkpoint.py 的 load_progress() 說明）。
     manifest = {"n_syn": args.n_syn, "refines": args.refines,
-                "dav_max": args.dav_max, "trial_offset": args.trial_offset,
-                "p_true_list": p_true_list}
+                "dav_max": args.dav_max, "trial_offset": args.trial_offset}
+    # **p_true_list 不放進 manifest**（2026-08-21 CodeRabbit review）：
+    # --only 的用途正是「補測單一可疑真值、不重跑整批」。若把掃描點清單
+    # 也拿去比對，先跑完整批（[0.9,1.3,1.7]）再用同一個 --tag 下
+    # --only 1.3，manifest 會變成 [1.3]，check_manifest() 判定設定不同
+    # 直接 sys.exit(1)——把這個旗標的用途整個擋掉。每個真值各自有獨立的
+    # scan_key（f"p{p}"），互不污染，不需要靠 manifest 擋。
+    # 跟 profile_lowmass.py 的 slopes、profile_outlierfrac.py 的 fracs
+    # 同一個理由、同一個處置。
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
     import checkpoint                                            # noqa: E402
     import preflight                                             # noqa: E402
@@ -180,6 +187,12 @@ def main():
     for p_true in p_true_list:
         key = f"p{p_true}"
         outs, attempted = checkpoint.load_progress(partial, key)
+        # 截到 args.trials：磁碟已有的成功次數可能比這次要求的多（例如
+        # 已有 3 筆、這次只下 --trials 2），不截斷的話下面迴圈會因為
+        # t < attempted 全部跳過、outs 卻仍帶著 3 筆，最後的 p_rec／
+        # alpha_rec 是用 3 筆算的，跟印出的 --trials 2 對不上
+        # （2026-08-21 CodeRabbit review，同 profile_lowmass.py 的修正）。
+        outs = outs[:args.trials]
         for t in range(args.trials):
             if t < attempted:
                 print(f"  p_true={p_true:.1f} trial{t+1}：已嘗試過，跳過"

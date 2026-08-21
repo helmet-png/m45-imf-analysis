@@ -59,9 +59,10 @@ def main():
                          "本機已掃過 0.9-1.7，要擴大範圍時用這個而不改本檔，"
                          "避免正在跑的背景工作看到不一致的模組狀態")
     # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py、
-    # docs/reference/PREFLIGHT.md）——這支腳本沒有續傳機制，本機曾經因為
-    # Windows 非預期重開機連續四天從頭重算一次都沒完成，確保設定沒錯
-    # 比 fit_real.py 更要緊，不是次要功能。
+    # docs/reference/PREFLIGHT.md）——本機曾經因為 Windows 非預期重開機
+    # 連續四天從頭重算一次都沒完成，確保設定沒錯比 fit_real.py 更要緊，
+    # 不是次要功能。**續傳已在下面補上**（見 checkpoint.py 那段），這裡
+    # 原本寫「這支腳本沒有續傳機制」已經過時，2026-08-21 訂正。
     ap.add_argument("--preflight", action="store_true",
                     help="只做開跑前檢查然後結束，不進行任何擬合")
     ap.add_argument("--force", action="store_true",
