@@ -232,15 +232,51 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
 
     `legacy_defaults`：manifest 裡缺鍵不等於「設定不同」——那個旗標
     當時根本不存在，舊檔案必定是用它的預設值算出來的（同 fit_real.py
-    的 MANIFEST_LEGACY_DEFAULTS）。"""
+    的 MANIFEST_LEGACY_DEFAULTS）。
+
+    **完全沒有 manifest 的舊檔則是另一回事，一律擋下不放行**（2026-08-21
+    修正，理由與實際案例見函式內註解）：`legacy_defaults` 處理的是「這個
+    旗標當時不存在」，而沒有 manifest 代表「整份設定都不知道」，兩者不能
+    用同一套寬容邏輯。"""
     if not partial:
         return
     old_manifest = load_manifest(out_path)
     legacy_defaults = legacy_defaults or {}
     if old_manifest is None:
-        print(f"警告：{out_path.name} 是加 manifest 檢查前存的舊檔，"
-              f"無法自動確認這次的設定跟它一致，視為信任沿用。", flush=True)
-        return
+        # **不能「視為信任沿用」**（2026-08-21 實際踩到，案例見下）。
+        # 沒有 manifest 的舊檔正是最不該信任的那一種：它是加 manifest
+        # 檢查之前存的，而那個「之前」涵蓋了 multi_stage_best() 精修
+        # bug 還在的整段時期（見 LIMITATIONS.md A1）。信任沿用等於讓
+        # 「專門為了修精修 bug 而排的重跑」把壞結果當成已完成的工作
+        # 直接跳過，跑完 exit 0、什麼都沒算——正是 docs/reference/
+        # PREFLIGHT.md 開宗明義要防的那個失敗形狀，在 preflight 自己
+        # 身上重演。
+        #
+        # **實際案例**：results/profile_lowmass.npz（2026-08-15 存，
+        # 無 manifest）裡 15 次擬合的 alpha 只有 4 個相異值
+        # （2.1/2.3/2.5/2.7），相異值最小間距正好 0.2 = COARSE 網格
+        # 間距，是「完全沒精修」的量化簽章。p6_lowmass_v2 就是為了
+        # 取代它而排的，但舊邏輯判定「既有結果已滿足重複次數」，
+        # 會讓那次重跑立刻結束。
+        #
+        # 改成擋下來並說明選項：沿用舊檔必須是人明確決定的動作，
+        # 不能是預設行為。
+        print(f"錯誤：{out_path.name} 有既有結果，但**沒有 manifest**"
+              f"（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
+              f"設定、什麼版本的程式碼算出來的。\n"
+              f"  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
+              f"multi_stage_best() 精修 bug 還在的那段時期，沿用會讓"
+              f"「為了修那個 bug 而排的重跑」直接跳過、什麼都不算，"
+              f"卻回報成功（見 LIMITATIONS.md A1、"
+              f"docs/reference/PREFLIGHT.md）。\n"
+              f"  三個選項擇一：\n"
+              f"    1. 這次要重算 -> 把 {out_path.name} 移開"
+              f"（例如改名成 {out_path.stem}_legacy_no_manifest.npz）"
+              f"再跑；\n"
+              f"    2. 這次要另存 -> 加一個不同的 --tag；\n"
+              f"    3. 確定舊檔可信 -> 自己核對過它的算法與設定之後，"
+              f"手動補上 manifest 再跑。", flush=True)
+        sys.exit(1)
 
     def _old(k):
         return old_manifest.get(k, legacy_defaults.get(k))
