@@ -116,6 +116,25 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 **D2 進度說明（2026-08-19）**：`scripts/diagnostics/sensitivity_sweep.py` 已寫好，涵蓋兩種目標：
 - `--target membership_threshold`：重新套用 `results/baseline.dat` 的成員機率門檻 -> 重跑第 2/3 步 -> 用 config C 跑一次前向模型，量 alpha 敏感度。**流程已驗證可行**（本機用小規模參數試跑通過），但完整掃描需要原始 Gaia 查詢 CSV（`data/m45_r5_g18_plx4.csv`，6,956 顆未篩選），這台機器原本沒有，追查後發現產生它的 `fetch_gaia.py` 依賴另一個私有 repo `github.com/helmet-png/gaia-dr3-export`——已 clone 到 `Documents/` 同層解鎖依賴，但重抓時卡在第一步：`fetch_gaia.py` 會先送一個 `SELECT COUNT(*)` 查詢決定要抓幾筆，這個查詢對 18 億列的 `gaia_source` 做 5 度錐形 + G<=18 + parallax>=4 篩選，**手動重現並拿到完整錯誤內文，確認是 ESA 伺服器端主動取消**：`SQL exception: ERROR: canceling statement due to statement timeout`（等了 183 秒後被砍），不是本機網路或帳號問題，是這個特定 COUNT 查詢在伺服端太重、撞到它自己的 statement timeout。**已知可能的解法**（留給下一個 session，這是 `gaia-dr3-export` 那個獨立 repo 的程式，不在這個專案範圍內改）：跳過精確計數，直接在主查詢用一個夠大的 `TOP`（例如 20000，M45 這個天區遠不會到這個量級）取代 `count_sources()` 那一步。**下一個 session 檢查 `data/m45_r5_g18_plx4.csv` 是否已成功抓到**，有的話直接跑 `python scripts/diagnostics/sensitivity_sweep.py --target membership_threshold`（預設掃 0.5/0.6/0.7/0.8/0.9 五個門檻，`--n-syn 40000 --refines 3,3` 較準，示範用可以先 `--n-syn 5000 --refines 3` 求快），沒有的話重跑 `python scripts/data_prep/fetch_gaia.py --target M45 --radius 5.0 --gmax 18.0 --plxmin 4.0 --force`。
+
+**2026-08-21：阻擋已解除，檔案抓到了**。原因確認是 `count_sources()` 那個
+COUNT(*) 查詢在 ESA 端逾時（不是本機網路），主查詢本身不做 COUNT、只取前 N 列
+反而跑得動。已幫 `fetch_gaia.py` 加兩個旗標（**改的是本專案的檔案，不是那個
+私有 repo**）：`--top` 跳過精確計數（並在取回列數頂到上限時中止、不靜默給
+截斷資料），`--ra`／`--dec` 跳過 Sesame 名稱解析。
+
+**`--ra`／`--dec` 不是可有可無**：Sesame 對 M45 回 RA=56.86909，跟
+`config.toml [target]` 註解記的 56.60083 差 0.27 度，錐形位置跟著偏——實測
+用 Sesame 座標抓到 6,986 顆，既有 `cmd_members.csv` 的 1,078 顆成員有 **2 顆
+落到錐形外面**（覆蓋率 99.81%）。改用 config 的座標後抓到 **6,956 顆，跟本表
+原本記載的數字完全一致，成員覆蓋率 1,078/1,078 = 100%**。敏感度比較的輸入
+天區必須跟原本一致，否則量到的差異會混進「天區不同」這個額外變因。
+
+正確的重抓指令是：
+`python scripts/data_prep/fetch_gaia.py --target M45 --ra 56.60083 --dec 24.11389 --radius 5.0 --gmax 18.0 --plxmin 4.0 --top 20000`
+（檔案在 `.gitignore` 裡，不進版控，換機器要自己重抓一次。）
+
+**下一步**：可以跑 `python scripts/diagnostics/sensitivity_sweep.py --target membership_threshold` 了。
 - `--target stars_per_cluster`：這個設定要真的重跑 pyUPMASK 聚類，不是重新套門檻能測的。這台機器沒有 `pyUPMASK/` 目錄（未驗證能不能跑），腳本會誠實報告做不到，不會編造數字——已內建這個可行性檢查，**不要跳過檢查直接猜答案**。留給有 pyUPMASK 環境的 session。
 
 
