@@ -100,7 +100,10 @@ def main():
     import checkpoint                                            # noqa: E402
     import preflight                                             # noqa: E402
     partial = checkpoint.load_partial(out_path)
-    checkpoint.check_manifest(out_path, manifest, partial)
+    # supports_tag=False：這支腳本的輸出路徑是寫死的、沒有 --tag，
+    # 錯誤訊息不能建議「換一個 --tag」（2026-08-21 CodeRabbit review）。
+    checkpoint.check_manifest(out_path, manifest, partial,
+                              supports_tag=False)
 
     if args.preflight:
         preflight._force_utf8_stdout()
