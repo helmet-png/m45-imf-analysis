@@ -54,6 +54,15 @@ def main():
     ap.add_argument("--refines", default="3",
                     help="精修階數，逗號分隔。3,3 較精確但貴一倍")
     ap.add_argument("--dav-max", type=float, default=0.6)
+    # --tag（2026-08-21，對應 LIMITATIONS.md D6）：這兩支腳本原本輸出路徑
+    # 寫死，是六支計算腳本裡最後兩支沒有 --tag 的——D6 記錄的「中間結果檔案
+    # 會被重跑覆寫」在它們身上仍然成立。有了 --tag 才能讓不同設定（例如
+    # 換一組 --slopes）的結果各存一份、事後可回溯比較，也才能在
+    # check_manifest() 擋下無 manifest 舊檔時，真的給得出「換一個 --tag」
+    # 這個選項。預設空字串＝維持原本檔名，既有呼叫端與既有結果檔不受影響。
+    ap.add_argument("--tag", default="",
+                    help="輸出檔名後綴，避免不同設定的結果互相覆寫"
+                         "（見 LIMITATIONS.md D6）")
     ap.add_argument("--slopes", default=None,
                     help="逗號分隔，覆寫預設的 SLOPES 掃描點。"
                          "本機已掃過 0.9-1.7，要擴大範圍時用這個而不改本檔，"
@@ -67,6 +76,11 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
+    # --tag 只能是檔名後綴，不能是路徑（比照 fit_real.py／
+    # inject_lowmass.py：不擋的話 --tag "/../../tmp/x" 能把輸出導到
+    # results/ 之外、覆寫任意 .npz）。
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
     if args.repeats < 1:
         # --repeats 0（或負數）會讓 outs 被截成空 list（見下面
         # [:args.repeats] 那行），np.array([]) 是 shape (0,) 的一維陣列，
@@ -99,7 +113,7 @@ def main():
     # 一次，中途被砍（p6_lowmass_v2 案例：本機四天內被 Windows 強制重開機
     # 四次）就得從頭重算，即使前面已經跑完的冪次本身沒有問題。改用
     # scripts/tools/checkpoint.py 的共用續傳機制，跟 fit_real.py 同一套。
-    out_path = HERE / "results" / "profile_lowmass.npz"
+    out_path = HERE / "results" / f"profile_lowmass{args.tag}.npz"
     # slopes 不放進 manifest：這支腳本沒有 --tag（輸出檔名固定），若把
     # 掃描點清單也拿去比對，擴大 --slopes 範圍就會被 check_manifest()
     # 判定成「設定不同」而 sys.exit(1)，錯誤訊息還會叫使用者「換一個
