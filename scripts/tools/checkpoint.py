@@ -246,7 +246,14 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
     修正，理由與實際案例見函式內註解）：`legacy_defaults` 處理的是「這個
     旗標當時不存在」，而沒有 manifest 代表「整份設定都不知道」，兩者不能
     用同一套寬容邏輯。"""
-    if not partial:
+    # **以「檔案存不存在」決定要不要檢查，不是以 partial 空不空**
+    # （2026-08-21 CodeRabbit review）：原本寫 `if not partial: return`，
+    # 但一個既有的 .npz 只要沒有結果陣列（例如只寫了 metadata、或上次
+    # 存檔在寫入結果前就被中斷），partial 就是空的，於是連 manifest 都
+    # 不看就放行——正好繞過「無 manifest 舊檔一律擋下」這個本函式存在
+    # 的目的。改成：檔案不存在才是真的沒事可查；只要檔案在，manifest
+    # 就要驗，驗過之後才輪到「有沒有既有結果要比對設定」。
+    if not out_path.exists():
         return
     old_manifest = load_manifest(out_path)
     legacy_defaults = legacy_defaults or {}
@@ -269,7 +276,8 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
         #
         # 改成擋下來並說明選項：沿用舊檔必須是人明確決定的動作，
         # 不能是預設行為。
-        print(f"錯誤：{out_path.name} 有既有結果，但**沒有 manifest**"
+        _has = "有既有結果" if partial else "存在（但沒有任何結果陣列）"
+        print(f"錯誤：{out_path.name} {_has}，但**沒有 manifest**"
               f"（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
               f"設定、什麼版本的程式碼算出來的。\n"
               f"  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
@@ -285,6 +293,11 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
               f"    3. 確定舊檔可信 -> 自己核對過它的算法與設定之後，"
               f"手動補上 manifest 再跑。", flush=True)
         sys.exit(1)
+
+    if not partial:
+        # 檔案在、manifest 也讀得到且格式正確，但沒有任何結果陣列——
+        # 沒有東西需要比對設定，放行讓這次從頭算。
+        return
 
     def _old(k):
         return old_manifest.get(k, legacy_defaults.get(k))

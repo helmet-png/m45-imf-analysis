@@ -274,19 +274,10 @@ c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3
 c5_davform_lognormal|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution lognormal --tag _c5_lognormal
 c5_davform_truncexp|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution trunc_exp --tag _c5_truncexp
 
-# ===== 2026-08-21：p6_lowmass_v2 重排到佇列最後（使用者選項 C）=====
-# 換 label 的理由：原本的 p6_lowmass_v2 會被記進 logs/queue_done.txt
-# （中止也算一筆），而派工是用「label 不在 done 裡」篩選的，沿用同一個
-# label 不會重跑。
-#
-# 跟先前那次的差別（很重要）：現在主工作樹的 profile_lowmass.py 已經是
-# 帶續傳機制的新版（每跑完一次重複就 checkpoint.save_progress()），所以
-# 這次即使中途重開機也不會全部歸零，可以分多次累積跑完 11.7 天的工作量。
-# 舊的 results/profile_lowmass.npz（2026-08-15、無 manifest、未精修的粗
-# 網格結果）已改名成 profile_lowmass_legacy_no_manifest.npz 移開，否則
-# 新版會判定「既有結果已滿足重複次數」直接跳過什麼都不算。
-p6_lowmass_v3|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
-
+# ===== p11_outlierfrac_v3 移到 p6 之前（2026-08-21 CodeRabbit review）=====
+# 原本 p11_v3 排在 p6_v3 後面，但 p6 是「移到最後」的那一項（15 次擬合、
+# 成本最高），run_queue.py 循序執行會讓 p6 擋住 p11——跟「p6 排最後」這個
+# 決定本身矛盾。把 p11 整段移到 p6 之前，p6 才真的是佇列最後一項。
 # ===== 2026-08-21 10:36：p11_outlierfrac_v2 重排（上一次是靜默跳過）=====
 # 10:35 那次「ok（14 秒）」是假的完成：既有的 results/profile_outlierfrac.npz
 # （無 manifest 的舊檔）讓 checkpoint.check_manifest() 判定「已滿足重複
@@ -300,3 +291,17 @@ p6_lowmass_v3|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3
 # (2) 主工作樹的 scripts/tools/checkpoint.py 換成 PR #89 的版本（無
 # manifest 的舊檔一律擋下、不再靜默信任）。這裡換 label 重排。
 p11_outlierfrac_v3|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
+# ===== 2026-08-21：p6_lowmass_v2 重排到佇列最後（使用者選項 C）=====
+# 換 label 的理由：原本的 p6_lowmass_v2 會被記進 logs/queue_done.txt
+# （中止也算一筆），而派工是用「label 不在 done 裡」篩選的，沿用同一個
+# label 不會重跑。
+#
+# 跟先前那次的差別（很重要）：現在主工作樹的 profile_lowmass.py 已經是
+# 帶續傳機制的新版（每跑完一次重複就 checkpoint.save_progress()），所以
+# 這次即使中途重開機也不會全部歸零，可以分多次累積跑完 11.7 天的工作量。
+# 舊的 results/profile_lowmass.npz（2026-08-15、無 manifest、未精修的粗
+# 網格結果）已改名成 profile_lowmass_legacy_no_manifest.npz 移開，否則
+# 新版會判定「既有結果已滿足重複次數」直接跳過什麼都不算。
+p6_lowmass_v3|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
