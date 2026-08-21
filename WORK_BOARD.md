@@ -131,8 +131,8 @@ COUNT(*) 查詢在 ESA 端逾時（不是本機網路），主查詢本身不做
 天區必須跟原本一致，否則量到的差異會混進「天區不同」這個額外變因。
 
 正確的重抓指令是：
-`python scripts/data_prep/fetch_gaia.py --target M45 --ra 56.60083 --dec 24.11389 --radius 5.0 --gmax 18.0 --plxmin 4.0 --top 20000`
-（檔案在 `.gitignore` 裡，不進版控，換機器要自己重抓一次。）
+`python scripts/data_prep/fetch_gaia.py --target M45 --ra 56.60083 --dec 24.11389 --radius 5.0 --gmax 18.0 --plxmin 4.0 --top 20000 --force`
+（檔案在 `.gitignore` 裡，不進版控，換機器要自己重抓一次。**`--force` 是必要的**：`fetch_gaia.py` 第 120 行對已存在的輸出檔會直接印「已存在，跳過」就結束，不加的話在已經抓過的機器上重跑這行等於什麼都沒做，卻看不出來——2026-08-21 CodeRabbit review 抓到。乾淨的新機器上不帶 `--force` 也會動，但照著這行複製貼上的人多半是想重抓。)
 
 **下一步**：可以跑 `python scripts/diagnostics/sensitivity_sweep.py --target membership_threshold` 了。
 - `--target stars_per_cluster`：這個設定要真的重跑 pyUPMASK 聚類，不是重新套門檻能測的。這台機器沒有 `pyUPMASK/` 目錄（未驗證能不能跑），腳本會誠實報告做不到，不會編造數字——已內建這個可行性檢查，**不要跳過檢查直接猜答案**。留給有 pyUPMASK 環境的 session。
