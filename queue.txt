@@ -198,7 +198,13 @@ p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 #              「亮端截斷後的 BHAC15 比較做不出可信數字」這個結論）
 #   若不撞牆 -> 照 D1 原計畫用同一個 --g-bright 跑一次 PARSEC 對照組比較
 # 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
-d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+# 2026-08-21：這個重複項目已停用。10:35 那次正式規模跑出結論了——
+# 仍然撞牆（f_bin 貼上界、alpha 貼下界），確認是真實簡併不是雜訊，
+# 見 LIMITATIONS.md D1 與 RESULTS_LOG.md 同日期行。用完全相同的
+# 指令再跑一次只會得到同樣的 WallError（種子與設定都一樣），純浪費
+# 19 分鐘。要繼續 D1 必須先改設定（放寬搜尋範圍或放寬亮端截斷），
+# 那是需要判斷的科學決定，不是重排就能解決的。
+# d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
 
 # ===== 2026-08-19：B/C/D 待認領清單裡「純換參數重跑、不用寫新腳本」
 # 的兩項（見 WORK_BOARD.md「待認領工作：B/C/D 類補齊」表）=====
@@ -234,7 +240,13 @@ c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3
 #   若不撞牆 -> 照 D1 原計畫用同一個 --g-bright 跑一次 PARSEC 對照組比較
 # 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
 # 需要 fit_real.py 的 --g-bright 旗標（PR #65 分支，尚未合併進 main）。
-d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+# 2026-08-21：這個重複項目已停用。10:35 那次正式規模跑出結論了——
+# 仍然撞牆（f_bin 貼上界、alpha 貼下界），確認是真實簡併不是雜訊，
+# 見 LIMITATIONS.md D1 與 RESULTS_LOG.md 同日期行。用完全相同的
+# 指令再跑一次只會得到同樣的 WallError（種子與設定都一樣），純浪費
+# 19 分鐘。要繼續 D1 必須先改設定（放寬搜尋範圍或放寬亮端截斷），
+# 那是需要判斷的科學決定，不是重排就能解決的。
+# d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
 
 # ===== 2026-08-21：extinction_form_test（C5，**現役缺陷．優先度 高**）=====
 # C5 的完成條件第 1 項：「兩種 dav_distribution 各跑一次注入回收，涵蓋
