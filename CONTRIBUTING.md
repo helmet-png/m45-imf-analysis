@@ -47,13 +47,32 @@ commit 已重新審過才自動轉 Approved），加上 GitHub branch protection
 main 分支的 required approving review count 提高到至少 1（原本是 0，
 CodeRabbit 卡在 Changes Requested 也不會真的擋合併）。
 
+**這兩個設定不是同一個 PR 套用的**（2026-08-21 CodeRabbit review 要求
+講清楚）：`.coderabbit.yaml` 那個開關在版控裡，跟著 PR 合併生效；
+**branch protection 那一半不在版控裡**，必須另外用 GitHub API／網頁設定
+套用（已於 2026-08-21 套用，`required_approving_review_count = 1`）。
+在 branch protection 套用之前，光有 `request_changes_workflow` **不會**
+真的鎖住合併按鈕——這一點如果搞混，會以為合併了這個 PR 就有保護。
+
+**副作用要知道**：required review count = 1 代表**每個 PR 都需要另一個
+人／帳號按 Approve**，GitHub 不允許自己 approve 自己開的 PR。這是刻意的
+（這個機制的目的就是「不能自己說了算」），但也代表 AI agent 沒辦法自己
+把 PR 合併掉，一定要由人來看過並 approve。
+
 **這不是自動修**——CodeRabbit 本身沒有辦法設定成自動觸發 autofix（官方
 文件明講一定要手動下 `@coderabbitai autofix` 或按 checkbox），這個機制
 只保證「沒處理就合併不了」，不保證有人幫你處理。收到 CodeRabbit 留言時
 還是要照這個檔案下面的流程回覆＋resolve（或確認站不住腳就說明理由），
 PR 才會解鎖。如果 CodeRabbit 誤判某則已經處理好的留言、卡住不放，找
-不到問題就在該討論串留言 `@coderabbitai resolve` 或直接在 GitHub UI
-手動 resolve。
+不到問題就直接在 GitHub UI 手動 resolve 該討論串。
+
+**注意 `@coderabbitai resolve` 的用法**（2026-08-21 CodeRabbit review
+訂正，原本這裡寫錯）：這個指令**必須以 PR 的頂層留言送出**（不是在
+單一討論串裡回覆），而且它會**一次 resolve 掉全部** CodeRabbit review
+comments。所以它只適合「所有留言都已經處理完、只是要一次收尾」的情況；
+**單一誤判請只在 GitHub UI resolve 對應的那一個討論串**，不要用這個指令
+——否則會把其他還沒處理的留言一起關掉，正好製造這整個機制要防的
+「看起來處理過了、其實沒有」。
 
 ---
 
