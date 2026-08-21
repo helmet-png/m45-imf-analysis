@@ -37,6 +37,47 @@
 | 2026-08-12 | Claude session（新機器，x64，接手交接） | Kaggle dataset 掛載問題根因排查（接續上一行） | 進行中，卡在第 2 點需要真人登入操作 | `LIMITATIONS.md`（已補「2026-08-12（新機器接手交接...）」段落）、`kaggle_accounts.json`（本機新增 `justinlan11` 帳號，不進版控） | 匿名瀏覽器測試部分排除第 1 點（平台前端目前渲染正常，但只測到唯讀頁面）；使用者提供第三個帳號 `justinlan11`（API token），用它重跑 `kaggle_smoketest.py`，**撞到跟 helmetalbert／teammate2 一模一樣的錯誤**（`FileNotFoundError: waited 280s...`），且已核對本機產生的 `dataset-metadata.json`／`kernel-metadata.json` 設定正確，排除「我們自己設定寫錯」。三個獨立帳號都一樣，帳號層級限制的可能性進一步降低。**唯一還沒排除、下一步該做的是第 2 點**（網頁手動 Add Input 測試），需要真人登入操作，AI agent 做不到，回報使用者需要親自測試或提供登入方式 |
 | 2026-08-12 | Claude session（新機器，x64） | Kaggle dataset 掛載問題根因排查（接續上兩行，**找到真正根因並修好**） | **完成** | `kaggle_sync.py`（`make_kernel()` 的 `base` 路徑修正）、`LIMITATIONS.md`（新增「2026-08-12：真正的根因找到了」一節，回頭訂正「平台異常」「帳號限制」兩個假設） | 使用者親自登入無痕視窗，手動網頁上傳 dataset＋Add Input＋`os.walk('/kaggle/input')`，印出真實路徑是 `/kaggle/input/datasets/<帳號>/<slug>/`，比 `kaggle_sync.py` 原本寫死的 `/kaggle/input/<slug>/` 多兩層。改一行路徑字串，用 `justinlan11` 帳號重跑驗證：修好前等滿 280 秒才 `ERROR`，修好後 **10.7 秒 `COMPLETE`**。純粹是我們自己的路徑 bug，不是 Kaggle 平台問題也不是帳號限制，這兩個假設已在 `LIMITATIONS.md` 回頭訂正。過程中發現的「頁面崩潰了」React 錯誤是使用者瀏覽器擴充功能干擾，跟這個 bug 無關，已在文件中記錄避免以後誤判成同一件事。`kaggle_queue.txt` 現在可以考慮恢復派工，留給使用者/負責的 session 決定 |
 
+## 需要使用者決定：`p6_lowmass_v2` 實測要 11.7 天，且擋住本機佇列其餘 8 項（2026-08-21 09:5x）
+
+**實測數字（不是估計）**：本機 `p6_lowmass_v2`（2026-08-20 15:16 啟動）
+的**第 1 次擬合花了 67,213 秒 = 18.7 小時**（見 `logs/p6_lowmass_v2.log`）。
+這項工作是 5 個低質量段冪次 × 3 次重複 = **15 次擬合，合計約 280 小時
+≈ 11.7 天**。
+
+**三個一起成立的問題**：
+1. **幾乎不可能跑完**：跑的是 2026-08-20 15:16 當下的舊版
+   `profile_lowmass.py`，**沒有續傳機制、只在 15 次全部跑完後才存檔一次**。
+   `docs/reference/PREFLIGHT.md` 記載這台機器四天內被 Windows 強制重開機
+   至少 4 次；要連續 11.7 天不重開才能拿到結果。
+2. **擋住本機佇列其餘 8 項**：`run_queue.py` 是循序執行，後面的
+   `p11_outlierfrac_v2`／`d1_bhac_check`／`c13_bias_floor_nsyn4x`／
+   `d10_config_cd_real`／`c19_extra_scatter_sweep`／`c5_davform_lognormal`／
+   `c5_davform_truncexp` 全部排在它後面，等於被無限期餓死。其中
+   `c5_davform_*` 對應的 C5 是**現役缺陷．優先度 高**。
+3. **Kaggle 也裝不下**：單次擬合 18.7 小時（本機 8 核），遠超 Kaggle
+   ~12 小時 session 上限，照 `p6b` 那樣按軸拆片也救不了單次擬合本身。
+
+**已確認沒問題的部分**：精修有真的生效（第 1 次的 alpha=2.633 不落在
+0.20 的粗網格上），所以這條路線的**方法是對的，只是成本被低估了**。
+
+**需要使用者決定的是科學取捨，不是機械修法**，以下選項各有代價：
+
+| 選項 | 做法 | 代價 |
+|---|---|---|
+| A. 維持現狀 | 讓它繼續跑 | 幾乎確定拿不到結果，且持續餓死其餘 8 項 |
+| B. 降重複次數 | 改成 `--repeats 1`（5 次擬合 ≈ 94 小時） | 沒有誤差棒，d(alpha)/d(p) 的斜率不確定度無法量化 |
+| C. 先跑完其餘 8 項再回頭 | 把這一項移到佇列最後 | A1/A3 這個最大單一系統誤差（0.248）繼續懸著 |
+| D. 減少掃描點 | 5 個冪次減成 3 個（0.9/1.3/1.7） | 斜率擬合只剩 3 點，但仍可量方向與量級 |
+
+**不建議的做法**：把 `--refines 3,3` 降回 `--refines 3`——那正是 A1
+要修的精修 bug 本身，降回去等於白跑。
+
+**下一個 session 若要動手**：現在殺掉它只會損失第 1 次擬合的 18.7 小時
+（那個結果只在記憶體裡、還沒存檔，本來就會在下次重開機時消失）。若決定
+重排，記得先把 `results/profile_lowmass.npz`（2026-08-15 的舊檔、無
+manifest、是未精修的粗網格結果）移開，否則新版程式會判定「已滿足重複
+次數」直接跳過（該誤判已由 PR #89 改成擋下來並提示）。
+
 ## 待認領工作（2026-08-12，`multi_stage_best()` 精修 bug 修好後還沒排的重跑）
 
 背景：`injection_recovery.py` 的 `multi_stage_best()` 曾有精修 bug（見
