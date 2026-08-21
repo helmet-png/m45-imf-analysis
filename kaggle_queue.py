@@ -439,6 +439,12 @@ def main() -> None:
                           f"（達到 MAX_PUSH_RETRIES={MAX_PUSH_RETRIES}）。"
                           f"要再跑請換一個 label 重排。", flush=True)
                     mark_done(item["label"], f"push_failed_x{n}", 0, name)
+                    # 放棄之後把計數清掉（2026-08-21 CodeRabbit review）：
+                    # 這個 dict 會活到執行器結束，長跑時每個放棄過的 label
+                    # 都留著計數不會被回收；更實際的問題是，若之後有人把
+                    # 這個 label 的 DONE 紀錄刪掉重排，殘留的舊計數會直接
+                    # 讓新的一輪從 n=MAX 起跳、第一次失敗就放棄。
+                    push_fail_counts.pop(item["label"], None)
                 else:
                     retryable_push_failure = True
                     print(f"  {item['label']} push 失敗（第 {n} 次，上限 "
