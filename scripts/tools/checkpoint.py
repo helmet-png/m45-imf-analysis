@@ -130,7 +130,7 @@ def acquire_write_lock(out_path: Path, timeout_s: float = 1800.0) -> Path:
         except FileExistsError:
             if time.time() - t0 > timeout_s:
                 print(f"警告：等待 {lock_path.name} 超過 {timeout_s:.0f} 秒"
-                      f"（可能是上一個行程異常結束沒清掉鎖檔），強制視為"
+                      "（可能是上一個行程異常結束沒清掉鎖檔），強制視為"
                       f"可以繼續，手動確認沒有另一個行程還在寫這個檔案。",
                       flush=True)
                 try:
@@ -235,9 +235,19 @@ def load_manifest_status(out_path: Path) -> tuple[str, dict | None, str]:
     except Exception as e:                                        # noqa: BLE001
         return MANIFEST_UNREADABLE, None, f"讀取 npz 失敗：{e}"
     try:
-        return MANIFEST_OK, json.loads(raw), ""
+        parsed = json.loads(raw)
     except Exception as e:                                        # noqa: BLE001
         return MANIFEST_UNREADABLE, None, f"manifest 不是合法 JSON：{e}"
+    # **頂層型別必須是 JSON 物件**（2026-08-21 CodeRabbit review）：
+    # json.loads() 對 "null"／"[1,2]"／"3" 都會成功回傳 None／list／int，
+    # 這些若被標成 MANIFEST_OK，check_manifest() 裡的 _old() 會對它呼叫
+    # .get() 而丟未處理的 AttributeError——變成看起來像程式壞掉，而不是
+    # 「這個檔案的 manifest 損毀」這個真正的原因。
+    if not isinstance(parsed, dict):
+        return (MANIFEST_UNREADABLE, None,
+                "manifest 的頂層不是 JSON 物件，而是 "
+                f"{type(parsed).__name__}（manifest 必須是 key-value 對應）")
+    return MANIFEST_OK, parsed, ""
 
 
 def load_manifest(out_path: Path) -> dict | None:
@@ -276,8 +286,8 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
         # 補一個補不了的東西（2026-08-21 CodeRabbit review）。
         print(f"錯誤：{out_path.name} 有既有結果，但 manifest **讀不出來**"
               f"（{detail}）。這不是「舊檔沒有 manifest」，是這個檔案或它的"
-              f" manifest 已經損毀——先確認檔案本身完不完整（例如上次存檔"
-              f"被中斷、或磁碟問題），不要直接補一個 manifest 蓋過去，"
+              " manifest 已經損毀——先確認檔案本身完不完整（例如上次存檔"
+              "被中斷、或磁碟問題），不要直接補一個 manifest 蓋過去，"
               f"那會把損毀的結果偽裝成可信的。", flush=True)
         sys.exit(1)
     if status == MANIFEST_ABSENT:
@@ -308,17 +318,17 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
             opt2 = ("    2. 這次要另存 -> 這支腳本的輸出路徑寫死、沒有 "
                     "--tag，要另存只能先把既有檔案改名移開（同選項 1）；\n")
         print(f"錯誤：{out_path.name} 有既有結果，但**沒有 manifest**"
-              f"（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
-              f"設定、什麼版本的程式碼算出來的。\n"
-              f"  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
-              f"multi_stage_best() 精修 bug 還在的那段時期，沿用會讓"
-              f"「為了修那個 bug 而排的重跑」直接跳過、什麼都不算，"
-              f"卻回報成功（見 LIMITATIONS.md A1、"
-              f"docs/reference/PREFLIGHT.md）。\n"
-              f"  三個選項擇一：\n"
+              "（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
+              "設定、什麼版本的程式碼算出來的。\n"
+              "  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
+              "multi_stage_best() 精修 bug 還在的那段時期，沿用會讓"
+              "「為了修那個 bug 而排的重跑」直接跳過、什麼都不算，"
+              "卻回報成功（見 LIMITATIONS.md A1、"
+              "docs/reference/PREFLIGHT.md）。\n"
+              "  三個選項擇一：\n"
               f"    1. 這次要重算 -> 把 {out_path.name} 移開"
               f"（例如改名成 {out_path.stem}_legacy_no_manifest.npz）"
-              f"再跑；\n"
+              "再跑；\n"
               + opt2
               + f"    3. 確定舊檔可信 -> 自己核對過它的算法與設定之後，"
                 f"手動補上 manifest 再跑。", flush=True)
