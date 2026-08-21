@@ -195,7 +195,12 @@ radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --
 # 理由記在這裡）。
 radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
 
-p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+# p6_lowmass_v2 已移到本檔最尾端（2026-08-21，使用者決定）——實測單次
+# 擬合 18.7 小時 × 15 次 ≈ 11.7 天，跑的又是沒有續傳機制的舊版
+# profile_lowmass.py，而這台機器四天內被 Windows 強制重開機至少 4 次
+# （見 docs/reference/PREFLIGHT.md），幾乎不可能連續跑完；擺在這個位置
+# 會把後面 8 項（含 C5「現役缺陷．優先度 高」的 c5_davform_*）無限期
+# 餓死。移動時它還沒開始跑，所以零損失。理由與四個選項的比較見 PR #90。
 p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
 # ===== 2026-08-14：headline p2_final2 重跑（A1 精修 bug + A2 金屬量先驗
@@ -268,3 +273,15 @@ c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3
 # 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
 # 需要 fit_real.py 的 --g-bright 旗標（PR #65 分支，尚未合併進 main）。
 d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+
+# ===== 2026-08-21：p6_lowmass_v2 移到最尾端（見上方原位置的說明）=====
+# 移到這裡不代表 A3（低質量段冪次固定，佔 59.5% 樣本、0.248 系統誤差）
+# 這個問題變得不重要——它仍然是目前最大的單一系統誤差，只是「用這個
+# 設定在這台機器上跑」這條路徑實測算不完。真的要解決 A3，需要先決定
+# 走哪一條：減少掃描點（5 個冪次減成 3 個）、降 --repeats（放棄誤差棒）、
+# 或改派到核心數更多的機器。**不要因為它現在排在最後就直接改小
+# --refines 回單值**——那正是 A1 精修 bug 本身，會讓結果重蹈覆轍。
+# 排在這裡之前，先確認 results/profile_lowmass.npz 那個舊壞檔已經移開
+# （15 次擬合的 alpha 只有 4 個相異值、間距精確 0.20＝完全沒精修的簽章，
+# 見 PR #89），否則續傳邏輯會把它當成「已完成」而整批跳過。
+p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
