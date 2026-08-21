@@ -30,7 +30,7 @@ GitHub 上十幾個尚未合併的分支／PR 相比，進度已經有落差—�
 
 ## A 類
 
-### A1 精修 bug 波及的結果尚未以完整精修（`--refines 3,3`）重跑（p2_final2_v3 9/10次，未合併、p6b_inject_lowmass_v2 已推送待查證完成、p6_lowmass_v2 否、p11_outlierfrac_v2 否、verify_bprperr_v2 否）
+### A1 精修 bug 波及的結果尚未以完整精修（`--refines 3,3`）重跑（**headline `p2_final2_v3` 10/10 已定案 2026-08-20，A1 對 headline 已解除**；其餘仍未重跑：p6b_inject_lowmass_v2 已推送待查證完成、p6_lowmass_v3 否（已排到本機佇列最後）、p11_outlierfrac_v3 否、verify_bprperr_v2 off 5/5 ／ on 0/5）
 
 **問題**：`injection_recovery.multi_stage_best()` 修好前，`--refines` 給單一值
 等於完全沒精修（回傳純粗網格 argmax），給 `3,3` 只精修一階。程式碼已修，
