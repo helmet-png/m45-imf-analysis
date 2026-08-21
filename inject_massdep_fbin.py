@@ -83,7 +83,15 @@ def main():
     # --tag "/../../tmp/x" 能把輸出導到 results/ 之外、覆寫任意 .npz）
     if "/" in args.tag or "\\" in args.tag:
         ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
-    out_path = HERE / "results" / f"inject_massdep_fbin{args.tag}.npz"
+    # **檔名要帶 trial_offset**（2026-08-21 CodeRabbit review）：每個分片
+    # 都從空的 results 開始跑，存檔時是整份覆寫。若兩個 --trial-offset
+    # 共用同一個檔名，後跑完的分片會用「只含自己那幾次試驗」的內容蓋掉
+    # 前一個分片，--trial-offset 這個拆分機制等於無聲失效。帶上 offset
+    # 之後各分片天然分開，跑完再串接。offset=0 時維持原檔名，不影響
+    # 既有單機一次跑完的用法。
+    _off_sfx = f"_t{args.trial_offset}" if args.trial_offset else ""
+    out_path = (HERE / "results"
+                / f"inject_massdep_fbin{args.tag}{_off_sfx}.npz")
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
 
@@ -112,7 +120,7 @@ def main():
     print(f"注入的質量相依強度 contrast = {contrasts}，分段質量 "
           f"{args.m_break} Msun")
     print("整體雙星比例在所有 contrast 下固定不變（只動質量相依性這一個變因）")
-    print(f"擬合端用**現有的常數 f_bin 模型**（七參數：六參數 + dav）\n",
+    print("擬合端用**現有的常數 f_bin 模型**（七參數：六參數 + dav）\n",
           flush=True)
 
     # 收窄方式與 inject_lowmass.py 一致：只固定實測不受資料約束、對 alpha
@@ -129,6 +137,7 @@ def main():
     ]
     dav_axis = np.arange(0.0, args.dav_max + 1e-9, args.dav_max / 3)
     results = {}
+    trial_ids = {}          # 每個 contrast 實際成功的 trial id
 
     for contrast in contrasts:
         outs = []
@@ -164,19 +173,27 @@ def main():
                       f"不影響其餘試驗）：{type(e).__name__}: {e}", flush=True)
                 continue
             dt = time.time() - t0
-            outs.append(best)
+            # 連 trial id 一起存（2026-08-21 CodeRabbit review）：撞牆的
+            # 試驗會被跳過，各 contrast 成功的是哪幾次不見得一樣。下面算
+            # 淨偏移是「contrast=X 減 contrast=0」，若兩邊用的是不同的
+            # 試驗集合，扣掉的偏差地板就不是同一批假資料的地板。
+            outs.append((t + args.trial_offset, best))
             print(f"  contrast={contrast:.2f} trial{t+1}/{args.trials}: "
                   f"alpha={best[3]:.3f}（真值 {THETA_TRUE[3]:.3f}，偏差 "
                   f"{best[3]-THETA_TRUE[3]:+.3f}）  f_bin={best[2]:.3f}"
                   f"（名目 {fbin_true:.3f}）  {dt/60:.1f} min", flush=True)
 
         if outs:
-            results[f"contrast_{contrast:.2f}"] = np.array(outs)
+            key = f"contrast_{contrast:.2f}"
+            results[key] = np.array([b for _, b in outs])
+            trial_ids[key] = np.array([tid for tid, _ in outs], dtype=int)
             # 邊跑邊存：長跑到一半被中斷時，已算完的不該陪葬
             atomic_savez(out_path, contrast_list=np.array(contrasts),
                          m_break=args.m_break, theta_true=THETA_TRUE,
                          dav_true=dav_true, n_syn=args.n_syn,
-                         trial_offset=args.trial_offset, **results)
+                         trial_offset=args.trial_offset,
+                         **results,
+                         **{f"{k}__trials": v for k, v in trial_ids.items()})
 
     print(f"\n{'contrast':>10} {'n':>3} {'alpha 平均':>10} {'偏差':>8} "
           f"{'散布':>8} {'f_bin 平均':>10}")
@@ -194,21 +211,89 @@ def main():
         print(f"{contrast:10.2f} {len(arr):3d} {arr[:,3].mean():10.3f} "
               f"{bias:+8.3f} {spread:8.3f} {arr[:,2].mean():10.3f}")
 
-    if base_bias is not None:
-        print(f"\n**扣掉 contrast=0 對照組的偏差地板（{base_bias:+.3f}）之後**：")
-        for contrast in contrasts:
-            key = f"contrast_{contrast:.2f}"
-            if contrast == 0.0 or key not in results:
-                continue
-            net = results[key][:, 3].mean() - THETA_TRUE[3] - base_bias
-            print(f"  contrast={contrast:.2f}: 淨 alpha 偏移 {net:+.3f}"
-                  f"（統計誤差 0.144 的 {abs(net)/0.144:.2f} 倍）")
-        print("\n判讀：淨偏移遠小於統計誤差 0.144 -> 記為可忽略並結案，"
-              "不必把質量相依 f_bin 升格成自由參數（WORK_BOARD 驗收標準）。")
-    else:
-        print("\n**沒有 contrast=0 對照組**，無法扣掉偏差地板"
+    # --- 完整性把關（2026-08-21 CodeRabbit review）---
+    # 撞牆的試驗會被跳過，程式仍可能帶著不完整的 outs 正常結束、被
+    # run_queue.py 記成 ok。但「淨偏移」是拿 contrast=X 減 contrast=0 的
+    # 偏差地板，任何一邊不完整，扣出來的就不是原本要量的東西——尤其
+    # contrast=0 若只跑成 1/3 次，地板本身只是單次雜訊。不完整時
+    # **不下結論、且以非零碼結束**，讓佇列標成失敗而不是 ok。
+    incomplete = []
+    for contrast in contrasts:
+        key = f"contrast_{contrast:.2f}"
+        n_ok = len(results.get(key, []))
+        if n_ok < args.trials:
+            incomplete.append((contrast, n_ok))
+
+    ALPHA_STAT_SIGMA = 0.144      # 注入回收量到的 alpha 統計誤差（S3F）
+    if incomplete:
+        print(f"\n**這批結果不完整，不下結論**（每個 contrast 都要跑滿 "
+              f"{args.trials} 次）：")
+        for contrast, n_ok in incomplete:
+            print(f"  contrast={contrast:.2f}: 只成功 {n_ok}/{args.trials} 次")
+        print("  撞牆而被跳過的試驗見上方各次的失敗訊息。補跑缺的試驗"
+              "（或放寬對應維度的搜尋範圍再跑）之後才能判讀。")
+        print(f"\n寫入 {out_path}")
+        sys.exit(1)
+
+    if base_bias is None:
+        print(f"\n**沒有 contrast=0 對照組**，無法扣掉偏差地板"
               "（C13 記錄目前 alpha 偏差地板約 -0.050，跟要測的量級接近），"
               "這批數字不能單獨判讀。")
+        print(f"\n寫入 {out_path}")
+        sys.exit(1)
+
+    # --- 淨偏移只用兩邊都成功的 trial id（2026-08-21 CodeRabbit review）---
+    base_key = "contrast_0.00"
+    base_ids = trial_ids.get(base_key, np.array([], dtype=int))
+    print(f"\n**扣掉 contrast=0 對照組的偏差地板之後**"
+          "（只用兩邊都成功的試驗配對相減）：")
+    verdicts = []
+    for contrast in contrasts:
+        key = f"contrast_{contrast:.2f}"
+        if contrast == 0.0 or key not in results:
+            continue
+        ids = trial_ids.get(key, np.array([], dtype=int))
+        common = np.intersect1d(base_ids, ids)
+        if len(common) == 0:
+            print(f"  contrast={contrast:.2f}: 與對照組沒有共同成功的試驗，"
+                  "無法配對相減")
+            verdicts.append((contrast, None))
+            continue
+        bi = {t: i for i, t in enumerate(base_ids)}
+        ci = {t: i for i, t in enumerate(ids)}
+        b_al = np.array([results[base_key][bi[t], 3] for t in common])
+        c_al = np.array([results[key][ci[t], 3] for t in common])
+        net = float((c_al - b_al).mean())
+        print(f"  contrast={contrast:.2f}: 淨 alpha 偏移 {net:+.3f}"
+              f"（統計誤差 {ALPHA_STAT_SIGMA} 的 "
+              f"{abs(net)/ALPHA_STAT_SIGMA:.2f} 倍；配對 "
+              f"{len(common)}/{args.trials} 次，trial id {common.tolist()}）")
+        verdicts.append((contrast, net))
+
+    # --- 結論只在真的通過門檻時才下（2026-08-21 CodeRabbit review）---
+    # 原本那兩行不看任何 net 值就印「可忽略並結案」，淨偏移再大也照印。
+    usable = [(c, n) for c, n in verdicts if n is not None]
+    unpaired = [c for c, n in verdicts if n is None]
+    over = [(c, n) for c, n in usable if abs(n) >= ALPHA_STAT_SIGMA]
+    print()
+    if unpaired:
+        print(f"**無法判讀**：contrast={unpaired} 與對照組沒有共同成功的"
+              "試驗，配對相減做不出來，這幾個 contrast 要補跑。")
+    elif not usable:
+        print("**無法判讀**：沒有任何可用的 contrast 淨偏移。")
+    elif over:
+        print("**未通過驗收門檻**：contrast="
+              f"{[c for c, _ in over]} 的淨 alpha 偏移絕對值達到或超過統計"
+              f"誤差 {ALPHA_STAT_SIGMA}（"
+              + "、".join(f"{c:.2f}->{n:+.3f}" for c, n in over) + "）。"
+              "**不能結案**——質量相依 f_bin 對 alpha 的影響不可忽略，要進一步"
+              "分析（升格成自由參數、或列為系統誤差項）。")
+    else:
+        worst = max(abs(n) for _, n in usable)
+        print("**通過驗收門檻**：所有 contrast 的淨 alpha 偏移絕對值都小於"
+              f"統計誤差 {ALPHA_STAT_SIGMA}（最大 {worst:.3f}），依 "
+              "WORK_BOARD 驗收標準記為可忽略並結案，不必把質量相依 f_bin "
+              "升格成自由參數。")
 
     print(f"\n寫入 {out_path}")
 

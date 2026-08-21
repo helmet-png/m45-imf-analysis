@@ -278,4 +278,10 @@ d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fi
 # 模型，量 alpha 被推歪多少。contrast=0 是對照組，用來扣掉這套注入回收
 # 本身的偏差地板（C13 記錄約 -0.050，跟要測的量級接近，不扣不能判讀）。
 # 驗收：淨偏移遠小於統計誤差 0.144 -> 記為可忽略並結案，不升格成自由參數。
+# **不完整的批次不會被記成 ok**（2026-08-21 CodeRabbit review）：撞牆的
+# 試驗會被跳過，程式原本仍可能帶著不完整的結果正常結束、被 run_queue.py
+# 標成 ok，而「淨偏移」是拿 contrast=X 減 contrast=0 的偏差地板——任一邊
+# 不完整，扣出來的就不是要量的東西（尤其 contrast=0 只成功一次時，地板
+# 本身只是單次雜訊）。腳本現在會檢查每個 contrast 都跑滿 --trials，沒跑滿
+# 就不下結論並以非零碼結束，讓這一項標成失敗而不是 ok。
 massdep_fbin|inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3
