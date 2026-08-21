@@ -156,7 +156,13 @@ radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --config
 # p6_lowmass 是全專案第二重要的數字（0.248 系統誤差），profile_outlierfrac
 # 是這次發現 bug 的源頭。其餘受影響項目（P9a-redo/P9c/P6b/P12）先記在
 # LIMITATIONS.md／WORK_BOARD.md 待認領清單，優先度較低，之後再排。=====
-p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+# ===== 2026-08-21：使用者選 C——先跑完其餘 8 項，這一項移到佇列最後 =====
+# 實測第 1 次擬合花了 67,213 秒 = 18.7 小時（見 logs/p6_lowmass_v2.log），
+# 15 次擬合合計約 280 小時 ≈ 11.7 天。它擋住本機佇列其餘 8 項（run_queue
+# 是循序執行），其中 c5_davform_* 對應的 C5 是現役缺陷．優先度 高。
+# 詳細評估與四個選項見 PR #90 與 WORK_BOARD.md 同日期段落。
+# 這一行停用，改成檔案最後的 p6_lowmass_v3（換 label 才不會被 done 檔擋掉）。
+# p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
 # ===== 2026-08-14：headline p2_final2 重跑（A1 精修 bug + A2 金屬量先驗
@@ -248,3 +254,30 @@ d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fi
 # dav 點涵蓋到 1.20（既有的 item4_davsweep 只到 0.60，C5 明確要求到 1.20）。
 c5_davform_lognormal|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution lognormal --tag _c5_lognormal
 c5_davform_truncexp|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution trunc_exp --tag _c5_truncexp
+
+# ===== 2026-08-21：p6_lowmass_v2 重排到佇列最後（使用者選項 C）=====
+# 換 label 的理由：原本的 p6_lowmass_v2 會被記進 logs/queue_done.txt
+# （中止也算一筆），而派工是用「label 不在 done 裡」篩選的，沿用同一個
+# label 不會重跑。
+#
+# 跟先前那次的差別（很重要）：現在主工作樹的 profile_lowmass.py 已經是
+# 帶續傳機制的新版（每跑完一次重複就 checkpoint.save_progress()），所以
+# 這次即使中途重開機也不會全部歸零，可以分多次累積跑完 11.7 天的工作量。
+# 舊的 results/profile_lowmass.npz（2026-08-15、無 manifest、未精修的粗
+# 網格結果）已改名成 profile_lowmass_legacy_no_manifest.npz 移開，否則
+# 新版會判定「既有結果已滿足重複次數」直接跳過什麼都不算。
+p6_lowmass_v3|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
+# ===== 2026-08-21 10:36：p11_outlierfrac_v2 重排（上一次是靜默跳過）=====
+# 10:35 那次「ok（14 秒）」是假的完成：既有的 results/profile_outlierfrac.npz
+# （無 manifest 的舊檔）讓 checkpoint.check_manifest() 判定「已滿足重複
+# 次數」，什麼都沒算就結束，還把同一批壞資料原樣寫回去、印出「四個 frac
+# 的 alpha 全部精確 2.500、散布 0.000、跨度 0.000」——那正是
+# LIMITATIONS.md 記載的舊 P11 壞結果特徵（精修沒對 alpha 生效）。照那個
+# 輸出的判讀文字，會得出「0.01 不是主要誤差來源、B2 可降級為已驗證安全」
+# 這個基於垃圾資料的錯誤結論。
+#
+# 已處理：(1) 舊檔改名成 profile_outlierfrac_legacy_no_manifest.npz 移開；
+# (2) 主工作樹的 scripts/tools/checkpoint.py 換成 PR #89 的版本（無
+# manifest 的舊檔一律擋下、不再靜默信任）。這裡換 label 重排。
+p11_outlierfrac_v3|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
