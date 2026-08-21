@@ -396,6 +396,15 @@ def main() -> None:
                    and it["label"] not in
                    {s["item"]["label"] for s in slots.values() if s}]
 
+        # 這一輪有沒有「push 失敗但還沒用完重試次數」的工作。**這個旗標是
+        # 必要的**（2026-08-21 CodeRabbit review）：`pending` 雖然每一輪都
+        # 重建（上面幾行），但下面 `pending.pop(idx)` 會把工作從**這一輪**
+        # 的清單移除。若佇列只剩這一個工作、它第 1 次 push 失敗（照設計
+        # 不寫 DONE、也沒佔到槽位），迴圈尾端的結束判斷會看到
+        # 「pending 空 + 所有槽位閒置」而直接 return，這個工作根本等不到
+        # 第 2、3 次重試——MAX_PUSH_RETRIES 形同虛設。
+        retryable_push_failure = False
+
         # 1) 把待辦工作塞進閒置的帳號槽位
         for name in accounts:
             if slots[name] is not None:
@@ -423,11 +432,15 @@ def main() -> None:
                 n = push_fail_counts.get(item["label"], 0) + 1
                 push_fail_counts[item["label"]] = n
                 if n >= MAX_PUSH_RETRIES:
+                    # 用「達到」不是「超過」——這個分支的條件是 >=，第 3 次
+                    # 失敗就成立，寫「超過」會讓 log 誤述終止條件
+                    #（2026-08-21 CodeRabbit review）。
                     print(f"  {item['label']} 連續 push 失敗 {n} 次，放棄"
-                          f"（超過 MAX_PUSH_RETRIES={MAX_PUSH_RETRIES}）。"
+                          f"（達到 MAX_PUSH_RETRIES={MAX_PUSH_RETRIES}）。"
                           f"要再跑請換一個 label 重排。", flush=True)
                     mark_done(item["label"], f"push_failed_x{n}", 0, name)
                 else:
+                    retryable_push_failure = True
                     print(f"  {item['label']} push 失敗（第 {n} 次，上限 "
                           f"{MAX_PUSH_RETRIES}），不寫 DONE，下一輪重試。",
                           flush=True)
@@ -539,7 +552,8 @@ def main() -> None:
                       f"（{secs/60:.1f} 分）\n", flush=True)
                 slots[name] = None
 
-        if not pending and all(s is None for s in slots.values()):
+        if (not pending and not retryable_push_failure
+                and all(s is None for s in slots.values())):
             print("Kaggle 佇列已清空，結束。", flush=True)
             return
         time.sleep(POLL_SECS)
