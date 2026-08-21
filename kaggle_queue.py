@@ -62,6 +62,20 @@ MAX_WAIT_HOURS = 20
 # dataset 掛載時序不穩，偵測到那個特定失敗模式就重推 kernel，
 # 間隔遞增（不是猜一個固定等待時長，見 is_mount_race_failure 的說明）。
 BACKOFFS = [60, 120, 240, 480]
+# push 失敗最多重試幾次才放棄。**這是補上一個真實的、已經造成損失的缺口**：
+# 下載端在 2026-08-19（PR #66）已修成「失敗就不寫 DONE 檔、下一輪自動重試」，
+# 推送端卻沒有——原本一次 push 失敗就直接 mark_done(..., "push_failed")，
+# 而派工是用「label 不在 DONE 裡」篩選的，那個工作等於被永久放棄，要人工
+# 換一個新 label 重排才會再跑。
+#
+# 實際損失（logs/kaggle_queue_done.txt 查得到）：到 2026-08-21 為止共 6 筆
+# push_failed，其中 2026-08-19 08:54:24–08:54:31 這 7 秒內就有 4 筆——單一次
+# 網路瞬斷一口氣吃掉四個工作，全部是人工發現後手動補排的。
+#
+# 設上限而不是無限重試：push 失敗不一定是網路，也可能是參數打錯、帳號額度
+# 用完之類重試幾次也不會好的原因，無限重試會變成安靜空轉。次數用完才寫
+# DONE，且狀態字串標明重試過幾次，事後查得出來。
+MAX_PUSH_RETRIES = 3
 
 
 def acquire_lock():
@@ -367,6 +381,10 @@ def main() -> None:
     # 啟動時先掃一輪，接回任何帳號已經在 Kaggle 端跑著的 kernel，
     # 不要無條件當成全新一輪、把還在跑的進度重推掉。
     slots = recover_running_slots(accounts, envs)
+    # 每個 label 連續 push 失敗幾次。刻意只放在記憶體、不落地：重啟這支
+    # 執行器時歸零是想要的行為——重啟通常正是為了排除當時那個環境問題，
+    # 不該讓上一輪的失敗次數繼續累計、害一個其實已經可以推的工作被放棄。
+    push_fail_counts: dict[str, int] = {}
     if any(slots.values()):
         running = [n for n, s in slots.items() if s]
         print(f"復原完成，接回 {len(running)} 個已在跑的槽位：{running}",
@@ -393,11 +411,26 @@ def main() -> None:
                   flush=True)
             ok, kid, work_dir = push(item, name)
             if ok:
+                push_fail_counts.pop(item["label"], None)
                 slots[name] = {"phase": "running", "item": item, "kid": kid,
                               "work_dir": work_dir, "t0": time.time(),
                               "retries": 0}
             else:
-                mark_done(item["label"], "push_failed", 0, name)
+                # push 失敗預設**不**寫 DONE：寫下去這個工作就再也不會被派，
+                # 而最常見的原因（網路瞬斷）下一輪就會自己好。留著不寫，
+                # 下一輪 pending 會再包含它，可能換一個帳號重推。
+                # 只有連續失敗超過上限才放棄，避免非網路原因造成無限空轉。
+                n = push_fail_counts.get(item["label"], 0) + 1
+                push_fail_counts[item["label"]] = n
+                if n >= MAX_PUSH_RETRIES:
+                    print(f"  {item['label']} 連續 push 失敗 {n} 次，放棄"
+                          f"（超過 MAX_PUSH_RETRIES={MAX_PUSH_RETRIES}）。"
+                          f"要再跑請換一個 label 重排。", flush=True)
+                    mark_done(item["label"], f"push_failed_x{n}", 0, name)
+                else:
+                    print(f"  {item['label']} push 失敗（第 {n} 次，上限 "
+                          f"{MAX_PUSH_RETRIES}），不寫 DONE，下一輪重試。",
+                          flush=True)
 
         # 2) 檢查每個忙碌槽位（各只查一次，不阻塞等待，才能真正併發）
         for name, slot in list(slots.items()):
