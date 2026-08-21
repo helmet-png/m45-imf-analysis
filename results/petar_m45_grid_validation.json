@@ -1,0 +1,32 @@
+{
+  "status": "pass",
+  "grid_path": "C:\\Users\\user\\Documents\\Codex\\2026-08-09\\github-plugin-github-openai-curated-remote\\work\\pdmf-imf-overnight-20260812\\petar_m45_grid.csv",
+  "n_runs": 10,
+  "n_priority_1": 3,
+  "n_priority_2": 7,
+  "seeds": [
+    101,
+    202,
+    303
+  ],
+  "half_mass_radius_pc": [
+    2.4,
+    3.1,
+    3.8
+  ],
+  "binary_system_fraction": [
+    0.87,
+    0.95,
+    0.99
+  ],
+  "mcluster_S": [
+    0.0,
+    0.3,
+    0.49
+  ],
+  "profiles": [
+    0,
+    2
+  ],
+  "errors": []
+}

@@ -1,0 +1,4 @@
+# Isolated environment for pdmf_limepy_smoke.py.
+numpy>=1.26
+scipy>=1.11
+astro-limepy==1.3.0

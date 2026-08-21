@@ -1,0 +1,114 @@
+{
+  "status": "preflight_ensemble_not_production_cluster_model",
+  "environment": {
+    "rebound_version": "5.1.1"
+  },
+  "parameters": {
+    "n_stars": [
+      1024,
+      2048
+    ],
+    "softening_rh": [
+      0.005,
+      0.01
+    ],
+    "replicates": 8,
+    "input_alpha": 2.3,
+    "time_end_crossing": 10.0,
+    "dt_crossing": 0.0005,
+    "seed_base": 2026081300
+  },
+  "overall": {
+    "n_stars": "all",
+    "softening_rh": "all",
+    "n_runs": 32,
+    "median_delta_alpha_contrast": 0.11950000000000016,
+    "p16_delta_alpha_contrast": 0.02196000000000023,
+    "p84_delta_alpha_contrast": 0.2152000000000004,
+    "fraction_positive_delta_alpha_contrast": 0.9375,
+    "median_delta_radius_ratio": 0.03741159135801109,
+    "fraction_positive_delta_radius_ratio": 0.9375,
+    "max_absolute_energy_error": 0.0020991371539702862,
+    "fraction_energy_pass": 0.875,
+    "n_energy_pass": 28,
+    "median_delta_alpha_contrast_energy_pass": 0.13050000000000028,
+    "fraction_positive_delta_alpha_contrast_energy_pass": 0.9642857142857143,
+    "median_delta_radius_ratio_energy_pass": 0.03741159135801109,
+    "fraction_positive_delta_radius_ratio_energy_pass": 0.9285714285714286
+  },
+  "groups": [
+    {
+      "n_stars": 1024,
+      "softening_rh": 0.005,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.18200000000000016,
+      "p16_delta_alpha_contrast": 0.08983999999999992,
+      "p84_delta_alpha_contrast": 0.24040000000000022,
+      "fraction_positive_delta_alpha_contrast": 1.0,
+      "median_delta_radius_ratio": 0.05800896021596491,
+      "fraction_positive_delta_radius_ratio": 0.875,
+      "max_absolute_energy_error": 0.00046771695368257325,
+      "fraction_energy_pass": 1.0,
+      "n_energy_pass": 8,
+      "median_delta_alpha_contrast_energy_pass": 0.18200000000000016,
+      "fraction_positive_delta_alpha_contrast_energy_pass": 1.0,
+      "median_delta_radius_ratio_energy_pass": 0.05800896021596491,
+      "fraction_positive_delta_radius_ratio_energy_pass": 0.875
+    },
+    {
+      "n_stars": 1024,
+      "softening_rh": 0.01,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.14800000000000058,
+      "p16_delta_alpha_contrast": 0.09847999999999986,
+      "p84_delta_alpha_contrast": 0.2524000000000001,
+      "fraction_positive_delta_alpha_contrast": 1.0,
+      "median_delta_radius_ratio": 0.06074107377456067,
+      "fraction_positive_delta_radius_ratio": 1.0,
+      "max_absolute_energy_error": 0.001971723429771509,
+      "fraction_energy_pass": 0.75,
+      "n_energy_pass": 6,
+      "median_delta_alpha_contrast_energy_pass": 0.20550000000000046,
+      "fraction_positive_delta_alpha_contrast_energy_pass": 1.0,
+      "median_delta_radius_ratio_energy_pass": 0.06074107377456067,
+      "fraction_positive_delta_radius_ratio_energy_pass": 1.0
+    },
+    {
+      "n_stars": 2048,
+      "softening_rh": 0.005,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.1080000000000001,
+      "p16_delta_alpha_contrast": 0.014839999999999805,
+      "p84_delta_alpha_contrast": 0.14999999999999963,
+      "fraction_positive_delta_alpha_contrast": 0.875,
+      "median_delta_radius_ratio": 0.03238897328716367,
+      "fraction_positive_delta_radius_ratio": 1.0,
+      "max_absolute_energy_error": 0.0020991371539702862,
+      "fraction_energy_pass": 0.75,
+      "n_energy_pass": 6,
+      "median_delta_alpha_contrast_energy_pass": 0.11150000000000015,
+      "fraction_positive_delta_alpha_contrast_energy_pass": 1.0,
+      "median_delta_radius_ratio_energy_pass": 0.03637800525524998,
+      "fraction_positive_delta_radius_ratio_energy_pass": 1.0
+    },
+    {
+      "n_stars": 2048,
+      "softening_rh": 0.01,
+      "n_runs": 8,
+      "median_delta_alpha_contrast": 0.050999999999999934,
+      "p16_delta_alpha_contrast": 0.006159999999999643,
+      "p84_delta_alpha_contrast": 0.13620000000000007,
+      "fraction_positive_delta_alpha_contrast": 0.875,
+      "median_delta_radius_ratio": 0.024585158494754455,
+      "fraction_positive_delta_radius_ratio": 0.875,
+      "max_absolute_energy_error": 0.0002582716470782281,
+      "fraction_energy_pass": 1.0,
+      "n_energy_pass": 8,
+      "median_delta_alpha_contrast_energy_pass": 0.050999999999999934,
+      "fraction_positive_delta_alpha_contrast_energy_pass": 0.875,
+      "median_delta_radius_ratio_energy_pass": 0.024585158494754455,
+      "fraction_positive_delta_radius_ratio_energy_pass": 0.875
+    }
+  ],
+  "interpretation_rule": "A robust pre-flight signal requires positive median changes in both radial-alpha contrast and low/high-mass radius ratio, plus acceptable energy conservation. It does not quantify the M45 correction."
+}
