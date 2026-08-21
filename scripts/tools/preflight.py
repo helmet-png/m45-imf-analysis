@@ -566,7 +566,19 @@ def gate_c(npz_path: Path, verbose=True) -> list[str]:
         # 注意到。沒有 manifest 時改成照樣判定量化，只是措辭不能說「宣稱
         # 精修幾階」（那要 manifest 才知道）。
         if on_node and n_on == len(on_node):
-            if refines:
+            # 用 `man is None` 而不是 `if refines` 來分辨兩種情況
+            # （2026-08-21 CodeRabbit review）：manifest 存在但 refines 欄位
+            # 缺鍵或是空字串時，`refines` 同樣會是空 list，用 `if refines`
+            # 判斷會把這種檔案誤報成「沒有 manifest」，給出錯的診斷方向、
+            # 誤導人工核對。
+            if man is None:
+                fails.append(
+                    f"{npz_path.name}[{key}]：最佳點在全部 {n_on} 個維度都"
+                    f"精確落在粗網格節點上（A1 的簽章），而且沒有 manifest "
+                    f"可以查證當初帶了什麼 --refines——這是最可疑的組合，"
+                    f"不是「資訊不足所以放行」，在人工核對確認精修真的有"
+                    f"生效之前不要引用這個檔案的數字")
+            elif refines:
                 fails.append(
                     f"{npz_path.name}[{key}]：宣稱精修 {len(refines)} 階，但"
                     f"最佳點在全部 {n_on} 個維度都精確落在粗網格節點上——"
@@ -574,10 +586,9 @@ def gate_c(npz_path: Path, verbose=True) -> list[str]:
             else:
                 fails.append(
                     f"{npz_path.name}[{key}]：最佳點在全部 {n_on} 個維度都"
-                    f"精確落在粗網格節點上（A1 的簽章），而且沒有 manifest "
-                    f"可以查證當初帶了什麼 --refines——這是最可疑的組合，"
-                    f"不是「資訊不足所以放行」，在人工核對確認精修真的有"
-                    f"生效之前不要引用這個檔案的數字")
+                    f"精確落在粗網格節點上（A1 的簽章）。這個檔案有 manifest，"
+                    f"但裡面的 --refines 是空的或缺這個欄位——等於明確記載了"
+                    f"「沒有做任何精修」，跟簽章一致，不要引用這個檔案的數字")
         if scatter is not None and nd > 3 and arr.shape[0] >= 3 \
                 and float(scatter[3]) == 0.0:
             fails.append(
