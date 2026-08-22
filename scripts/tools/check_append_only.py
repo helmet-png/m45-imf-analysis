@@ -9,18 +9,25 @@
 這支腳本在 CI 補上這層驗證：PR 分支相對於 base 分支，這兩個檔案的既有行
 必須全部還在（可以增加新行，不能刪除或修改舊行）。
 
-**判定方式，故意選最寬鬆的**：只比對「非空白行的集合」（忽略順序），不比
-逐行比對位置。理由：`merge=union` 本身就可能改變行的相對順序（兩邊各自
+**判定方式，故意選最寬鬆的**：只比對「非空白行的多重集合」（忽略順序），
+不逐行比對位置。理由：`merge=union` 本身就可能改變行的相對順序（兩邊各自
 新增的行怎麼交錯，取決於 git 的合併演算法，不保證跟原檔案順序一致），若
 用「逐行完全一致的前綴」這種嚴格判定，會把 union 合併本身造成的正常重排
-也判成違規，變成擋自己人。用集合比對雖然抓不到「刪一行、加一行內容剛好
-不同」這種邊緣案例，但這是 append-only 契約要防的主要情境（整段改寫、
-整段刪除）已經足夠，且不會產生假警報。
+也判成違規，變成擋自己人。
+
+**用 `Counter`（多重集合）而不是純 `set`**（2026-08-21 CodeRabbit
+review）：純集合比對有個真的會漏抓的洞——base 若有兩行內容完全相同，
+PR 刪掉其中一行，`set(base) - set(cur)` 算出來還是空的（因為那個內容
+在 `cur` 裡仍出現一次），append-only 契約明明被違反卻放行。`Counter`
+會記住每個內容出現的次數，`base_counts - cur_counts` 對「次數變少」的
+內容才會顯示正數，逐行內容不同的極端案例仍然抓不到（那不是這支腳本
+要解決的），但「行的出現次數變少」這個更貼近契約本身的情況會被抓到。
 """
 from __future__ import annotations
 
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[2]
@@ -60,19 +67,23 @@ def check(base_ref: str) -> int:
             fails.append(f"{rel}：{base_ref} 上有這個檔案，但這個分支把它刪掉了")
             continue
         cur_text = cur_path.read_text(encoding="utf-8", errors="replace")
-        base_lines = {l for l in base_text.splitlines() if l.strip()}
-        cur_lines = {l for l in cur_text.splitlines() if l.strip()}
-        missing = base_lines - cur_lines
+        # Counter（多重集合）不是 set：base 裡兩行內容相同、PR 刪掉一行時，
+        # 純 set 比對會算成沒有變化（那個內容在 cur 裡仍出現一次），
+        # Counter 才抓得到「出現次數變少」（見上方 docstring 說明）。
+        base_counts = Counter(l for l in base_text.splitlines() if l.strip())
+        cur_counts = Counter(l for l in cur_text.splitlines() if l.strip())
+        missing = base_counts - cur_counts   # 只留「base 次數 > cur 次數」的差額
+        n_missing = sum(missing.values())
         if missing:
             fails.append(
-                f"{rel}：{len(missing)} 行在 {base_ref} 存在，這個分支卻沒有"
+                f"{rel}：{n_missing} 行在 {base_ref} 存在的次數比這個分支多"
                 f"——append-only 檔案只能新增，不能修改或刪除既有行")
-            for m in sorted(missing)[:5]:
+            for m in sorted(missing.elements())[:5]:
                 print(f"    消失/被改掉的行：{m[:150]}")
-            if len(missing) > 5:
-                print(f"    ...還有 {len(missing) - 5} 行")
+            if n_missing > 5:
+                print(f"    ...還有 {n_missing - 5} 行")
         else:
-            print(f"  {rel}：OK（{len(base_lines)} 行全部還在）")
+            print(f"  {rel}：OK（{sum(base_counts.values())} 行全部還在）")
     if fails:
         print("\n結論：不通過")
         for f in fails:
