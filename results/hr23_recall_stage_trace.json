@@ -1,0 +1,3772 @@
+{
+  "status": "saved_file_stage_trace_not_membership_truth",
+  "hr23_probability_threshold": 0.7,
+  "pipeline_probability_threshold": 0.7,
+  "external_members": 529,
+  "stage_totals": {
+    "not_in_saved_baseline": 34,
+    "baseline_below_pipeline_probability": 0,
+    "baseline_pass_probability_not_in_cmd": 62,
+    "in_cmd": 433
+  },
+  "stage_fractions": {
+    "not_in_saved_baseline": 0.06427221172022685,
+    "baseline_below_pipeline_probability": 0.0,
+    "baseline_pass_probability_not_in_cmd": 0.11720226843100189,
+    "in_cmd": 0.8185255198487713
+  },
+  "by_G_bin": {
+    "G < 4": {
+      "not_in_saved_baseline": 0,
+      "baseline_below_pipeline_probability": 0,
+      "baseline_pass_probability_not_in_cmd": 1,
+      "in_cmd": 0
+    },
+    "4 <= G < 5.2": {
+      "not_in_saved_baseline": 0,
+      "baseline_below_pipeline_probability": 0,
+      "baseline_pass_probability_not_in_cmd": 0,
+      "in_cmd": 0
+    },
+    "5.2 <= G < 8": {
+      "not_in_saved_baseline": 0,
+      "baseline_below_pipeline_probability": 0,
+      "baseline_pass_probability_not_in_cmd": 0,
+      "in_cmd": 15
+    },
+    "8 <= G < 12": {
+      "not_in_saved_baseline": 0,
+      "baseline_below_pipeline_probability": 0,
+      "baseline_pass_probability_not_in_cmd": 2,
+      "in_cmd": 86
+    },
+    "12 <= G < 16": {
+      "not_in_saved_baseline": 0,
+      "baseline_below_pipeline_probability": 0,
+      "baseline_pass_probability_not_in_cmd": 14,
+      "in_cmd": 158
+    },
+    "16 <= G < 18": {
+      "not_in_saved_baseline": 0,
+      "baseline_below_pipeline_probability": 0,
+      "baseline_pass_probability_not_in_cmd": 45,
+      "in_cmd": 174
+    },
+    "G >= 18": {
+      "not_in_saved_baseline": 34,
+      "baseline_below_pipeline_probability": 0,
+      "baseline_pass_probability_not_in_cmd": 0,
+      "in_cmd": 0
+    }
+  },
+  "stars": [
+    {
+      "source_id": "64094037476647040",
+      "hr23_probability": 0.75461659656826,
+      "Gmag": 14.9738245,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64104933811828480",
+      "hr23_probability": 0.775155369695122,
+      "Gmag": 15.906264,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64128294135554688",
+      "hr23_probability": 0.729168636329672,
+      "Gmag": 16.372732,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64131150292139648",
+      "hr23_probability": 0.81394898569235,
+      "Gmag": 13.846435,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64136063734692224",
+      "hr23_probability": 0.765250338108215,
+      "Gmag": 16.388481,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64148738180119680",
+      "hr23_probability": 0.799237402018478,
+      "Gmag": 12.54847,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64163242287720448",
+      "hr23_probability": 0.845220718036563,
+      "Gmag": 18.505384,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "64172038380708224",
+      "hr23_probability": 0.836575207325087,
+      "Gmag": 11.16862,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64174546641593984",
+      "hr23_probability": 0.850856988346028,
+      "Gmag": 15.392325,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64445988572906752",
+      "hr23_probability": 0.708742745796173,
+      "Gmag": 15.090019,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64449729487990912",
+      "hr23_probability": 0.723208518023093,
+      "Gmag": 10.207125,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64453685154291968",
+      "hr23_probability": 0.736311236715746,
+      "Gmag": 17.73309,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64665203703566848",
+      "hr23_probability": 0.744569237486095,
+      "Gmag": 16.899952,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64667535869958784",
+      "hr23_probability": 0.726290628480538,
+      "Gmag": 17.04338,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64720179284934016",
+      "hr23_probability": 0.819871268243901,
+      "Gmag": 16.604225,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64720625961541120",
+      "hr23_probability": 0.80460009218886,
+      "Gmag": 16.829,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64768763955442944",
+      "hr23_probability": 0.766876469102072,
+      "Gmag": 16.099396,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64795289673433728",
+      "hr23_probability": 0.766951767898025,
+      "Gmag": 16.55351,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64798691287540224",
+      "hr23_probability": 0.813430500943805,
+      "Gmag": 7.800061,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64808483812941440",
+      "hr23_probability": 0.831530735699367,
+      "Gmag": 14.011793,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64822017259193600",
+      "hr23_probability": 0.709176541755473,
+      "Gmag": 18.58,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "64837242912474624",
+      "hr23_probability": 0.756902150259007,
+      "Gmag": 8.88526,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64840541448791424",
+      "hr23_probability": 0.743342655739601,
+      "Gmag": 16.816063,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64843805623922688",
+      "hr23_probability": 0.778550321435353,
+      "Gmag": 16.934334,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64857721317916032",
+      "hr23_probability": 0.704968361089519,
+      "Gmag": 16.504587,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64871740091177600",
+      "hr23_probability": 0.834602636899676,
+      "Gmag": 16.29566,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64874454510493440",
+      "hr23_probability": 0.944407188162108,
+      "Gmag": 17.110922,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64879402312818944",
+      "hr23_probability": 0.761150877492873,
+      "Gmag": 8.886077,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64884624994048256",
+      "hr23_probability": 0.813383738755862,
+      "Gmag": 16.003756,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64891634380723712",
+      "hr23_probability": 0.878559463927335,
+      "Gmag": 14.505948,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64895139073954944",
+      "hr23_probability": 0.952740656874542,
+      "Gmag": 15.133998,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64912009705490304",
+      "hr23_probability": 1.0,
+      "Gmag": 15.890427,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64913452814489216",
+      "hr23_probability": 0.965311196249329,
+      "Gmag": 10.945833,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64917094946846848",
+      "hr23_probability": 0.774266609681861,
+      "Gmag": 16.074583,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64922283267331968",
+      "hr23_probability": 0.930521454827585,
+      "Gmag": 13.63343,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64923279699744256",
+      "hr23_probability": 0.923626295820703,
+      "Gmag": 11.473286,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64927368508592512",
+      "hr23_probability": 0.744477501323785,
+      "Gmag": 17.534443,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64928605459180416",
+      "hr23_probability": 0.823087542049731,
+      "Gmag": 10.937686,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64928674178659968",
+      "hr23_probability": 0.793582337577373,
+      "Gmag": 17.513542,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64929391436043264",
+      "hr23_probability": 0.953509019877989,
+      "Gmag": 8.094326,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64930495244783616",
+      "hr23_probability": 0.706980003077915,
+      "Gmag": 9.034874,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64933759417769984",
+      "hr23_probability": 0.998295151518685,
+      "Gmag": 8.33693,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64934893291213952",
+      "hr23_probability": 0.85366104808754,
+      "Gmag": 12.242328,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64936508198907904",
+      "hr23_probability": 0.893610711874824,
+      "Gmag": 12.882789,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64940906245415808",
+      "hr23_probability": 0.732001147085209,
+      "Gmag": 5.428299,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64941211186036352",
+      "hr23_probability": 0.950975885847464,
+      "Gmag": 10.21041,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64942001460286080",
+      "hr23_probability": 0.914075744061169,
+      "Gmag": 17.704262,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64943758103791104",
+      "hr23_probability": 0.776562694734044,
+      "Gmag": 16.382866,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64946025846426752",
+      "hr23_probability": 0.739678226447848,
+      "Gmag": 17.347544,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64950625753906176",
+      "hr23_probability": 0.784988127261884,
+      "Gmag": 17.679,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64951626483855744",
+      "hr23_probability": 0.947272459053458,
+      "Gmag": 16.956253,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64952829074688896",
+      "hr23_probability": 0.733017885744765,
+      "Gmag": 9.295629,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64956127609464320",
+      "hr23_probability": 0.90544339505926,
+      "Gmag": 6.895188,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64959662365552384",
+      "hr23_probability": 0.976767353869589,
+      "Gmag": 13.143335,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64960663095015680",
+      "hr23_probability": 0.834271923322762,
+      "Gmag": 14.486368,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64962174923490304",
+      "hr23_probability": 0.789263371420184,
+      "Gmag": 16.41158,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64964717544035200",
+      "hr23_probability": 0.923701848171894,
+      "Gmag": 14.018696,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64966916567283456",
+      "hr23_probability": 0.905918702960602,
+      "Gmag": 17.4539,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64971722633920768",
+      "hr23_probability": 0.738204795004537,
+      "Gmag": 18.161404,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "64971933089093760",
+      "hr23_probability": 1.0,
+      "Gmag": 13.21777,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64974338270788864",
+      "hr23_probability": 0.948928831445573,
+      "Gmag": 16.11487,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64974574492213248",
+      "hr23_probability": 0.794043460994394,
+      "Gmag": 17.363674,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64977705525131904",
+      "hr23_probability": 0.938851746321551,
+      "Gmag": 14.081177,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64979732749686016",
+      "hr23_probability": 0.896975294154256,
+      "Gmag": 11.273634,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64980832261312640",
+      "hr23_probability": 0.904899764538146,
+      "Gmag": 16.288599,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64981137202021376",
+      "hr23_probability": 0.902593439556466,
+      "Gmag": 12.397641,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64981863053470592",
+      "hr23_probability": 0.769142402456303,
+      "Gmag": 17.219704,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64981931772948480",
+      "hr23_probability": 0.748259717456999,
+      "Gmag": 10.363573,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64984951133439232",
+      "hr23_probability": 0.885223500258595,
+      "Gmag": 17.09217,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64985127228608128",
+      "hr23_probability": 0.808698042334177,
+      "Gmag": 12.563813,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64986325522809728",
+      "hr23_probability": 0.752507116876422,
+      "Gmag": 18.267855,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "64987876007763968",
+      "hr23_probability": 0.899270076255412,
+      "Gmag": 16.418585,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64988322684358144",
+      "hr23_probability": 0.812542431217399,
+      "Gmag": 16.84718,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64988803720689408",
+      "hr23_probability": 0.848205885688383,
+      "Gmag": 17.783087,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64989490915460608",
+      "hr23_probability": 0.926035604395065,
+      "Gmag": 13.712051,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64990349908937984",
+      "hr23_probability": 0.885223500258595,
+      "Gmag": 15.722567,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64990792288875264",
+      "hr23_probability": 0.896975294154256,
+      "Gmag": 17.404692,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64997187496822912",
+      "hr23_probability": 1.0,
+      "Gmag": 17.839243,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64998905483757568",
+      "hr23_probability": 0.786965436571092,
+      "Gmag": 15.042486,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "64999558318784768",
+      "hr23_probability": 1.0,
+      "Gmag": 15.923727,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "64999588381514496",
+      "hr23_probability": 0.769395002187292,
+      "Gmag": 9.99203,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65000417312240896",
+      "hr23_probability": 0.93963771808766,
+      "Gmag": 15.711198,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65003612767943040",
+      "hr23_probability": 0.727863013292721,
+      "Gmag": 17.898127,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65004437401569664",
+      "hr23_probability": 0.949518717491859,
+      "Gmag": 16.694729,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65004712279475712",
+      "hr23_probability": 0.936805151757579,
+      "Gmag": 10.388345,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65005262035285888",
+      "hr23_probability": 0.731141283346684,
+      "Gmag": 14.2646475,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65005846150835200",
+      "hr23_probability": 0.752965570200568,
+      "Gmag": 16.335794,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65008010814357248",
+      "hr23_probability": 0.91664064514796,
+      "Gmag": 17.381496,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65008388771477120",
+      "hr23_probability": 0.99681330712711,
+      "Gmag": 16.497435,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65010239900405504",
+      "hr23_probability": 0.962220105255686,
+      "Gmag": 11.99486,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65010519075247616",
+      "hr23_probability": 0.930554801676254,
+      "Gmag": 16.342907,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65010549138050944",
+      "hr23_probability": 1.0,
+      "Gmag": 12.215946,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65011412428446592",
+      "hr23_probability": 0.782125339409098,
+      "Gmag": 14.170108,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65011476851589632",
+      "hr23_probability": 0.903466023732495,
+      "Gmag": 18.451954,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65012408860856832",
+      "hr23_probability": 0.948887603165544,
+      "Gmag": 16.648165,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65013474012743936",
+      "hr23_probability": 0.881234307638375,
+      "Gmag": 13.317822,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65014195567317504",
+      "hr23_probability": 0.850647999740795,
+      "Gmag": 15.997229,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65014985841292032",
+      "hr23_probability": 0.738961694076426,
+      "Gmag": 16.735138,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65017627244152064",
+      "hr23_probability": 1.0,
+      "Gmag": 6.997606,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65017906418989312",
+      "hr23_probability": 0.937375009381975,
+      "Gmag": 14.748187,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65018417518780672",
+      "hr23_probability": 0.837396878935919,
+      "Gmag": 16.862331,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65019963707009024",
+      "hr23_probability": 0.926557338263704,
+      "Gmag": 18.670362,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65020414679879296",
+      "hr23_probability": 0.915644905301262,
+      "Gmag": 9.761056,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65023232178029440",
+      "hr23_probability": 0.718147528098297,
+      "Gmag": 14.220257,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65026839950559744",
+      "hr23_probability": 0.848041742781,
+      "Gmag": 13.883523,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65027595864800000",
+      "hr23_probability": 0.770873169089003,
+      "Gmag": 9.057103,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65027905102436608",
+      "hr23_probability": 0.773327354180267,
+      "Gmag": 13.702901,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65040686925109760",
+      "hr23_probability": 0.787643651839186,
+      "Gmag": 15.615843,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65042645428743680",
+      "hr23_probability": 0.756433304055881,
+      "Gmag": 17.786415,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65047043476608128",
+      "hr23_probability": 0.715185223169738,
+      "Gmag": 16.736732,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65052639818118400",
+      "hr23_probability": 0.811632192318096,
+      "Gmag": 18.776737,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65052953351603456",
+      "hr23_probability": 0.855534752177341,
+      "Gmag": 12.413892,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65053915424355584",
+      "hr23_probability": 0.759964652311544,
+      "Gmag": 17.104906,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65056526764528128",
+      "hr23_probability": 0.769142402456303,
+      "Gmag": 15.538341,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65058760147520000",
+      "hr23_probability": 0.872178285261218,
+      "Gmag": 16.57428,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65078929312363392",
+      "hr23_probability": 0.853352745315852,
+      "Gmag": 16.435478,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65084358152509440",
+      "hr23_probability": 0.804205507509928,
+      "Gmag": 13.831366,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65086591535491584",
+      "hr23_probability": 1.0,
+      "Gmag": 10.823086,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65088275162687104",
+      "hr23_probability": 0.770968824251273,
+      "Gmag": 16.996695,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65089336018173440",
+      "hr23_probability": 0.705513377809665,
+      "Gmag": 10.5763235,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65098514364769408",
+      "hr23_probability": 0.824581726303649,
+      "Gmag": 16.232439,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65101606741121792",
+      "hr23_probability": 0.799492070625323,
+      "Gmag": 16.835623,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65107860213588096",
+      "hr23_probability": 0.7226708346891,
+      "Gmag": 13.492777,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65117206062341760",
+      "hr23_probability": 0.940849630226088,
+      "Gmag": 14.743395,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65119469509073152",
+      "hr23_probability": 0.708063281022332,
+      "Gmag": 18.58516,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65120470237460480",
+      "hr23_probability": 0.815989649176948,
+      "Gmag": 9.069493,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65125452399528320",
+      "hr23_probability": 0.722353903798481,
+      "Gmag": 14.410244,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65125864716379264",
+      "hr23_probability": 0.890543051095813,
+      "Gmag": 12.452076,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65131121756446592",
+      "hr23_probability": 0.793640911676897,
+      "Gmag": 13.487999,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65136791113382912",
+      "hr23_probability": 0.735900973526939,
+      "Gmag": 16.743004,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65147438335354624",
+      "hr23_probability": 0.867773504694546,
+      "Gmag": 17.286898,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65150947325369600",
+      "hr23_probability": 0.879393040543985,
+      "Gmag": 10.972593,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65153833543386624",
+      "hr23_probability": 0.846370358194395,
+      "Gmag": 13.935524,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65161976802151680",
+      "hr23_probability": 0.723519139262615,
+      "Gmag": 13.3745775,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65162492198224768",
+      "hr23_probability": 0.922261580407502,
+      "Gmag": 17.780386,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65164171528305792",
+      "hr23_probability": 0.864946799540464,
+      "Gmag": 12.190561,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65165653294149760",
+      "hr23_probability": 0.948887603165544,
+      "Gmag": 16.157358,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65167577439502592",
+      "hr23_probability": 0.874270885965728,
+      "Gmag": 15.381319,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65169943964429952",
+      "hr23_probability": 0.909497312620548,
+      "Gmag": 16.988838,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65170016980919808",
+      "hr23_probability": 0.891468143883929,
+      "Gmag": 16.171886,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65173620458875008",
+      "hr23_probability": 0.948887603165544,
+      "Gmag": 17.018866,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65175480179315840",
+      "hr23_probability": 0.86703139933995,
+      "Gmag": 17.297462,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65179946945247488",
+      "hr23_probability": 0.797460214377536,
+      "Gmag": 15.793812,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65181527493208192",
+      "hr23_probability": 0.941255228631071,
+      "Gmag": 16.055323,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65184894747573376",
+      "hr23_probability": 0.777447395888345,
+      "Gmag": 15.929374,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65188090203295744",
+      "hr23_probability": 0.902593439556466,
+      "Gmag": 8.888269,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65189739470654464",
+      "hr23_probability": 0.888886401661689,
+      "Gmag": 17.109238,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65190048708380160",
+      "hr23_probability": 1.0,
+      "Gmag": 12.071662,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65190220507070208",
+      "hr23_probability": 0.945581607494823,
+      "Gmag": 12.855757,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65190838982357760",
+      "hr23_probability": 0.783677372613386,
+      "Gmag": 18.086927,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65194584193758336",
+      "hr23_probability": 1.0,
+      "Gmag": 11.684071,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65195404530870144",
+      "hr23_probability": 1.0,
+      "Gmag": 18.384014,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65196370900147968",
+      "hr23_probability": 0.802264805227365,
+      "Gmag": 10.590246,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65196405259884544",
+      "hr23_probability": 0.883014262764936,
+      "Gmag": 16.095974,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65199978672758272",
+      "hr23_probability": 0.800666074599846,
+      "Gmag": 10.045166,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65200283613608704",
+      "hr23_probability": 0.806372437693362,
+      "Gmag": 17.161976,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65201039527567232",
+      "hr23_probability": 0.908266535831683,
+      "Gmag": 12.133683,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65201249983083392",
+      "hr23_probability": 0.929618812645945,
+      "Gmag": 14.375109,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65202383854448384",
+      "hr23_probability": 0.835013516065649,
+      "Gmag": 17.039532,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65202418214188544",
+      "hr23_probability": 0.789705258686901,
+      "Gmag": 14.805443,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9998
+    },
+    {
+      "source_id": "65203758244032512",
+      "hr23_probability": 0.782200572488504,
+      "Gmag": 16.309023,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65204342359530112",
+      "hr23_probability": 0.761584234827145,
+      "Gmag": 18.085272,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65206674525036672",
+      "hr23_probability": 0.956187252744248,
+      "Gmag": 17.452063,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65207709611941376",
+      "hr23_probability": 0.937830866137194,
+      "Gmag": 7.286501,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65208396808627840",
+      "hr23_probability": 0.936805151757579,
+      "Gmag": 13.007188,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65211038213901952",
+      "hr23_probability": 0.877156614644559,
+      "Gmag": 19.281624,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65211145587780992",
+      "hr23_probability": 0.923651219916475,
+      "Gmag": 13.736212,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65211557904569856",
+      "hr23_probability": 0.948887603165544,
+      "Gmag": 15.067968,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65212107660378880",
+      "hr23_probability": 0.78994490879636,
+      "Gmag": 8.332108,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65212206443054464",
+      "hr23_probability": 0.788864538477147,
+      "Gmag": 18.32441,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65212760495396736",
+      "hr23_probability": 0.858612016935689,
+      "Gmag": 15.390224,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65212932294091264",
+      "hr23_probability": 0.905590659068259,
+      "Gmag": 15.380993,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65213172812266240",
+      "hr23_probability": 0.841517535076635,
+      "Gmag": 16.13903,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65214409762926720",
+      "hr23_probability": 0.936805151757579,
+      "Gmag": 13.566717,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65214856439472640",
+      "hr23_probability": 0.948887603165544,
+      "Gmag": 13.134053,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65215058301202816",
+      "hr23_probability": 0.90426815834675,
+      "Gmag": 18.035473,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65215887229784320",
+      "hr23_probability": 0.886342392276751,
+      "Gmag": 19.715424,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65216363971331072",
+      "hr23_probability": 0.798252688252062,
+      "Gmag": 17.420778,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65221487868870784",
+      "hr23_probability": 1.0,
+      "Gmag": 7.8336287,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65221586651685248",
+      "hr23_probability": 0.713673108191422,
+      "Gmag": 18.12122,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65222484301820800",
+      "hr23_probability": 0.793474463656746,
+      "Gmag": 18.887249,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65222518661019520",
+      "hr23_probability": 0.748902079361757,
+      "Gmag": 13.691072,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65222759179728640",
+      "hr23_probability": 0.729607096911142,
+      "Gmag": 9.984646,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65223515093523328",
+      "hr23_probability": 0.963475988675635,
+      "Gmag": 16.894072,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65223583812996864",
+      "hr23_probability": 0.897403510863781,
+      "Gmag": 17.106117,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65223618172733952",
+      "hr23_probability": 0.822767514259999,
+      "Gmag": 11.957084,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65224889481112832",
+      "hr23_probability": 0.916497709222075,
+      "Gmag": 19.425034,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65225469302220800",
+      "hr23_probability": 0.804571598584999,
+      "Gmag": 17.469643,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65225611037551360",
+      "hr23_probability": 0.763238950951779,
+      "Gmag": 9.199545,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65226092073881856",
+      "hr23_probability": 0.742529610124931,
+      "Gmag": 17.303078,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65226401312036864",
+      "hr23_probability": 0.761584234827145,
+      "Gmag": 13.540735,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65228772133391488",
+      "hr23_probability": 0.727676996553544,
+      "Gmag": 17.9169,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65229184450247296",
+      "hr23_probability": 0.73808761174922,
+      "Gmag": 17.291239,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65230764996027776",
+      "hr23_probability": 0.853187297181568,
+      "Gmag": 8.228746,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65231486552803328",
+      "hr23_probability": 0.968304301113396,
+      "Gmag": 7.352819,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65232066371441792",
+      "hr23_probability": 0.838257656791159,
+      "Gmag": 17.853973,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65232105028172160",
+      "hr23_probability": 0.992772346796791,
+      "Gmag": 10.641136,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65232757863112192",
+      "hr23_probability": 0.958697064700138,
+      "Gmag": 16.385273,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65237911823760640",
+      "hr23_probability": 0.968645052584602,
+      "Gmag": 16.364956,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65239522434899840",
+      "hr23_probability": 0.872178285261218,
+      "Gmag": 19.276834,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65241313435901568",
+      "hr23_probability": 1.0,
+      "Gmag": 14.32924,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65241313437941504",
+      "hr23_probability": 0.847433252074732,
+      "Gmag": 14.416532,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65241863193865856",
+      "hr23_probability": 0.881342777052091,
+      "Gmag": 16.52288,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65242069352190976",
+      "hr23_probability": 1.0,
+      "Gmag": 9.539745,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65244435877629824",
+      "hr23_probability": 0.895479849282626,
+      "Gmag": 17.847445,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65244749411766528",
+      "hr23_probability": 0.812489298128351,
+      "Gmag": 13.679698,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65245539685760640",
+      "hr23_probability": 0.894191199164506,
+      "Gmag": 16.285315,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65247704349267584",
+      "hr23_probability": 0.859923150527834,
+      "Gmag": 11.167223,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65248460263511552",
+      "hr23_probability": 0.993307713672424,
+      "Gmag": 11.859773,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65254576296865152",
+      "hr23_probability": 0.967738238231028,
+      "Gmag": 17.378773,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65254885534508672",
+      "hr23_probability": 0.715366102477105,
+      "Gmag": 16.582888,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65257187636977536",
+      "hr23_probability": 0.801474647920711,
+      "Gmag": 17.168375,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65263097511969792",
+      "hr23_probability": 0.887570483498903,
+      "Gmag": 17.451342,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65265674492422784",
+      "hr23_probability": 0.89069588904897,
+      "Gmag": 17.757893,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65266494828710400",
+      "hr23_probability": 0.838257656791159,
+      "Gmag": 14.178851,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65267078945207296",
+      "hr23_probability": 0.765553506658764,
+      "Gmag": 15.717465,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65269935099961600",
+      "hr23_probability": 0.968645052584602,
+      "Gmag": 17.16973,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65270450496044416",
+      "hr23_probability": 0.842328714755635,
+      "Gmag": 15.178773,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65275020341243520",
+      "hr23_probability": 0.919443084625741,
+      "Gmag": 16.460293,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65275089060719104",
+      "hr23_probability": 0.735900973526939,
+      "Gmag": 11.193486,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65276703968959488",
+      "hr23_probability": 0.859696677276236,
+      "Gmag": 10.392956,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65277975278721408",
+      "hr23_probability": 0.700562587311629,
+      "Gmag": 16.796629,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65279418387728896",
+      "hr23_probability": 0.718865928370987,
+      "Gmag": 16.810167,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65280036863012864",
+      "hr23_probability": 0.775547757567485,
+      "Gmag": 17.37458,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65281166437426176",
+      "hr23_probability": 0.833623534670165,
+      "Gmag": 12.989489,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65281239453865856",
+      "hr23_probability": 0.715366102477105,
+      "Gmag": 14.607255,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65282716920396160",
+      "hr23_probability": 0.915644905301262,
+      "Gmag": 15.446207,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65283094877491200",
+      "hr23_probability": 0.968304301113396,
+      "Gmag": 17.727373,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65283232316451328",
+      "hr23_probability": 0.748793602143097,
+      "Gmag": 3.863349,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65284469269256704",
+      "hr23_probability": 0.909514463333583,
+      "Gmag": 11.090695,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65287458566524928",
+      "hr23_probability": 0.98879232163637,
+      "Gmag": 5.4413247,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65289004754691200",
+      "hr23_probability": 0.822816095936729,
+      "Gmag": 16.33304,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65289279632598016",
+      "hr23_probability": 0.756841543789905,
+      "Gmag": 16.479933,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65289279632597760",
+      "hr23_probability": 0.845584030736949,
+      "Gmag": 11.1088,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65289623229979136",
+      "hr23_probability": 0.948887603165544,
+      "Gmag": 11.209136,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65292268929825408",
+      "hr23_probability": 0.749295157771917,
+      "Gmag": 15.011795,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65293368441513344",
+      "hr23_probability": 0.872860803774859,
+      "Gmag": 15.395012,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65294807253267328",
+      "hr23_probability": 0.9721318952695,
+      "Gmag": 18.121277,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "65295430026352512",
+      "hr23_probability": 1.0,
+      "Gmag": 10.2749605,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65296357738731008",
+      "hr23_probability": 0.7807588672586,
+      "Gmag": 8.54996,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65297251091930624",
+      "hr23_probability": 0.85300731104602,
+      "Gmag": 16.519524,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65298208867376384",
+      "hr23_probability": 0.787667933093372,
+      "Gmag": 17.7707,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65299965511216384",
+      "hr23_probability": 1.0,
+      "Gmag": 15.661935,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65437644983224320",
+      "hr23_probability": 0.703066495205912,
+      "Gmag": 8.301424,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65674383581036800",
+      "hr23_probability": 0.796523131827968,
+      "Gmag": 15.41097,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65677372878285312",
+      "hr23_probability": 0.733017885744765,
+      "Gmag": 12.194483,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "65699569269925888",
+      "hr23_probability": 0.805133466118069,
+      "Gmag": 17.171106,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65701527774387840",
+      "hr23_probability": 0.738934487893664,
+      "Gmag": 16.473394,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65732447241199744",
+      "hr23_probability": 0.701778798565492,
+      "Gmag": 12.259071,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "65783029073414144",
+      "hr23_probability": 0.724987854622129,
+      "Gmag": 14.732029,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66429232674604544",
+      "hr23_probability": 0.788721540202956,
+      "Gmag": 16.541801,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66441323003146112",
+      "hr23_probability": 0.764485820527426,
+      "Gmag": 17.535738,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66445038154189952",
+      "hr23_probability": 0.877247723662236,
+      "Gmag": 17.512774,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66451429065390080",
+      "hr23_probability": 0.888569223186714,
+      "Gmag": 16.797077,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66451497784867712",
+      "hr23_probability": 0.837225411195935,
+      "Gmag": 15.786174,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66452047540860160",
+      "hr23_probability": 0.89892616450207,
+      "Gmag": 16.796696,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66452769091505024",
+      "hr23_probability": 0.851306804946185,
+      "Gmag": 11.35299,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66453181412027392",
+      "hr23_probability": 0.789809784513311,
+      "Gmag": 17.699118,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66460225158376192",
+      "hr23_probability": 0.939589715863201,
+      "Gmag": 17.770643,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66462939577861248",
+      "hr23_probability": 0.83145982152009,
+      "Gmag": 10.161764,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66468918172339328",
+      "hr23_probability": 0.731366901479254,
+      "Gmag": 17.061905,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66469742806047744",
+      "hr23_probability": 0.786490852220465,
+      "Gmag": 17.095089,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66470567439742208",
+      "hr23_probability": 0.731539815637008,
+      "Gmag": 17.230505,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66473178779856768",
+      "hr23_probability": 0.735985797465507,
+      "Gmag": 16.476507,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66480944080770176",
+      "hr23_probability": 0.708407580962429,
+      "Gmag": 12.090216,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66481734354737792",
+      "hr23_probability": 0.723849039230611,
+      "Gmag": 13.465058,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66481837433947392",
+      "hr23_probability": 0.857004761246043,
+      "Gmag": 13.02816,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66482868226100096",
+      "hr23_probability": 0.836423808456283,
+      "Gmag": 14.081378,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66483761579269888",
+      "hr23_probability": 0.852848690363584,
+      "Gmag": 16.594847,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66489259137570816",
+      "hr23_probability": 0.829711150612657,
+      "Gmag": 12.779283,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66499154741977216",
+      "hr23_probability": 0.765782284625913,
+      "Gmag": 11.176867,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66501181966524800",
+      "hr23_probability": 0.812603625762566,
+      "Gmag": 10.746968,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66506331628024832",
+      "hr23_probability": 0.899060464233412,
+      "Gmag": 8.101668,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66507469798631808",
+      "hr23_probability": 0.812459810430281,
+      "Gmag": 6.806421,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66509771901085696",
+      "hr23_probability": 0.768804392743211,
+      "Gmag": 16.25907,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66511970924353792",
+      "hr23_probability": 0.71857801804862,
+      "Gmag": 16.304827,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66512074003566976",
+      "hr23_probability": 0.892426517207074,
+      "Gmag": 16.154657,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66515196441155712",
+      "hr23_probability": 0.915117921895214,
+      "Gmag": 18.430693,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66515922294233728",
+      "hr23_probability": 0.740565039666754,
+      "Gmag": 16.615265,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66517468482370176",
+      "hr23_probability": 0.985651382587492,
+      "Gmag": 13.975899,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66521179334108928",
+      "hr23_probability": 0.910449718495527,
+      "Gmag": 17.046577,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66521381194879232",
+      "hr23_probability": 0.808950169249638,
+      "Gmag": 16.340902,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66522381924952704",
+      "hr23_probability": 0.98408473698124,
+      "Gmag": 16.501642,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66523103479455744",
+      "hr23_probability": 0.816923831241113,
+      "Gmag": 16.80336,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66523893753437824",
+      "hr23_probability": 1.0,
+      "Gmag": 9.903484,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66531178017967872",
+      "hr23_probability": 0.938109217308828,
+      "Gmag": 16.580677,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66533170882790784",
+      "hr23_probability": 0.834778523343269,
+      "Gmag": 16.850975,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66536331978799616",
+      "hr23_probability": 0.837456204931447,
+      "Gmag": 15.43928,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66537981246228096",
+      "hr23_probability": 0.725376537960904,
+      "Gmag": 11.425587,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66541142342159232",
+      "hr23_probability": 0.856611476024691,
+      "Gmag": 17.168797,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66546742979468416",
+      "hr23_probability": 0.756629510708048,
+      "Gmag": 16.63125,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66553443128503552",
+      "hr23_probability": 0.752663914632608,
+      "Gmag": 16.20243,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66553885506789504",
+      "hr23_probability": 0.797985665284423,
+      "Gmag": 18.835318,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66556535504958848",
+      "hr23_probability": 0.707088182770565,
+      "Gmag": 11.475932,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66556535504957568",
+      "hr23_probability": 0.73200392032836,
+      "Gmag": 16.240494,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66558249192653952",
+      "hr23_probability": 0.959675279771564,
+      "Gmag": 7.546007,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66560349435890176",
+      "hr23_probability": 0.815847931735276,
+      "Gmag": 16.40082,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66560727393001216",
+      "hr23_probability": 0.781272933330146,
+      "Gmag": 16.679499,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66565365957676416",
+      "hr23_probability": 0.740290778242632,
+      "Gmag": 10.915199,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66565778274538624",
+      "hr23_probability": 0.817625142071865,
+      "Gmag": 16.925774,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66566946505629440",
+      "hr23_probability": 0.786486920579691,
+      "Gmag": 12.286877,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66570554277316992",
+      "hr23_probability": 0.737195235351021,
+      "Gmag": 11.173697,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66581961710329984",
+      "hr23_probability": 0.708708511090242,
+      "Gmag": 10.85027,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66593437863017984",
+      "hr23_probability": 0.787144460216093,
+      "Gmag": 17.161787,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66640712564777856",
+      "hr23_probability": 0.710882773688781,
+      "Gmag": 12.341359,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66642641008348416",
+      "hr23_probability": 0.806933289326231,
+      "Gmag": 16.535604,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66648001127514368",
+      "hr23_probability": 0.757353208307162,
+      "Gmag": 16.8203,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66649409876772096",
+      "hr23_probability": 0.762989101187644,
+      "Gmag": 15.435466,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66652467893487488",
+      "hr23_probability": 0.710022724187419,
+      "Gmag": 14.509749,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66655560269868544",
+      "hr23_probability": 0.751922887597597,
+      "Gmag": 9.341612,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66657415696297344",
+      "hr23_probability": 0.82366379817812,
+      "Gmag": 8.769578,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66658240329321088",
+      "hr23_probability": 0.892314414005989,
+      "Gmag": 16.36067,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66659408560406528",
+      "hr23_probability": 0.703142705185192,
+      "Gmag": 16.571566,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66671468828544384",
+      "hr23_probability": 0.709268169858008,
+      "Gmag": 14.976172,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66710845088732160",
+      "hr23_probability": 0.820806294632538,
+      "Gmag": 14.752962,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66710948167949696",
+      "hr23_probability": 0.834583753102894,
+      "Gmag": 16.773333,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66711532283494656",
+      "hr23_probability": 0.744495224637155,
+      "Gmag": 16.304049,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66714177981308800",
+      "hr23_probability": 0.946555205962733,
+      "Gmag": 17.282734,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66714418501518848",
+      "hr23_probability": 0.867895588333169,
+      "Gmag": 16.853323,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66715105696289024",
+      "hr23_probability": 0.948887603165544,
+      "Gmag": 6.29883,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66715273197982848",
+      "hr23_probability": 0.904566449988728,
+      "Gmag": 8.243902,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66715827250786432",
+      "hr23_probability": 0.891183421873767,
+      "Gmag": 16.877417,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66716136489019008",
+      "hr23_probability": 0.98879232163637,
+      "Gmag": 17.69065,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66717987616472704",
+      "hr23_probability": 0.878105734308936,
+      "Gmag": 17.494467,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66719228864863360",
+      "hr23_probability": 0.774797040244996,
+      "Gmag": 15.501962,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66720294016753280",
+      "hr23_probability": 0.870117417196551,
+      "Gmag": 16.058432,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66720534534913792",
+      "hr23_probability": 0.803083660109142,
+      "Gmag": 14.94409,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66722355601033600",
+      "hr23_probability": 0.915407556333982,
+      "Gmag": 14.699243,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66722660540945408",
+      "hr23_probability": 0.977369324701054,
+      "Gmag": 18.549948,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66727234683931520",
+      "hr23_probability": 0.997926101684828,
+      "Gmag": 13.826407,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66728089380491648",
+      "hr23_probability": 0.947037186589075,
+      "Gmag": 17.542105,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66728089380492160",
+      "hr23_probability": 0.727033256039476,
+      "Gmag": 17.551449,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66728265476081408",
+      "hr23_probability": 0.909296453881648,
+      "Gmag": 17.19236,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66728501697350016",
+      "hr23_probability": 0.822545079646437,
+      "Gmag": 18.567303,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66729261908482048",
+      "hr23_probability": 0.950698091132676,
+      "Gmag": 9.376594,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66729635568719872",
+      "hr23_probability": 0.796480079139927,
+      "Gmag": 17.617458,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66729674225341696",
+      "hr23_probability": 0.825522630231773,
+      "Gmag": 17.056747,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66730120901930240",
+      "hr23_probability": 0.8418938861351,
+      "Gmag": 13.26761,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66730601936067072",
+      "hr23_probability": 0.753573594397039,
+      "Gmag": 18.383253,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66731731512764416",
+      "hr23_probability": 0.98879232163637,
+      "Gmag": 18.72439,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66732423004453376",
+      "hr23_probability": 0.74794533299751,
+      "Gmag": 14.973033,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66737095928811648",
+      "hr23_probability": 0.929976839936753,
+      "Gmag": 10.402332,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66737405166459264",
+      "hr23_probability": 0.909693913580991,
+      "Gmag": 14.798532,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66738023641737088",
+      "hr23_probability": 0.845057817661,
+      "Gmag": 16.653147,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66739982146803456",
+      "hr23_probability": 0.95919284891726,
+      "Gmag": 13.717735,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66740497542906368",
+      "hr23_probability": 0.835117350207281,
+      "Gmag": 17.043259,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66741116018188416",
+      "hr23_probability": 0.849811057560877,
+      "Gmag": 16.133425,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66741833275728768",
+      "hr23_probability": 1.0,
+      "Gmag": 20.620213,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66742765285619584",
+      "hr23_probability": 0.833815475075381,
+      "Gmag": 15.015844,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66745170467302656",
+      "hr23_probability": 0.846696057107231,
+      "Gmag": 16.013287,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66745617143891968",
+      "hr23_probability": 0.716485722373881,
+      "Gmag": 6.604883,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66745754582838272",
+      "hr23_probability": 0.893581224920008,
+      "Gmag": 16.6729,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66749121837171840",
+      "hr23_probability": 0.838765228467368,
+      "Gmag": 15.359683,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66754241438299520",
+      "hr23_probability": 0.819931585689529,
+      "Gmag": 12.7328415,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66755959425257856",
+      "hr23_probability": 0.816563837926404,
+      "Gmag": 16.821295,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66757746131459200",
+      "hr23_probability": 0.723849039230611,
+      "Gmag": 17.477245,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66761903659793152",
+      "hr23_probability": 0.734384876398879,
+      "Gmag": 15.173774,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66763965244167808",
+      "hr23_probability": 0.809136506636891,
+      "Gmag": 16.977882,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66767843597097856",
+      "hr23_probability": 0.919683889168394,
+      "Gmag": 17.77927,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66771764904729984",
+      "hr23_probability": 0.852084373586229,
+      "Gmag": 17.683437,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66774513683782912",
+      "hr23_probability": 0.899994666369787,
+      "Gmag": 12.459594,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66779358406877568",
+      "hr23_probability": 0.728515941586968,
+      "Gmag": 15.694813,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66779564565300224",
+      "hr23_probability": 0.758520893999093,
+      "Gmag": 16.700275,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66781316909399424",
+      "hr23_probability": 0.702649742475645,
+      "Gmag": 14.0124,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66781832308018176",
+      "hr23_probability": 0.808879249690752,
+      "Gmag": 10.873117,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66782897460055424",
+      "hr23_probability": 0.825160706577019,
+      "Gmag": 16.011278,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66782931820393216",
+      "hr23_probability": 0.752296785506407,
+      "Gmag": 17.010265,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66783584654831872",
+      "hr23_probability": 0.840365911934397,
+      "Gmag": 15.896999,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66783722091045248",
+      "hr23_probability": 0.822767514259999,
+      "Gmag": 18.957493,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66786505232432512",
+      "hr23_probability": 0.98879232163637,
+      "Gmag": 6.4252644,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66786539592171392",
+      "hr23_probability": 0.932421036916914,
+      "Gmag": 16.471231,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66787119410915072",
+      "hr23_probability": 1.0,
+      "Gmag": 12.868829,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66788253282520192",
+      "hr23_probability": 0.831654820045401,
+      "Gmag": 17.185026,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66788291938818304",
+      "hr23_probability": 0.972776668704599,
+      "Gmag": 10.296593,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66788669895935616",
+      "hr23_probability": 0.731674046735115,
+      "Gmag": 16.643583,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66792999222948992",
+      "hr23_probability": 0.726316952348872,
+      "Gmag": 16.739185,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66793583338514816",
+      "hr23_probability": 0.945305299140275,
+      "Gmag": 14.310514,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66797156751286912",
+      "hr23_probability": 0.742161027899046,
+      "Gmag": 16.827679,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66798496781121792",
+      "hr23_probability": 0.834278211698342,
+      "Gmag": 5.752026,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66798526845337344",
+      "hr23_probability": 0.956911711978671,
+      "Gmag": 13.832768,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66798977817468288",
+      "hr23_probability": 0.977369324701054,
+      "Gmag": 16.209143,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66799768088857856",
+      "hr23_probability": 0.765504160172655,
+      "Gmag": 12.692504,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66799763794633856",
+      "hr23_probability": 0.929085087518044,
+      "Gmag": 12.414279,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66800180408292992",
+      "hr23_probability": 0.708587855361038,
+      "Gmag": 15.064789,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66800244832257280",
+      "hr23_probability": 0.774693732041334,
+      "Gmag": 17.224361,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66801623514684416",
+      "hr23_probability": 0.863667728815626,
+      "Gmag": 14.265003,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66801623517295104",
+      "hr23_probability": 0.929680596038799,
+      "Gmag": 16.6805,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66802276352348416",
+      "hr23_probability": 0.85300731104602,
+      "Gmag": 13.399992,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66803616382830592",
+      "hr23_probability": 0.809548103553146,
+      "Gmag": 18.092802,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66807464672814336",
+      "hr23_probability": 0.838777758234861,
+      "Gmag": 15.306499,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66808220587759104",
+      "hr23_probability": 0.842630559849646,
+      "Gmag": 13.70242,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66808839062339712",
+      "hr23_probability": 0.85300731104602,
+      "Gmag": 17.464863,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66808869124393600",
+      "hr23_probability": 0.74720135029878,
+      "Gmag": 11.587448,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66809491897360896",
+      "hr23_probability": 0.89514036046526,
+      "Gmag": 10.408444,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66816295125702144",
+      "hr23_probability": 1.0,
+      "Gmag": 12.540388,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66818322350220416",
+      "hr23_probability": 0.800613891876008,
+      "Gmag": 15.761837,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66820590092840960",
+      "hr23_probability": 0.753639390018301,
+      "Gmag": 15.393848,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66823132713476480",
+      "hr23_probability": 0.852600356011972,
+      "Gmag": 16.87391,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66828870789879168",
+      "hr23_probability": 0.723978971113947,
+      "Gmag": 16.20272,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66831069813319936",
+      "hr23_probability": 0.911676079235239,
+      "Gmag": 15.47262,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66831172892327680",
+      "hr23_probability": 0.767403068931792,
+      "Gmag": 18.0745,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66832100605159424",
+      "hr23_probability": 0.829667068851265,
+      "Gmag": 10.744773,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66834054814431232",
+      "hr23_probability": 0.829662655685365,
+      "Gmag": 16.563644,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66838452861270272",
+      "hr23_probability": 0.885071362967456,
+      "Gmag": 10.10806,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66846291177113088",
+      "hr23_probability": 0.758118464440187,
+      "Gmag": 14.673388,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66847631206903040",
+      "hr23_probability": 0.956099116898988,
+      "Gmag": 15.424488,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "66850517426494208",
+      "hr23_probability": 0.730601086814259,
+      "Gmag": 17.439728,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66852647730267264",
+      "hr23_probability": 0.759812705340469,
+      "Gmag": 13.310761,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66885942316710784",
+      "hr23_probability": 0.707004752773249,
+      "Gmag": 16.95706,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66887660303617408",
+      "hr23_probability": 0.743510593194632,
+      "Gmag": 16.868773,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66894772769437952",
+      "hr23_probability": 0.704941700601771,
+      "Gmag": 17.874992,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66903293984399872",
+      "hr23_probability": 0.7289130389922,
+      "Gmag": 13.613075,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66926211929978880",
+      "hr23_probability": 0.741092275497045,
+      "Gmag": 16.598265,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66941635153934848",
+      "hr23_probability": 0.857786418535575,
+      "Gmag": 18.346786,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66942189204257408",
+      "hr23_probability": 0.725755633840441,
+      "Gmag": 18.907158,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "66960262430594816",
+      "hr23_probability": 0.716650019798652,
+      "Gmag": 9.52466,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "66960743466922624",
+      "hr23_probability": 0.737832654678633,
+      "Gmag": 16.939152,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "67732257029618048",
+      "hr23_probability": 0.787208163850716,
+      "Gmag": 14.31126,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "67756789882795008",
+      "hr23_probability": 0.74780305626436,
+      "Gmag": 15.859415,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68117635855255168",
+      "hr23_probability": 0.724469326780942,
+      "Gmag": 16.598715,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68120418994061312",
+      "hr23_probability": 0.831633813476783,
+      "Gmag": 17.177141,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68129764842889600",
+      "hr23_probability": 0.819871268243901,
+      "Gmag": 10.699779,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68150861722174848",
+      "hr23_probability": 0.881284972257002,
+      "Gmag": 11.304962,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68152820227358720",
+      "hr23_probability": 0.724164047144148,
+      "Gmag": 15.784899,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68167835432980480",
+      "hr23_probability": 0.969489612005147,
+      "Gmag": 15.505199,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68170721650939264",
+      "hr23_probability": 0.784541238105984,
+      "Gmag": 16.658615,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68174191984522368",
+      "hr23_probability": 0.878496419314578,
+      "Gmag": 16.293001,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68175806892217216",
+      "hr23_probability": 0.830794944819634,
+      "Gmag": 15.53727,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68185221460637824",
+      "hr23_probability": 0.775371430525913,
+      "Gmag": 16.584269,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68186114813689344",
+      "hr23_probability": 0.832401673710261,
+      "Gmag": 17.018175,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68233531252642432",
+      "hr23_probability": 0.835159351868933,
+      "Gmag": 16.483887,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68259438496008832",
+      "hr23_probability": 0.7755734738562,
+      "Gmag": 14.768776,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68261053403709312",
+      "hr23_probability": 0.857606095240896,
+      "Gmag": 17.022444,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68262973252098304",
+      "hr23_probability": 0.763835486512345,
+      "Gmag": 17.22576,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68265588889169664",
+      "hr23_probability": 1.0,
+      "Gmag": 15.268429,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68282837477714816",
+      "hr23_probability": 0.806577963735977,
+      "Gmag": 17.633608,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68283421593270400",
+      "hr23_probability": 0.846334288810038,
+      "Gmag": 17.595737,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68294309333614720",
+      "hr23_probability": 0.886374619311879,
+      "Gmag": 18.979607,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "68294554148575232",
+      "hr23_probability": 0.828805951381344,
+      "Gmag": 13.636955,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68296650092601088",
+      "hr23_probability": 0.807836062431698,
+      "Gmag": 15.147523,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68298093201624960",
+      "hr23_probability": 0.739982770989508,
+      "Gmag": 17.32333,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68303487680516224",
+      "hr23_probability": 0.938365286148903,
+      "Gmag": 11.282754,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68303659479211776",
+      "hr23_probability": 0.853511328078595,
+      "Gmag": 15.863776,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68303728198686080",
+      "hr23_probability": 0.813623955474651,
+      "Gmag": 16.39733,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68306099020642432",
+      "hr23_probability": 0.921380112128902,
+      "Gmag": 8.041619,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68310359628169472",
+      "hr23_probability": 0.732497002921455,
+      "Gmag": 12.553257,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68310561489710336",
+      "hr23_probability": 0.741428297405934,
+      "Gmag": 9.3706045,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68314414077327744",
+      "hr23_probability": 0.781306038619543,
+      "Gmag": 14.889832,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68317609532996480",
+      "hr23_probability": 0.719293455598181,
+      "Gmag": 11.684883,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68322145018429952",
+      "hr23_probability": 0.949689722058473,
+      "Gmag": 10.600085,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68323485048225152",
+      "hr23_probability": 0.814862207688911,
+      "Gmag": 13.734854,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68323966084583680",
+      "hr23_probability": 0.710528278847454,
+      "Gmag": 15.649356,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68327402058399232",
+      "hr23_probability": 0.964008057183063,
+      "Gmag": 15.965781,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68348155340347776",
+      "hr23_probability": 0.704056741262659,
+      "Gmag": 15.177081,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68354374452892160",
+      "hr23_probability": 0.714631639151095,
+      "Gmag": 16.329308,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68356367317952256",
+      "hr23_probability": 0.737007415943985,
+      "Gmag": 15.603813,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68363411064150272",
+      "hr23_probability": 0.856974642549995,
+      "Gmag": 13.830462,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68364544933829376",
+      "hr23_probability": 0.748717593060668,
+      "Gmag": 13.597192,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68367190635351936",
+      "hr23_probability": 0.931436926783218,
+      "Gmag": 17.305487,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68378563708730624",
+      "hr23_probability": 0.827703077744891,
+      "Gmag": 15.265487,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68381793524163968",
+      "hr23_probability": 0.796510969841752,
+      "Gmag": 17.462278,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68390830135333504",
+      "hr23_probability": 0.787684472655596,
+      "Gmag": 15.981778,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68395606138958592",
+      "hr23_probability": 0.841309197501705,
+      "Gmag": 16.7538,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "68448142178730752",
+      "hr23_probability": 0.724613902940013,
+      "Gmag": 16.846962,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68581694185489920",
+      "hr23_probability": 0.718886796777953,
+      "Gmag": 17.939394,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68595751615127296",
+      "hr23_probability": 0.822450207591214,
+      "Gmag": 15.024521,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68606918530067072",
+      "hr23_probability": 0.715887423658893,
+      "Gmag": 17.212824,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "68660554081641472",
+      "hr23_probability": 0.725625534684154,
+      "Gmag": 16.92848,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69806039039416832",
+      "hr23_probability": 0.707487383764206,
+      "Gmag": 17.622309,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69807963184755840",
+      "hr23_probability": 0.89738335154347,
+      "Gmag": 16.527004,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69811364798863744",
+      "hr23_probability": 0.944258217508385,
+      "Gmag": 14.463644,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69811639676769536",
+      "hr23_probability": 0.916092299601078,
+      "Gmag": 10.473494,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69811948914407168",
+      "hr23_probability": 0.887587565575515,
+      "Gmag": 9.715471,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69812945346809600",
+      "hr23_probability": 0.719525509337474,
+      "Gmag": 5.6404076,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69812945346809344",
+      "hr23_probability": 0.968304301113396,
+      "Gmag": 15.99179,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69819027020489088",
+      "hr23_probability": 1.0,
+      "Gmag": 9.570481,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69819404977607168",
+      "hr23_probability": 0.847895903778963,
+      "Gmag": 8.900821,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69829541100441600",
+      "hr23_probability": 0.841822191704636,
+      "Gmag": 15.050903,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69834282744302208",
+      "hr23_probability": 1.0,
+      "Gmag": 16.973806,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69834759483788928",
+      "hr23_probability": 0.970030256444281,
+      "Gmag": 12.777334,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69834866859848192",
+      "hr23_probability": 0.949689722058473,
+      "Gmag": 13.570004,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69847610026687104",
+      "hr23_probability": 0.823838714881431,
+      "Gmag": 10.402031,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69856272976786560",
+      "hr23_probability": 0.738302933053405,
+      "Gmag": 16.592688,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69857235049588736",
+      "hr23_probability": 0.817616851956734,
+      "Gmag": 11.425433,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69859124835119360",
+      "hr23_probability": 0.712100106153466,
+      "Gmag": 16.831028,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69860293066219136",
+      "hr23_probability": 0.841494440499231,
+      "Gmag": 14.256176,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69864313155605120",
+      "hr23_probability": 0.923057054466583,
+      "Gmag": 11.010165,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69871219462957952",
+      "hr23_probability": 0.838843910851172,
+      "Gmag": 15.6527,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69872044096705664",
+      "hr23_probability": 0.837598866220264,
+      "Gmag": 8.016677,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69876712724339456",
+      "hr23_probability": 0.841026867633939,
+      "Gmag": 11.434036,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69877163697813248",
+      "hr23_probability": 0.995474719806197,
+      "Gmag": 13.9155445,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69878503727603072",
+      "hr23_probability": 0.712242781803967,
+      "Gmag": 14.705767,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69883417170175488",
+      "hr23_probability": 0.973237705319118,
+      "Gmag": 10.628875,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69889876800977408",
+      "hr23_probability": 0.816966146288332,
+      "Gmag": 14.827288,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69894962042148096",
+      "hr23_probability": 0.773972113417855,
+      "Gmag": 17.730902,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69896473870624640",
+      "hr23_probability": 0.899304289862879,
+      "Gmag": 11.959438,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69898294936767488",
+      "hr23_probability": 0.720557794230344,
+      "Gmag": 17.410069,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69904410970171392",
+      "hr23_probability": 0.725799142770021,
+      "Gmag": 15.347046,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69906571336964608",
+      "hr23_probability": 0.860251245366956,
+      "Gmag": 12.185305,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69906713072633856",
+      "hr23_probability": 0.773510285626851,
+      "Gmag": 16.485218,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69911282917833216",
+      "hr23_probability": 0.854229149254707,
+      "Gmag": 15.779932,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69911867033651200",
+      "hr23_probability": 0.855172056964111,
+      "Gmag": 17.140594,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69912309413652864",
+      "hr23_probability": 0.76563122207121,
+      "Gmag": 17.451437,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69917635172718720",
+      "hr23_probability": 0.722226537050042,
+      "Gmag": 11.862408,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69918086146123520",
+      "hr23_probability": 0.764728282150681,
+      "Gmag": 15.064909,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69918979499309952",
+      "hr23_probability": 0.765359422347249,
+      "Gmag": 16.726799,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69934334006064768",
+      "hr23_probability": 0.745886142374296,
+      "Gmag": 16.46216,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69935162935991168",
+      "hr23_probability": 0.702465161162358,
+      "Gmag": 12.610382,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "69942515919994368",
+      "hr23_probability": 0.741697615264839,
+      "Gmag": 16.459324,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69947635521777152",
+      "hr23_probability": 0.729706850723986,
+      "Gmag": 16.461193,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69951449452730752",
+      "hr23_probability": 0.72785673069645,
+      "Gmag": 16.65519,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69964879813013248",
+      "hr23_probability": 0.777765048466293,
+      "Gmag": 9.696473,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69985637392346496",
+      "hr23_probability": 0.75371088570015,
+      "Gmag": 16.544926,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "69990241597280640",
+      "hr23_probability": 0.70188348007923,
+      "Gmag": 15.00792,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70044628765739776",
+      "hr23_probability": 0.703296948897168,
+      "Gmag": 14.088978,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70049477786093056",
+      "hr23_probability": 0.752646536399517,
+      "Gmag": 11.516263,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70088819686490496",
+      "hr23_probability": 0.760109588554114,
+      "Gmag": 16.582438,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70091259227969920",
+      "hr23_probability": 0.760109588554114,
+      "Gmag": 17.84341,
+      "stage": "baseline_pass_probability_not_in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70097581419826944",
+      "hr23_probability": 0.878909110698404,
+      "Gmag": 15.527512,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "70098612211973248",
+      "hr23_probability": 0.92404482542776,
+      "Gmag": 16.097664,
+      "stage": "in_cmd",
+      "pipeline_probability": 1.0
+    },
+    {
+      "source_id": "70121805035254144",
+      "hr23_probability": 0.709050661220547,
+      "Gmag": 12.406143,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70127955428529536",
+      "hr23_probability": 0.786337877979991,
+      "Gmag": 16.52787,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70150357977789056",
+      "hr23_probability": 0.741307717156469,
+      "Gmag": 15.682308,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70153484713977472",
+      "hr23_probability": 0.750762333750394,
+      "Gmag": 16.255726,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70158977974956672",
+      "hr23_probability": 0.788207093657426,
+      "Gmag": 12.313311,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70165476262750976",
+      "hr23_probability": 0.754008980412242,
+      "Gmag": 16.019033,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70169251536714624",
+      "hr23_probability": 0.734450046359751,
+      "Gmag": 12.449474,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    },
+    {
+      "source_id": "70230652389756928",
+      "hr23_probability": 0.770112893782916,
+      "Gmag": 18.211119,
+      "stage": "not_in_saved_baseline",
+      "pipeline_probability": null
+    },
+    {
+      "source_id": "70248180152474368",
+      "hr23_probability": 0.708454814520552,
+      "Gmag": 15.680851,
+      "stage": "in_cmd",
+      "pipeline_probability": 0.9999
+    }
+  ],
+  "limits": [
+    "The saved baseline is an intermediate project snapshot, not necessarily the original Gaia query universe.",
+    "Not in baseline does not mean non-member; below project probability does not prove HR23 is wrong.",
+    "Pass probability but absent from CMD localises a later selection loss but does not by itself identify the exact quality cut."
+  ]
+}
