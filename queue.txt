@@ -156,6 +156,29 @@ radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --config
 # p6_lowmass 是全專案第二重要的數字（0.248 系統誤差），profile_outlierfrac
 # 是這次發現 bug 的源頭。其餘受影響項目（P9a-redo/P9c/P6b/P12）先記在
 # LIMITATIONS.md／WORK_BOARD.md 待認領清單，優先度較低，之後再排。=====
+#
+# ===== 2026-08-20：radial_final_reruns（WORK_BOARD.md「第 2 步四項
+# 到齊後新解鎖的工作」，A5，最優先）。四項合計單次 prelim 已知耗時
+# 5,298–29,319 秒，乘上 5 次重複，數十小時等級——`fit_real.py` 有
+# manifest＋逐次重複續傳保護，就算再被 Windows 強制重開機也不會歸零。
+# 目標：確認 r3(2.50) > rall(2.43) 這個非單調現象是真實訊號還是統計
+# 雜訊（prelim 版單次無誤差棒，這批要看誤差棒重不重疊）。=====
+# （2026-08-22：這個區塊在 PR #87 的分支裡曾經整段消失——只有這一側改了
+# 這裡，git 三方合併不會標成 conflict，會直接悄悄刪掉，靠比對 merge-base
+# 才抓到。這裡補回來，四項仍在本機排隊／執行中，不能弄丟。）
+radial_r1_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final
+radial_r2_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final
+radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,3 --tag _radial_r3_final
+# rall 刻意不帶 --radius-range：這是四項裡唯一的「真正全樣本」對照組，
+# 不是「0-5.1 度」這個切片。文件裡寫的「0-5.1 度」是描述目前樣本的
+# 實際涵蓋範圍（cone 搜尋半徑 5.0 度，見 config.toml 的 radius_deg），
+# 不是一個要靠 --radius-range 主動執行的裁切——5.1 這個數字沒有對應到
+# 任何設定值，寫死進來反而會在樣本涵蓋範圍改變時（例如之後真的放大
+# 搜尋半徑）悄悄變成錯誤的裁切，讓 rall 不再是真正的「全部」
+# （2026-08-20 CodeRabbit review 建議加這個旗標，評估後決定不採用，
+# 理由記在這裡）。
+radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
+#
 # ===== 2026-08-21：使用者選 C——先跑完其餘 8 項，這一項移到佇列最後 =====
 # 實測第 1 次擬合花了 67,213 秒 = 18.7 小時（見 logs/p6_lowmass_v2.log），
 # 15 次擬合合計約 280 小時 ≈ 11.7 天。它擋住本機佇列其餘 8 項（run_queue
@@ -305,3 +328,19 @@ p11_outlierfrac_v3|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 # 新版會判定「既有結果已滿足重複次數」直接跳過什麼都不算。
 p6_lowmass_v3|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
+# ===== 2026-08-20：mass_dependent_fbin（D14 衍生，見 WORK_BOARD.md
+# 「對照 Hobart et al. 2026 的鞏固工作」表）=====
+# synthesise() 裡決定「誰帶伴星」的 Bernoulli(f_bin) 跟主星質量完全獨立，
+# 等於假設雙星比例不隨質量變化——已知簡化但從沒量化過代價。
+# 注入端讓 f_bin 隨質量分兩段（重星段減輕星段相差 contrast，**整體雙星
+# 比例固定不變**，只動質量相依性這一個變因），擬合端用現有的常數 f_bin
+# 模型，量 alpha 被推歪多少。contrast=0 是對照組，用來扣掉這套注入回收
+# 本身的偏差地板（C13 記錄約 -0.050，跟要測的量級接近，不扣不能判讀）。
+# 驗收：淨偏移遠小於統計誤差 0.144 -> 記為可忽略並結案，不升格成自由參數。
+# **不完整的批次不會被記成 ok**（2026-08-21 CodeRabbit review）：撞牆的
+# 試驗會被跳過，程式原本仍可能帶著不完整的結果正常結束、被 run_queue.py
+# 標成 ok，而「淨偏移」是拿 contrast=X 減 contrast=0 的偏差地板——任一邊
+# 不完整，扣出來的就不是要量的東西（尤其 contrast=0 只成功一次時，地板
+# 本身只是單次雜訊）。腳本現在會檢查每個 contrast 都跑滿 --trials，沒跑滿
+# 就不下結論並以非零碼結束，讓這一項標成失敗而不是 ok。
+massdep_fbin|inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3
