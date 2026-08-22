@@ -1,0 +1,177 @@
+{
+  "status": "coarse_smoke_diagnostic_not_headline_fit",
+  "purpose": "Screen alpha sensitivity to an unmodelled mass-dependent binary fraction.",
+  "true_theta": {
+    "logage": 8.15,
+    "A_V": 0.15,
+    "f_bin": 0.45,
+    "alpha": 2.35,
+    "MH": 0.0,
+    "q_gamma": -0.5
+  },
+  "fixed_parameters_in_recovery": [
+    "logage",
+    "A_V",
+    "MH",
+    "q_gamma"
+  ],
+  "fitted_grid": {
+    "f_bin": [
+      0.15,
+      0.25,
+      0.35,
+      0.45000000000000007,
+      0.55,
+      0.65,
+      0.7500000000000001,
+      0.8500000000000001
+    ],
+    "alpha": [
+      1.75,
+      1.9,
+      2.05,
+      2.1999999999999997,
+      2.3499999999999996,
+      2.4999999999999996,
+      2.6499999999999995,
+      2.7999999999999994,
+      2.9499999999999993
+    ]
+  },
+  "n_stars": 1078,
+  "n_gen_for_injection": 60000,
+  "n_syn_per_likelihood": 5000,
+  "profiles": {
+    "constant_0.45": {
+      "injected_profile": null,
+      "selected_fake_stars": 1078,
+      "realised_selected_binary_fraction": 0.4536178107606679,
+      "constant_model_recovery": {
+        "loglike": 1687.0317838569042,
+        "fbin": 0.45000000000000007,
+        "alpha": 2.4999999999999996,
+        "top5": [
+          {
+            "loglike": 1687.0317838569042,
+            "fbin": 0.45000000000000007,
+            "alpha": 2.4999999999999996
+          },
+          {
+            "loglike": 1680.1711266666766,
+            "fbin": 0.55,
+            "alpha": 2.4999999999999996
+          },
+          {
+            "loglike": 1669.9993955968616,
+            "fbin": 0.55,
+            "alpha": 2.6499999999999995
+          },
+          {
+            "loglike": 1665.0194578795738,
+            "fbin": 0.45000000000000007,
+            "alpha": 2.3499999999999996
+          },
+          {
+            "loglike": 1662.6805596069694,
+            "fbin": 0.35,
+            "alpha": 2.4999999999999996
+          }
+        ]
+      },
+      "alpha_shift_from_injected": 0.14999999999999947,
+      "alpha_shift_relative_to_constant_control": 0.0
+    },
+    "mild_low0.35_high0.65_at0.8Msun": {
+      "injected_profile": [
+        0.8,
+        0.35,
+        0.65
+      ],
+      "selected_fake_stars": 1078,
+      "realised_selected_binary_fraction": 0.4294990723562152,
+      "constant_model_recovery": {
+        "loglike": 1647.8698090656435,
+        "fbin": 0.45000000000000007,
+        "alpha": 2.05,
+        "top5": [
+          {
+            "loglike": 1647.8698090656435,
+            "fbin": 0.45000000000000007,
+            "alpha": 2.05
+          },
+          {
+            "loglike": 1635.529765428208,
+            "fbin": 0.35,
+            "alpha": 2.05
+          },
+          {
+            "loglike": 1631.8598922860056,
+            "fbin": 0.45000000000000007,
+            "alpha": 1.9
+          },
+          {
+            "loglike": 1627.7664349136503,
+            "fbin": 0.45000000000000007,
+            "alpha": 2.3499999999999996
+          },
+          {
+            "loglike": 1627.1534737715622,
+            "fbin": 0.55,
+            "alpha": 2.05
+          }
+        ]
+      },
+      "alpha_shift_from_injected": -0.30000000000000027,
+      "alpha_shift_relative_to_constant_control": -0.44999999999999973
+    },
+    "strong_low0.20_high0.80_at0.8Msun": {
+      "injected_profile": [
+        0.8,
+        0.2,
+        0.8
+      ],
+      "selected_fake_stars": 1078,
+      "realised_selected_binary_fraction": 0.33487940630797774,
+      "constant_model_recovery": {
+        "loglike": 1716.4535821424217,
+        "fbin": 0.35,
+        "alpha": 2.1999999999999997,
+        "top5": [
+          {
+            "loglike": 1716.4535821424217,
+            "fbin": 0.35,
+            "alpha": 2.1999999999999997
+          },
+          {
+            "loglike": 1708.6760198169002,
+            "fbin": 0.25,
+            "alpha": 2.1999999999999997
+          },
+          {
+            "loglike": 1706.8401215428296,
+            "fbin": 0.35,
+            "alpha": 2.05
+          },
+          {
+            "loglike": 1699.9974099067354,
+            "fbin": 0.25,
+            "alpha": 2.05
+          },
+          {
+            "loglike": 1691.0259597507386,
+            "fbin": 0.35,
+            "alpha": 2.3499999999999996
+          }
+        ]
+      },
+      "alpha_shift_from_injected": -0.15000000000000036,
+      "alpha_shift_relative_to_constant_control": -0.2999999999999998
+    }
+  },
+  "limits": [
+    "One deterministic fake catalogue per profile; no sampling error bar.",
+    "The two mass-dependent profiles are examples, not a measured M45 law.",
+    "A coarse grid is for direction and scale only; it does not replace a joint fit.",
+    "Compare profiles against constant_0.45, not directly against the injected alpha: the control itself reveals finite-catalogue and grid recovery error."
+  ]
+}

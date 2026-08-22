@@ -294,7 +294,24 @@ class JointModel:
         # 一個後處理步驟，這裡沒有做，報出來的 alpha 也不是那個東西。
         # 另外第 (2) 步與 m1 獨立，等於假設**雙星比例不隨質量變化**——
         # 這是已知的簡化，不是疏忽（見 LIMITATIONS.md）。
-        is_bin = d["u_bin"][:n] < fbin
+        # A diagnostic may set ``binary_fraction_profile`` to
+        # ``(mass_break, f_below, f_above)``.  This deliberately affects only
+        # synthetic *injections*: normal production fits do not set it and
+        # therefore retain the original mass-independent Bernoulli(f_bin).
+        # Keeping this switch on the model rather than adding a fitted theta
+        # parameter prevents a diagnostic from silently changing the headline
+        # model.
+        binary_profile = getattr(self, "binary_fraction_profile", None)
+        if binary_profile is None:
+            p_bin = fbin
+        else:
+            mass_break, f_below, f_above = map(float, binary_profile)
+            if not (mi.min() < mass_break < mi.max()):
+                raise ValueError("binary_fraction_profile mass break is outside the isochrone")
+            if not (0.0 <= f_below <= 1.0 and 0.0 <= f_above <= 1.0):
+                raise ValueError("binary_fraction_profile fractions must be in [0, 1]")
+            p_bin = np.where(m1 < mass_break, f_below, f_above)
+        is_bin = d["u_bin"][:n] < p_bin
         if is_bin.any():
             u = d["u_q"][:n][is_bin]
             qg, qm = qgamma, self.c3.binary_q_min
