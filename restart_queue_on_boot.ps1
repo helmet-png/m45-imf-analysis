@@ -73,6 +73,37 @@ function Restart-QueueIfNotRunning {
     $scriptPath = Join-Path $repo $ScriptName
     $queueLog = Join-Path $repo "logs\$LogFile"
 
+    # 第一優先：看單例鎖檔。這是跟 Python 端同一個真相來源——run_queue.py
+    # 與 kaggle_queue.py 的 acquire_lock() 就是用這個檔案判斷「有沒有另一
+    # 份在跑」，兩邊用同一個判準才不會各說各話。
+    #
+    # **為什麼不能只靠命令列比對**（2026-08-21 實測到的問題）：下面那段
+    # 比對要求命令列裡出現腳本的**完整絕對路徑**，但用相對路徑啟動
+    # （`Set-Location $repo; python -u kaggle_queue.py`）時命令列裡只有
+    # 裸檔名，比對不到，於是這支腳本每 15 分鐘都誤判成「沒在跑」而多開
+    # 一份。那些多開的行程雖然一啟動就被 Python 端的單例鎖擋掉、自己
+    # 退出（所以沒造成真正的傷害），但等於每輪都白開一個行程、還把
+    # autorestart.log 灌滿假的「自動重啟」紀錄，真的出事時反而看不出來。
+    # 這正是 acquire_lock() 註解裡記的 2026-08-18 那次「相對路徑啟動
+    # 導致漏配」的同一個坑，只是這次是持續每 15 分鐘重演。
+    $lockFile = Join-Path $repo ("logs\" + [IO.Path]::GetFileNameWithoutExtension($ScriptName) + ".lock")
+    if (Test-Path $lockFile) {
+        $lockPid = $null
+        try { $lockPid = [int]((Get-Content $lockFile -Raw).Trim()) } catch { $lockPid = $null }
+        if ($lockPid) {
+            $alive = Get-Process -Id $lockPid -ErrorAction SilentlyContinue
+            if ($alive) {
+                Write-SelfLog "$ScriptName 已在跑（鎖檔 PID $lockPid），略過重複啟動"
+                return
+            }
+            # 鎖檔在、PID 卻不在 = 上次沒清乾淨。**不在這裡刪**：Python 端的
+            # acquire_lock() 自己會偵測殘留鎖並清掉重搶，由它處理才不會跟
+            # 正在啟動中的行程搶。這裡只當作「沒在跑」，往下走重啟流程。
+            Write-SelfLog "$ScriptName 的鎖檔殘留（PID $lockPid 已不存在），視為沒在跑"
+        }
+    }
+
+    # 第二道：命令列比對。鎖檔不存在時（例如還沒跑過任何一次）才用得上。
     # 只比對這個 repo 自己的腳本完整路徑，不是裸的檔名片段——避免別的
     # checkout、備份檔（例如 run_queue.py.bak）之類的命令列片段誤判成
     # 「已經在跑」，導致該重啟的時候被誤判成略過（CodeRabbit review
