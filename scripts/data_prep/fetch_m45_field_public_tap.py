@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TAP = "https://gaia.ari.uni-heidelberg.de/tap/sync"
 TOP = 20000
-RA_DEG = 56.75
-DEC_DEG = 24.1167
+RA_DEG = 56.60083
+DEC_DEG = 24.11389
 RADIUS_DEG = 5.0
 FIELDS = [
     "source_id", "ra", "dec", "pmra", "pmdec", "parallax",

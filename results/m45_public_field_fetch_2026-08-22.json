@@ -1,11 +1,11 @@
 {
   "status": "complete_bounded_public_tap_query",
-  "rows": 6983,
+  "rows": 6956,
   "top_guard": 20000,
   "tap": "https://gaia.ari.uni-heidelberg.de/tap/sync",
   "query_geometry": {
-    "ra_deg": 56.75,
-    "dec_deg": 24.1167,
+    "ra_deg": 56.60083,
+    "dec_deg": 24.11389,
     "radius_deg": 5.0
   },
   "cuts": {
