@@ -62,6 +62,20 @@ MAX_WAIT_HOURS = 20
 # dataset 掛載時序不穩，偵測到那個特定失敗模式就重推 kernel，
 # 間隔遞增（不是猜一個固定等待時長，見 is_mount_race_failure 的說明）。
 BACKOFFS = [60, 120, 240, 480]
+# push 失敗最多重試幾次才放棄。**這是補上一個真實的、已經造成損失的缺口**：
+# 下載端在 2026-08-19（PR #66）已修成「失敗就不寫 DONE 檔、下一輪自動重試」，
+# 推送端卻沒有——原本一次 push 失敗就直接 mark_done(..., "push_failed")，
+# 而派工是用「label 不在 DONE 裡」篩選的，那個工作等於被永久放棄，要人工
+# 換一個新 label 重排才會再跑。
+#
+# 實際損失（logs/kaggle_queue_done.txt 查得到）：到 2026-08-21 為止共 6 筆
+# push_failed，其中 2026-08-19 08:54:24–08:54:31 這 7 秒內就有 4 筆——單一次
+# 網路瞬斷一口氣吃掉四個工作，全部是人工發現後手動補排的。
+#
+# 設上限而不是無限重試：push 失敗不一定是網路，也可能是參數打錯、帳號額度
+# 用完之類重試幾次也不會好的原因，無限重試會變成安靜空轉。次數用完才寫
+# DONE，且狀態字串標明重試過幾次，事後查得出來。
+MAX_PUSH_RETRIES = 3
 
 
 def acquire_lock():
@@ -367,6 +381,10 @@ def main() -> None:
     # 啟動時先掃一輪，接回任何帳號已經在 Kaggle 端跑著的 kernel，
     # 不要無條件當成全新一輪、把還在跑的進度重推掉。
     slots = recover_running_slots(accounts, envs)
+    # 每個 label 連續 push 失敗幾次。刻意只放在記憶體、不落地：重啟這支
+    # 執行器時歸零是想要的行為——重啟通常正是為了排除當時那個環境問題，
+    # 不該讓上一輪的失敗次數繼續累計、害一個其實已經可以推的工作被放棄。
+    push_fail_counts: dict[str, int] = {}
     if any(slots.values()):
         running = [n for n, s in slots.items() if s]
         print(f"復原完成，接回 {len(running)} 個已在跑的槽位：{running}",
@@ -377,6 +395,15 @@ def main() -> None:
         pending = [it for it in read_queue() if it["label"] not in done
                    and it["label"] not in
                    {s["item"]["label"] for s in slots.values() if s}]
+
+        # 這一輪有沒有「push 失敗但還沒用完重試次數」的工作。**這個旗標是
+        # 必要的**（2026-08-21 CodeRabbit review）：`pending` 雖然每一輪都
+        # 重建（上面幾行），但下面 `pending.pop(idx)` 會把工作從**這一輪**
+        # 的清單移除。若佇列只剩這一個工作、它第 1 次 push 失敗（照設計
+        # 不寫 DONE、也沒佔到槽位），迴圈尾端的結束判斷會看到
+        # 「pending 空 + 所有槽位閒置」而直接 return，這個工作根本等不到
+        # 第 2、3 次重試——MAX_PUSH_RETRIES 形同虛設。
+        retryable_push_failure = False
 
         # 1) 把待辦工作塞進閒置的帳號槽位
         for name in accounts:
@@ -393,11 +420,36 @@ def main() -> None:
                   flush=True)
             ok, kid, work_dir = push(item, name)
             if ok:
+                push_fail_counts.pop(item["label"], None)
                 slots[name] = {"phase": "running", "item": item, "kid": kid,
                               "work_dir": work_dir, "t0": time.time(),
                               "retries": 0}
             else:
-                mark_done(item["label"], "push_failed", 0, name)
+                # push 失敗預設**不**寫 DONE：寫下去這個工作就再也不會被派，
+                # 而最常見的原因（網路瞬斷）下一輪就會自己好。留著不寫，
+                # 下一輪 pending 會再包含它，可能換一個帳號重推。
+                # 只有連續失敗超過上限才放棄，避免非網路原因造成無限空轉。
+                n = push_fail_counts.get(item["label"], 0) + 1
+                push_fail_counts[item["label"]] = n
+                if n >= MAX_PUSH_RETRIES:
+                    # 用「達到」不是「超過」——這個分支的條件是 >=，第 3 次
+                    # 失敗就成立，寫「超過」會讓 log 誤述終止條件
+                    #（2026-08-21 CodeRabbit review）。
+                    print(f"  {item['label']} 連續 push 失敗 {n} 次，放棄"
+                          f"（達到 MAX_PUSH_RETRIES={MAX_PUSH_RETRIES}）。"
+                          f"要再跑請換一個 label 重排。", flush=True)
+                    mark_done(item["label"], f"push_failed_x{n}", 0, name)
+                    # 放棄之後把計數清掉（2026-08-21 CodeRabbit review）：
+                    # 這個 dict 會活到執行器結束，長跑時每個放棄過的 label
+                    # 都留著計數不會被回收；更實際的問題是，若之後有人把
+                    # 這個 label 的 DONE 紀錄刪掉重排，殘留的舊計數會直接
+                    # 讓新的一輪從 n=MAX 起跳、第一次失敗就放棄。
+                    push_fail_counts.pop(item["label"], None)
+                else:
+                    retryable_push_failure = True
+                    print(f"  {item['label']} push 失敗（第 {n} 次，上限 "
+                          f"{MAX_PUSH_RETRIES}），不寫 DONE，下一輪重試。",
+                          flush=True)
 
         # 2) 檢查每個忙碌槽位（各只查一次，不阻塞等待，才能真正併發）
         for name, slot in list(slots.items()):
@@ -506,7 +558,8 @@ def main() -> None:
                       f"（{secs/60:.1f} 分）\n", flush=True)
                 slots[name] = None
 
-        if not pending and all(s is None for s in slots.values()):
+        if (not pending and not retryable_push_failure
+                and all(s is None for s in slots.values())):
             print("Kaggle 佇列已清空，結束。", flush=True)
             return
         time.sleep(POLL_SECS)
