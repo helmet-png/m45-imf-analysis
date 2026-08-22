@@ -250,3 +250,7 @@ p6b_v2_t2_p09|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offse
 p6b_v2_t2_p13|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --only 1.3 --tag _p6b_v2_t2_p13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
 p6b_v2_t2_p17|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --only 1.7 --tag _p6b_v2_t2_p17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
 
+# 2026-08-22 13:28：radial_r2_final_rep1_retry 又是 push_failed（推送瞬斷）。
+# 修法在 PR #93（push 失敗不寫 DONE、自動重試 3 次），還沒合併進 main，
+# 所以仍要手動換 label 補排。
+radial_r2_final_rep1_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 1 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
