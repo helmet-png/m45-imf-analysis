@@ -184,6 +184,16 @@ radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 
 # 15 次擬合合計約 280 小時 ≈ 11.7 天。它擋住本機佇列其餘 8 項（run_queue
 # 是循序執行），其中 c5_davform_* 對應的 C5 是現役缺陷．優先度 高。
 # 詳細評估與四個選項見 PR #90 與 WORK_BOARD.md 同日期段落。
+#
+# **上面「18.7 小時／11.7 天」引用 PR #90 的 logs/p6_lowmass_v2.log 為證，
+# 但查證後這個引用站不住腳**（2026-08-21 CodeRabbit review 抓到）：本機
+# 那個檔案只有 7 行、沒有任何一行擬合完成時間，且檔案時間（08-20 10:34）
+# 早於 PR 所述的啟動時間（15:16），無法佐證。這個數字可能是對的，但在
+# 能重新量到之前不當成既定事實。另外「跑的是沒有續傳機制的舊版」這個
+# 說法**現在也不成立**：profile_lowmass.py 已於 PR #85 接上
+# scripts/tools/checkpoint.py，每次重複算完就存檔，重開機後會讀回既有
+# 進度、不會從頭重算。
+#
 # 這一行停用，改成檔案最後的 p6_lowmass_v3（換 label 才不會被 done 檔擋掉）。
 # p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 # 這一行停用，改成檔案最後的 p11_outlierfrac_v3（換 label 才不會被 done 檔擋掉）。
@@ -344,3 +354,21 @@ p6_lowmass_v3|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3
 # 本身只是單次雜訊）。腳本現在會檢查每個 contrast 都跑滿 --trials，沒跑滿
 # 就不下結論並以非零碼結束，讓這一項標成失敗而不是 ok。
 massdep_fbin|inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3
+
+# ===== 2026-08-21：p6_lowmass_v2 移到最尾端（見上方原位置的說明）=====
+# 移到這裡不代表 A3（低質量段冪次固定，佔 59.5% 樣本、0.248 系統誤差）
+# 這個問題變得不重要——它仍然是目前最大的單一系統誤差，只是排在整條
+# 佇列的最後面。真的要加速，可以考慮：減少掃描點（5 個冪次減成 3 個）、
+# 降 --repeats（放棄誤差棒）、或改派到核心數更多的機器。**不要因為它
+# 排在最後就直接改小 --refines 回單值**——那正是 A1 精修 bug 本身，
+# 會讓結果重蹈覆轍。
+#
+# **開跑前一定要先確認 results/profile_lowmass.npz 那個舊壞檔已經移開**
+# （15 次擬合的 alpha 只有 4 個相異值、間距精確 0.20＝完全沒精修的簽章，
+# 見 PR #89）。現在有兩道保護會擋下來，但兩道都是「擋住」不是「自動
+# 處理」，還是要人去把檔案移開：
+#   - checkpoint.check_manifest()（PR #89）：無 manifest 的舊檔不再靜默
+#     信任沿用，改成中止並要求人明確決定
+#   - preflight.py --gate c（PR #96）：沒有 manifest 時照樣判定量化簽章，
+#     不再因為「資訊不足」而跳過最強的那道檢查
+p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3

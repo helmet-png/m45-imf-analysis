@@ -512,7 +512,7 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
 # metadata 寫成一般鍵（不能加 "__" 前綴——下游分析程式是用這些名字讀的）。
 # gate_c 逐鍵做「落在粗網格節點上沒有」的判定時要跳過它們，否則會對一個
 # 根本不是參數向量的陣列做落點判定，產生跟結果無關的假阻擋
-# （2026-08-21 CodeRabbit review；同一個修正也在 PR #96）。
+# （2026-08-21 CodeRabbit review）。
 METADATA_KEYS = frozenset({
     "slopes",          # profile_lowmass.py
     "fracs",           # profile_outlierfrac.py
@@ -570,6 +570,9 @@ def _gate_c_body(d, npz_path: Path, verbose: bool) -> list[str]:
 
     for key in [k for k in d.files if not k.startswith("__")]:
         if key in METADATA_KEYS:
+            # 掃描點清單／注入真值這類 metadata（由 checkpoint.save_progress()
+            # 的 extra_arrays 寫入），不是「一次擬合的參數向量」，拿去做
+            # 落點/散布判定沒有意義，只會產生跟結果無關的雜訊行。
             continue
         arr = np.atleast_2d(d[key])
         nd = arr.shape[1]
@@ -589,11 +592,40 @@ def _gate_c_body(d, npz_path: Path, verbose: bool) -> list[str]:
                      if scatter[i] == 0.0]
                 print(f"     重複間散布精確為 0 的維度："
                       f"{', '.join(z) if z else '無'}")
-        if refines and n_on == len(on_node):
-            fails.append(
-                f"{npz_path.name}[{key}]：宣稱精修 {len(refines)} 階，但"
-                f"最佳點在全部 {n_on} 個維度都精確落在粗網格節點上——"
-                f"精修很可能沒有生效（A1 的簽章）")
+        # **量化簽章的判定不能取決於有沒有 manifest**（2026-08-21 修）：
+        # 原本寫成 `if refines and n_on == len(on_node)`，沒有 manifest 時
+        # `refines` 是 None，這道最強的檢查整個被跳過——資訊越少反而檢查
+        # 越鬆，方向是反的，跟先前修過的 `_preflight_ok()` 同一類 fail-open。
+        # 實際後果：`results/profile_lowmass.npz`（無 manifest）15 次擬合
+        # 的 alpha 只有 4 個相異值、間距精確 0.20＝COARSE 格距，是教科書
+        # 等級的「完全沒精修」簽章，gate_c 卻只回報「沒有 manifest」，把
+        # 「6/6 個維度全部落在粗網格節點上」當成純資訊印出來，要靠人眼
+        # 注意到。沒有 manifest 時改成照樣判定量化，只是措辭不能說「宣稱
+        # 精修幾階」（那要 manifest 才知道）。
+        if on_node and n_on == len(on_node):
+            # 用 `man is None` 而不是 `if refines` 來分辨兩種情況
+            # （2026-08-21 CodeRabbit review）：manifest 存在但 refines 欄位
+            # 缺鍵或是空字串時，`refines` 同樣會是空 list，用 `if refines`
+            # 判斷會把這種檔案誤報成「沒有 manifest」，給出錯的診斷方向、
+            # 誤導人工核對。
+            if man is None:
+                fails.append(
+                    f"{npz_path.name}[{key}]：最佳點在全部 {n_on} 個維度都"
+                    f"精確落在粗網格節點上（A1 的簽章），而且沒有 manifest "
+                    f"可以查證當初帶了什麼 --refines——這是最可疑的組合，"
+                    f"不是「資訊不足所以放行」，在人工核對確認精修真的有"
+                    f"生效之前不要引用這個檔案的數字")
+            elif refines:
+                fails.append(
+                    f"{npz_path.name}[{key}]：宣稱精修 {len(refines)} 階，但"
+                    f"最佳點在全部 {n_on} 個維度都精確落在粗網格節點上——"
+                    f"精修很可能沒有生效（A1 的簽章）")
+            else:
+                fails.append(
+                    f"{npz_path.name}[{key}]：最佳點在全部 {n_on} 個維度都"
+                    f"精確落在粗網格節點上（A1 的簽章）。這個檔案有 manifest，"
+                    f"但裡面的 --refines 是空的或缺這個欄位——等於明確記載了"
+                    f"「沒有做任何精修」，跟簽章一致，不要引用這個檔案的數字")
         if scatter is not None and nd > 3 and arr.shape[0] >= 3 \
                 and float(scatter[3]) == 0.0:
             fails.append(
