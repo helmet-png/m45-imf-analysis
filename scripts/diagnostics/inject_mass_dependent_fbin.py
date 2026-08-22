@@ -65,6 +65,8 @@ def main():
     ap.add_argument("--n-stars", type=int, default=1078)
     ap.add_argument("--n-gen", type=int, default=80000)
     ap.add_argument("--n-syn", type=int, default=8000)
+    ap.add_argument("--seeds", default="2200",
+                    help="Comma-separated fake-catalogue seeds (same seed is used across profiles).")
     ap.add_argument("--output", default="results/mass_dependent_fbin_smoke.json")
     args = ap.parse_args()
 
@@ -93,29 +95,41 @@ def main():
     }
     fbin_grid = np.arange(0.15, 0.901, 0.10)
     alpha_grid = np.arange(1.75, 2.951, 0.15)
-    results = {}
-    for name, profile in profiles.items():
-        fake_c, fake_g, fake_binary = make_fake(
-            # The same random stream makes the constant case a genuine
-            # control: differences are then caused by the profile rather
-            # than a separately drawn fake cluster.
-            base, THETA_TRUE, args.n_stars, args.n_gen, 2200,
-            selection, profile)
-        fit = joint_fit.JointModel(cfg, fake_c, fake_g, grid, errmodel, dm)
-        fit.selection = selection
-        recovered = best_constant_fit(fit, fbin_grid, alpha_grid)
-        results[name] = {
-            "injected_profile": profile,
-            "selected_fake_stars": int(len(fake_c)),
-            "realised_selected_binary_fraction": float(fake_binary.mean()),
-            "constant_model_recovery": recovered,
-            "alpha_shift_from_injected": float(recovered["alpha"] - THETA_TRUE[3]),
+    seeds = [int(x.strip()) for x in args.seeds.split(",") if x.strip()]
+    if not seeds:
+        raise ValueError("--seeds must contain at least one integer")
+    results = {name: {"injected_profile": profile, "trials": []}
+               for name, profile in profiles.items()}
+    for seed in seeds:
+        one_seed = {}
+        for name, profile in profiles.items():
+            fake_c, fake_g, fake_binary = make_fake(
+                # The same random stream makes the constant case a genuine
+                # control: differences are caused by the profile rather than
+                # a separately drawn fake cluster.
+                base, THETA_TRUE, args.n_stars, args.n_gen, seed,
+                selection, profile)
+            fit = joint_fit.JointModel(cfg, fake_c, fake_g, grid, errmodel, dm)
+            fit.selection = selection
+            recovered = best_constant_fit(fit, fbin_grid, alpha_grid)
+            one_seed[name] = recovered["alpha"]
+            results[name]["trials"].append({
+                "seed": seed, "selected_fake_stars": int(len(fake_c)),
+                "realised_selected_binary_fraction": float(fake_binary.mean()),
+                "constant_model_recovery": recovered,
+                "alpha_shift_from_injected": float(recovered["alpha"] - THETA_TRUE[3]),
+            })
+        control_alpha = one_seed["constant_0.45"]
+        for name in profiles:
+            results[name]["trials"][-1]["alpha_shift_relative_to_constant_control"] = float(
+                one_seed[name] - control_alpha)
+    for item in results.values():
+        shifts = np.asarray([x["alpha_shift_relative_to_constant_control"]
+                             for x in item["trials"]])
+        item["relative_control_shift_summary"] = {
+            "mean": float(shifts.mean()), "min": float(shifts.min()),
+            "max": float(shifts.max()), "n_trials": int(len(shifts)),
         }
-
-    control_alpha = results["constant_0.45"]["constant_model_recovery"]["alpha"]
-    for name, item in results.items():
-        item["alpha_shift_relative_to_constant_control"] = float(
-            item["constant_model_recovery"]["alpha"] - control_alpha)
 
     payload = {
         "status": "coarse_smoke_diagnostic_not_headline_fit",
@@ -126,7 +140,7 @@ def main():
         "n_stars": args.n_stars, "n_gen_for_injection": args.n_gen,
         "n_syn_per_likelihood": args.n_syn, "profiles": results,
         "limits": [
-            "One deterministic fake catalogue per profile; no sampling error bar.",
+            "Only a small number of fake catalogues; this is not a formal sampling error bar.",
             "The two mass-dependent profiles are examples, not a measured M45 law.",
             "A coarse grid is for direction and scale only; it does not replace a joint fit.",
             "Compare profiles against constant_0.45, not directly against the injected alpha: the control itself reveals finite-catalogue and grid recovery error.",
@@ -134,9 +148,7 @@ def main():
     }
     out = ROOT / args.output
     out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({k: {"alpha": v["constant_model_recovery"]["alpha"],
-                          "alpha_shift": v["alpha_shift_from_injected"],
-                          "fbin": v["constant_model_recovery"]["fbin"]}
+    print(json.dumps({k: v["relative_control_shift_summary"]
                       for k, v in results.items()}, indent=2))
 
 
