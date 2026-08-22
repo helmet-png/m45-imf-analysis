@@ -10,16 +10,17 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
-  # 2026-08-22 起：main 的分支保護只設了 required_approving_review_count: 1，
-  # 但這個數字不管審核意見從哪來——CodeRabbit 原本只用留言回應，永遠不會被
-  # 算進這個 1，於是「合不合併」變成只看「有沒有人類按過 Approve」，跟
-  # 「CodeRabbit 的意見有沒有真的解決」完全脫鉤。
-  # 打開這個之後：CodeRabbit 有可執行意見時會送出正式的「Request changes」
-  # review（擋住合併），意見全部解決（改完 push，或用 @coderabbitai resolve）
-  # 才會自動改送「Approve」。因為 CodeRabbit 的 GitHub App 對這個 repo 有
-  # write 權限，它送出的 Approve 會被 GitHub 算進 required_approving_review_count，
-  # 不需要人類再按一次——效果變成「CodeRabbit 意見沒解決前不能合併」，
-  # 不是「有人按過就能合併」。
+  # 2026-08-21 新增：查過 42 個 PR 裡有 41 個 CodeRabbit 留言完全沒人
+  # 回覆，只是「沒人記得去檢查」——開啟後 CodeRabbit 會用真正的 GitHub
+  # 「Request changes」審查狀態卡住 PR，等到 (1) 全部留言都 resolved、
+  # (2) 最新一次 commit 已重新審過、(3) 沒有其他檢查失敗，才自動轉成
+  # Approved。單靠這個設定還不會擋住合併，要搭配 GitHub branch
+  # protection 把 main 分支的 required_approving_review_count 提高到
+  # 至少 1（這個 repo 原本是 0，同一批改的），兩者一起才會讓合併按鈕
+  # 真的被鎖住，不再需要靠任何人記得去查。
+  # （2026-08-22：這個開關本身已經在 PR #100 先合併過一次，這裡合併
+  # main 之後只是把本 PR 的另一份說明文字讓路給先合併的那份，設定
+  # 本身沒有變。）
   request_changes_workflow: true
   path_filters:
     # 結果檔案（.npz/.csv/.json）跟快取的等時線網格不是給人看 diff 的，
