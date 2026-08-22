@@ -10,6 +10,17 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+  # 2026-08-22 起：main 的分支保護只設了 required_approving_review_count: 1，
+  # 但這個數字不管審核意見從哪來——CodeRabbit 原本只用留言回應，永遠不會被
+  # 算進這個 1，於是「合不合併」變成只看「有沒有人類按過 Approve」，跟
+  # 「CodeRabbit 的意見有沒有真的解決」完全脫鉤。
+  # 打開這個之後：CodeRabbit 有可執行意見時會送出正式的「Request changes」
+  # review（擋住合併），意見全部解決（改完 push，或用 @coderabbitai resolve）
+  # 才會自動改送「Approve」。因為 CodeRabbit 的 GitHub App 對這個 repo 有
+  # write 權限，它送出的 Approve 會被 GitHub 算進 required_approving_review_count，
+  # 不需要人類再按一次——效果變成「CodeRabbit 意見沒解決前不能合併」，
+  # 不是「有人按過就能合併」。
+  request_changes_workflow: true
   path_filters:
     # 結果檔案（.npz/.csv/.json）跟快取的等時線網格不是給人看 diff 的，
     # 審這些只會製造噪音，排除掉。
