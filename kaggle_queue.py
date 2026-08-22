@@ -164,10 +164,26 @@ def read_orphans() -> list[dict]:
 
 
 def write_orphans(rows: list[dict]) -> None:
+    # 寫到暫存檔再 os.replace()（2026-08-22 CodeRabbit review）：直接
+    # write_text() 覆寫時若中途被中止（斷電、被砍行程），會留下截斷或
+    # 空的 ORPHANS 檔，把既有的孤兒記錄整批弄丟——跟這支 PR 要防的
+    # 「工作悄悄不見」是同一類問題，只是換成孤兒清單本身遺失。
+    # os.replace() 在 POSIX 與 Windows 都保證是單一系統呼叫等級的原子
+    # 操作，不會有「新檔案寫一半、舊檔案已經被砍」的中間狀態（跟
+    # scripts/tools/checkpoint.py 的 atomic_savez() 同一個理由）。
     ORPHANS.parent.mkdir(exist_ok=True)
-    ORPHANS.write_text(
-        "".join(f"{r['label']}\t{r['kid']}\t{r['account']}\n" for r in rows),
-        encoding="utf-8")
+    tmp = ORPHANS.with_name(ORPHANS.name + ".tmp")
+    try:
+        tmp.write_text(
+            "".join(f"{r['label']}\t{r['kid']}\t{r['account']}\n" for r in rows),
+            encoding="utf-8")
+        os.replace(tmp, ORPHANS)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def add_orphan(label: str, kid: str, account: str) -> None:
@@ -215,9 +231,17 @@ def sweep_orphans(accounts: dict, envs: dict) -> None:
             else:
                 keep.append(r)      # 拉不下來，下一輪再試，不要記 DONE
         elif st in ("error", "cancelled"):
-            pull(r["kid"], r["label"], envs[name])   # 拉 log 供事後查
-            mark_done(r["label"], f"{st}_recovered", 0, name)
-            print(f"  孤兒工作 {r['label']} 事後確認為 {st}", flush=True)
+            # **要看 pull() 的回傳值**（2026-08-22 CodeRabbit review）：
+            # 原本忽略回傳值、不管拉不拉得到 log 都 mark_done()，這支
+            # 腳本存在的理由正是「不要在還沒確認拿到東西之前就放棄」，
+            # 這裡若拉 log 失敗（網路瞬斷、Kaggle 那端暫時不給）卻照樣
+            # 記 DONE，這個 label 就再也不會被回頭查、log 永久拿不到——
+            # 跟這支 PR 本身要修的那個問題是同一個形狀。
+            if pull(r["kid"], r["label"], envs[name]):
+                mark_done(r["label"], f"{st}_recovered", 0, name)
+                print(f"  孤兒工作 {r['label']} 事後確認為 {st}", flush=True)
+            else:
+                keep.append(r)   # log 拉不下來，下一輪再試，不要記 DONE
         else:
             # "running" 還在跑、"unknown" 查不到、"missing" 遠端沒了——
             # 前兩者都要繼續等；"missing" 理論上該放棄，但 probe 對
@@ -561,9 +585,15 @@ def main() -> None:
                     # DONE 檔就不會再被派工也不會再被拉，radial_rall_final_
                     # rep0/rep3 就是這樣在 20.3 小時被丟掉，事後查證兩個
                     # 其實都是 complete（差點白丟 40 機時）。
+                    # **順序很重要**（2026-08-22 CodeRabbit review）：
+                    # add_orphan() 必須先於 mark_done()。若程序在兩者之間
+                    # 被中止，反過來的順序會讓 label 進了 DONE（不會再被
+                    # 派工、也不會被 sweep_orphans() 查）卻沒進 ORPHANS
+                    # （sweep_orphans() 找不到它去回收）——這正是這支 PR
+                    # 要修的那類遺失，只是換了個發生的時間點。
+                    add_orphan(slot["item"]["label"], slot["kid"], name)
                     mark_done(slot["item"]["label"], "timeout_orphaned",
                              time.time() - slot["t0"], name)
-                    add_orphan(slot["item"]["label"], slot["kid"], name)
                     print(f"[{datetime.now():%H:%M:%S}] [{name}] "
                           f"{slot['item']['label']} 等待逾時，釋放槽位但"
                           f"**不放棄這個工作**——遠端可能還在跑，已記進 "
