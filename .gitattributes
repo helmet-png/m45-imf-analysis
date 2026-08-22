@@ -17,5 +17,10 @@
 #   3. **絕對不要**用在程式碼、設定檔、或順序有意義的檔案上——union 會
 #      把兩邊的行都留下，在 queue.txt 這種「順序＝執行順序」的檔案上會
 #      直接產生錯誤的佇列，在 .py 上會產生語法錯誤卻不報衝突。
-results/RESULTS_LOG.md merge=union
-WORK_BOARD.md merge=union
+# 用根目錄錨定（開頭的 `/`）而不是裸檔名——裸檔名會套用到任何深度、
+# 任何目錄下同名的檔案（例如未來若有 docs/WORK_BOARD.md 這種巢狀同名檔），
+# git attributes 的比對規則預設就是這樣，不是這裡寫錯，是要明確排除掉
+# （2026-08-21 CodeRabbit review）。目前專案裡沒有巢狀同名檔（已用 find
+# 核對過），但錨定不影響現在的行為，純粹是防未來新增檔案時被誤套用。
+/results/RESULTS_LOG.md merge=union
+/WORK_BOARD.md merge=union
