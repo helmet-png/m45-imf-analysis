@@ -14,18 +14,29 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", default="results/mass_dependent_fbin_matched_fast.json")
+    ap.add_argument("--input", nargs="+",
+                    default=["results/mass_dependent_fbin_matched_fast.json"],
+                    help="One or more non-overlapping seed-batch result files.")
     ap.add_argument("--output", default="results/mass_dependent_fbin_matched_fast_summary.json")
     ap.add_argument("--headline-sigma", type=float, default=0.144)
     args = ap.parse_args()
 
-    source = json.loads((ROOT / args.input).read_text(encoding="utf-8"))
+    sources = [json.loads((ROOT / path).read_text(encoding="utf-8"))
+               for path in args.input]
+    profile_names = set(sources[0]["profiles"])
+    if any(set(source["profiles"]) != profile_names for source in sources[1:]):
+        raise ValueError("All input files must contain the same profile names")
     summaries = {}
-    for name, profile in source["profiles"].items():
+    for name in sources[0]["profiles"]:
+        trials = [trial for source in sources
+                  for trial in source["profiles"][name]["trials"]]
+        seeds = [trial["seed"] for trial in trials]
+        if len(seeds) != len(set(seeds)):
+            raise ValueError(f"Duplicate seed found for {name}; refusing to double-count")
         shifts = np.asarray([t["alpha_shift_relative_to_constant_control"]
-                             for t in profile["trials"]], float)
+                             for t in trials], float)
         selected_fbin = np.asarray([t["realised_selected_binary_fraction"]
-                                    for t in profile["trials"]], float)
+                                    for t in trials], float)
         n = len(shifts)
         mean = float(shifts.mean())
         sd = float(shifts.std(ddof=1)) if n > 1 else None
@@ -53,7 +64,7 @@ def main():
 
     output = {
         "status": "fixed_nuisance_medium_cost_gate_not_formal_7d_recovery",
-        "source": args.input,
+        "sources": args.input,
         "headline_alpha_sigma_reference": args.headline_sigma,
         "summaries": summaries,
         "interpretation_limits": [

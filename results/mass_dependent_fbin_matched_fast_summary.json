@@ -1,10 +1,13 @@
 {
   "status": "fixed_nuisance_medium_cost_gate_not_formal_7d_recovery",
-  "source": "results/mass_dependent_fbin_matched_fast.json",
+  "sources": [
+    "results/mass_dependent_fbin_matched_fast.json",
+    "results/mass_dependent_fbin_matched_fast_part2.json"
+  ],
   "headline_alpha_sigma_reference": 0.144,
   "summaries": {
     "constant_0.45": {
-      "n_trials": 20,
+      "n_trials": 60,
       "alpha_shift_mean": 0.0,
       "alpha_shift_median": 0.0,
       "alpha_shift_sd": 0.0,
@@ -14,36 +17,36 @@
         0.0
       ],
       "fraction_abs_shift_ge_headline_sigma": 0.0,
-      "selected_binary_fraction_mean": 0.45361781076066787,
-      "selected_binary_fraction_sd": 0.013405723895502788
+      "selected_binary_fraction_mean": 0.45508658008658004,
+      "selected_binary_fraction_sd": 0.01645677073428566
     },
     "matched_contrast_0.15_at0.5Msun": {
-      "n_trials": 20,
+      "n_trials": 60,
       "alpha_shift_mean": -2.2204460492503132e-17,
       "alpha_shift_median": 0.0,
-      "alpha_shift_sd": 0.23619795444544092,
-      "alpha_shift_sem": 0.05281546822864045,
+      "alpha_shift_sd": 0.21292952601940274,
+      "alpha_shift_sem": 0.027489083606299522,
       "alpha_shift_95pct_t_interval": [
-        -0.11054404544738228,
-        0.11054404544738222
+        -0.05500552924408732,
+        0.055005529244087276
       ],
-      "fraction_abs_shift_ge_headline_sigma": 0.25,
-      "selected_binary_fraction_mean": 0.47435064935064936,
-      "selected_binary_fraction_sd": 0.015040165709758668
+      "fraction_abs_shift_ge_headline_sigma": 0.35,
+      "selected_binary_fraction_mean": 0.47660791589363005,
+      "selected_binary_fraction_sd": 0.013663543013454335
     },
     "matched_contrast_0.30_at0.5Msun": {
-      "n_trials": 20,
-      "alpha_shift_mean": 0.01749999999999998,
-      "alpha_shift_median": 0.0,
-      "alpha_shift_sd": 0.3285834829433124,
-      "alpha_shift_sem": 0.07347350041448891,
+      "n_trials": 60,
+      "alpha_shift_mean": 0.0416666666666667,
+      "alpha_shift_median": 0.02499999999999991,
+      "alpha_shift_sd": 0.2679436233813646,
+      "alpha_shift_sem": 0.03459137303594991,
       "alpha_shift_95pct_t_interval": [
-        -0.13628180372910415,
-        0.17128180372910412
+        -0.027550510899996175,
+        0.11088384423332957
       ],
-      "fraction_abs_shift_ge_headline_sigma": 0.6,
-      "selected_binary_fraction_mean": 0.4974489795918366,
-      "selected_binary_fraction_sd": 0.02124726366042719
+      "fraction_abs_shift_ge_headline_sigma": 0.65,
+      "selected_binary_fraction_mean": 0.5005720470006184,
+      "selected_binary_fraction_sd": 0.016496427829594332
     }
   },
   "interpretation_limits": [
