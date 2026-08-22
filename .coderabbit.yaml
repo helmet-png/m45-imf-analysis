@@ -10,6 +10,18 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+  # 2026-08-21 新增：查過 42 個 PR 裡有 41 個 CodeRabbit 留言完全沒人
+  # 回覆，只是「沒人記得去檢查」——開啟後 CodeRabbit 會用真正的 GitHub
+  # 「Request changes」審查狀態卡住 PR，等到 (1) 全部留言都 resolved、
+  # (2) 最新一次 commit 已重新審過、(3) 沒有其他檢查失敗，才自動轉成
+  # Approved。單靠這個設定還不會擋住合併，要搭配 GitHub branch
+  # protection 把 main 分支的 required_approving_review_count 提高到
+  # 至少 1（這個 repo 原本是 0，同一批改的），兩者一起才會讓合併按鈕
+  # 真的被鎖住，不再需要靠任何人記得去查。
+  # （2026-08-22：這個開關本身已經在 PR #100 先合併過一次，這裡合併
+  # main 之後只是把本 PR 的另一份說明文字讓路給先合併的那份，設定
+  # 本身沒有變。）
+  request_changes_workflow: true
   path_filters:
     # 結果檔案（.npz/.csv/.json）跟快取的等時線網格不是給人看 diff 的，
     # 審這些只會製造噪音，排除掉。
