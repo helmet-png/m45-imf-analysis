@@ -1,0 +1,55 @@
+{
+  "status": "fixed_nuisance_medium_cost_gate_not_formal_7d_recovery",
+  "source": "results/mass_dependent_fbin_matched_fast.json",
+  "headline_alpha_sigma_reference": 0.144,
+  "summaries": {
+    "constant_0.45": {
+      "n_trials": 20,
+      "alpha_shift_mean": 0.0,
+      "alpha_shift_median": 0.0,
+      "alpha_shift_sd": 0.0,
+      "alpha_shift_sem": 0.0,
+      "alpha_shift_95pct_t_interval": [
+        0.0,
+        0.0
+      ],
+      "fraction_abs_shift_ge_headline_sigma": 0.0,
+      "selected_binary_fraction_mean": 0.45361781076066787,
+      "selected_binary_fraction_sd": 0.013405723895502788
+    },
+    "matched_contrast_0.15_at0.5Msun": {
+      "n_trials": 20,
+      "alpha_shift_mean": -2.2204460492503132e-17,
+      "alpha_shift_median": 0.0,
+      "alpha_shift_sd": 0.23619795444544092,
+      "alpha_shift_sem": 0.05281546822864045,
+      "alpha_shift_95pct_t_interval": [
+        -0.11054404544738228,
+        0.11054404544738222
+      ],
+      "fraction_abs_shift_ge_headline_sigma": 0.25,
+      "selected_binary_fraction_mean": 0.47435064935064936,
+      "selected_binary_fraction_sd": 0.015040165709758668
+    },
+    "matched_contrast_0.30_at0.5Msun": {
+      "n_trials": 20,
+      "alpha_shift_mean": 0.01749999999999998,
+      "alpha_shift_median": 0.0,
+      "alpha_shift_sd": 0.3285834829433124,
+      "alpha_shift_sem": 0.07347350041448891,
+      "alpha_shift_95pct_t_interval": [
+        -0.13628180372910415,
+        0.17128180372910412
+      ],
+      "fraction_abs_shift_ge_headline_sigma": 0.6,
+      "selected_binary_fraction_mean": 0.4974489795918366,
+      "selected_binary_fraction_sd": 0.02124726366042719
+    }
+  },
+  "interpretation_limits": [
+    "The injected primary-mass-weighted mean f_bin is fixed before photometric selection.",
+    "The selected binary fraction may differ because binarity and mass affect detectability.",
+    "Age, extinction, metallicity and q_gamma were fixed; this cannot replace the pending full seven-parameter recovery on branch mass-dep-fbin.",
+    "The 95% intervals describe variability across these 20 deterministic fake catalogues, not a measured M45 systematic uncertainty."
+  ]
+}

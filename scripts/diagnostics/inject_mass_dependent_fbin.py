@@ -28,13 +28,15 @@ from pipeline.table_compat import Table                       # noqa: E402
 THETA_TRUE = np.array([8.15, 0.15, 0.45, 2.35, 0.00, -0.50])
 
 
-def make_fake(model, theta, n_stars, n_gen, seed, selection, profile):
+def make_fake(model, theta, n_stars, n_gen, seed, selection, profile,
+              contrast=None):
     """Generate a selected fake catalogue without touching the base model."""
     gen = copy.copy(model)
     gen.n_syn = n_gen
     gen.draws = draw_randoms(n_gen, np.random.default_rng(seed))
     gen.selection = selection
     gen.binary_fraction_profile = profile
+    gen.binary_fraction_contrast = contrast
     color, mag, binary = gen.synthesise(theta, return_binary_flag=True)
     if len(color) < n_stars:
         raise RuntimeError(f"Only {len(color)} selected synthetic stars; need {n_stars}")
@@ -67,6 +69,10 @@ def main():
     ap.add_argument("--n-syn", type=int, default=8000)
     ap.add_argument("--seeds", default="2200",
                     help="Comma-separated fake-catalogue seeds (same seed is used across profiles).")
+    ap.add_argument("--matched-contrasts", action="store_true",
+                    help="Keep the generated primary-mass weighted mean f_bin fixed at theta f_bin.")
+    ap.add_argument("--alpha-step", type=float, default=0.15)
+    ap.add_argument("--fbin-step", type=float, default=0.10)
     ap.add_argument("--output", default="results/mass_dependent_fbin_smoke.json")
     args = ap.parse_args()
 
@@ -88,27 +94,35 @@ def main():
 
     # The break is deliberately within the well-populated CMD range.  The
     # two cases are illustrative strengths, not a measured binary law.
-    profiles = {
-        "constant_0.45": None,
-        "mild_low0.35_high0.65_at0.8Msun": (0.8, 0.35, 0.65),
-        "strong_low0.20_high0.80_at0.8Msun": (0.8, 0.20, 0.80),
-    }
-    fbin_grid = np.arange(0.15, 0.901, 0.10)
-    alpha_grid = np.arange(1.75, 2.951, 0.15)
+    if args.matched_contrasts:
+        profiles = {
+            "constant_0.45": (None, None),
+            "matched_contrast_0.15_at0.5Msun": (None, (0.5, 0.15)),
+            "matched_contrast_0.30_at0.5Msun": (None, (0.5, 0.30)),
+        }
+    else:
+        profiles = {
+            "constant_0.45": (None, None),
+            "mild_low0.35_high0.65_at0.8Msun": ((0.8, 0.35, 0.65), None),
+            "strong_low0.20_high0.80_at0.8Msun": ((0.8, 0.20, 0.80), None),
+        }
+    fbin_grid = np.arange(0.15, 0.901, args.fbin_step)
+    alpha_grid = np.arange(1.75, 2.951, args.alpha_step)
     seeds = [int(x.strip()) for x in args.seeds.split(",") if x.strip()]
     if not seeds:
         raise ValueError("--seeds must contain at least one integer")
-    results = {name: {"injected_profile": profile, "trials": []}
-               for name, profile in profiles.items()}
+    results = {name: {"injected_profile": profile,
+                      "injected_matched_contrast": contrast, "trials": []}
+               for name, (profile, contrast) in profiles.items()}
     for seed in seeds:
         one_seed = {}
-        for name, profile in profiles.items():
+        for name, (profile, contrast) in profiles.items():
             fake_c, fake_g, fake_binary = make_fake(
                 # The same random stream makes the constant case a genuine
                 # control: differences are caused by the profile rather than
                 # a separately drawn fake cluster.
                 base, THETA_TRUE, args.n_stars, args.n_gen, seed,
-                selection, profile)
+                selection, profile, contrast)
             fit = joint_fit.JointModel(cfg, fake_c, fake_g, grid, errmodel, dm)
             fit.selection = selection
             recovered = best_constant_fit(fit, fbin_grid, alpha_grid)
@@ -139,6 +153,7 @@ def main():
         "fitted_grid": {"f_bin": fbin_grid.tolist(), "alpha": alpha_grid.tolist()},
         "n_stars": args.n_stars, "n_gen_for_injection": args.n_gen,
         "n_syn_per_likelihood": args.n_syn, "profiles": results,
+        "matched_contrasts": bool(args.matched_contrasts),
         "limits": [
             "Only a small number of fake catalogues; this is not a formal sampling error bar.",
             "The two mass-dependent profiles are examples, not a measured M45 law.",

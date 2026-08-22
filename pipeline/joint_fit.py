@@ -302,7 +302,18 @@ class JointModel:
         # parameter prevents a diagnostic from silently changing the headline
         # model.
         binary_profile = getattr(self, "binary_fraction_profile", None)
-        if binary_profile is None:
+        binary_contrast = getattr(self, "binary_fraction_contrast", None)
+        if binary_contrast is not None:
+            mass_break, contrast = map(float, binary_contrast)
+            hi = m1 >= mass_break
+            w_hi = float(hi.mean())
+            w_lo = 1.0 - w_hi
+            f_below = fbin - contrast * w_hi
+            f_above = fbin + contrast * w_lo
+            if not (0.0 <= f_below <= 1.0 and 0.0 <= f_above <= 1.0):
+                raise ValueError("mass-dependent binary fractions fall outside [0, 1]")
+            p_bin = np.where(hi, f_above, f_below)
+        elif binary_profile is None:
             p_bin = fbin
         else:
             mass_break, f_below, f_above = map(float, binary_profile)
