@@ -25,9 +25,25 @@ for off in range(n_expect):
     if not f.is_file():
         print(f"缺少分片 offset={off}: {f}")
         sys.exit(1)
-    with np.load(f, allow_pickle=True) as z:
+    # allow_pickle=False：manifest 是 np.array(json.dumps(...)) 的純
+    # unicode 陣列、C 是數值陣列，兩者都不需要 pickle。這支工具讀的是
+    # 從 Kaggle 拉回來的檔案，開 allow_pickle 等於讓損毀或被動過手腳的
+    # 分片有機會在讀取時執行任意程式碼（2026-08-21 CodeRabbit review，
+    # 跟 preflight.gate_c() 當初同一個修正）。
+    with np.load(f, allow_pickle=False) as z:
         man = json.loads(str(z["__manifest__"])) if "__manifest__" in z.files else None
-        C = z["C"]
+        C = np.atleast_2d(z["C"])
+    # 每片必須剛好一列——這些分片是用 `--repeats 1` 跑的，一列就是一次
+    # 重複。若某片有多列（例如有人手動用 --repeats 2 補跑過），下面
+    # np.concatenate 會照收，C_all 變成 6 列以上，但 len(rows) 仍是 5，
+    # 逐片表格也只印 C[0]，最後卻印成「alpha 五次」——串出一份列數與
+    # 宣稱不符的正式結果。manifest 不記 repeats 的列數，所以上面的
+    # manifest 一致性檢查攔不到這種情況（2026-08-21 CodeRabbit review）。
+    if C.shape[0] != 1:
+        print(f"分片 offset={off} 的 C 有 {C.shape[0]} 列，預期剛好 1 列："
+              f"{f}")
+        print("中止：每片必須是單次重複，否則串接後的列數會與宣稱不符。")
+        sys.exit(1)
     rows.append((off, C, man, f))
 
 # manifest 一致性檢查（repeat_offset 以外全部要相同）
@@ -63,5 +79,20 @@ print(f"樣本標準差(ddof=1) = {a.std(ddof=1):.4f}")
 print(f"平均值標準誤 = {a.std(ddof=1)/np.sqrt(len(a)):.4f}")
 
 out = REPO / "results" / f"fit_real_radial_{group}_final.npz"
-np.savez(out, C=C_all, __manifest__=json.dumps(base, ensure_ascii=False))
+# **串接檔的 manifest 要保留「這是串出來的」這個身分**（2026-08-21
+# CodeRabbit review）。上面 base 被 pop 掉了 repeat_offset，寫出去之後
+# 若有人用同一個 --tag 跑 `fit_real.py`，`check_manifest()` 會拿舊檔缺的
+# repeat_offset 套 MANIFEST_LEGACY_DEFAULTS 的 0——結果剛好正確（這 5 列
+# 就是 offset 0–4，跟 `--repeats 5 --repeat-offset 0` 產生的那一組完全
+# 相同），但那是「碰巧對」不是「明確記載」，而 manifest 存在的意義正是
+# 事後查得出來歷。所以明確寫回 repeat_offset=0，並額外記下這是 aggregate
+# 與每一列實際的 offset，讓事後拿到這個檔案的人分得出「5 列 = 5 個分片
+# 串接」而不是「一台機器連跑 5 次」。
+# 多出來的鍵不會干擾續傳：`check_manifest()` 是走訪「這次新建的
+# manifest」的鍵去比對，舊檔多出來的鍵會被忽略。
+agg = dict(base)
+agg["repeat_offset"] = 0
+agg["manifest_type"] = "aggregate"
+agg["aggregated_repeat_offsets"] = [off for off, _, _, _ in rows]
+np.savez(out, C=C_all, __manifest__=json.dumps(agg, ensure_ascii=False))
 print(f"\n寫入 {out}")
