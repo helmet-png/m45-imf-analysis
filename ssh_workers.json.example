@@ -1,0 +1,19 @@
+{
+  "_說明": "複製這個檔案改名成 ssh_workers.json（不進版控），每個 worker 填一組真實連線資訊。key 名稱（如 gcp1）只是給人看的識別名，可以隨便取；host 是 VM 的公開 IP 或網域；user 是登入帳號（GCP 預設常是你的 Google 帳號本地化名稱，Oracle 預設是 ubuntu 或 opc，視 image 而定）；key_path 是本機 SSH 私鑰路徑，留空字串就用 ssh 預設身分（~/.ssh/id_ed25519 等）；remote_dir 是 VM 上這個 repo 的路徑，第一次 push 會自動 git clone 到這裡（VM 需要先在 GitHub 該 repo 設定一把唯讀 Deploy Key，見 docs/reference/CLOUD_WORKERS.md）；procs 是這台機器要傳給腳本 --procs 的核心數，照 VM 實際 vCPU 數填。",
+  "gcp1": {
+    "host": "填 VM 的公開 IP，例如 34.123.45.67",
+    "user": "填登入帳號，例如 ubuntu",
+    "key_path": "",
+    "port": 22,
+    "remote_dir": "~/m45_membership",
+    "procs": 8
+  },
+  "oracle1": {
+    "host": "填 VM 的公開 IP",
+    "user": "ubuntu",
+    "key_path": "",
+    "port": 22,
+    "remote_dir": "~/m45_membership",
+    "procs": 2
+  }
+}

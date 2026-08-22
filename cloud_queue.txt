@@ -1,0 +1,9 @@
+# cloud_queue.py 的佇列檔，格式見該檔案開頭說明：
+#   標籤|腳本.py|參數|逗號分隔額外檔案|minimal(true/false)|worker名稱
+#
+# worker 名稱對應 kaggle_accounts.json 或 ssh_workers.json 裡登記的任一個
+# 名稱（兩邊合併解析，見 cloud_queue.py 的 load_all_workers()）。留空最後
+# 一欄就是誰有空給誰。
+#
+# 範例（先別解除註解——確認 worker 真的連得上、resource 夠用之後再排）：
+# smoketest|kaggle_smoketest.py|||true|gcp1
