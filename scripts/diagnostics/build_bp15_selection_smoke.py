@@ -23,7 +23,9 @@ sys.modules.setdefault("astropy", _astropy)
 sys.modules.setdefault("astropy.table", _astropy_table)
 
 from pipeline import selection as selmod  # noqa: E402
-from pipeline.step2_cmd import bp_rp_excess_expected, bp_rp_excess_sigma  # noqa: E402
+from pipeline.step2_cmd import (  # noqa: E402
+    bp_rp_excess_expected, bp_rp_excess_sigma, photometric_error_model,
+)
 
 THRESHOLDS = {"g": 50.0, "bp": 15.0, "rp": 20.0}
 G_BRIGHT = 4.0
@@ -112,6 +114,23 @@ def main():
     snr, excess = quality_masks(d)
     observed = snr & excess
     bp15_ids = {row["source_id"] for row, keep in zip(selected_rows, observed) if keep}
+    bp15_rows = [row for row, keep in zip(selected_rows, observed) if keep]
+    members_path = ROOT / "results" / "cmd_members_bp15_smoke.csv"
+    fieldnames = list(bp15_rows[0])
+    if "bp_rp" not in fieldnames:
+        fieldnames.append("bp_rp")
+    if "probs_final" not in fieldnames:
+        fieldnames.append("probs_final")
+    with members_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for source in bp15_rows:
+            row = dict(source)
+            row["bp_rp"] = value(source, "phot_bp_mean_mag") - value(source, "phot_rp_mean_mag")
+            row["probs_final"] = probs[source["source_id"]]
+            writer.writerow(row)
+    errmodel = photometric_error_model(_CompatTable.read(members_path, format="csv"))
+    np.savez(ROOT / "results" / "errmodel_bp15_smoke.npz", **errmodel)
     with (ROOT / "data" / "cmd_members.csv").open(newline="", encoding="utf-8-sig") as handle:
         current_ids = {row["source_id"] for row in csv.DictReader(handle)}
 
@@ -169,6 +188,11 @@ def main():
         "raw_field_rows": len(raw),
         "p_ge_0p7_and_g_ge_4_rows": len(selected_rows),
         "observed_bp15_quality_pass": int(observed.sum()),
+        "isolated_forward_inputs": {
+            "members": "results/cmd_members_bp15_smoke.csv",
+            "errmodel": "results/errmodel_bp15_smoke.npz",
+            "selection": "results/selection_bp15_smoke.npz",
+        },
         "source_id_accounting_vs_current_cmd": {
             "overlap": len(bp15_ids & current_ids),
             "bp15_only": len(bp15_ids - current_ids),

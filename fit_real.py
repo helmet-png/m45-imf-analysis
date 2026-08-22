@@ -79,6 +79,9 @@ def build_manifest(args) -> dict:
         # 相同，rep < len(reps) 會直接跳過重算，把 offset 0 的結果當成 offset 1
         # 的結果沿用。
         "repeat_offset": args.repeat_offset,
+        "members_file": args.members_file,
+        "errmodel_file": args.errmodel_file,
+        "selection_file": args.selection_file,
     }
 
 
@@ -89,6 +92,9 @@ def build_manifest(args) -> dict:
 MANIFEST_LEGACY_DEFAULTS = {
     "g_bright": None,
     "repeat_offset": 0,
+    "members_file": "data/cmd_members.csv",
+    "errmodel_file": "data/errmodel.npz",
+    "selection_file": "data/selection.npz",
 }
 
 HERE = Path(__file__).resolve().parent
@@ -380,6 +386,12 @@ def main():
                          "預設 None＝沿用 config.toml 的 g_bright_limit（4.0）、"
                          "且不砍觀測端，行為與加入這個旗標前完全相同。"
                          "用於等時線網格質量涵蓋不足時做同基準比較（D1）")
+    ap.add_argument("--members-file", default="data/cmd_members.csv",
+                    help="CMD member CSV relative to the repository root")
+    ap.add_argument("--errmodel-file", default="data/errmodel.npz",
+                    help="Photometric-error NPZ relative to the repository root")
+    ap.add_argument("--selection-file", default="data/selection.npz",
+                    help="Selection-function NPZ relative to the repository root")
     args = ap.parse_args()
     if args.repeat_offset < 0:
         ap.error("--repeat-offset must be non-negative")
@@ -388,8 +400,8 @@ def main():
 
     cfg = cfgmod.load()
     c3 = cfg.step3_age
-    clean = Table.read(HERE / "data" / "cmd_members.csv", format="csv")
-    errmodel = dict(np.load(HERE / "data" / "errmodel.npz"))
+    clean = Table.read(HERE / args.members_file, format="csv")
+    errmodel = dict(np.load(HERE / args.errmodel_file))
     grid = isomod.load_grid(isomod.CACHE / args.grid)
     plx = np.asarray(clean["parallax"], float)
     dm = 5.0 * np.log10(1000.0 / (np.median(plx) - c3.parallax_zero_point)) - 5.0
@@ -436,7 +448,7 @@ def main():
         print("錯誤：--native-bprp-err 需要 errmodel.npz 含 e_bp_native/"
               "e_rp_native 鍵，目前載入的檔案沒有，先重建 errmodel.npz")
         sys.exit(1)
-    sel = selmod.load(HERE / "data" / "selection.npz")
+    sel = selmod.load(HERE / args.selection_file)
     print(f"真實觀測 {len(color):,} 顆，距離模數 {dm:.4f}，"
           f"n_synthetic {args.n_syn:,}")
     print(f"等時線網格：{args.grid}\n")

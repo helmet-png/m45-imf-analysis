@@ -8,6 +8,11 @@
   "raw_field_rows": 6956,
   "p_ge_0p7_and_g_ge_4_rows": 1295,
   "observed_bp15_quality_pass": 1136,
+  "isolated_forward_inputs": {
+    "members": "results/cmd_members_bp15_smoke.csv",
+    "errmodel": "results/errmodel_bp15_smoke.npz",
+    "selection": "results/selection_bp15_smoke.npz"
+  },
   "source_id_accounting_vs_current_cmd": {
     "overlap": 1078,
     "bp15_only": 58,
