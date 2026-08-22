@@ -209,6 +209,66 @@ class JointModel:
         self.bounds = np.vstack([self.bounds[:6], [[dav_min, dav_max]]])
         return PARAM_NAMES + ["dav"]
 
+    def set_mass_dependent_fbin(self, contrast, m_break=0.5):
+        """讓合成星團的雙星比例隨主星質量變化（**只用於生成假資料**）。
+
+        現況（見 `synthesise()` 第 (2) 步的註解與 `LIMITATIONS.md` D14）：
+        決定「誰帶伴星」的 Bernoulli(f_bin) 跟主星質量 m1 完全獨立，等於
+        假設雙星比例不隨質量變化。這是已知簡化但從沒量化過代價。這支
+        鉤子讓注入端可以生成「雙星比例隨質量變化」的假資料，再用現有的
+        常數 f_bin 模型去擬合，量 alpha 被推歪多少。
+
+        **整體雙星比例會被固定住，不隨 contrast 改變**：`contrast` 是
+        「重星段的 f_bin 減去輕星段的 f_bin」，兩段各自的值由下式決定，
+        使得**樣本加權平均恰好等於原本的 f_bin**：
+
+            f_lo = f_bin - contrast * w_hi
+            f_hi = f_bin + contrast * w_lo      （w 是各段的星數比例）
+
+        這樣做是刻意的：如果只是把某一段調高，整體雙星比例會跟著變，
+        那就同時動了兩個變因（質量相依性 **與** 整體雙星比例），量到的
+        alpha 偏移分不清是哪一個造成的。固定總量才是「只動質量相依性
+        這一個變因」。
+
+        contrast=0 時逐位元等同於原本的常數 f_bin 行為（不呼叫這個方法
+        也一樣），所以既有結果不受影響。
+
+        參數
+        ----
+        contrast : float
+            f_bin(重) - f_bin(輕)。正值 = 重星比較容易有伴星。
+        m_break : float
+            分段質量（Msun）。預設 0.5，跟 Kroupa 分段點、以及 `alpha`
+            自由參數只控制 m>0.5 段這件事一致。
+        """
+        self._fbin_contrast = float(contrast)
+        self._fbin_m_break = float(m_break)
+        return self
+
+    def _effective_fbin(self, fbin, m1):
+        """把純量 f_bin 換成逐星的 f_bin（若有設定質量相依性）。
+
+        沒設定時直接回傳原本的純量，呼叫端的比較運算完全不變。
+        """
+        contrast = getattr(self, "_fbin_contrast", 0.0)
+        if not contrast:
+            return fbin
+        m_break = getattr(self, "_fbin_m_break", 0.5)
+        hi = m1 >= m_break
+        w_hi = float(hi.mean())
+        w_lo = 1.0 - w_hi
+        if w_hi == 0.0 or w_lo == 0.0:
+            # 全部落在同一段時「兩段」沒有意義，退回常數（不是靜默失敗：
+            # 這種情況下質量相依性本來就無從表現，硬算會除出無意義的值）
+            return fbin
+        f_lo = fbin - contrast * w_hi
+        f_hi = fbin + contrast * w_lo
+        # 機率必須落在 [0,1]。contrast 太大時會超出，這裡夾住並且**不**
+        # 事後修正另一段——夾住之後樣本平均會偏離原本的 f_bin，那代表
+        # 這個 contrast 對這個 f_bin 來說太大、設計上就不該用，呼叫端
+        # 應該挑更小的 contrast，而不是讓程式默默改掉它的意思。
+        return np.where(hi, np.clip(f_hi, 0.0, 1.0), np.clip(f_lo, 0.0, 1.0))
+
     def log_prior(self, theta):
         nb = len(self.bounds)
         if len(theta) != nb:
@@ -294,7 +354,11 @@ class JointModel:
         # 一個後處理步驟，這裡沒有做，報出來的 alpha 也不是那個東西。
         # 另外第 (2) 步與 m1 獨立，等於假設**雙星比例不隨質量變化**——
         # 這是已知的簡化，不是疏忽（見 LIMITATIONS.md）。
-        is_bin = d["u_bin"][:n] < fbin
+        # 預設 _effective_fbin() 直接回傳純量 fbin，這行與加入它之前逐位元
+        # 相同；只有呼叫過 set_mass_dependent_fbin() 的**生成端**模型才會
+        # 拿到逐星的 f_bin 陣列（見 LIMITATIONS.md D14 衍生的
+        # mass_dependent_fbin 待認領工作）。
+        is_bin = d["u_bin"][:n] < self._effective_fbin(fbin, m1)
         if is_bin.any():
             u = d["u_q"][:n][is_bin]
             qg, qm = qgamma, self.c3.binary_q_min
