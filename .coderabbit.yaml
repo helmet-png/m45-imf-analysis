@@ -18,6 +18,9 @@ reviews:
   # protection 把 main 分支的 required_approving_review_count 提高到
   # 至少 1（這個 repo 原本是 0，同一批改的），兩者一起才會讓合併按鈕
   # 真的被鎖住，不再需要靠任何人記得去查。
+  # （2026-08-22：這個開關本身已經在 PR #100 先合併過一次，這裡合併
+  # main 之後只是把本 PR 的另一份說明文字讓路給先合併的那份，設定
+  # 本身沒有變。）
   request_changes_workflow: true
   path_filters:
     # 結果檔案（.npz/.csv/.json）跟快取的等時線網格不是給人看 diff 的，
