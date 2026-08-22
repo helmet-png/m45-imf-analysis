@@ -150,6 +150,27 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
   下次真的重開機時麻煩順便確認一下 `logs\autorestart.log` 有沒有
   新紀錄。
 
+  **2026-08-21 補上真正的自我復原**：這天 14:13–15:10 之間
+  `run_queue.py` 與 `kaggle_queue.py` **同時無聲死掉**（stderr 全空、
+  沒有重開機、Python 行程總共只用 1.3 GB 所以不是記憶體問題，死因無從
+  證實），一直到排定巡檢才被發現，中間閒置約一小時。追查發現
+  `restart_queue_on_boot.ps1` **腳本本身沒問題**（2026-08-18 已擴充成
+  同時顧兩個行程），問題出在**工作排程器那個
+  `M45-QueueRunner-AutoRestart` 只有「登入時」一個觸發器**——已經登入
+  著的狀態下它永遠不會再觸發，等於只防重開機、不防行程中途死掉。
+
+  想直接幫原任務加重複觸發器時被 `Access is denied` 擋下（那個任務要
+  管理員權限才能改），改成**另外註冊一個使用者層級的新任務
+  `M45-QueueWatchdog-15min`**：跑同一支腳本、每 15 分鐘一次、持續 3650
+  天，`-MultipleInstances IgnoreNew` 避免重疊。腳本偵測到行程還活著就
+  直接略過，所以重複觸發是安全的 no-op；已實測觸發一次，行程數維持
+  2 個沒有被重複啟動。**原本的 `M45-QueueRunner-AutoRestart` 保留不動**，
+  兩個併存（一個管開機、一個管中途死掉）。
+
+  踩到的坑記一下免得下次重犯：`New-ScheduledTaskTrigger` 的
+  `-RepetitionDuration ([TimeSpan]::MaxValue)` 會產生非法 XML
+  （`P99999999DT23H59M59S`），要改用有限長度。
+
 ## 紀錄（續）
 
 | 日期 | 執行者 | 任務名稱 | 狀態 | 涉及檔案／分支 | 備註 |

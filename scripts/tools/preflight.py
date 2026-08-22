@@ -36,7 +36,32 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parents[2]
+def _find_repo_root() -> Path:
+    """找出專案根目錄（放 config.toml 的那一層）。
+
+    平常這支檔案在 `scripts/tools/preflight.py`，往上兩層就是根目錄。
+    **但 Kaggle 派工會把附加檔案的路徑壓平**（`kaggle_sync.py` 的
+    `build_payload()` 用 `shutil.copy(src, work_dir / Path(f).name)`，
+    kernel 端也是複製到 cwd），所以在 Kaggle 上這支檔案會躺在
+    `/kaggle/working/preflight.py`，`parents[2]` 算出來是 `/`，接著
+    `open(HERE / "config.toml")` 就會 FileNotFoundError: '/config.toml'。
+
+    2026-08-21 實測踩到：radial_r1_final_rep3/rep4、radial_r2_final_rep0~3
+    等 6 個 Kaggle 工作連續在 187-213 秒失敗，錯誤都是這一行。
+
+    改法是「按實際找得到 config.toml 的那一層為準」，依序試：
+    往上兩層（正常安裝）-> 這支檔案自己所在的目錄（Kaggle 壓平後）->
+    目前工作目錄。全都找不到時退回原本的 parents[2]，讓錯誤訊息維持
+    原樣，不要靜默用一個猜的路徑繼續跑。
+    """
+    here = Path(__file__).resolve()
+    for cand in (here.parents[2], here.parent, Path.cwd()):
+        if (cand / "config.toml").is_file():
+            return cand
+    return here.parents[2]
+
+
+HERE = _find_repo_root()
 sys.path.insert(0, str(HERE))
 
 
@@ -486,7 +511,8 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
 # checkpoint.save_progress() 的 extra_arrays 會把掃描點清單、注入真值這類
 # metadata 寫成一般鍵（不能加 "__" 前綴——下游分析程式是用這些名字讀的）。
 # gate_c 逐鍵做「落在粗網格節點上沒有」的判定時要跳過它們，否則會對一個
-# 根本不是參數向量的陣列做落點判定。
+# 根本不是參數向量的陣列做落點判定，產生跟結果無關的假阻擋
+# （2026-08-21 CodeRabbit review）。
 METADATA_KEYS = frozenset({
     "slopes",          # profile_lowmass.py
     "fracs",           # profile_outlierfrac.py
@@ -504,14 +530,25 @@ def gate_c(npz_path: Path, verbose=True) -> list[str]:
     0.000，那個簽章一直在檔案裡，只是沒有人系統性地去看——十八個機時
     之後才靠人眼發現。
     """
-    from injection_recovery import COARSE
-    import json
-    fails = []
     # allow_pickle=False：manifest 存的是 np.array(json.dumps(...))，
     # 純 unicode 陣列，其餘鍵都是數值陣列，都不需要 pickle。Gate C 由
     # 無人監看的 run_queue.py 自動呼叫，開 allow_pickle 等於讓惡意/損毀
     # 的 npz 有機會在讀取時執行任意程式碼（2026-08-20 CodeRabbit review）。
-    d = np.load(npz_path, allow_pickle=False)
+    # 用 with 關閉 NpzFile——`scripts/tools/checkpoint.py` 的
+    # `_read_npz_dict()` 明文記錄過這條規則：NpzFile 內部 zipfile 的循環
+    # 參照會讓底層檔案控制代碼延遲關閉，後續對同一路徑的 os.replace() 在
+    # Windows 上丟 PermissionError。gate_c 由 run_queue.py 的 _postflight()
+    # 在跑完之後呼叫，緊接著佇列下一項就可能寫同一個檔案，屬於會踩到的
+    # 情境（2026-08-21 CodeRabbit review）。
+    with np.load(npz_path, allow_pickle=False) as d:
+        return _gate_c_body(d, npz_path, verbose)
+
+
+def _gate_c_body(d, npz_path: Path, verbose: bool) -> list[str]:
+    """gate_c() 的本體，拆出來只是為了讓上面那層 `with` 包住整段。"""
+    from injection_recovery import COARSE
+    import json
+    fails = []
     names = ["logage", "A_V", "f_bin", "alpha", "MH", "q_gamma", "dav"]
     if verbose:
         print(f"【Gate C】{npz_path.name}")

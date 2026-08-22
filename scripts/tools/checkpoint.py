@@ -137,6 +137,14 @@ def acquire_write_lock(out_path: Path, timeout_s: float = 1800.0) -> Path:
                     lock_path.unlink()
                 except FileNotFoundError:
                     pass
+                # **一定要重設 t0**（2026-08-21 CodeRabbit review）：不重設
+                # 的話，逾時之後每一輪迴圈的 `time.time() - t0 > timeout_s`
+                # 都仍然成立——若另一個行程在我們刪掉鎖檔後立刻建立它，
+                # 這裡會馬上再刪一次，而且完全不等待。互斥保護在第一次
+                # 逾時之後就永久失效，兩個行程可以同時進入 save_progress()
+                # 的讀-改-寫區段，正是這個鎖要防的事。重設之後每次強制
+                # 接管都重新計時，最壞情況是慢，不是失去保護。
+                t0 = time.time()
                 continue
             time.sleep(0.5)
 
@@ -232,14 +240,63 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
 
     `legacy_defaults`：manifest 裡缺鍵不等於「設定不同」——那個旗標
     當時根本不存在，舊檔案必定是用它的預設值算出來的（同 fit_real.py
-    的 MANIFEST_LEGACY_DEFAULTS）。"""
-    if not partial:
+    的 MANIFEST_LEGACY_DEFAULTS）。
+
+    **完全沒有 manifest 的舊檔則是另一回事，一律擋下不放行**（2026-08-21
+    修正，理由與實際案例見函式內註解）：`legacy_defaults` 處理的是「這個
+    旗標當時不存在」，而沒有 manifest 代表「整份設定都不知道」，兩者不能
+    用同一套寬容邏輯。"""
+    # **以「檔案存不存在」決定要不要檢查，不是以 partial 空不空**
+    # （2026-08-21 CodeRabbit review）：原本寫 `if not partial: return`，
+    # 但一個既有的 .npz 只要沒有結果陣列（例如只寫了 metadata、或上次
+    # 存檔在寫入結果前就被中斷），partial 就是空的，於是連 manifest 都
+    # 不看就放行——正好繞過「無 manifest 舊檔一律擋下」這個本函式存在
+    # 的目的。改成：檔案不存在才是真的沒事可查；只要檔案在，manifest
+    # 就要驗，驗過之後才輪到「有沒有既有結果要比對設定」。
+    if not out_path.exists():
         return
     old_manifest = load_manifest(out_path)
     legacy_defaults = legacy_defaults or {}
     if old_manifest is None:
-        print(f"警告：{out_path.name} 是加 manifest 檢查前存的舊檔，"
-              f"無法自動確認這次的設定跟它一致，視為信任沿用。", flush=True)
+        # **不能「視為信任沿用」**（2026-08-21 實際踩到，案例見下）。
+        # 沒有 manifest 的舊檔正是最不該信任的那一種：它是加 manifest
+        # 檢查之前存的，而那個「之前」涵蓋了 multi_stage_best() 精修
+        # bug 還在的整段時期（見 LIMITATIONS.md A1）。信任沿用等於讓
+        # 「專門為了修精修 bug 而排的重跑」把壞結果當成已完成的工作
+        # 直接跳過，跑完 exit 0、什麼都沒算——正是 docs/reference/
+        # PREFLIGHT.md 開宗明義要防的那個失敗形狀，在 preflight 自己
+        # 身上重演。
+        #
+        # **實際案例**：results/profile_lowmass.npz（2026-08-15 存，
+        # 無 manifest）裡 15 次擬合的 alpha 只有 4 個相異值
+        # （2.1/2.3/2.5/2.7），相異值最小間距正好 0.2 = COARSE 網格
+        # 間距，是「完全沒精修」的量化簽章。p6_lowmass_v2 就是為了
+        # 取代它而排的，但舊邏輯判定「既有結果已滿足重複次數」，
+        # 會讓那次重跑立刻結束。
+        #
+        # 改成擋下來並說明選項：沿用舊檔必須是人明確決定的動作，
+        # 不能是預設行為。
+        _has = "有既有結果" if partial else "存在（但沒有任何結果陣列）"
+        print(f"錯誤：{out_path.name} {_has}，但**沒有 manifest**"
+              f"（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
+              f"設定、什麼版本的程式碼算出來的。\n"
+              f"  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
+              f"multi_stage_best() 精修 bug 還在的那段時期，沿用會讓"
+              f"「為了修那個 bug 而排的重跑」直接跳過、什麼都不算，"
+              f"卻回報成功（見 LIMITATIONS.md A1、"
+              f"docs/reference/PREFLIGHT.md）。\n"
+              f"  三個選項擇一：\n"
+              f"    1. 這次要重算 -> 把 {out_path.name} 移開"
+              f"（例如改名成 {out_path.stem}_legacy_no_manifest.npz）"
+              f"再跑；\n"
+              f"    2. 這次要另存 -> 加一個不同的 --tag；\n"
+              f"    3. 確定舊檔可信 -> 自己核對過它的算法與設定之後，"
+              f"手動補上 manifest 再跑。", flush=True)
+        sys.exit(1)
+
+    if not partial:
+        # 檔案在、manifest 也讀得到且格式正確，但沒有任何結果陣列——
+        # 沒有東西需要比對設定，放行讓這次從頭算。
         return
 
     def _old(k):
