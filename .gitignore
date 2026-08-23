@@ -58,6 +58,12 @@ access_token
 # 多帳號憑證登記檔（每位成員一個 token），只有範本 kaggle_accounts.json.example
 # 進版控，真檔案含機敏 token 絕不進版控。
 kaggle_accounts.json
+# SSH 遠端運算節點登記檔（含 VM 的真實 IP／登入帳號），只有範本
+# ssh_workers.json.example 進版控，理由跟上面 kaggle_accounts.json 一樣。
+ssh_workers.json
+# ssh_sync.py pull 下來的結果與 log（跟 kaggle_work/、kaggle_results/
+# 同一類，可重新產生，不進版控）
+cloud_results/
 
 # ============================================================
 # 第三方原始碼：用 clone 取得，不納入本 repo

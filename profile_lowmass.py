@@ -54,6 +54,15 @@ def main():
     ap.add_argument("--refines", default="3",
                     help="精修階數，逗號分隔。3,3 較精確但貴一倍")
     ap.add_argument("--dav-max", type=float, default=0.6)
+    # --tag（2026-08-21，對應 LIMITATIONS.md D6）：這兩支腳本原本輸出路徑
+    # 寫死，是六支計算腳本裡最後兩支沒有 --tag 的——D6 記錄的「中間結果檔案
+    # 會被重跑覆寫」在它們身上仍然成立。有了 --tag 才能讓不同設定（例如
+    # 換一組 --slopes）的結果各存一份、事後可回溯比較，也才能在
+    # check_manifest() 擋下無 manifest 舊檔時，真的給得出「換一個 --tag」
+    # 這個選項。預設空字串＝維持原本檔名，既有呼叫端與既有結果檔不受影響。
+    ap.add_argument("--tag", default="",
+                    help="輸出檔名後綴，避免不同設定的結果互相覆寫"
+                         "（見 LIMITATIONS.md D6）")
     ap.add_argument("--slopes", default=None,
                     help="逗號分隔，覆寫預設的 SLOPES 掃描點。"
                          "本機已掃過 0.9-1.7，要擴大範圍時用這個而不改本檔，"
@@ -67,6 +76,11 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
+    # --tag 只能是檔名後綴，不能是路徑（比照 fit_real.py／
+    # inject_lowmass.py：不擋的話 --tag "/../../tmp/x" 能把輸出導到
+    # results/ 之外、覆寫任意 .npz）。
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
     if args.repeats < 1:
         # --repeats 0（或負數）會讓 outs 被截成空 list（見下面
         # [:args.repeats] 那行），np.array([]) 是 shape (0,) 的一維陣列，
@@ -99,15 +113,18 @@ def main():
     # 一次，中途被砍（p6_lowmass_v2 案例：本機四天內被 Windows 強制重開機
     # 四次）就得從頭重算，即使前面已經跑完的冪次本身沒有問題。改用
     # scripts/tools/checkpoint.py 的共用續傳機制，跟 fit_real.py 同一套。
-    out_path = HERE / "results" / "profile_lowmass.npz"
-    # slopes 不放進 manifest：這支腳本沒有 --tag（輸出檔名固定），若把
-    # 掃描點清單也拿去比對，擴大 --slopes 範圍就會被 check_manifest()
-    # 判定成「設定不同」而 sys.exit(1)，錯誤訊息還會叫使用者「換一個
-    # --tag」——但這支腳本根本沒有這個旗標，使用者只能手動刪掉整個
-    # 既有結果檔，前面已經跑完的掃描點全部作廢。每個掃描點各自有獨立
-    # 的 scan_key（f"p{p}"），互不污染，不需要靠 manifest 擋這個
-    # （2026-08-20 CodeRabbit review）。slopes 本身仍會透過下面迴圈裡
-    # 的 extra_arrays 存進輸出檔，事後查得到這批掃過哪些點。
+    out_path = HERE / "results" / f"profile_lowmass{args.tag}.npz"
+    # slopes 不放進 manifest：每個掃描點各自有獨立的 scan_key
+    # （f"p{p}"），互不污染，不需要靠 manifest 擋。這支腳本現在雖然有
+    # --tag 了（2026-08-21），但「同一個 --tag、逐次擴大 --slopes」本來
+    # 就是設計上允許的用法（跟 fit_real.py 的 --configs 同一個道理：
+    # --configs 也不在 manifest 裡，允許同一個 --tag 逐次補跑不同設定）
+    # ——manifest 管的是「同一批掃描點的參數是否一致」，不是「這次要掃
+    # 哪些點」。slopes 本身透過下面迴圈的 extra_arrays 存進輸出檔，事後
+    # 查得到這批掃過哪些點；**存的是磁碟既有加這次要求的聯集，不是只存
+    # 這次的清單**（見下方「合併既有 slopes」），否則同一 --tag 分兩次
+    # 跑不同 --slopes 時，後面那次的 extra_arrays 會覆寫掉 metadata，讓
+    # 它跟檔案裡實際存在的 scan_key 對不上（2026-08-21 CodeRabbit review）。
     manifest = {"n_syn": args.n_syn, "refines": args.refines,
                 "dav_max": args.dav_max}
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
@@ -137,6 +154,14 @@ def main():
         expected_overrides={"mh_prior_sigma": 0.0},
         force=args.force, dry_run=args.preflight,
         extra_fails=w_fails, extra_warns=w_warns)
+
+    # 合併既有 slopes：磁碟上可能已經記過別次（同一 --tag、不同
+    # --slopes）掃過的點，metadata 要反映「檔案裡實際有哪些 scan_key」，
+    # 不能只反映「這次要求的清單」（2026-08-21 CodeRabbit review）。
+    _existing_slopes = partial.get("slopes")
+    all_slopes = sorted(set(slopes)
+                        | (set(np.asarray(_existing_slopes).tolist())
+                           if _existing_slopes is not None else set()))
 
     sel = selmod.load(HERE / "data" / "selection.npz")
     print(f"真實觀測 {n_obs:,} 顆，config C（選擇函數 + 差異消光），"
@@ -189,7 +214,7 @@ def main():
             # 被砍，已經算完的每一次重複都保得住，重跑時讀回來跳過。
             outs = checkpoint.save_progress(
                 out_path, key, outs, manifest,
-                extra_arrays={"slopes": np.array(slopes)})
+                extra_arrays={"slopes": np.array(all_slopes)})
         arr = np.array(outs)
         results[p] = arr
         print(f"  -> p={p:.1f} 跨 {args.repeats} 次：alpha 平均 "

@@ -50,6 +50,15 @@ def main():
     ap.add_argument("--refines", default="3",
                     help="精修階數，逗號分隔。3,3 較精確但貴一倍")
     ap.add_argument("--dav-max", type=float, default=0.6)
+    # --tag（2026-08-21，對應 LIMITATIONS.md D6）：這兩支腳本原本輸出路徑
+    # 寫死，是六支計算腳本裡最後兩支沒有 --tag 的——D6 記錄的「中間結果檔案
+    # 會被重跑覆寫」在它們身上仍然成立。有了 --tag 才能讓不同設定（例如
+    # 換一組 --fracs）的結果各存一份、事後可回溯比較，也才能在
+    # check_manifest() 擋下無 manifest 舊檔時，真的給得出「換一個 --tag」
+    # 這個選項。預設空字串＝維持原本檔名，既有呼叫端與既有結果檔不受影響。
+    ap.add_argument("--tag", default="",
+                    help="輸出檔名後綴，避免不同設定的結果互相覆寫"
+                         "（見 LIMITATIONS.md D6）")
     ap.add_argument("--fracs", default=None,
                     help="逗號分隔，覆寫預設的 OUTLIER_FRACS 掃描點")
     # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py）——這支腳本
@@ -59,6 +68,11 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
+    # --tag 只能是檔名後綴，不能是路徑（比照 fit_real.py／
+    # inject_lowmass.py：不擋的話 --tag "/../../tmp/x" 能把輸出導到
+    # results/ 之外、覆寫任意 .npz）。
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
     if args.repeats < 1:
         # 理由同 profile_lowmass.py 的同一處檢查（2026-08-20 CodeRabbit
         # review）：--repeats 0（或負數）會讓 outs 截成空 list，後面
@@ -88,12 +102,13 @@ def main():
 
     # 2026-08-20：B3（續傳）—— 同 profile_lowmass.py，原本只在全部掃描點
     # 跑完後 np.savez 一次，中途被砍就得從頭重算。改用 checkpoint.py。
-    out_path = HERE / "results" / "profile_outlierfrac.npz"
-    # fracs 不放進 manifest——同 profile_lowmass.py 的理由（這支腳本也
-    # 沒有 --tag，把掃描點清單放進 manifest 會讓擴大 --fracs 範圍時被
-    # check_manifest() 擋下，還叫使用者去用一個不存在的旗標；每個掃描點
-    # 各自有獨立的 scan_key，不需要 manifest 擋，2026-08-20 CodeRabbit
-    # review）。fracs 仍透過下面迴圈的 extra_arrays 存進輸出檔。
+    out_path = HERE / "results" / f"profile_outlierfrac{args.tag}.npz"
+    # fracs 不放進 manifest——同 profile_lowmass.py 的理由：每個掃描點
+    # 各自有獨立的 scan_key，「同一個 --tag、逐次擴大 --fracs」是設計上
+    # 允許的用法（跟 fit_real.py 的 --configs 同一個道理）。fracs 透過
+    # 下面迴圈的 extra_arrays 存進輸出檔，**存的是磁碟既有加這次要求的
+    # 聯集**，不是只存這次的清單，否則同一 --tag 分兩次跑不同 --fracs
+    # 時後面那次會覆寫掉 metadata（2026-08-21 CodeRabbit review）。
     manifest = {"n_syn": args.n_syn, "refines": args.refines,
                 "dav_max": args.dav_max}
     sys.path.insert(0, str(HERE / "scripts" / "tools"))
@@ -119,6 +134,13 @@ def main():
         expected_overrides={"mh_prior_sigma": 0.0},
         force=args.force, dry_run=args.preflight,
         extra_fails=w_fails, extra_warns=w_warns)
+
+    # 合併既有 fracs：理由同 profile_lowmass.py 的同一處修正
+    # （2026-08-21 CodeRabbit review）。
+    _existing_fracs = partial.get("fracs")
+    all_fracs = sorted(set(fracs)
+                       | (set(np.asarray(_existing_fracs).tolist())
+                          if _existing_fracs is not None else set()))
 
     sel = selmod.load(HERE / "data" / "selection.npz")
     print(f"真實觀測 {n_obs:,} 顆，config C（選擇函數 + 差異消光），"
@@ -165,7 +187,7 @@ def main():
                   f"lnP={lp:.1f}  ({time.time()-t0:.0f}s)", flush=True)
             outs = checkpoint.save_progress(
                 out_path, key, outs, manifest,
-                extra_arrays={"fracs": np.array(fracs)})
+                extra_arrays={"fracs": np.array(all_fracs)})
         arr = np.array(outs)
         results[frac] = arr
         print(f"  -> frac={frac:.3f} 跨 {args.repeats} 次：alpha 平均 "
