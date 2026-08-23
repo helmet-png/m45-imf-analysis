@@ -32,6 +32,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
+ALERTS = HERE / "QUEUE_ALERTS.md"
 LOCK = HERE / "logs" / "run_queue.lock"
 STALL_RETRIES = HERE / "logs" / "stall_retries.txt"
 TICK_LOG = HERE / "logs" / "watchdog_ticks.log"
@@ -336,6 +337,31 @@ PREFLIGHT_AWARE_SCRIPTS = frozenset({
 })
 
 
+def _write_alert(label: str, cmd: str, gate: str, reason: str) -> None:
+    """Gate B／C 沒過時寫進 QUEUE_ALERTS.md（2026-08-23，使用者要求）。
+
+    只印 log 沒人會固定去看——今天才確認過 CodeRabbit 額度用完時
+    「Review completed」照樣顯示綠燈，這是同一種「訊號存在但沒人看＝
+    沒有」的風險。改成寫進一份規定每個 agent 開始工作前都要讀的檔案，
+    用制度取代「記得去查」。只有這個 process 在跑（run_queue.py 靠
+    acquire_lock() 保證單一實例），純附加寫入不需要額外檔案鎖。
+    """
+    try:
+        ALERTS.parent.mkdir(parents=True, exist_ok=True)
+        # `|` 會被 markdown 表格讀成新欄位分隔，reason／cmd 裡難免出現
+        # （例如 --configs A,C 沒有，但保險起見還是逐一換掉）。
+        safe_cmd = cmd.replace("|", "\\|")
+        safe_reason = reason.replace("|", "\\|").replace("\n", " ")
+        with open(ALERTS, "a", encoding="utf-8") as f:
+            f.write(f"| {datetime.now():%Y-%m-%d %H:%M:%S} | {label} | "
+                    f"`{safe_cmd}` | {gate} | {safe_reason} | 待處理 |\n")
+    except OSError as e:                                       # noqa: BLE001
+        # 寫警示本身失敗不該讓整條佇列跟著掛掉——退而求其次印到 log，
+        # 至少 logs/queue_runner8.log 裡還查得到。
+        print(f"  警示寫入失敗（{type(e).__name__}: {e}），"
+              f"改印在這裡：[{gate}] {label} {reason}", flush=True)
+
+
 def _preflight_ok(label: str, cmd: str) -> bool:
     """派工前先讓目標腳本自己做一次開跑前檢查（見 scripts/tools/preflight.py）。
 
@@ -390,43 +416,60 @@ def _preflight_ok(label: str, cmd: str) -> bool:
               f"（fail closed；preflight_fail 不會永久噤聲，下次重啟"
               f"run_queue.py 會自動再給一次機會，見 read_done()）",
               flush=True)
+        _write_alert(label, cmd, "B",
+                     f"開跑前檢查無法執行：{type(e).__name__}: {e}")
         return False
+    status_lines = []
     for ln in (r.stdout or "").splitlines():
         if ln.strip().startswith(preflight.STATUS_PREFIXES):
             print(f"  {ln.strip()}", flush=True)
+            status_lines.append(ln.strip())
     if r.returncode != 0:
         print(f"  開跑前檢查不通過（退出碼 {r.returncode}），跳過 {label}，"
-              f"不浪費機時。修好後把 logs/queue_done.txt 裡那一行刪掉即可"
-              f"重新排隊。", flush=True)
+              f"不浪費機時。這一輪不重試；修好後重新啟動 run_queue.py"
+              f"會自動重新排隊。", flush=True)
+        reason = "; ".join(status_lines) if status_lines else \
+            f"退出碼 {r.returncode}，沒有擷取到細節訊息（見 logs/queue_runner8.log）"
+        _write_alert(label, cmd, "B", reason)
         return False
     return True
 
 
-def _postflight(label: str, cmd: str) -> None:
-    """跑完立刻驗收產出（Gate C）。只印警告、不改變佇列流程——結果檔已經
-    寫出來了，這裡的價值是「當天就看到問題」而不是幾週後才發現（P11 那
-    12 次全部等於 2.500 的簽章在檔案裡躺了很久沒人看）。"""
-    if cmd.split()[0] != "fit_real.py":
-        return
+def _postflight(label: str, cmd: str) -> bool:
+    """跑完立刻驗收產出（Gate C）。回傳 False 代表沒過——**2026-08-23
+    起沒過會被當成真正的失敗**（狀態寫成 `gate_c_fail`，不再是 `ok`），
+    不會自動重排（跟 `exit1` 同一類，避免盲目重跑白燒一次已經燒過的
+    機時，見 `QUEUE_ALERTS.md` 檔頭說明），並寫一筆警示。
+
+    **2026-08-23 起擴充到全部五支計算腳本**（原本只有 `fit_real.py`），
+    `preflight.gate_c()` 本身早就是通用實作（`METADATA_KEYS` 涵蓋另外
+    四支腳本的專屬鍵），只有這裡的檔名推導跟呼叫端寫死成 `fit_real.py`
+    ——五支腳本的輸出檔名規則完全一致（`results/{script 主檔名}{tag}.npz`），
+    改成用 `cmd.split()[0]` 動態推導即可涵蓋全部。"""
+    script = cmd.split()[0]
+    if script not in PREFLIGHT_AWARE_SCRIPTS:
+        return True
+    stem = script[:-3] if script.endswith(".py") else script
     # 同時吃 `--tag value` 與 `--tag=value` 兩種 argparse 都接受的形式，
     # 原本只吃空白分隔那種，`=` 形式會讓 m 是 None 而整支函式靜默 return——
     # 使用者會以為「這次沒有 Gate C 警告」，其實是驗收根本沒有跑
     # （2026-08-20 CodeRabbit review 第一輪）。
-    # **第二輪又抓到**：`fit_real.py` 的 `--tag` 預設值是空字串，完全
-    # 沒帶這個旗標時 m 一樣是 None，但那不是「沒有輸出檔」，是「輸出檔
-    # 沒有後綴」（`results/fit_real.npz`）——原本的 `or not m` 會把這種
-    # 合法情況也當成跳過，讓沒帶 --tag 的每一個成功工作都漏掉 Gate C。
-    # 改成 m 沒對到就當空字串，不再用「有沒有對到」判斷要不要驗收。
+    # **第二輪又抓到**：`--tag` 預設值是空字串，完全沒帶這個旗標時 m
+    # 一樣是 None，但那不是「沒有輸出檔」，是「輸出檔沒有後綴」——原本
+    # 的 `or not m` 會把這種合法情況也當成跳過，讓沒帶 --tag 的每一個
+    # 成功工作都漏掉 Gate C。改成 m 沒對到就當空字串。
     m = re.search(r"--tag[=\s]+(\S+)", cmd)
     tag = m.group(1) if m else ""
-    npz = HERE / "results" / f"fit_real{tag}.npz"
+    npz = HERE / "results" / f"{stem}{tag}.npz"
     if not npz.exists():
         # **2026-08-20 CodeRabbit review**：原本這裡靜默 return——一個
         # 狀態回報 "ok" 但沒有真的產出預期 npz 檔案的工作（例如腳本邏輯
         # 分支問題、寫到了別的路徑），Gate C 完全不會印任何東西，跟
         # 「驗收通過、沒問題」長得一樣，實際是「根本沒驗收到」。
-        print(f"  產出驗收警告：找不到預期輸出檔：{npz}", flush=True)
-        return
+        reason = f"找不到預期輸出檔：{npz}"
+        print(f"  產出驗收警告：{reason}", flush=True)
+        _write_alert(label, cmd, "C", reason)
+        return False
     try:
         tools_dir = str(HERE / "scripts" / "tools")
         if tools_dir not in sys.path:
@@ -434,12 +477,17 @@ def _postflight(label: str, cmd: str) -> None:
         import preflight                                     # noqa: PLC0415
         fails = preflight.gate_c(npz, verbose=False)
     except Exception as e:                                   # noqa: BLE001
-        print(f"  產出驗收無法執行（{type(e).__name__}: {e}）", flush=True)
-        return
+        reason = f"產出驗收無法執行：{type(e).__name__}: {e}"
+        print(f"  {reason}", flush=True)
+        _write_alert(label, cmd, "C", reason)
+        return False
     for f in fails:
         print(f"  產出驗收警告：{f}", flush=True)
-    if not fails:
-        print(f"  產出驗收通過：{npz.name}", flush=True)
+    if fails:
+        _write_alert(label, cmd, "C", "; ".join(fails))
+        return False
+    print(f"  產出驗收通過：{npz.name}", flush=True)
+    return True
 
 
 def run_with_stall_watchdog(cmd_list, cwd, log_path, label):
@@ -723,11 +771,20 @@ def main():
                 status = "stalled_giveup"
                 _reset_stall_retry(label)
                 skip_this_run.add(label)
+            # Gate C 要在 mark_done() 之前跑，才能把「跑完但驗收沒過」
+            # 反映進寫進 logs/queue_done.txt 的狀態本身，不是跑完才追加
+            # 印警告——後者會讓 gate_c_fail 的工作照樣被記成 ok，跟真的
+            # 沒問題的工作分不出來（2026-08-23，使用者要求「沒過就視為
+            # 失敗」）。gate_c_fail 不在 read_done() 的自動重跑白名單裡，
+            # 不會被盲目重跑白燒一次已經花掉的機時，要處理的人先讀
+            # QUEUE_ALERTS.md 判斷是不是真的問題，再決定要不要調整設定
+            # 後重新啟動 run_queue.py；read_done() 會把 gate_c_fail 視為已
+            # 處理，故不會盲目自動重跑。
+            if status == "ok" and not _postflight(label, cmd):
+                status = "gate_c_fail"
             mark_done(label, status, secs)
             print(f"[{datetime.now():%H:%M:%S}] {label} 結束：{status}"
                   f"（{secs/60:.1f} 分）", flush=True)
-            if status == "ok":
-                _postflight(label, cmd)
     finally:
         release_system_awake()
         release_lock()

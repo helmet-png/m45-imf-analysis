@@ -21,6 +21,20 @@ Claude，先讀 `CLAUDE.md`；這份是通用規則，兩者都要遵守。
 
 ---
 
+## 零之零、開始新工作前——也要查 `QUEUE_ALERTS.md`
+
+**2026-08-23 起新增**：`run_queue.py` 的 Gate B（開跑前檢查）／Gate C
+（跑完後驗收）沒過時，不會讓整條佇列停下來（機器繼續跑下一項，不留著
+空轉），但也不會只印一行警告到 `logs/queue_runner8.log` 就沒事——那樣
+需要有人主動去翻 log 才會發現，跟 CodeRabbit 額度用完時「Review
+completed」照樣顯示綠燈是同一種「訊號存在但沒人看＝沒有」的風險。
+兩道關卡沒過時會改寫進 `QUEUE_ALERTS.md`，**任何 session 開始碰這個
+repo 的工作前，先讀一次這份文件，看有沒有「待處理」的項目**，處理完
+（或確認不是問題）要把該列狀態改成「已處理」——不要刪掉那一列，完整
+格式與 Gate B／C 各自該怎麼收尾寫在 `QUEUE_ALERTS.md` 檔頭。
+
+---
+
 ## 零之一、自動 PR 審查——CodeRabbit（免費，公開 repo 自動適用）
 
 **2026-08-12 起**：repo 公開後，[CodeRabbit](https://coderabbit.ai) 對公開
