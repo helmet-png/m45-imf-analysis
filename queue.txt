@@ -389,4 +389,8 @@ p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3
 # 這一項先前卡在缺原始 Gaia 查詢 CSV（fetch_gaia.py 的 COUNT(*) 在伺服端
 # 逾時），已用 --top 繞過（PR #92）重抓到 data/m45_r5_g18_plx4.csv，
 # 現在可以真的跑掃描了。
-d2_membership_threshold|scripts/diagnostics/sensitivity_sweep.py --target membership_threshold --procs 8 --n-syn 40000 --refines 3,3
+# 2026-08-23：改派到新上線的 GCP SSH worker（gcp1，見
+# cloud_queue.txt／docs/reference/CLOUD_WORKERS.md），這台機器早先
+# 就評估過正式規模（5 門檻 x n_syn=40000）數百小時，不適合排本機
+# 8 核佇列——停用這裡，避免 gcp1 跟本機各自重算一次浪費算力。
+# d2_membership_threshold|scripts/diagnostics/sensitivity_sweep.py --target membership_threshold --procs 8 --n-syn 40000 --refines 3,3
