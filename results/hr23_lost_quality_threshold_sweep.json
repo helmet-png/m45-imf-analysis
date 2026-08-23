@@ -1,5 +1,11 @@
 {
   "status": "candidate_only_threshold_sensitivity_not_a_new_selection_function",
+  "effective_fixed_cuts": {
+    "source": "config.toml step2_cmd loaded at execution time",
+    "g_bright_limit": 4.0,
+    "min_flux_snr_g": 50.0,
+    "min_flux_snr_rp": 20.0
+  },
   "candidate_count": 62,
   "scenarios": [
     {

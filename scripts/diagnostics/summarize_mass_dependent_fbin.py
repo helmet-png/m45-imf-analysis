@@ -26,6 +26,31 @@ def main():
     profile_names = set(sources[0]["profiles"])
     if any(set(source["profiles"]) != profile_names for source in sources[1:]):
         raise ValueError("All input files must contain the same profile names")
+    contract_fields = (
+        "true_theta", "fitted_grid", "n_stars", "n_gen_for_injection",
+        "n_syn_per_likelihood", "matched_contrasts",
+    )
+
+    def execution_contract(source):
+        return {
+            **{field: source.get(field) for field in contract_fields},
+            "profile_injections": {
+                name: {
+                    "injected_profile": source["profiles"][name].get(
+                        "injected_profile"),
+                    "injected_matched_contrast": source["profiles"][name].get(
+                        "injected_matched_contrast"),
+                }
+                for name in sorted(profile_names)
+            },
+        }
+
+    reference_contract = execution_contract(sources[0])
+    for index, source in enumerate(sources[1:], start=1):
+        if execution_contract(source) != reference_contract:
+            raise ValueError(
+                f"Input {args.input[index]} has a different execution contract; "
+                "refusing to combine incomparable trials")
     summaries = {}
     for name in sources[0]["profiles"]:
         trials = [trial for source in sources
@@ -71,7 +96,7 @@ def main():
             "The injected primary-mass-weighted mean f_bin is fixed before photometric selection.",
             "The selected binary fraction may differ because binarity and mass affect detectability.",
             "Age, extinction, metallicity and q_gamma were fixed; this cannot replace the pending full seven-parameter recovery on branch mass-dep-fbin.",
-            "The 95% intervals describe variability across these 20 deterministic fake catalogues, not a measured M45 systematic uncertainty.",
+            "The 95% intervals describe variability across the aggregated deterministic fake catalogues, not a measured M45 systematic uncertainty.",
         ],
     }
     out = ROOT / args.output

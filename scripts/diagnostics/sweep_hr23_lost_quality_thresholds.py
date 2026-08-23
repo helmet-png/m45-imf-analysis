@@ -62,6 +62,12 @@ def main():
             })
     output = {
         "status": "candidate_only_threshold_sensitivity_not_a_new_selection_function",
+        "effective_fixed_cuts": {
+            "source": "config.toml step2_cmd loaded at execution time",
+            "g_bright_limit": cfg.g_bright_limit,
+            "min_flux_snr_g": cfg.min_flux_snr_g,
+            "min_flux_snr_rp": cfg.min_flux_snr_rp,
+        },
         "candidate_count": len(rows), "scenarios": scenarios,
         "limits": [
             "Counts apply only to the 62 traced HR23 candidates, not to all Gaia sources or contaminants.",
