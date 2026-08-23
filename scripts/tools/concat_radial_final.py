@@ -33,16 +33,21 @@ for off in range(n_expect):
     with np.load(f, allow_pickle=False) as z:
         man = json.loads(str(z["__manifest__"])) if "__manifest__" in z.files else None
         C = np.atleast_2d(z["C"])
-    # 每片必須剛好一列——這些分片是用 `--repeats 1` 跑的，一列就是一次
-    # 重複。若某片有多列（例如有人手動用 --repeats 2 補跑過），下面
-    # np.concatenate 會照收，C_all 變成 6 列以上，但 len(rows) 仍是 5，
-    # 逐片表格也只印 C[0]，最後卻印成「alpha 五次」——串出一份列數與
-    # 宣稱不符的正式結果。manifest 不記 repeats 的列數，所以上面的
-    # manifest 一致性檢查攔不到這種情況（2026-08-21 CodeRabbit review）。
-    if C.shape[0] != 1:
-        print(f"分片 offset={off} 的 C 有 {C.shape[0]} 列，預期剛好 1 列："
+    # 每片必須恰好是 (1, 7)——這些分片是用 `--repeats 1` 跑的，一列就是
+    # 一次重複，七欄對應 names 那七個量（logage/A_V/f_bin/alpha/MH/
+    # q_gamma/dav）。若某片有多列（例如有人手動用 --repeats 2 補跑過），
+    # 下面 np.concatenate 會照收，C_all 變成 6 列以上，但 len(rows) 仍是
+    # 5，逐片表格也只印 C[0]，最後卻印成「alpha 五次」——串出一份列數
+    # 與宣稱不符的正式結果。欄數若不是 7（例如舊版腳本輸出少一欄），
+    # 下面 `a = C_all[:, 3]` 仍會照抓第 4 欄當 alpha，但那一欄實際對到
+    # 的量可能已經錯位——manifest 不記欄數也不記 repeats 的列數，所以
+    # 上面的 manifest 一致性檢查攔不到這兩種情況（2026-08-21／2026-08-23
+    # CodeRabbit review）。
+    if C.shape != (1, 7):
+        print(f"分片 offset={off} 的 C 形狀是 {C.shape}，預期剛好 (1, 7)："
               f"{f}")
-        print("中止：每片必須是單次重複，否則串接後的列數會與宣稱不符。")
+        print("中止：每片必須是單次重複、七欄結果，否則串接後的列數／"
+              "欄位對應會與宣稱不符。")
         sys.exit(1)
     rows.append((off, C, man, f))
 
