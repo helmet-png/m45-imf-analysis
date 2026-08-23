@@ -1,0 +1,117 @@
+{
+  "status": "empirical_mapping_from_saved_step5_not_imf_refit",
+  "reference": "results/step5_imf.npz masses aligned to data/cmd_members.csv",
+  "candidate_count": 16,
+  "finite_mass_count": 16,
+  "mass_min_msun": 0.16077114134374643,
+  "mass_median_msun": 0.1734716295062939,
+  "mass_max_msun": 0.21880242416355788,
+  "mass_below_0p3": 16,
+  "mass_0p3_to_0p5": 0,
+  "mass_at_least_0p5": 0,
+  "stars": [
+    {
+      "source_id": "65200283613608704",
+      "g": 17.136478,
+      "bp_rp": 3.3704548,
+      "mass_from_g_msun": 0.21880242416355788
+    },
+    {
+      "source_id": "65216363971331072",
+      "g": 17.420778,
+      "bp_rp": 3.1692924,
+      "mass_from_g_msun": 0.1949015617810216
+    },
+    {
+      "source_id": "69912309413652864",
+      "g": 17.451437,
+      "bp_rp": 3.733448,
+      "mass_from_g_msun": 0.19266314876101992
+    },
+    {
+      "source_id": "66728089380491648",
+      "g": 17.542105,
+      "bp_rp": 3.0739517,
+      "mass_from_g_msun": 0.18604347976667843
+    },
+    {
+      "source_id": "68283421593270400",
+      "g": 17.57024,
+      "bp_rp": 3.4147701,
+      "mass_from_g_msun": 0.18398934393975175
+    },
+    {
+      "source_id": "64950625753906176",
+      "g": 17.653503,
+      "bp_rp": 3.710434,
+      "mass_from_g_msun": 0.17791031385773978
+    },
+    {
+      "source_id": "66771764904729984",
+      "g": 17.683437,
+      "bp_rp": 3.141058,
+      "mass_from_g_msun": 0.17572483307425915
+    },
+    {
+      "source_id": "66453181412027392",
+      "g": 17.699118,
+      "bp_rp": 3.4090595,
+      "mass_from_g_msun": 0.1745992031312705
+    },
+    {
+      "source_id": "64453685154291968",
+      "g": 17.73309,
+      "bp_rp": 3.3465729,
+      "mass_from_g_msun": 0.17234405588131732
+    },
+    {
+      "source_id": "65265674492422784",
+      "g": 17.757893,
+      "bp_rp": 3.267561,
+      "mass_from_g_msun": 0.17075649891881922
+    },
+    {
+      "source_id": "66460225158376192",
+      "g": 17.770643,
+      "bp_rp": 3.4066734,
+      "mass_from_g_msun": 0.1699404141197283
+    },
+    {
+      "source_id": "66767843597097856",
+      "g": 17.77927,
+      "bp_rp": 3.3148994,
+      "mass_from_g_msun": 0.16938822874233553
+    },
+    {
+      "source_id": "64997187496822912",
+      "g": 17.813745,
+      "bp_rp": 3.2330704,
+      "mass_from_g_msun": 0.16718159945224456
+    },
+    {
+      "source_id": "65244435877629824",
+      "g": 17.847445,
+      "bp_rp": 3.2905197,
+      "mass_from_g_msun": 0.16502457531660822
+    },
+    {
+      "source_id": "66894772769437952",
+      "g": 17.874992,
+      "bp_rp": 3.3453732,
+      "mass_from_g_msun": 0.16326138410401558
+    },
+    {
+      "source_id": "68581694185489920",
+      "g": 17.913898,
+      "bp_rp": 3.4784622,
+      "mass_from_g_msun": 0.16077114134374643
+    }
+  ],
+  "limits": [
+    "Masses are empirical G-band interpolation from the already-saved step5 mass array.",
+    "The saved step5 mapping predates the p2final_v3 headline and is used only to locate the candidates relative to the 0.5 Msun break.",
+    "Unresolved binaries and differential extinction can change individual inferred masses.",
+    "The forward alpha parameter changes only the mass segment above 0.5 Msun, but lower-mass CMD cells can still constrain nuisance parameters.",
+    "No membership model, selection function, forward model or IMF was rerun."
+  ]
+}

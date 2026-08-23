@@ -1,0 +1,186 @@
+{
+  "status": "diagnostic_only_not_an_independent_likelihood",
+  "source_result": "results/fit_real_p2final_v3.npz",
+  "n_completed_repeats": 10,
+  "n_syn_per_diagnostic": 40000,
+  "cmd_offset_threshold_mag": 0.3765,
+  "distance_modulus": 5.659445887724068,
+  "reference_theta_mean": {
+    "logage": 8.025925925925922,
+    "A_V": 0.38592592592592595,
+    "f_bin": 0.5677777777777775,
+    "alpha": 2.382222222222222,
+    "MH": -0.022222222222222178,
+    "q_gamma": -0.8962962962962961,
+    "dav": 0.557222222222222
+  },
+  "observed_cmd_offset": {
+    "n_flag": 62,
+    "n_eligible": 1072,
+    "fraction": 0.05783582089552239,
+    "binomial_se": 0.007129586682671782
+  },
+  "fixed_other_parameters_fbin_grid": {
+    "0.2": {
+      "n_flag": 715,
+      "n_eligible": 21979,
+      "fraction": 0.03253105236816962,
+      "binomial_se": 0.001196640257060465,
+      "selected_stars": 22299,
+      "true_binary_fraction_selected": 0.20260998251042647,
+      "cmd_offset_precision": 0.634965034965035,
+      "cmd_offset_recall": 0.10177090338489128
+    },
+    "0.4": {
+      "n_flag": 1088,
+      "n_eligible": 22072,
+      "fraction": 0.04929322218194998,
+      "binomial_se": 0.0014571224695004818,
+      "selected_stars": 22386,
+      "true_binary_fraction_selected": 0.40199231662646295,
+      "cmd_offset_precision": 0.8106617647058824,
+      "cmd_offset_recall": 0.0994026822946016
+    },
+    "0.6": {
+      "n_flag": 1486,
+      "n_eligible": 22175,
+      "fraction": 0.06701240135287485,
+      "binomial_se": 0.0016791276445822319,
+      "selected_stars": 22478,
+      "true_binary_fraction_selected": 0.6063261856037014,
+      "cmd_offset_precision": 0.9071332436069987,
+      "cmd_offset_recall": 0.10017835909631391
+    },
+    "0.8": {
+      "n_flag": 1895,
+      "n_eligible": 22303,
+      "fraction": 0.08496614805183159,
+      "binomial_se": 0.001867067001801265,
+      "selected_stars": 22594,
+      "true_binary_fraction_selected": 0.8039302469682217,
+      "cmd_offset_precision": 0.9641160949868074,
+      "cmd_offset_recall": 0.1018508194893522
+    },
+    "1.0": {
+      "n_flag": 2264,
+      "n_eligible": 22416,
+      "fraction": 0.10099928622412563,
+      "binomial_se": 0.0020126122492796117,
+      "selected_stars": 22697,
+      "true_binary_fraction_selected": 1.0,
+      "cmd_offset_precision": 1.0,
+      "cmd_offset_recall": 0.10099928622412563
+    }
+  },
+  "completed_repeat_predictions": [
+    {
+      "n_flag": 1548,
+      "n_eligible": 22185,
+      "fraction": 0.06977687626774848,
+      "binomial_se": 0.001710486341710317,
+      "selected_stars": 22497,
+      "true_binary_fraction_selected": 0.6000355602969285,
+      "cmd_offset_precision": 0.9224806201550387,
+      "cmd_offset_recall": 0.10717502251576103
+    },
+    {
+      "n_flag": 1442,
+      "n_eligible": 22304,
+      "fraction": 0.06465208034433285,
+      "binomial_se": 0.0016465937631849558,
+      "selected_stars": 22628,
+      "true_binary_fraction_selected": 0.5433975605444582,
+      "cmd_offset_precision": 0.9056865464632455,
+      "cmd_offset_recall": 0.1076669414674361
+    },
+    {
+      "n_flag": 1405,
+      "n_eligible": 22172,
+      "fraction": 0.06336821215948042,
+      "binomial_se": 0.0016361297392036925,
+      "selected_stars": 22563,
+      "true_binary_fraction_selected": 0.56557195408412,
+      "cmd_offset_precision": 0.8975088967971531,
+      "cmd_offset_recall": 0.1004060832868859
+    },
+    {
+      "n_flag": 1490,
+      "n_eligible": 22272,
+      "fraction": 0.06690014367816093,
+      "binomial_se": 0.001674163917550182,
+      "selected_stars": 22570,
+      "true_binary_fraction_selected": 0.5812140008861321,
+      "cmd_offset_precision": 0.9120805369127517,
+      "cmd_offset_recall": 0.10493398193189715
+    },
+    {
+      "n_flag": 1341,
+      "n_eligible": 22018,
+      "fraction": 0.06090471432464347,
+      "binomial_se": 0.001611726518858079,
+      "selected_stars": 22235,
+      "true_binary_fraction_selected": 0.5878569822352148,
+      "cmd_offset_precision": 0.9075316927665921,
+      "cmd_offset_recall": 0.09398409143563209
+    },
+    {
+      "n_flag": 1266,
+      "n_eligible": 21835,
+      "fraction": 0.057980306846805586,
+      "binomial_se": 0.001581589042823104,
+      "selected_stars": 22105,
+      "true_binary_fraction_selected": 0.5957475684234336,
+      "cmd_offset_precision": 0.8925750394944708,
+      "cmd_offset_recall": 0.08685626441199078
+    },
+    {
+      "n_flag": 1593,
+      "n_eligible": 22628,
+      "fraction": 0.07039950503800602,
+      "binomial_se": 0.0017006302153138831,
+      "selected_stars": 22919,
+      "true_binary_fraction_selected": 0.5562197303547275,
+      "cmd_offset_precision": 0.9165097300690521,
+      "cmd_offset_recall": 0.11593742555387913
+    },
+    {
+      "n_flag": 1303,
+      "n_eligible": 21878,
+      "fraction": 0.059557546393637445,
+      "binomial_se": 0.0016000394949704142,
+      "selected_stars": 22233,
+      "true_binary_fraction_selected": 0.5277740295956461,
+      "cmd_offset_precision": 0.8833461243284727,
+      "cmd_offset_recall": 0.099593320065761
+    },
+    {
+      "n_flag": 1419,
+      "n_eligible": 22162,
+      "fraction": 0.06402851728183377,
+      "binomial_se": 0.0016444230496328704,
+      "selected_stars": 22431,
+      "true_binary_fraction_selected": 0.5846373322633855,
+      "cmd_offset_precision": 0.9140239605355884,
+      "cmd_offset_recall": 0.10006943908649024
+    },
+    {
+      "n_flag": 1462,
+      "n_eligible": 22300,
+      "fraction": 0.06556053811659193,
+      "binomial_se": 0.0016574651611629206,
+      "selected_stars": 22618,
+      "true_binary_fraction_selected": 0.5846670793173578,
+      "cmd_offset_precision": 0.9110807113543091,
+      "cmd_offset_recall": 0.1020767874932945
+    }
+  ],
+  "repeat_prediction_fraction_mean": 0.06431284404512408,
+  "repeat_prediction_fraction_min": 0.057980306846805586,
+  "repeat_prediction_fraction_max": 0.07039950503800602,
+  "coarse_sensitivity_dfso_dfbin": 0.08739182613943662,
+  "interpretation": [
+    "The CMD-offset fraction is an observable proxy, not f_bin itself.",
+    "It is affected by q_gamma, errors, extinction, the isochrone and selection.",
+    "It uses the same CMD as the Hess likelihood, so a separate binomial term would double-count unless a joint/calibrated likelihood replaces or conditions the Hess information."
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "status": "candidate_error_comparison_not_selection_validation",
+  "selection_tested": "G16-18, G_SNR>=50, BP_SNR>=15, RP_SNR>=20, excess<3sigma",
+  "bp15_recovered_hr23_candidates": {
+    "n": 16,
+    "bp_mag_error": {
+      "median": 0.0618556757566366,
+      "p90": 0.07055361998481093,
+      "max": 0.07215488524573374
+    },
+    "rp_mag_error": {
+      "median": 0.006027178930362305,
+      "p90": 0.007634858364495237,
+      "max": 0.007784296812632333
+    },
+    "bp_rp_colour_error": {
+      "median": 0.062164398600103116,
+      "p90": 0.07084755722074057,
+      "max": 0.07248775116291045
+    }
+  },
+  "current_cmd_members_G16_to_18": {
+    "n": 459,
+    "bp_mag_error": {
+      "median": 0.024843404585667483,
+      "p90": 0.0440568494688567,
+      "max": 0.053449486615435055
+    },
+    "rp_mag_error": {
+      "median": 0.0038650639797095693,
+      "p90": 0.006243231755696585,
+      "max": 0.010731126441684538
+    },
+    "bp_rp_colour_error": {
+      "median": 0.0250572529129804,
+      "p90": 0.04441111507499218,
+      "max": 0.054192436376388764
+    }
+  },
+  "median_colour_error_ratio_candidate_over_cmd": 2.4808944067408167,
+  "recovered_source_ids": [
+    "64453685154291968",
+    "64950625753906176",
+    "64997187496822912",
+    "65200283613608704",
+    "65216363971331072",
+    "65244435877629824",
+    "65265674492422784",
+    "66453181412027392",
+    "66460225158376192",
+    "66728089380491648",
+    "66767843597097856",
+    "66771764904729984",
+    "66894772769437952",
+    "68283421593270400",
+    "68581694185489920",
+    "69912309413652864"
+  ],
+  "limits": [
+    "The comparison uses only known HR23 candidates and cannot measure contamination.",
+    "HR23 membership is an external reference, not ground truth.",
+    "Magnitude errors are flux-SNR approximations and omit covariance/systematics.",
+    "No membership model, selection function, forward model or IMF was rerun."
+  ]
+}
