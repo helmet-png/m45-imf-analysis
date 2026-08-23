@@ -65,6 +65,59 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+# 2026-08-23 CodeRabbit review 訂正：worker 名稱 -> 已經展開過 `~` 的
+# remote_dir 絕對路徑，每個 worker 在這個行程裡只透過 SSH 解析一次、
+# 快取在這裡，後面所有函式一律用 _get_worker() 拿 worker dict，不要
+# 各自重新呼叫 ssh_workers.load_workers() 再各自處理 remote_dir——
+# 理由見 _resolve_remote_dir() 的說明。
+_RESOLVED_DIRS: dict[str, str] = {}
+
+
+def _resolve_remote_dir(worker_name: str, w: dict) -> str:
+    """把 `w['remote_dir']` 開頭的 `~` 展開成遠端 home 目錄的絕對路徑。
+
+    **為什麼一定要展開，不能讓 `~` 原樣留著交給後面的呼叫點各自處理**：
+    push()／run()／poll()／kill()／pull() 每個呼叫點都會對 remote_dir
+    做 `shlex.quote()` 再組進遠端指令字串，這是對的（避免特殊字元／
+    CWE-78，見 ensure_repo() 的說明）——但 `shlex.quote("~/m45_membership")`
+    的結果是整段用單引號包起來（`'~/m45_membership'`），而 `~` 展開是
+    shell 的**詞法**規則，只在參數完全沒被引號包住時才會生效；一旦被
+    單引號包住，bash 會把它當成字面上名叫 `~` 的目錄，`cd
+    '~/m45_membership'` 會因為找不到這個字面目錄直接失敗。等於每個
+    呼叫點各自 quote 的當下都重新踩進同一個 bug。改成在每個 worker
+    第一次用到時，就用一次 SSH 查出遠端 home 目錄、把 `~` 換成絕對
+    路徑，之後快取起來給所有呼叫點共用——絕對路徑本身不含 `~`，後面
+    不管哪個呼叫點怎麼 `shlex.quote()` 都不影響展開的結果。
+    """
+    if worker_name in _RESOLVED_DIRS:
+        return _RESOLVED_DIRS[worker_name]
+    remote_dir = w["remote_dir"]
+    if remote_dir == "~" or remote_dir.startswith("~/"):
+        try:
+            r = ssh_workers.remote_run(w, "echo $HOME", timeout=15)
+        except subprocess.TimeoutExpired:
+            r = None
+        home = r.stdout.strip() if r is not None and r.returncode == 0 else ""
+        if home:
+            remote_dir = home if remote_dir == "~" else home + remote_dir[1:]
+        else:
+            print(f"  警告：無法查詢 {worker_name} 的遠端 home 目錄，"
+                 f"remote_dir 的 ~ 保留原樣，後續指令可能因此失敗")
+    _RESOLVED_DIRS[worker_name] = remote_dir
+    return remote_dir
+
+
+def _get_worker(worker_name: str) -> dict:
+    """回傳 worker 設定字典，`remote_dir` 已經解析成絕對路徑（見
+    `_resolve_remote_dir()`）。除了 push() 因為要組「worker 不存在」的
+    友善錯誤訊息、額外自己查了一次 `ssh_workers.load_workers()` 之外，
+    其餘函式一律從這裡拿 worker dict，不要繞過去重新解析。"""
+    workers = ssh_workers.load_workers()
+    w = dict(workers[worker_name])
+    w["remote_dir"] = _resolve_remote_dir(worker_name, w)
+    return w
+
+
 def _repo_ssh_url() -> str:
     r = subprocess.run(["git", "remote", "get-url", "origin"],
                        cwd=str(HERE), capture_output=True, text=True)
@@ -150,10 +203,24 @@ def ensure_static_data(w: dict) -> bool:
             # sha256sum 印不出東西（檔案不存在）就當作「跟本機不同」，
             # 一律走上傳分支——不存在本來就該上傳，跟內容不同是同一個
             # 處置，不用分兩種情況判斷。
-            check = ssh_workers.remote_run(
-                w, f"sha256sum {q_remote_path} 2>/dev/null | cut -d' ' -f1",
-                timeout=30)
-            remote_hash = check.stdout.strip() if check.returncode == 0 else ""
+            #
+            # 2026-08-23 CodeRabbit review 訂正：遠端 sha256sum 逾時
+            # （原本 30 秒，大檔案在慢速/忙碌的 VM 上算雜湊可能不夠）
+            # 原本沒接 subprocess.TimeoutExpired，會讓整支腳本直接炸掉、
+            # 卡在這個檔案就不會再往下檢查其他檔案。逾時跟「查不到雜湊」
+            # 同樣視為「跟本機不同」處理，一律走上傳分支——誤判成不同
+            # 頂多多傳一次，比讓例外整個中斷同步、或誤判成相同讓過期
+            # 資料繼續留著沒人發現安全。逾時本身順便拉長到 120 秒，
+            # 降低大檔案在正常情況下也被誤判逾時的機率。
+            try:
+                check = ssh_workers.remote_run(
+                    w, f"sha256sum {q_remote_path} 2>/dev/null | cut -d' ' -f1",
+                    timeout=120)
+                remote_hash = check.stdout.strip() if check.returncode == 0 else ""
+            except subprocess.TimeoutExpired:
+                print(f"  查詢 {sub}/{name} 遠端雜湊逾時，當作內容不同"
+                     f"處理（會觸發上傳）")
+                remote_hash = ""
             if remote_hash and remote_hash == _sha256(local):
                 continue
             print(f"  上傳 {sub}/{name}（worker 上缺少或內容不同）...")
@@ -172,7 +239,7 @@ def push(worker_name: str, branch: str = "main") -> bool:
     if worker_name not in workers:
         print(f"找不到 worker {worker_name!r}，登記檔裡有：{list(workers)}")
         return False
-    w = workers[worker_name]
+    w = _get_worker(worker_name)
     print(f"[{worker_name}] 同步程式碼...")
     if not ensure_repo(w, branch):
         return False
@@ -183,8 +250,7 @@ def push(worker_name: str, branch: str = "main") -> bool:
 def run(worker_name: str, script: str, args: str, label: str) -> bool:
     """啟動背景工作。回傳是否成功送出（不等它跑完——跟 kaggle_sync.py
     的 push 一樣，啟動之後由 cloud_queue.py 或 status 指令另外去查）。"""
-    workers = ssh_workers.load_workers()
-    w = workers[worker_name]
+    w = _get_worker(worker_name)
     remote_dir = w["remote_dir"]
     # label／script／remote_dir 都是識別字串，用 shlex.quote() 包起來，
     # 避免 cloud_queue.txt 裡的值（逗號分隔欄位，來源是人手工編輯的佇列
@@ -224,16 +290,26 @@ def poll(worker_name: str, label: str) -> str:
     """回傳 "running"／"complete"／"error"／"missing"／"unknown"，
     跟 kaggle_queue.py 的 probe_kernel_status() 用同一套詞彙，讓
     cloud_queue.py 可以共用同一套上層判斷邏輯。"""
-    workers = ssh_workers.load_workers()
-    w = workers[worker_name]
+    w = _get_worker(worker_name)
     remote_dir = w["remote_dir"]
     q_label = shlex.quote(label)
     q_dir = shlex.quote(remote_dir)
+    # 2026-08-23 CodeRabbit review 訂正：kill -0 原本查的是 <label>.pid
+    # 記的那個 PID 本身（bash 的 PID）活不活著。啟動指令是
+    # `setsid bash -c '...'`，setsid 會讓這個 bash 成為新 session／
+    # process group 的 leader，所以它的 PID 同時也是整個 process group
+    # 的 PGID；bash -c 裡面接著跑的 `python3 -u ...` 是同一個 bash
+    # 底下的前景指令，沒有另外呼叫 setpgid，預設會沿用同一個 PGID。
+    # 用「負的 PID」（`-$pid`）signal 的目標就變成整個 process group
+    # 而不是單一行程——查活著與否也一併改成查整個 group，這樣即使
+    # bash 本身已經結束但 group 裡還有孤兒行程殘留（例如下面 kill()
+    # 曾經只殺掉 bash、python3 變孤兒的那種情況），也查得出來還沒真的
+    # 收乾淨，不會誤判成已經結束。
     cmd = (
         f"cd {q_dir} 2>/dev/null || exit 9; "
         f"if [ -f logs/{q_label}.exit ]; then "
         f"  echo EXIT:$(cat logs/{q_label}.exit); "
-        f"elif [ -f logs/{q_label}.pid ] && kill -0 $(cat logs/{q_label}.pid) "
+        f"elif [ -f logs/{q_label}.pid ] && kill -0 -$(cat logs/{q_label}.pid) "
         f"2>/dev/null; then echo RUNNING; "
         f"elif [ -f logs/{q_label}.pid ]; then echo CRASHED; "
         f"else echo MISSING; fi"
@@ -268,20 +344,29 @@ def kill(worker_name: str, label: str) -> bool:
     重派一個新工作，跟還沒真正死掉的舊行程搶同一份 remote_dir、同一批
     logs/results 檔案**，這是 SSH worker（持久機器，沒有 Kaggle 那種
     容器隔離）特有的風險，Kaggle 那邊逾時直接放槽位沒有這個問題。"""
-    workers = ssh_workers.load_workers()
-    w = workers[worker_name]
+    w = _get_worker(worker_name)
     remote_dir = w["remote_dir"]
     q_dir = shlex.quote(remote_dir)
     q_label = shlex.quote(label)
+    # 2026-08-23 CodeRabbit review 訂正：原本只對 <label>.pid 記的那個
+    # PID（setsid 底下 bash 的 PID）送信號——bash 收到 SIGTERM／SIGKILL
+    # 死掉之後，它底下用一般前景指令跑的 python3（以及 python3 自己開的
+    # 子行程，例如 multiprocessing worker）不會被連帶終止，會變成孤兒行程
+    # 繼續在背景跑，變成 kill() 回報「已確認終止」但其實遠端運算還在
+    # 繼續佔用 CPU 的假象。setsid 讓 bash 成為新 process group 的 leader，
+    # 它的 PID 同時是 PGID，所以改成對「負的 PID」送信號（`-$pid`），
+    # 目標就是整個 process group（bash 本身＋python3＋python3 的子行程，
+    # 只要沒有另外呼叫 setpgid 改變自己的 group，預設都在同一個 group
+    # 裡），才能真的把這個工作啟動的所有行程一起收乾淨。
     cmd = (
         f"cd {q_dir} 2>/dev/null || exit 9; "
         f"test -f logs/{q_label}.pid || {{ echo NO_PID; exit 0; }}; "
         f"pid=$(cat logs/{q_label}.pid); "
-        f"kill -TERM $pid 2>/dev/null; "
+        f"kill -TERM -$pid 2>/dev/null; "
         f"sleep 2; "
-        f"kill -0 $pid 2>/dev/null && kill -KILL $pid 2>/dev/null; "
+        f"kill -0 -$pid 2>/dev/null && kill -KILL -$pid 2>/dev/null; "
         f"sleep 1; "
-        f"kill -0 $pid 2>/dev/null && echo STILL_ALIVE || echo KILLED"
+        f"kill -0 -$pid 2>/dev/null && echo STILL_ALIVE || echo KILLED"
     )
     try:
         r = ssh_workers.remote_run(w, cmd, timeout=30)
@@ -313,8 +398,7 @@ def pull(worker_name: str, label: str) -> bool:
     `results/.start_<label>` 時間戳記標記檔，只挑「比它新」的檔案傳
     回來（`find ... -newer`），排除標記檔本身。
     """
-    workers = ssh_workers.load_workers()
-    w = workers[worker_name]
+    w = _get_worker(worker_name)
     remote_dir = w["remote_dir"]
     q_dir = shlex.quote(remote_dir)
     q_label = shlex.quote(label)

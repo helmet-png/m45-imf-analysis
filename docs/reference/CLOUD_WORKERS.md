@@ -70,10 +70,16 @@ GitHub 的身分，等於把「防中間人」這層保護關掉。**兩個做�
   冒充，值得花這一步人工核對。）
 - 或：手動把 GitHub 官方公告的 host key fingerprint（見
   https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints）
-  核對後寫進 `~/.ssh/known_hosts`，例如：
+  核對後**才**寫進 `~/.ssh/known_hosts`——**先驗證、再寫入，不要反過來**：
+  如果先 `>> ~/.ssh/known_hosts` 再核對，一把還沒驗證過的金鑰（萬一是
+  中間人攻擊植入的）已經被信任了，之後才做的核對形同虛設，等於沒做這
+  一步的防護；而且直接對 `~/.ssh/known_hosts` 跑 `ssh-keygen -lf` 會把
+  檔案裡**其他主機**的 fingerprint 也一起列出來，混在一起很難看出哪一行
+  才是 GitHub 的。改成先寫到暫存檔、核對過通過才附加進 `known_hosts`：
   ```bash
-  ssh-keyscan github.com >> ~/.ssh/known_hosts
-  ssh-keygen -lf ~/.ssh/known_hosts   # 核對輸出的 fingerprint 跟官方公告一致
+  ssh-keyscan github.com > /tmp/gh_hostkeys
+  ssh-keygen -lf /tmp/gh_hostkeys   # 核對輸出的 fingerprint 跟官方公告一致，通過才繼續下一步
+  cat /tmp/gh_hostkeys >> ~/.ssh/known_hosts && rm /tmp/gh_hostkeys
   ```
 
 ## 4. 本機設定 `ssh_workers.json`
@@ -96,14 +102,31 @@ python ssh_sync.py push --worker gcp1
 
 `push` 會自動 `git clone`（第一次）或 `git pull`，並補齊缺少的靜態
 資料（`data/`、`isochrones/` 底下的白名單檔案，見 `kaggle_sync.py` 的
-`NEEDED_DATA_FILES`／`NEEDED_ISOCHRONE_GLOBS`）。跑成功之後可以用一支
-輕量腳本先跑一輪 smoke test（`--minimal`，不用等靜態資料傳完）：
+`NEEDED_DATA_FILES`／`NEEDED_ISOCHRONE_GLOBS`）——`push` 這一步本身就
+已經把程式碼跟靜態資料都同步完成才會回傳，不是「先跑起來、靜態資料
+在背景慢慢傳」，所以底下的 smoke test **是在靜態資料已經同步完之後才
+跑**，不是「不用等」。跑成功之後可以用一支輕量腳本先跑一輪 smoke
+test，確認整條 push→run→status→pull 的路徑通不通，再把工作排進正式
+佇列：
 
 ```bash
 python ssh_sync.py run --worker gcp1 --script kaggle_smoketest.py --label smoketest
 python ssh_sync.py status --worker gcp1 --label smoketest
 python ssh_sync.py pull --worker gcp1 --label smoketest
 ```
+
+（2026-08-23 訂正：`ssh_sync.py run` 只吃 `--worker`／`--script`／
+`--args`／`--label` 四個參數，**沒有 `--minimal` 這個頂層旗標**，
+`kaggle_smoketest.py` 本身也不解析任何命令列參數——照舊版文件字面加
+`--minimal` 會直接得到 argparse 的錯誤。跟 Kaggle 那邊 `kaggle_sync.py`
+的 `--minimal`（控制要不要把 `pipeline/`／`data/`／`isochrones/` 一起
+打包上傳到 kernel）是不同機制：SSH worker 是持久機器，`push` 已經把
+整個 repo 跟靜態資料同步過一次，不需要另外的「精簡打包」選項。如果
+之後要指定的腳本本身支援類似 `--minimal` 的自訂旗標，透過
+`--args "--minimal"` 傳給它，例如
+`python ssh_sync.py run --worker gcp1 --script some_script.py --args "--minimal" --label smoketest`——
+`--minimal` 是要傳給 `--script` 指定的那支腳本的參數，不是
+`ssh_sync.py run` 自己的參數。）
 
 確認整輪跑得通之後，才把工作排進 `cloud_queue.txt`、跑
 `python cloud_queue.py` 正式派工。

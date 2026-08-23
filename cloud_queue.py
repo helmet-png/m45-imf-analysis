@@ -264,11 +264,41 @@ def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
                      f"完成，補拉結果並標記完成，不重算", flush=True)
                 if fetch_slot(name, kind, item, handle):
                     mark_done(item["label"], "ok", 0, name)
-                else:
-                    print(f"  結果下載失敗，不標記完成——留給下一輪重試",
-                         flush=True)
-                continue    # 槽位保持空著，可以接新工作
-            # error／cancelled：記成終態失敗，不自動重派。
+                    continue    # 槽位保持空著，可以接新工作
+                # 2026-08-23 CodeRabbit review 訂正：結果下載失敗時原本
+                # 直接 continue 放空槽位——遠端其實已經算完，放空槽位會讓
+                # 主迴圈把這個 label 當成新工作重派，等於把已經算完的
+                # 計算結果丟掉重算一次。改成保留槽位（照抄主迴圈本來就有
+                # 的同一套處置，見下面 while 迴圈裡 `status == "complete"
+                # and not pulled` 那段），下一輪 probe_slot 會再查到
+                # complete，再重試 fetch_slot，只重試下載，不重跑計算。
+                print(f"  結果下載失敗，保留槽位讓主迴圈下一輪重試下載"
+                     f"（不重跑計算）", flush=True)
+                slots[name] = {"phase": "running", "item": item, "kind": kind,
+                               **handle, "t0": time.time(), "retries": 0}
+                break
+            if (kind == "kaggle" and st == "error"
+                   and kaggle_queue.is_mount_race_failure(item["label"])):
+                # 2026-08-23 CodeRabbit review 訂正：這裡原本跟下面的
+                # error／cancelled 分支合在一起，一律記成終態失敗——但
+                # Kaggle 的 dataset 掛載時序競態是已知的暫時性失敗（見
+                # is_mount_race_failure() 的說明跟主迴圈裡 status=="error"
+                # 那段一樣的處置），本機重啟後接回一個剛好卡在 mount race
+                # 的槽位不該直接判死刑，要走跟主迴圈相同的 cooldown 重試
+                # 流程，不能因為「這次是在復原路徑上發現的」就少了重試
+                # 機會。SSH 沒有這種已知可重試的暫時性失敗模式，所以這段
+                # 只在 kind=="kaggle" 時才會進來，SSH 的 error 繼續走下面
+                # 的終態失敗處置。
+                wait_s = KAGGLE_BACKOFFS[0]
+                slots[name] = {"phase": "cooldown", "item": item, "kind": kind,
+                               **handle, "t0": time.time(), "retries": 1,
+                               "resume_at": time.time() + wait_s}
+                print(f"復原：{name} 的 {item['label']} 遠端狀態為 error，"
+                     f"但偵測到 dataset 掛載時序問題（非程式錯誤），{wait_s}s "
+                     f"後重推（第 1 次重試），不記成終態失敗", flush=True)
+                break
+            # error／cancelled（SSH 的錯誤，或非 mount race 的 kaggle 錯誤）：
+            # 記成終態失敗，不自動重派。
             print(f"復原：{name} 的 {item['label']} 遠端狀態為 {st}，記成"
                  f"終態失敗，不自動重派", flush=True)
             mark_done(item["label"], st, 0, name)
