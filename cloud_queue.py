@@ -83,6 +83,19 @@ def acquire_lock():
                      f"退出。", flush=True)
                 sys.exit(1)
             print("鎖檔案殘留，清掉重新搶鎖。", flush=True)
+            # 2026-08-22 CodeRabbit review 訂正：unlink 前重新讀一次鎖檔
+            # 內容，跟剛才判定「PID 已死」時讀到的 old_pid 比對——如果這
+            # 段時間裡內容已經變了（另一個行程也判定它殘留並剛重建、或
+            # 真的有新行程搶到鎖），代表現在檔案裡的不是我們判定過的那個
+            # 死掉的鎖，貿然 unlink 會刪掉別人剛建好的合法鎖（TOCTOU）。
+            # 內容沒變才動手清掉，改變了就放棄這次清除、回圈重新走一輪
+            # 判斷，不強行搶鎖。
+            try:
+                current = LOCK.read_text().strip()
+            except (FileNotFoundError, OSError):
+                current = None
+            if current != str(old_pid):
+                continue
             try:
                 LOCK.unlink()
             except FileNotFoundError:
@@ -194,10 +207,25 @@ TERMINAL = {"complete", "error", "cancelled"}
 
 def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
     """開機／重啟時接回還在跑的槽位，理由跟 kaggle_queue.py 的同名函式
-    完全一樣（本機失聯不代表遠端沒在跑，見那邊 2026-08-18 的說明）——
-    這裡簡化成不逐一複製那邊處理 COMPLETE/ERROR 的每個分支，只認
-    RUNNING 就接回、其餘一律當空槽位讓主迴圈自然重派或跳過（已經
-    done 的不會被排進 pending）。"""
+    完全一樣（本機失聯不代表遠端沒在跑，見那邊 2026-08-18 的說明）。
+
+    2026-08-22 CodeRabbit review 訂正：原本只認 RUNNING 就接回，其餘
+    （complete／error／cancelled／unknown）一律當空槽位讓主迴圈自然
+    重派。這對 **complete** 等於把已經算完的結果丟掉重算——跟這個專案
+    在 Kaggle 那邊已經踩過、也已經在 `kaggle_queue.py` 的同名函式修過
+    的同一種「重複算力」bug，這裡當初沒有照著做，是遺漏不是刻意簡化。
+    對 **unknown**（查不到狀態，可能只是網路斷或連線逾時，不代表遠端
+    真的沒在跑）一律當空槽位重派，則可能讓兩個行程同時在同一個 worker
+    的同一個 remote_dir 裡搶同一個 label 的 logs／results 檔案——這是
+    SSH worker（持久機器、無容器隔離）特有的風險，比 Kaggle 只是「白算
+    一次」更嚴重。
+
+    改成比照 kaggle_queue.py 的處置：complete 就 pull＋mark_done（不
+    重算）；error／cancelled 記成終態失敗（不自動重派——SSH 沒有 Kaggle
+    那種已知可重試的 mount race 暫時性失敗模式，保守起見交給人工判斷要
+    不要重新排進佇列）；unknown 保留槽位（phase="probe"）讓主迴圈下一輪
+    繼續查，這一輪不派新工作。
+    """
     done = read_done()
     pending = [it for it in read_queue() if it["label"] not in done]
     slots: dict[str, dict | None] = {name: None for name in workers}
@@ -216,18 +244,34 @@ def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
             else:
                 st = ssh_sync.poll(name, item["label"])
                 handle = {}
+            if st == "missing":
+                continue    # 這個 worker 沒推過這項，看下一個候選
             if st == "running":
                 slots[name] = {"phase": "running", "item": item, "kind": kind,
                                **handle, "t0": time.time(), "retries": 0}
                 print(f"復原：{name} 已經在跑 {item['label']}，接回追蹤",
                      flush=True)
                 break
-            if st == "missing":
-                continue
-            # complete/error/unknown：不在這裡下結論，交給主迴圈第一輪
-            # 正常派工或重試流程處理（跟 kaggle_queue.py 的差異：這裡
-            # 選擇簡單、不在復原階段就 pull，代價是重啟後第一輪會晚一點
-            # 才拉到已經跑完的結果，換取邏輯不重複兩份）。
+            if st == "unknown":
+                slots[name] = {"phase": "probe", "item": item, "kind": kind,
+                               **handle, "t0": time.time(), "retries": 0}
+                print(f"復原：{name} 查 {item['label']} 狀態失敗，這一輪不"
+                     f"派新工作，下一輪再查（避免遠端其實正在跑卻被重派"
+                     f"洗掉）", flush=True)
+                break
+            if st == "complete":
+                print(f"復原：{name} 的 {item['label']} 在本機失聯期間已經"
+                     f"完成，補拉結果並標記完成，不重算", flush=True)
+                if fetch_slot(name, kind, item, handle):
+                    mark_done(item["label"], "ok", 0, name)
+                else:
+                    print(f"  結果下載失敗，不標記完成——留給下一輪重試",
+                         flush=True)
+                continue    # 槽位保持空著，可以接新工作
+            # error／cancelled：記成終態失敗，不自動重派。
+            print(f"復原：{name} 的 {item['label']} 遠端狀態為 {st}，記成"
+                 f"終態失敗，不自動重派", flush=True)
+            mark_done(item["label"], st, 0, name)
     return slots
 
 
@@ -296,6 +340,20 @@ def main() -> None:
 
             elapsed_h = (time.time() - slot["t0"]) / 3600
             if elapsed_h > MAX_WAIT_HOURS:
+                if kind == "ssh":
+                    # SSH worker 是持久機器，逾時不能直接放槽位——遠端的
+                    # 行程可能還真的在跑，放了槽位讓主迴圈重派，會在同一個
+                    # remote_dir 裡跟舊行程搶同一批 logs／results 檔案
+                    # （2026-08-22 CodeRabbit review 訂正）。先用 PID 確認
+                    # 終止，確認不了就保留槽位、不重派，等人工介入——這跟
+                    # Kaggle 不一樣：kernel 是平台自己管的容器，本機沒有
+                    # 能力也不需要去「殺」它，逾時單純是本機端放棄追蹤。
+                    if not ssh_sync.kill(name, item["label"]):
+                        print(f"  [{name}] {item['label']} 逾時但無法確認"
+                             f"遠端行程已終止，保留槽位、不重派，需要人工"
+                             f"介入檢查 worker 上 logs/{item['label']}.pid "
+                             f"對應的行程", flush=True)
+                        continue    # 保留槽位，下一輪再試一次終止
                 mark_done(item["label"], "timeout", time.time() - slot["t0"],
                          name)
                 slots[name] = None

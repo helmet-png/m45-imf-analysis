@@ -11,7 +11,9 @@
 - GCP：`asia-east1`，`c2-standard-8`（8 vCPU）或 `e2-standard-8`，
   Ubuntu 24.04 LTS，開防火牆允許 SSH（22 埠，預設通常已經有）。
 - Oracle：Shape 選 `VM.Standard.A1.Flex`（Ampere ARM），2 OCPU / 12GB
-  （2026-06-15 起 Always Free 的新上限），Ubuntu ARM64 image。
+  （目前 Always Free 的上限規格；生效日期沒有查到可靠且能長期維護的
+  來源，這裡不寫死日期，實際額度以 Oracle 主控台當下顯示為準）。
+  Ubuntu ARM64 image。
   **已知的坑**：Always Free 的 A1 常在特定 region/Availability Domain
   訂不到（"Out of Capacity"），換一個 AD 或 region 重試即可，這是
   Oracle 社群普遍反映的已知現象，不是設定錯誤。
@@ -45,6 +47,34 @@ cat ~/.ssh/id_ed25519.pub
 
 把印出來的公鑰貼到 GitHub repo 設定：`Settings → Deploy keys → Add
 deploy key`，**不要勾選 "Allow write access"**。
+
+## 3.1 驗證 GitHub 的 host key（第一次 `git clone` 前一定要做）
+
+VM 是全新機器，`~/.ssh/known_hosts` 裡不會有 `github.com` 的紀錄。
+`ssh_sync.py push` 第一次會透過**非互動式** SSH 連線在 VM 上跑
+`git clone`——非互動連線遇到未知主機不會有地方可以按 yes，只會直接
+卡住等輸入或連線失敗，而且如果略過驗證直接關掉 host key 檢查
+（`StrictHostKeyChecking=no`），VM 對外那次 git 連線就完全不驗證
+GitHub 的身分，等於把「防中間人」這層保護關掉。**兩個做法擇一，跑完
+才能開始用 `ssh_sync.py push`**：
+
+- **推薦**：在 VM 上手動跑一次互動式連線，出現 fingerprint 提示時人工
+  核對後輸入 `yes`：
+  ```bash
+  ssh -T git@github.com
+  ```
+  （這一步一定要真人在場核對，不能改成 accept-new 之類自動接受——
+  這裡驗證的是 GitHub 本身的身分，跟 `ssh_workers.py` 對 VM 用
+  `accept-new` 是不同的信任情境：VM 是我們自己剛建的，「第一次連線
+  照單全收」風險可接受；GitHub 是外部服務，第一次連線就有可能被
+  冒充，值得花這一步人工核對。）
+- 或：手動把 GitHub 官方公告的 host key fingerprint（見
+  https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints）
+  核對後寫進 `~/.ssh/known_hosts`，例如：
+  ```bash
+  ssh-keyscan github.com >> ~/.ssh/known_hosts
+  ssh-keygen -lf ~/.ssh/known_hosts   # 核對輸出的 fingerprint 跟官方公告一致
+  ```
 
 ## 4. 本機設定 `ssh_workers.json`
 
