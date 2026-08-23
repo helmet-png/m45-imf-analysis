@@ -40,3 +40,6 @@ Praesepe 的 A 設定（不套選擇函數）有 1/2 次未貼牆，但研究問
 1. NGC 3532：不要放寬門檻；先檢查控制場與暗端紅、藍星的 SNR／測光品質分布。
 2. Praesepe：畫真實 CMD 與最佳模型的殘差，找出是哪個星等或顏色區域把 `f_bin` 推到上限。
 3. 在上述問題解決前，保留傳統法結果作探索用途；前向 alpha 一律維持 `diagnostic_only`。
+
+現役限制已分開記在 `LIMITATIONS.md` 的 D16（NGC 3532 selection failure）
+與 D17（Praesepe `f_bin=1`）；D8 本身只保留已結案的程式正確性歷史紀錄。
