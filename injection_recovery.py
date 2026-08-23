@@ -253,13 +253,22 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
     # 必須一致」在貼牆偵測這裡的變體。只會讓 bounds 變緊不會變寬，
     # 所以只要現有結果從未真的貼到先驗牆（headline 與 radial 系列的
     # A_V 都遠低於 0.6，查證過程見 LIMITATIONS.md），這個改動對它們的
-    # 數值結果逐位元不變，只有貼牆偵測本身變準；`model.bounds` 長度跟
-    # `cur` 對不上（呼叫端傳的 axes/extra_axis 維度數與模型當下的
-    # bounds 不一致）時直接跳過，退回原本行為，不假設一定對得上。
+    # 數值結果逐位元不變，只有貼牆偵測本身變準。`axes` 一律是模型的前
+    # N 個核心參數、`extra_axis` 一律接在後面（呼叫端與 JointModel 的
+    # bounds 都遵守同一個「六參數在前，dav／低質量段冪次視情況接在
+    # 第七維」的固定順序——見 JointModel.enable_dav_fit()／
+    # enable_lowmass_fit() 都是 vstack 到 self.bounds 尾端），所以就算
+    # `model.bounds` 跟 `cur` 維度數不一致（例如這次呼叫沒開 dav，
+    # model.bounds 只有 6 維，但 bounds 因為 extra_axis 有 7 維），
+    # 前面對得上的那幾維位置對應仍然成立，只有多出來的尾端維度沒有
+    # 對應的先驗可以收緊——那幾維維持原本的搜尋軸邊界，不是整批放棄
+    # 交集（2026-08-23 CodeRabbit review：原本長度不符就整批跳過，
+    # 會讓明明對得上的前幾維也白白錯過收緊機會）。
     model_bounds = getattr(model, "bounds", None)
-    if model_bounds is not None and len(model_bounds) == len(bounds):
+    if model_bounds is not None:
+        n = min(len(model_bounds), len(bounds))
         bounds = [(max(lo, float(mlo)), min(hi, float(mhi)))
-                  for (lo, hi), (mlo, mhi) in zip(bounds, model_bounds)]
+                  for (lo, hi), (mlo, mhi) in zip(bounds[:n], model_bounds[:n])] + bounds[n:]
     best, lp = grid_best_parallel(model, cur, n_proc)
     for r in refines:
         nxt = []
