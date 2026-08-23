@@ -8,8 +8,18 @@
 
 ## 1. 建 VM（GCP／Oracle 主控台上手動做，帳號申請與信用卡驗證見前面對話）
 
-- GCP：`asia-east1`，`c2-standard-8`（8 vCPU）或 `e2-standard-8`，
-  Ubuntu 24.04 LTS，開防火牆允許 SSH（22 埠，預設通常已經有）。
+- GCP：`asia-east1`，**e2-highcpu-8**（8 vCPU/4 實體核心/8GB，比
+  c2-standard-8 便宜、$300 額度能撐更久，見對話中的定價核算；記憶體
+  夠但有瞬間解析尖峰，第一次派工先用 `--procs 4` 觀察），**Ubuntu
+  26.04 LTS Minimal**（2026-08-23 訂正——原本寫 24.04 是舊資訊，
+  26.04 LTS「Resolute Raccoon」已於 2026-04-23 發布，支援期限更長，
+  沒有理由選舊的；Minimal 變體開機更快、預裝套件少，這台機器是純
+  自動化運算節點不需要互動使用的便利工具，`apt install` 照常能用，
+  差異只在初次手動設定那幾行指令要自己裝，換來更小的攻擊面跟更少
+  要追蹤的安全更新），開防火牆允許 SSH（22 埠，預設通常已經有）。
+  **Debian 也完全可以**（這個 repo 目前實際在用的 VM 是 Debian 13）——
+  兩者都是 apt 套件管理，下面的安裝指令原封不動適用，不用為了這份
+  文件的建議特地重建已經好好在跑的 VM。
 - Oracle：Shape 選 `VM.Standard.A1.Flex`（Ampere ARM），2 OCPU / 12GB
   （2026-06-15 起 Always Free 的新上限），Ubuntu ARM64 image。
   **已知的坑**：Always Free 的 A1 常在特定 region/Availability Domain
@@ -23,8 +33,13 @@
 
 ```bash
 sudo apt update && sudo apt install -y python3 python3-pip git
-pip3 install --user numpy scipy astropy emcee
+pip3 install --break-system-packages numpy scipy astropy emcee
 ```
+
+（Ubuntu 24.04+／Debian 12+ 都預設鎖住系統 Python（PEP 668），
+`pip3 install --user` 不夠、會被拒絕，要加 `--break-system-packages`
+才裝得進去——這台是專用運算節點、不跟別的專案共用環境，鎖沒有實際
+保護作用，加這個旗標比另外建 venv 簡單。）
 
 （`emcee` 只有跑 MCMC 相關腳本才需要，先裝起來比較省事，裝不起來也不
 影響網格搜尋類的腳本。）
