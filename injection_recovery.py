@@ -240,6 +240,26 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
         extras = [extra_axis]          # 單一陣列：維持舊呼叫端的行為
     cur = list(axes) + extras
     bounds = [(a.min(), a.max()) for a in cur]
+    # 2026-08-23：跟 model.bounds（真正生效的先驗）取交集，理由見
+    # LIMITATIONS.md 新增條目——搜尋軸的名目邊界有時刻意開得比先驗寬
+    # （例如這支模組自己的 COARSE 常數，A_V 軸開到 1.0，但
+    # config.toml [joint_fit] av_max 當時沒有跟著從 0.6 放寬，logage
+    # 軸開到 8.40、av_max 仍是 8.30），此時任何超出先驗的格點在
+    # log_prior() 都會被直接判 -inf、永遠選不到，真正的「牆」是先驗
+    # 邊界，不是搜尋軸本身的邊界。check_walls()／report() 都直接沿用
+    # 這裡回傳的 bounds 判斷貼牆，若不取交集，會在先驗邊界被貼住時
+    # 誤判成「還沒到牆」，讓角落解悄悄當成收斂解通過——這正是
+    # CONTRIBUTING.md 第六節第 2 條「先驗、搜尋軸、網格涵蓋三層邊界
+    # 必須一致」在貼牆偵測這裡的變體。只會讓 bounds 變緊不會變寬，
+    # 所以只要現有結果從未真的貼到先驗牆（headline 與 radial 系列的
+    # A_V 都遠低於 0.6，查證過程見 LIMITATIONS.md），這個改動對它們的
+    # 數值結果逐位元不變，只有貼牆偵測本身變準；`model.bounds` 長度跟
+    # `cur` 對不上（呼叫端傳的 axes/extra_axis 維度數與模型當下的
+    # bounds 不一致）時直接跳過，退回原本行為，不假設一定對得上。
+    model_bounds = getattr(model, "bounds", None)
+    if model_bounds is not None and len(model_bounds) == len(bounds):
+        bounds = [(max(lo, float(mlo)), min(hi, float(mhi)))
+                  for (lo, hi), (mlo, mhi) in zip(bounds, model_bounds)]
     best, lp = grid_best_parallel(model, cur, n_proc)
     for r in refines:
         nxt = []
