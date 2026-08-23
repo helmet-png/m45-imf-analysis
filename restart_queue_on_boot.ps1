@@ -64,6 +64,14 @@
 # 裡沒排完，先手動搬進 `cloud_queue.txt`（格式完全相同）再交給
 # cloud_queue.py，不要讓兩份佇列檔各自派工。
 
+# **2026-08-24 補充**：工作排程器的兩個工作（M45-QueueWatchdog-15min、
+# M45-QueueRunner-AutoRestart）先前設過 Hidden=true，但那只影響「工作
+# 排程器清單裡看不看得到這個工作」，跟啟動出來的 powershell.exe 主控台
+# 視窗會不會在螢幕上閃一下完全無關，所以每次觸發還是會跳出視窗。改成
+# 由 run_hidden.vbs（同目錄）透過 wscript.exe + WshShell.Run(...,0,False)
+# 呼叫這支腳本，才是真正零閃現的做法；本檔內容不受影響，只是啟動方式
+# 換了一層。
+
 $repo = $PSScriptRoot
 $selfLog = Join-Path $repo "logs\autorestart.log"
 
