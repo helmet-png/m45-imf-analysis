@@ -47,15 +47,33 @@ install`、產生 deploy key＋登記到 GitHub）就好，不用重建 VM。
 
 ## 2. VM 上裝環境（SSH 進去手動跑一次）
 
+**推薦：建一個 venv**（2026-08-23 CodeRabbit review 建議，取代原本的
+`--break-system-packages`）——`ssh_workers.json` 的 `python_bin` 欄位
+就是為了指到這裡而加的：
+
 ```bash
-sudo apt update && sudo apt install -y python3 python3-pip git
+sudo apt update && sudo apt install -y python3 python3-venv python3-pip git
+python3 -m venv ~/m45_venv
+~/m45_venv/bin/pip install numpy scipy astropy emcee
+```
+
+裝完把 `ssh_workers.json` 裡這個 worker 的 `python_bin` 填成
+`"~/m45_venv/bin/python3"`（`~` 會自動展開成遠端 home 目錄，不用自己
+先查絕對路徑）。
+
+**替代做法**（已經用這個方式裝過、正常在跑的 worker 不用重裝）：直接裝
+進系統 Python，`python_bin` 留空或設成 `"python3"`：
+
+```bash
 pip3 install --break-system-packages numpy scipy astropy emcee
 ```
 
-（Ubuntu 24.04+／Debian 12+ 都預設鎖住系統 Python（PEP 668），
+Ubuntu 24.04+／Debian 12+ 都預設鎖住系統 Python（PEP 668），
 `pip3 install --user` 不夠、會被拒絕，要加 `--break-system-packages`
-才裝得進去——這台是專用運算節點、不跟別的專案共用環境，鎖沒有實際
-保護作用，加這個旗標比另外建 venv 簡單。）
+才裝得進去。這台是專用運算節點、不跟別的專案共用環境，PEP 668 想防的
+「系統套件被 pip 裝的東西弄壞」風險在這裡實際發生的機率很低，但終究
+是繞過官方建議的隔離機制，**不是首選**——只是不強迫已經這樣裝好、
+正常在跑的既有 worker 為了改做法而重來一次。
 
 （`emcee` 只有跑 MCMC 相關腳本才需要，先裝起來比較省事，裝不起來也不
 影響網格搜尋類的腳本。）
@@ -163,6 +181,13 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 
 確認整輪跑得通之後，才把工作排進 `cloud_queue.txt`、跑
 `python cloud_queue.py` 正式派工。
+
+**不要手動對同一個 worker 平行呼叫兩次 `ssh_sync.py run`**（例如開兩個
+終端機視窗、或手動跑的同時 `cloud_queue.py` 也在對它派工）——`pull()`
+用時間戳記分辨結果檔屬於哪個 label，兩個 label 同時在跑的話會抓錯
+檔案，細節見 `ssh_sync.py` 裡 `pull()` docstring 的「已知未解決的
+限制」。透過 `cloud_queue.py` 派工不會踩到這個問題（同一個 worker
+同一時間只會佔一個槽位），只有繞過佇列手動平行呼叫才會。
 
 ## 跟 Kaggle 的差異（為什麼架構不一樣）
 
