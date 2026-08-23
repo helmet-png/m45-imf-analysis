@@ -26,6 +26,10 @@ mass-function slopes: unresolved binaries, selection, and model choice in M45
 - 前向模型／混合模型擬合星團 CMD 含雙星：Li, Shao et al. 2020（NGC 3532，
   ApJ 901, 49）、BASE-9（"Goodbye to Chi-by-Eye"，六個疏散星團）、
   Cordoni et al. 2023 本身就是光度法族群擬合。**前向模型不是我們發明的。**
+  本專案 2026-08-23 合併後多星團重跑顯示：NGC 3532 選擇函數未過暗端
+  紅藍驗收，Praesepe 前向擬合貼 `f_bin=1` 上界；兩者都只能列為方法限制，
+  不得作跨星團 IMF 結論；見
+  `docs/planning/D8_POSTMERGE_MULTICLUSTER_VALIDATION_2026-08-23.md`。
 - 「忽略雙星使 α 偏平」的定量預測：arXiv:2603.15779 已給出偏差公式與
   族群式概似的解法。
 - 「不同方法給出不同雙星比例」：arXiv:2604.20722（2026-04，含 M45！）
