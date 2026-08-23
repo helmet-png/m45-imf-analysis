@@ -279,7 +279,21 @@ def run(worker_name: str, script: str, args: str, label: str) -> bool:
           f"touch results/.start_{q_label} && "
           f"setsid bash -c {shlex.quote(inner)} "
           f"> logs/{q_label}.out 2> logs/{q_label}.err < /dev/null &")
-    r = ssh_workers.remote_run(w, cmd, timeout=30)
+    # 2026-08-23 實測發現：這個指令本身已經把工作丟到背景並立刻返回
+    # （setsid ... &），但送出指令這個動作本身（開一條新 SSH 連線、
+    # 認證、執行）偶爾就是要超過 30 秒才回得來——不是工作卡住，是
+    # 「送出指令」這一步本身慢。原本沒接 TimeoutExpired，逾時會讓
+    # 整支程式當場崩潰，即使背景工作其實已經成功啟動（用 poll() 查
+    # 得到，見附帶驗證）。改成逾時視為「送出去了但沒等到確認」，
+    # 回傳 True 讓呼叫端用 status()／poll() 另外查證，而不是直接崩潰
+    # 掉整個派工流程——寧可事後查證，不要讓一次連線變慢就中止全部。
+    try:
+        r = ssh_workers.remote_run(w, cmd, timeout=60)
+    except subprocess.TimeoutExpired:
+        print(f"  送出指令逾時（60 秒），工作可能已經在背景啟動，"
+             f"用 status 查證：ssh_sync.py status --worker {worker_name} "
+             f"--label {label}", flush=True)
+        return True
     if r.returncode != 0:
         print(f"  啟動失敗：{(r.stderr or r.stdout).strip()[:300]}")
         return False
