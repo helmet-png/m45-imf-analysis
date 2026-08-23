@@ -61,6 +61,7 @@ import checkpoint                                                 # noqa: E402
 # fit_real.py 自己另外維護的一份跟共用版本不同步過，見下面
 # _preflight_report() 的說明）。
 MANIFEST_KEY = checkpoint.MANIFEST_KEY
+SEED_SCHEME = "fit-real-offset-v1:2000+13*(rep+repeat_offset)"
 
 
 def build_manifest(args) -> dict:
@@ -87,6 +88,9 @@ def build_manifest(args) -> dict:
         # 相同，rep < len(reps) 會直接跳過重算，把 offset 0 的結果當成 offset 1
         # 的結果沿用。
         "repeat_offset": args.repeat_offset,
+        # 續傳安全不只取決於 offset，也取決於 offset 如何換成種子。
+        # 規則若改變，即使其他旗標相同，舊 repeats 也不可混入新結果。
+        "seed_scheme": SEED_SCHEME,
         "members_file": args.members_file,
         "errmodel_file": args.errmodel_file,
         "selection_file": args.selection_file,
@@ -350,9 +354,10 @@ def main():
         # config.toml 讀 g_bright_limit=4.0；這裡覆寫掉。
         base.g_bright = args.g_bright
     base.use_native_bprp_err = args.native_bprp_err
-    if args.native_bprp_err and "e_bp_native" not in errmodel:
-        print("錯誤：--native-bprp-err 需要 errmodel.npz 含 e_bp_native/"
-              "e_rp_native 鍵，目前載入的檔案沒有，先重建 errmodel.npz")
+    if args.native_bprp_err and not {"e_bp_native", "e_rp_native"}.issubset(errmodel):
+        print(f"錯誤：--native-bprp-err 需要 {args.errmodel_file} 含 "
+              "e_bp_native/e_rp_native 鍵，目前載入的檔案沒有，請先重建 "
+              f"{args.errmodel_file}")
         sys.exit(1)
     sel = selmod.load(HERE / args.selection_file)
     print(f"真實觀測 {len(color):,} 顆，距離模數 {dm:.4f}，"
@@ -381,6 +386,11 @@ def main():
     out_path = HERE / "results" / f"fit_real{args.tag}.npz"
     manifest = build_manifest(args)
     partial = checkpoint.load_partial(out_path)
+    if partial and checkpoint.load_manifest(out_path) is None:
+        print(f"錯誤：{out_path.name} 有既有結果但沒有 manifest，無法確認其"
+              "亂數種子規則；為避免混合不可比的 repeats，拒絕續傳。請換一個 "
+              "--tag，或先明確遷移舊結果。", flush=True)
+        sys.exit(1)
     checkpoint.check_manifest(out_path, manifest, partial,
                               legacy_defaults=MANIFEST_LEGACY_DEFAULTS)
     # `__attempted_*` 是 checkpoint.py 內部的記帳鍵（每個 config 存一份，

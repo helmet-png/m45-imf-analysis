@@ -263,11 +263,12 @@ class JointModel:
             return fbin
         f_lo = fbin - contrast * w_hi
         f_hi = fbin + contrast * w_lo
-        # 機率必須落在 [0,1]。contrast 太大時會超出，這裡夾住並且**不**
-        # 事後修正另一段——夾住之後樣本平均會偏離原本的 f_bin，那代表
-        # 這個 contrast 對這個 f_bin 來說太大、設計上就不該用，呼叫端
-        # 應該挑更小的 contrast，而不是讓程式默默改掉它的意思。
-        return np.where(hi, np.clip(f_hi, 0.0, 1.0), np.clip(f_lo, 0.0, 1.0))
+        # contrast 太大會讓機率超界，也會破壞「固定整體 f_bin」的控制變因。
+        # 不可偷偷 clip，否則診斷測到的是另一個沒有明說的模型。
+        if not (0.0 <= f_lo <= 1.0 and 0.0 <= f_hi <= 1.0):
+            raise ValueError(
+                "mass-dependent binary fractions fall outside [0, 1]")
+        return np.where(hi, f_hi, f_lo)
 
     def log_prior(self, theta):
         nb = len(self.bounds)
