@@ -67,6 +67,12 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
+    if args.repeats < 1:
+        # --repeats 0（或負數）會讓 outs 被截成空 list（見下面
+        # [:args.repeats] 那行），np.array([]) 是 shape (0,) 的一維陣列，
+        # 後面 arr[:, 3] 直接丟 IndexError；且這段沒有被 --force 保護的
+        # 條件包住，屬於結構性輸入錯誤（2026-08-20 CodeRabbit review）。
+        ap.error("--repeats must be positive")
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     slopes = ([float(x) for x in args.slopes.split(",")] if args.slopes
@@ -89,18 +95,45 @@ def main():
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
 
+    # 2026-08-20：B3（續傳）—— 這支腳本原本只在全部掃描點跑完後 np.savez
+    # 一次，中途被砍（p6_lowmass_v2 案例：本機四天內被 Windows 強制重開機
+    # 四次）就得從頭重算，即使前面已經跑完的冪次本身沒有問題。改用
+    # scripts/tools/checkpoint.py 的共用續傳機制，跟 fit_real.py 同一套。
+    out_path = HERE / "results" / "profile_lowmass.npz"
+    # slopes 不放進 manifest：這支腳本沒有 --tag（輸出檔名固定），若把
+    # 掃描點清單也拿去比對，擴大 --slopes 範圍就會被 check_manifest()
+    # 判定成「設定不同」而 sys.exit(1)，錯誤訊息還會叫使用者「換一個
+    # --tag」——但這支腳本根本沒有這個旗標，使用者只能手動刪掉整個
+    # 既有結果檔，前面已經跑完的掃描點全部作廢。每個掃描點各自有獨立
+    # 的 scan_key（f"p{p}"），互不污染，不需要靠 manifest 擋這個
+    # （2026-08-20 CodeRabbit review）。slopes 本身仍會透過下面迴圈裡
+    # 的 extra_arrays 存進輸出檔，事後查得到這批掃過哪些點。
+    manifest = {"n_syn": args.n_syn, "refines": args.refines,
+                "dav_max": args.dav_max}
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import checkpoint                                            # noqa: E402
+    import preflight                                             # noqa: E402
+    partial = checkpoint.load_partial(out_path)
+    checkpoint.check_manifest(out_path, manifest, partial)
+
     # 開跑前檢查——無條件執行，不是選用步驟（見 scripts/tools/
     # preflight.py 的 mandatory_gate() 說明）。mh_prior_sigma=0.0 是這支
     # 腳本刻意的行為（先驗會污染要測的低質量段冪次敏感度），登記進
     # expected_overrides 避免每次都誤報成阻擋。
-    sys.path.insert(0, str(HERE / "scripts" / "tools"))
-    import preflight                                             # noqa: E402
     if args.preflight:
         preflight._force_utf8_stdout()
+    scan_keys = [f"p{p}" for p in slopes]
+    partial_counts = {k: len(partial.get(k, [])) for k in scan_keys}
+    w_fails, w_warns = preflight.workload_audit(
+        scan_keys=scan_keys, repeats=args.repeats, n_syn=args.n_syn,
+        n_obs=n_obs, refines=refines, partial_counts=partial_counts,
+        unit="次重複", scan_label="低質量段冪次（--slopes）")
+    preflight.output_audit(out_path, partial)
     preflight.mandatory_gate(
         base, grid, refines, script="profile_lowmass.py",
         expected_overrides={"mh_prior_sigma": 0.0},
-        force=args.force, dry_run=args.preflight)
+        force=args.force, dry_run=args.preflight,
+        extra_fails=w_fails, extra_warns=w_warns)
 
     sel = selmod.load(HERE / "data" / "selection.npz")
     print(f"真實觀測 {n_obs:,} 顆，config C（選擇函數 + 差異消光），"
@@ -110,8 +143,20 @@ def main():
     from pipeline.step3_age import draw_randoms
     results = {}
     for p in slopes:
-        outs = []
+        key = f"p{p}"
+        # 截到 args.repeats：既有結果比這次要求的 --repeats 多時（例如
+        # 磁碟上已有 3 次、這次只要 2 次），不截斷的話下面的迴圈會因為
+        # rep < len(outs) 全部跳過、outs 卻仍帶著全部 3 筆，讓「跨 2 次」
+        # 的平均/散布統計實際上是用 3 筆算出來的，跟印出來的次數對不上
+        # （2026-08-20 CodeRabbit review）。不把 repeats 放進 manifest 就是
+        # 為了讓「加大 --repeats」保持可續傳，這裡只是不讓「縮小
+        # --repeats」意外地用了太多筆。
+        outs = list(partial.get(key, []))[:args.repeats]
         for rep in range(args.repeats):
+            if rep < len(outs):
+                print(f"  p={p:.1f} 第{rep+1}次：沿用既有結果，跳過重算",
+                      flush=True)
+                continue
             import copy
             m = copy.copy(base)
             m.obs_h = joint_fit.hess(color, mag, base.nb_c, base.nb_m,
@@ -137,6 +182,11 @@ def main():
             print(f"  p={p:.1f} 第{rep+1}次  alpha={best[3]:.3f}  "
                   f"A_V={best[1]:.3f}  logage={best[0]:.3f}  "
                   f"lnP={lp:.1f}  ({time.time()-t0:.0f}s)", flush=True)
+            # 跑完一次重複就存一次，不等全部冪次或全部重複都跑完——中途
+            # 被砍，已經算完的每一次重複都保得住，重跑時讀回來跳過。
+            outs = checkpoint.save_progress(
+                out_path, key, outs, manifest,
+                extra_arrays={"slopes": np.array(slopes)})
         arr = np.array(outs)
         results[p] = arr
         print(f"  -> p={p:.1f} 跨 {args.repeats} 次：alpha 平均 "
@@ -159,10 +209,9 @@ def main():
     print("      必須升格為自由參數或至少在論文列為系統誤差項；")
     print("      倍數接近或小於 1，代表目前的固定值不是主要誤差來源。")
 
-    np.savez(HERE / "results" / "profile_lowmass.npz",
-             slopes=np.array(slopes),
-             **{f"p{p}": v for p, v in results.items()})
-    print("\n寫入 results/profile_lowmass.npz")
+    # 每一次重複跑完就已經存過檔了（見上面迴圈裡的 checkpoint.save_progress()），
+    # 這裡不用再存一次，只是印出最終確認訊息。
+    print(f"\n已寫入 {out_path.relative_to(HERE)}")
 
 
 if __name__ == "__main__":
