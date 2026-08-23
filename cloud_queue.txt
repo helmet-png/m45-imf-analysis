@@ -1,0 +1,16 @@
+# cloud_queue.py 的佇列檔，格式見該檔案開頭說明：
+#   標籤|腳本.py|參數|逗號分隔額外檔案|minimal(true/false)|worker名稱
+#
+# worker 名稱對應 kaggle_accounts.json 或 ssh_workers.json 裡登記的任一個
+# 名稱（兩邊合併解析，見 cloud_queue.py 的 load_all_workers()）。留空最後
+# 一欄就是誰有空給誰。
+#
+# 範例（先別解除註解——確認 worker 真的連得上、resource 夠用之後再排）：
+# smoketest|kaggle_smoketest.py|||true|gcp1
+
+# gcp1 已經連線測試通過（push/run/status/pull 全部驗證，見 smoketest2）。
+# D2 敏感度掃描：membership_threshold（WORK_BOARD.md「B/C/D 類補齊」表，
+# 從本機佇列移過來，見 queue.txt 2026-08-23 那則停用說明）。先跑兩個
+# 門檻（0.6、0.7，夾住預設值 0.7）當第一批正式規模測試，觀察真實耗時
+# 後再決定要不要把剩下的 0.5/0.8/0.9 也排進來。
+d2_membership_threshold_p06_p07_retry|scripts/diagnostics/sensitivity_sweep.py|--target membership_threshold --values 0.6,0.7 --procs 4 --n-syn 40000 --refines 3,3||false|gcp1
