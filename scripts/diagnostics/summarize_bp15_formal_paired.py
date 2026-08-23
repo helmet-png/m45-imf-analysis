@@ -29,6 +29,18 @@ def load_one(path: Path, sample: str, offset: int) -> dict:
         raise ValueError(f"{path.name}: manifest tag does not match {expected_tag}")
     if int(manifest.get("repeat_offset", -1)) != offset:
         raise ValueError(f"{path.name}: wrong repeat_offset")
+    expected_inputs = ({
+        "members_file": "cmd_members_bp15_smoke.csv",
+        "errmodel_file": "errmodel_bp15_smoke.npz",
+        "selection_file": "selection_bp15_smoke.npz",
+    } if sample == "15" else {
+        "members_file": "data/cmd_members.csv",
+        "errmodel_file": "data/errmodel.npz",
+        "selection_file": "data/selection.npz",
+    })
+    for field, expected in expected_inputs.items():
+        if manifest.get(field) != expected:
+            raise ValueError(f"{path.name}: manifest {field} does not match {expected}")
     if int(manifest.get("n_syn", -1)) != 40_000 or manifest.get("refines") != "3,3":
         raise ValueError(f"{path.name}: not the formal 40k/refines=3,3 recipe")
     return {"alpha": float(c[0, 3]), "logage": float(c[0, 0]),

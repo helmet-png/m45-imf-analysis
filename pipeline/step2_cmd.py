@@ -67,15 +67,19 @@ def photometric_quality_masks(
     brightness = np.ones(g.shape, dtype=bool)
     if g_bright_limit is not None:
         brightness = g >= g_bright_limit
-    snr_mask = (
-        np.isfinite(g) & brightness & np.isfinite(bp) & np.isfinite(rp)
-        & np.isfinite(snr_g) & (snr_g >= min_flux_snr_g)
-        & np.isfinite(snr_bp) & (snr_bp >= min_flux_snr_bp)
-        & np.isfinite(snr_rp) & (snr_rp >= min_flux_snr_rp)
-    )
+    snr_mask = np.isfinite(g) & brightness & np.isfinite(bp) & np.isfinite(rp)
+    for values, limit in ((snr_g, min_flux_snr_g),
+                          (snr_bp, min_flux_snr_bp),
+                          (snr_rp, min_flux_snr_rp)):
+        if limit > 0:
+            snr_mask &= np.isfinite(values) & (values >= limit)
     residual = excess_factor - bp_rp_excess_expected(bp - rp)
-    excess_mask = np.isfinite(residual) & (
-        np.abs(residual) < excess_sigma_limit * bp_rp_excess_sigma(g))
+    sigma = bp_rp_excess_sigma(g)
+    if excess_sigma_limit > 0:
+        excess_mask = (np.isfinite(residual) & np.isfinite(sigma) & (sigma > 0)
+                       & (np.abs(residual) < excess_sigma_limit * sigma))
+    else:
+        excess_mask = np.ones(g.shape, dtype=bool)
     return snr_mask, excess_mask
 
 

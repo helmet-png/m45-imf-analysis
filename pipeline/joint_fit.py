@@ -284,7 +284,8 @@ class JointModel:
             lp += -0.5 * ((theta[4] - self._mh_mean) / self._mh_sigma) ** 2
         return lp
 
-    def synthesise(self, theta, return_binary_flag=False):
+    def synthesise(self, theta, return_binary_flag=False,
+                   return_source_index=False):
         """由參數生成合成星團，回傳套用選擇函數後的 (顏色, 星等[, 是否雙星])。
 
         `return_binary_flag=True` 時多回傳一個布林陣列，標出每顆合成星
@@ -524,6 +525,8 @@ class JointModel:
                                         d["z_snr"][:n], d["u_sel"][:n])
         if keep.sum() < 50:
             return None
+        if return_source_index:
+            return (bp - rp)[keep], g[keep], is_bin[keep], np.flatnonzero(keep)
         if return_binary_flag:
             return (bp - rp)[keep], g[keep], is_bin[keep]
         return (bp - rp)[keep], g[keep]

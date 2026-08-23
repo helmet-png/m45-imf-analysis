@@ -33,10 +33,17 @@ def bin_label(g):
     raise AssertionError(g)
 
 
+def probability(value):
+    value = float(value)
+    if not 0.0 <= value <= 1.0:
+        raise argparse.ArgumentTypeError("probability must be in [0, 1]")
+    return value
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hr23-prob", type=float, default=0.7)
-    ap.add_argument("--pipeline-prob", type=float, default=0.7)
+    ap.add_argument("--hr23-prob", type=probability, default=0.7)
+    ap.add_argument("--pipeline-prob", type=probability, default=0.7)
     ap.add_argument("--output", default="results/hr23_recall_stage_trace.json")
     args = ap.parse_args()
 

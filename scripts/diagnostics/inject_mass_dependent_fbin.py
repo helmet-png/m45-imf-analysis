@@ -37,11 +37,15 @@ def make_fake(model, theta, n_stars, n_gen, seed, selection, profile,
     gen.selection = selection
     gen.binary_fraction_profile = profile
     gen.binary_fraction_contrast = contrast
-    color, mag, binary = gen.synthesise(theta, return_binary_flag=True)
+    color, mag, binary, source_index = gen.synthesise(
+        theta, return_binary_flag=True, return_source_index=True)
     if len(color) < n_stars:
         raise RuntimeError(f"Only {len(color)} selected synthetic stars; need {n_stars}")
-    pick = np.random.default_rng(seed + 1000).choice(len(color), n_stars,
-                                                       replace=False)
+    # Give every pre-selection synthetic system one shared deterministic
+    # priority.  After each profile's keep mask, select surviving systems by
+    # that same priority so paired profiles retain system correspondence.
+    priority = np.random.default_rng(seed + 1000).random(n_gen)
+    pick = np.argsort(priority[source_index], kind="stable")[:n_stars]
     return color[pick], mag[pick], binary[pick]
 
 

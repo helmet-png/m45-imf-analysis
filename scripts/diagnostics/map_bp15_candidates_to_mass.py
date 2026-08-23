@@ -31,6 +31,10 @@ def main():
         row for row in load_csv(ROOT / "data" / "hr23_passprob_notcmd_gaia_photometry.csv")
         if row["source_id"] in wanted
     ]
+    found = {row["source_id"] for row in rows}
+    if found != wanted or len(rows) != len(found):
+        raise RuntimeError(
+            "BP15 candidate photometry does not contain exactly the recovered source IDs")
     cmd = load_csv(ROOT / "data" / "cmd_members.csv")
     saved_masses = np.load(ROOT / "results" / "step5_imf.npz")["masses"]
     if len(saved_masses) != len(cmd):
