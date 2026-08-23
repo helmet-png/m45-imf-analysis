@@ -137,6 +137,14 @@ def acquire_write_lock(out_path: Path, timeout_s: float = 1800.0) -> Path:
                     lock_path.unlink()
                 except FileNotFoundError:
                     pass
+                # **一定要重設 t0**（2026-08-21 CodeRabbit review）：不重設
+                # 的話，逾時之後每一輪迴圈的 `time.time() - t0 > timeout_s`
+                # 都仍然成立——若另一個行程在我們刪掉鎖檔後立刻建立它，
+                # 這裡會馬上再刪一次，而且完全不等待。互斥保護在第一次
+                # 逾時之後就永久失效，兩個行程可以同時進入 save_progress()
+                # 的讀-改-寫區段，正是這個鎖要防的事。重設之後每次強制
+                # 接管都重新計時，最壞情況是慢，不是失去保護。
+                t0 = time.time()
                 continue
             time.sleep(0.5)
 
@@ -276,7 +284,14 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
     建議只有部分腳本做得到——`profile_lowmass.py` 與
     `profile_outlierfrac.py` 的輸出路徑寫死、根本沒有 `--tag`（2026-08-21
     CodeRabbit review）。傳 `False` 時那個選項會換成對應的說法。"""
-    if not partial:
+    # **以「檔案存不存在」決定要不要檢查，不是以 partial 空不空**
+    # （2026-08-21 CodeRabbit review）：原本寫 `if not partial: return`，
+    # 但一個既有的 .npz 只要沒有結果陣列（例如只寫了 metadata、或上次
+    # 存檔在寫入結果前就被中斷），partial 就是空的，於是連 manifest 都
+    # 不看就放行——正好繞過「無 manifest 舊檔一律擋下」這個本函式存在
+    # 的目的。改成：檔案不存在才是真的沒事可查；只要檔案在，manifest
+    # 就要驗，驗過之後才輪到「有沒有既有結果要比對設定」。
+    if not out_path.exists():
         return
     status, old_manifest, detail = load_manifest_status(out_path)
     legacy_defaults = legacy_defaults or {}
@@ -317,7 +332,12 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
         if not supports_tag:
             opt2 = ("    2. 這次要另存 -> 這支腳本的輸出路徑寫死、沒有 "
                     "--tag，要另存只能先把既有檔案改名移開（同選項 1）；\n")
-        print(f"錯誤：{out_path.name} 有既有結果，但**沒有 manifest**"
+        # 「有既有結果」跟「檔案在但沒有任何結果陣列」要講清楚是哪一種：
+        # 上面已改成用檔案存不存在決定要不要驗，所以這裡 partial 有可能
+        # 是空的（例如上次存檔在寫入結果前被中斷），照原本一律說「有既有
+        # 結果」會讓人去找一個根本不存在的結果。
+        _has = "有既有結果" if partial else "存在（但沒有任何結果陣列）"
+        print(f"錯誤：{out_path.name} {_has}，但**沒有 manifest**"
               "（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
               "設定、什麼版本的程式碼算出來的。\n"
               "  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
@@ -333,6 +353,11 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
               + f"    3. 確定舊檔可信 -> 自己核對過它的算法與設定之後，"
                 f"手動補上 manifest 再跑。", flush=True)
         sys.exit(1)
+
+    if not partial:
+        # 檔案在、manifest 也讀得到且格式正確，但沒有任何結果陣列——
+        # 沒有東西需要比對設定，放行讓這次從頭算。
+        return
 
     def _old(k):
         return old_manifest.get(k, legacy_defaults.get(k))

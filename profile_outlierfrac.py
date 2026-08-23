@@ -61,8 +61,9 @@ def main():
                          "（見 LIMITATIONS.md D6）")
     ap.add_argument("--fracs", default=None,
                     help="逗號分隔，覆寫預設的 OUTLIER_FRACS 掃描點")
-    # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py）——這支腳本
-    # 沒有續傳機制，設定錯了會白跑好幾小時，跟 fit_real.py 同等重要。
+    # 2026-08-20：開跑前檢查（見 scripts/tools/preflight.py）——設定錯了
+    # 會白跑好幾小時，跟 fit_real.py 同等重要。（原本這裡寫「這支腳本
+    # 沒有續傳機制」，續傳已在下面用 checkpoint.py 補上，2026-08-21 訂正。）
     ap.add_argument("--preflight", action="store_true",
                     help="只做開跑前檢查然後結束，不進行任何擬合")
     ap.add_argument("--force", action="store_true",

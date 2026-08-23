@@ -82,12 +82,12 @@
 # 指令與這行完全相同、只把 --procs 4 改成 8。=====
 # verify_bprperr_off_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --refines 3,3 --tag _bprperr_off_v2|measure_overconfidence.py,injection_recovery.py|false|
 # verify_bprperr_on_v2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 5 --configs C --native-bprp-err --refines 3,3 --tag _bprperr_on_v2|measure_overconfidence.py,injection_recovery.py|false|
-p6b_inject_lowmass_v2_t0_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_t0|measure_overconfidence.py,injection_recovery.py|false|
-p6b_inject_lowmass_v2_t1_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_t1|measure_overconfidence.py,injection_recovery.py|false|
+p6b_inject_lowmass_v2_t0_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_t0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_inject_lowmass_v2_t1_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_t1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
 # 2026-08-20：COMPLETE，結果已拉回並串接成 results/fit_real_p2final_v3.npz
 # （見 PR #74，headline 10/10 次重複到齊，正式數字 alpha=2.382±0.068）。
 # p2_final2_v3_rep9_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3,3 --repeat-offset 9 --tag _p2final_v3_rep9|measure_overconfidence.py,injection_recovery.py|false|
-p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_t2|measure_overconfidence.py,injection_recovery.py|false|
+p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_t2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
 
 # ===== 2026-08-19 22:23-22:29：verify_bprperr_off/on_v2_retry 兩個都在
 # ~13.1-13.2 小時（785.8／788.9 分）被 Kaggle 取消（CANCEL_ACKNOWLEDGED）。
@@ -108,14 +108,161 @@ p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trial
 # verify_bprperr_off_v2_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 1 --tag _bprperr_off_v2_rep1|measure_overconfidence.py,injection_recovery.py|false|
 # rep3 第一次 push 失敗（上傳 isochrones.zip 中途網速驟降到 433kB/s，比照
 # 08-19 08:54 那次網路瞬斷的模式，不是程式問題），22:36 補推重試。
-verify_bprperr_off_v2_rep3_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 3 --tag _bprperr_off_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-08-20：off_v2 五片（offset 0-4）全部完成並已串接成
+# results/fit_real_bprperr_off_v2.npz（alpha=2.384±0.079），這一項
+# 已無需再跑，停用避免重複派工（種子公式是決定性的，重跑只會得到
+# 完全相同的數字，純粹浪費 Kaggle 額度）。
+# verify_bprperr_off_v2_rep3_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 3 --tag _bprperr_off_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
 # 2026-08-20：COMPLETE，已拉回（kaggle_results/verify_bprperr_off_v2_rep2/），
 # 尚未串接（同上，等 5 片到齊）。
 # verify_bprperr_off_v2_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 2 --tag _bprperr_off_v2_rep2|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_off_v2_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 3 --tag _bprperr_off_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_off_v2_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 4 --tag _bprperr_off_v2_rep4|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_on_v2_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 0 --tag _bprperr_on_v2_rep0|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_on_v2_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 1 --tag _bprperr_on_v2_rep1|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_on_v2_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 2 --tag _bprperr_on_v2_rep2|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_on_v2_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 3 --tag _bprperr_on_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
-verify_bprperr_on_v2_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-08-20：off_v2 五片（offset 0-4）全部完成並已串接成
+# results/fit_real_bprperr_off_v2.npz（alpha=2.384±0.079），這一項
+# 已無需再跑，停用避免重複派工（種子公式是決定性的，重跑只會得到
+# 完全相同的數字，純粹浪費 Kaggle 額度）。
+# verify_bprperr_off_v2_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 3 --tag _bprperr_off_v2_rep3|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-08-20：off_v2 五片（offset 0-4）全部完成並已串接成
+# results/fit_real_bprperr_off_v2.npz（alpha=2.384±0.079），這一項
+# 已無需再跑，停用避免重複派工（種子公式是決定性的，重跑只會得到
+# 完全相同的數字，純粹浪費 Kaggle 額度）。
+# verify_bprperr_off_v2_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 4 --tag _bprperr_off_v2_rep4|measure_overconfidence.py,injection_recovery.py|false|
+verify_bprperr_on_v2_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 0 --tag _bprperr_on_v2_rep0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+verify_bprperr_on_v2_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 1 --tag _bprperr_on_v2_rep1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+verify_bprperr_on_v2_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 2 --tag _bprperr_on_v2_rep2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+verify_bprperr_on_v2_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 3 --tag _bprperr_on_v2_rep3|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+verify_bprperr_on_v2_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+# 2026-08-20 22:49：上面那項 push 失敗（push_failed，網路問題，跟 08-19
+# off_v2_rep3 那次同一個模式）。push_failed 會被寫進 kaggle_queue_done.txt，
+# 而派工是用「label 不在 done 裡」篩選的，所以**失敗的項目不會自動重試**，
+# 必須像這樣手動補一個不同 label 的重試項目（--tag 保持不變，輸出檔名
+# 一樣是 fit_real_bprperr_on_v2_rep4.npz，種子由 --repeat-offset 4 決定，
+# 跟原本那次完全相同，不是重算不同的東西）。
+verify_bprperr_on_v2_rep4_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# ===== 2026-08-20：radial_final_reruns（A5，WORK_BOARD 標「最優先」）=====
+# 第 2 步的四個徑向切片目前只有 _prelim 版（單次重複、單階精修、沒有誤差
+# 棒）：r1(0-1°)=2.10、r2(0-2°)=2.43、r3(0-3°)=2.50、rall=2.43。r1→r3 遞增
+# 但 rall 又降回去，這個非單調現象**沒有誤差棒就無法判斷是真實訊號還是
+# 單次雜訊**——而 WORK_BOARD 的 limepy_radial_crosscheck 與「要不要投入
+# 第 4 步（放大搜尋半徑重抓 Gaia）」兩個決定都卡在這個判斷上。
+#
+# 這裡用完整設定（--repeats 5 --refines 3,3）重跑四項，拆成每片 1 次重複
+# 的 20 個分片跑在 Kaggle（單一 kernel 跑 5 次重複必定超過 session 上限，
+# 見 KAGGLE_DIAGNOSIS.md；單次重複實測 off_v2 用同樣 --refines 3,3 花了
+# 32,935-35,569 秒，在上限內）。四項的 --tag 各自獨立，不會覆寫 _prelim
+# 版本（那些是 _radial_*_prelim，這裡是 _radial_*_final）。
+#
+# **同一組的 5 個分片刻意共用同一個 --tag**（2026-08-21 CodeRabbit
+# review 建議改成每片一個唯一 tag，評估後決定不改，理由記在這裡）：
+#   1. 每個分片是獨立的 Kaggle kernel，結果各自拉回
+#      kaggle_results/<label>/ 底下（label 已含 rep0..rep4），**在磁碟上
+#      本來就是分開的**，不會互相覆寫。
+#   2. scripts/tools/concat_radial_final.py 就是照這個約定寫的——它靠
+#      目錄名對應 offset，並**逐片核對 manifest 裡的 repeat_offset 與所在
+#      目錄相符**，正是為了補上「檔名相同」這件事的風險。
+#   3. r3 那一組已經用這個約定跑完並串接（見 PR #94），現在改約定會讓
+#      r3 與其餘三組不一致，反而更容易出錯。
+# **但要注意**：這個安全性來自「每片在自己的目錄」，所以**不要把兩個
+# 分片的輸出放進同一個 results/ 目錄**，那樣才會真的互相覆寫。
+#
+# 全部到齊後：每一項的 5 個分片依 offset 由小到大沿 axis=0 串接成
+# fit_real_radial_r1_final.npz 等四個檔案，再回答那個非單調問題——
+# 誤差棒明顯重疊就是雜訊，不重疊就是需要解釋的真實現象。
+radial_r1_final_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 0 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r1_final_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 1 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r1_final_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 2 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r1_final_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 3 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r1_final_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 4 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 0 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 1 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 2 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 3 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 4 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r3_final_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,3 --repeat-offset 0 --tag _radial_r3_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r3_final_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,3 --repeat-offset 1 --tag _radial_r3_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r3_final_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,3 --repeat-offset 2 --tag _radial_r3_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r3_final_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,3 --repeat-offset 3 --tag _radial_r3_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r3_final_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,3 --repeat-offset 4 --tag _radial_r3_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_rall_final_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 0 --tag _radial_rall_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_rall_final_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 1 --tag _radial_rall_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_rall_final_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 2 --tag _radial_rall_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_rall_final_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 3 --tag _radial_rall_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_rall_final_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --repeat-offset 4 --tag _radial_rall_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# ===== 2026-08-21 02:35：補回被我自己造成的迴歸砍掉的兩項 =====
+# 01:5x 我把主工作樹的計算腳本同步到 main（為了拿 PR #85 的 preflight
+# 關卡），但**漏掉一件事**：新版 fit_real.py 在檔頭 `import checkpoint`，
+# 而 Kaggle 派工只上傳 kaggle_queue.txt 第 4 欄列出的檔案，那一欄當時
+# 沒有 scripts/tools/checkpoint.py 與 preflight.py。結果 02:24 的
+# verify_bprperr_on_v2_rep4_retry 與 02:30 的 radial_r1_final_rep3 都在
+# Kaggle 上 93 秒／187 秒就 ModuleNotFoundError 失敗。
+# 已把那兩個模組加進全部 29 個活躍項目的第 4 欄（kaggle_sync.py 會把
+# 路徑壓平成 basename 上傳、kernel 端也複製到 cwd，所以 fit_real.py 的
+# `import checkpoint` 找得到）。這裡補回那兩項（label 換新的，因為舊的
+# 已經以 error 記進 kaggle_queue_done.txt，派工是用「label 不在 done 裡」
+# 篩選的，不換名字不會重派）。
+verify_bprperr_on_v2_rep4_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r1_final_rep3_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 3 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# ===== 2026-08-21 03:10：修好第二層 bug 後補回被砍掉的工作 =====
+# 02:35 我以為把 checkpoint.py/preflight.py 加進第 4 欄就修好了，實際上
+# 只修掉第一層（ModuleNotFoundError），馬上踩到第二層：preflight.py 的
+# `HERE = Path(__file__).resolve().parents[2]` 假設自己躺在 scripts/tools/
+# 底下，但 kaggle_sync.py 上傳附加檔案時會把路徑**壓平成 basename**
+# （build_payload() 的 shutil.copy(src, work_dir / Path(f).name)，kernel
+# 端也是複製到 cwd），於是在 Kaggle 上 parents[2] 算出來是 `/`，
+# `open(HERE / "config.toml")` 就 FileNotFoundError: '/config.toml'。
+# 02:37-03:03 之間 radial_r1_final_rep3/rep4、radial_r2_final_rep0~3
+# 共 6 個工作都是這樣在 187-213 秒失敗。
+# 已把 preflight.py 的 HERE 改成「按實際找得到 config.toml 的那一層為準」
+# （依序試 parents[2] -> 檔案自己所在目錄 -> cwd），本機與壓平兩種佈局
+# 都實測過。這裡補回那 6 項（label 全部換新，舊的已以 error 記進
+# kaggle_queue_done.txt，派工用「label 不在 done 裡」篩選，不換名不重派）。
+verify_bprperr_on_v2_rep4_retry3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --native-bprp-err --refines 3,3 --repeat-offset 4 --tag _bprperr_on_v2_rep4|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r1_final_rep3_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 3 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r1_final_rep4_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,1 --repeat-offset 4 --tag _radial_r1_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep0_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 0 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep1_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 1 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 2 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep3_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 3 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# ===== 2026-08-21 03:35：p6b_inject_lowmass_v2 改按 p_true 拆片 =====
+# 這三項（t0/t1/t2）三天內失敗 8 次，最近三次都是在 12.1-13.1 小時被
+# Kaggle 以 session 上限取消（43404s/43425s/47250s）。重排同樣的指令
+# 不會有不同結果——種子公式是決定性的，跑的是完全一樣的工作量。
+#
+# 真正的原因不是「一個 trial 太慢」，是 **--trials 1 並不是最小單位**：
+# inject_lowmass.py 內部對 P_TRUE_LIST = [0.9, 1.3, 1.7] 三個真值各做
+# 一次八參數擬合（六參數 + dav + p_lowmass），所以「1 個 trial」實際上
+# 是 3 次擬合，12 小時上限裝不下。
+#
+# 腳本本來就有 --only 旗標可以只測其中一個真值（p6b4_boundary_retest
+# 用過），這裡就用它把每個 trial 再拆成 3 片，每片只做 1 次擬合，
+# 估計 4-6 小時，安全落在上限內。--tag 各自獨立，不會互相覆寫；
+# 全部到齊後把 9 個檔案依 (trial_offset, p_true) 合併回一份完整結果。
+p6b_v2_t0_p09|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --only 0.9 --tag _p6b_v2_t0_p09|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t0_p13|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --only 1.3 --tag _p6b_v2_t0_p13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t0_p17|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --only 1.7 --tag _p6b_v2_t0_p17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t1_p09|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --only 0.9 --tag _p6b_v2_t1_p09|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t1_p13|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --only 1.3 --tag _p6b_v2_t1_p13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t1_p17|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --only 1.7 --tag _p6b_v2_t1_p17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t2_p09|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --only 0.9 --tag _p6b_v2_t2_p09|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t2_p13|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --only 1.3 --tag _p6b_v2_t2_p13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t2_p17|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --only 1.7 --tag _p6b_v2_t2_p17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# 2026-08-22 13:28：radial_r2_final_rep1_retry 又是 push_failed（推送瞬斷）。
+# 修法在 PR #93（push 失敗不寫 DONE、自動重試 3 次），還沒合併進 main，
+# 所以仍要手動換 label 補排。
+radial_r2_final_rep1_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 1 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# 2026-08-22 巡檢：rep2_retry／rep3_retry 也 push_failed，同上手動補排。
+radial_r2_final_rep2_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 2 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+radial_r2_final_rep3_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 3 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# 2026-08-23 巡檢發現：rep4 從 2026-08-21 最初那批 error 之後從沒補排過
+# 重試，其他四片都有、只有這片被漏掉。補上。
+radial_r2_final_rep4_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --refines 3,3 --radius-range 0,2 --repeat-offset 4 --tag _radial_r2_final|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# p6b_v2_t0_p09／t0_p13 也 push_failed，補排。
+p6b_v2_t0_p09_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --only 0.9 --tag _p6b_v2_t0_p09|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+p6b_v2_t0_p13_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --only 1.3 --tag _p6b_v2_t0_p13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|

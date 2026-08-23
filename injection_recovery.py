@@ -408,6 +408,15 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
+    # 數值參數驗證（2026-08-21 CodeRabbit review）：--trials 0 會讓結果
+    # 陣列為空，後面 arr[:, 3] 丟 IndexError；--n-syn 0 會被下面的 `or`
+    # 靜默換回設定檔值（看起來成功、其實沒照你給的跑）；負值或非正的
+    # refines 會在模型建構／精修時才炸。這些都是結構性輸入錯誤，在
+    # argparse 階段擋掉最省。
+    if args.trials < 1:
+        ap.error("--trials must be positive")
+    if args.n_syn is not None and args.n_syn < 1:
+        ap.error("--n-syn must be positive（不給這個旗標才是沿用 config 值）")
     if "/" in args.tag or "\\" in args.tag:
         ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
     if args.dav_distribution != "lognormal" and not args.tag:
@@ -498,7 +507,8 @@ def main():
     if args.preflight:
         preflight._force_utf8_stdout()
     scan_keys = [k for k in want if k in known_scenarios]
-    partial_counts = {k: len(partial.get(_store_key(k), [])) for k in scan_keys}
+    partial_counts = {k: min(len(partial.get(_store_key(k), [])), args.trials)
+                      for k in scan_keys}
     w_fails, w_warns = preflight.workload_audit(
         scan_keys=scan_keys, repeats=args.trials, n_syn=effective_n_syn,
         n_obs=n_obs, refines=refines, partial_counts=partial_counts,
@@ -573,7 +583,10 @@ def main():
         skey = _store_key(key)
         desc, dav_in, sel_in, dav_fit, sel_fit, extra = SCEN[key]
         print(f"\n{'='*74}\n{key}：{desc}\n{'='*74}")
-        got_all = list(partial.get(skey, []))
+        # 截到 args.trials：理由同 inject_lowmass.py 的同一處修正
+        # （2026-08-21 CodeRabbit review）——磁碟已有的次數比這次要求的多時，
+        # 不截斷會讓統計與 dav sweep 總表用了超過本次 --trials 的筆數。
+        got_all = list(partial.get(skey, []))[:args.trials]
         for t in range(args.trials):
             if t < len(got_all):
                 print(f"  {key} 第 {t+1} 次：沿用既有結果，跳過重算",

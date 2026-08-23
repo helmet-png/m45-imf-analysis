@@ -167,7 +167,7 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 ## 待認領工作：第 2 步四項到齊後新解鎖的工作（2026-08-19）
 
-**全部不在本機（ARM64 8 核桌機）跑**——本機佇列（`queue.txt`）留給
+**全部不在本機（x64 8 核桌機）跑**——本機佇列（`queue.txt`）留給
 既有排隊項目，這幾項規模較大或需要不同架構／機器，請認領的人在
 自己的機器（x64 協作機、Kaggle、或評估過的雲算力，見
 [雲算力評估](https://claude.ai/code/artifact/8f3b0148-708e-4ddc-a10d-1870dc39ec83)）上跑，不要排進本機的 `queue.txt`。
@@ -187,7 +187,7 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 | `p6b4_boundary_retest`（D5） | 用 `inject_lowmass.py --tag _p6b4_retest`（**已經有 `--tag` 了，不會覆寫原檔**）只補測 `p_true=1.3` 這一組（目前程式碼會測 `P_TRUE_LIST` 全部三組，先跑一次確認能不能只挑一個真值跑，需要的話加個 `--only` 旗標） | 補測的這一筆 logage 沒有再貼到 PARSEC 網格邊界（8.25），若又貼牆，代表這是系統性現象不是單次巧合，要在 D5 裡升級處理方式 |
 | `extinction_form_test`（C5） | 在 `pipeline/joint_fit.py` 的 `synthesise()` 對數常態消光旁邊，做一個可切換的替代分布（例如截尾指數分布），跑一次注入回收比較兩種分布下 A_V 系統誤差有沒有差異。這牽動核心前向模型程式碼，改動前先確認不會影響預設行為（新分布只在明確旗標開啟時生效） | 兩種分布形式下，用同一組合成真值做注入回收，alpha／A_V 的偏差量化比較 |
 | `pyupmask_completeness_test`（C8） | 寫一個小規模的合成測試：在原始 Gaia 天測資料座標範圍內，注入已知數量、已知位置的合成「成員星」（自行/視差抽樣自星團分布），混進真實場星資料，重跑 pyUPMASK，量多少比例的注入星被正確判定為成員（召回率），依半徑/質量分箱看召回率有沒有系統性差異 | 給出完整度隨半徑/星等變化的具體曲線，不是只有一個全域數字 |
-| `injection_bias_floor_recheck`（C13） | 直接重跑現有 `injection_recovery.py`／`fit_real.py` 但把 `--n-syn` 從預設值大幅調高（例如 4 倍），比較 alpha 偏差地板（目前 −0.050）有沒有縮小。純粹是換參數重跑，不用寫新腳本 | 若地板隨 n_syn 提高而縮小，證實是蒙地卡羅雜訊；若不縮小，代表地板另有原因，要重新調查 |
+| ~~`injection_bias_floor_recheck`（C13）~~ | **已完成，2026-08-23**，見 `LIMITATIONS.md` C13 與 `results/RESULTS_LOG.md` 同日期那行 | alpha 偏差從 −0.050 縮小到 −0.006，證實是蒙地卡羅雜訊，不用再認領。附帶發現 `q_gamma` 偏差沒有跟著縮小，可另開新項目查證 |
 | `extra_scatter_sensitivity`（C19） | 在合成 CMD 裡疊加一個額外的高斯散布項（代表自轉/前主序光變/黑子的合併效應），散布量級參考文獻對年輕疏散星團光度變異的實測（例如轉動調製造成的 CMD 散布），掃過幾個散布量級，看 alpha 對這項未建模的物理有多敏感 | 給出「散布量級 vs alpha 偏移」的敏感度曲線，不是只回答「有沒有影響」 |
 | `configCD_real_data_compare`（D10，2026-08-16 教學對話中使用者追問發現） | 用真實資料跑 `fit_real.py --configs C,D`（其餘旗標完全相同、同一批 `--repeats`），比較兩者的 alpha 中心值與散布。目前「alpha 不受 dav 貼牆位置污染」只在注入回收的合成資料上驗證過，真實資料沒有直接比較過 C 跟 D | C、D 的 alpha 差距要跟兩者各自的統計誤差（散布）比較——差距遠小於合併標準誤，才能確認 headline 數字沒有被 dav 不可辨識這個已知問題間接污染；若差距顯著，要回頭檢視現有 headline 數字，見 `LIMITATIONS.md` D10 |
 
@@ -211,12 +211,16 @@ COUNT(*) 查詢在 ESA 端逾時（不是本機網路），主查詢本身不做
 `python scripts/data_prep/fetch_gaia.py --target M45 --ra 56.60083 --dec 24.11389 --radius 5.0 --gmax 18.0 --plxmin 4.0 --top 20000 --force`
 （檔案在 `.gitignore` 裡，不進版控，換機器要自己重抓一次。**`--force` 是必要的**：`fetch_gaia.py` 第 120 行對已存在的輸出檔會直接印「已存在，跳過」就結束，不加的話在已經抓過的機器上重跑這行等於什麼都沒做，卻看不出來——2026-08-21 CodeRabbit review 抓到。乾淨的新機器上不帶 `--force` 也會動，但照著這行複製貼上的人多半是想重抓。)
 
-**下一步**：可以跑 `python scripts/diagnostics/sensitivity_sweep.py --target membership_threshold` 了。
+**2026-08-23 更新：端到端驗證跑過了**。用示範規模（`--procs 4 --n-syn 5000 --refines 3 --values 0.7`）實跑一次：先用更小的 `--n-syn 500 --refines 1` 試跑會撞牆（`WallError`：alpha 貼在下界 1.500），換成文件建議的示範規模後正常跑完，`threshold=0.70 → alpha=2.633、logage=8.000、A_V=0.500、lnP=1266.4`，耗時 23,142 秒（約 6.4 小時）——**證實那次撞牆是極端小樣本（n_syn=500）造成的假性失敗，不是腳本問題，整條流程（含上面解掉的資料抓取阻塞）真的能跑通**。單一門檻值還不構成敏感度結論（至少要 2 個門檻才有斜率可看）。**正式規模成本估計**：以 23,142 秒（n_syn=5000）外推，n_syn=40000 單一門檻約 50+ 小時，5 個門檻合計數百小時——跟「第 2 步四項到齊後新解鎖的工作」表上方同樣的機器分配原則，**不適合排本機 8 核佇列**。
+
+**2026-08-23 再更新：已改派到 gcp1**（GCP e2-highcpu-8 SSH worker，見下方紀錄表 2026-08-23 那行），本機 `queue.txt` 這一項已停用避免重複算。正式規模先排 0.6／0.7 兩個門檻當第一批（`cloud_queue.txt` 的 `d2_membership_threshold_p06_p07_retry`），觀察真實耗時後再決定要不要把剩下的 0.5/0.8/0.9 也排進去，不用等本機或 Kaggle 有空。
 - `--target stars_per_cluster`：這個設定要真的重跑 pyUPMASK 聚類，不是重新套門檻能測的。這台機器沒有 `pyUPMASK/` 目錄（未驗證能不能跑），腳本會誠實報告做不到，不會編造數字——已內建這個可行性檢查，**不要跳過檢查直接猜答案**。留給有 pyUPMASK 環境的 session。
 
 
 
-- **本機 8 核運算佇列**（`queue.txt` / `run_queue.py`，Windows ARM64 這台機器）
+- **本機 8 核運算佇列**（`queue.txt` / `run_queue.py`，Windows x64 這台機器；
+  **2026-08-23 訂正**：2026-08-16 已交接到新機器 Acer AI 16（x64），這裡跟下面
+  多處「ARM64」是沿用交接前的舊稱呼沒有更新，不是還在用 ARM64 桌機）
   只有這台機器能跑，其他人／agent 不會撞到，不需要在此認領。**2026-08-13
   更新**：`verify_bprperr_off`／`verify_bprperr_on` 已跑完（結果與精修
   程度不一致的發現見上面 `verify_bprperr_v2` 那一行，不要重複派工），
@@ -245,6 +249,27 @@ COUNT(*) 查詢在 ESA 端逾時（不是本機網路），主查詢本身不做
   session 限制，不是腳本邏輯問題）——真正的開機/登入觸發沒有實測到，
   下次真的重開機時麻煩順便確認一下 `logs\autorestart.log` 有沒有
   新紀錄。
+
+  **2026-08-21 補上真正的自我復原**：這天 14:13–15:10 之間
+  `run_queue.py` 與 `kaggle_queue.py` **同時無聲死掉**（stderr 全空、
+  沒有重開機、Python 行程總共只用 1.3 GB 所以不是記憶體問題，死因無從
+  證實），一直到排定巡檢才被發現，中間閒置約一小時。追查發現
+  `restart_queue_on_boot.ps1` **腳本本身沒問題**（2026-08-18 已擴充成
+  同時顧兩個行程），問題出在**工作排程器那個
+  `M45-QueueRunner-AutoRestart` 只有「登入時」一個觸發器**——已經登入
+  著的狀態下它永遠不會再觸發，等於只防重開機、不防行程中途死掉。
+
+  想直接幫原任務加重複觸發器時被 `Access is denied` 擋下（那個任務要
+  管理員權限才能改），改成**另外註冊一個使用者層級的新任務
+  `M45-QueueWatchdog-15min`**：跑同一支腳本、每 15 分鐘一次、持續 3650
+  天，`-MultipleInstances IgnoreNew` 避免重疊。腳本偵測到行程還活著就
+  直接略過，所以重複觸發是安全的 no-op；已實測觸發一次，行程數維持
+  2 個沒有被重複啟動。**原本的 `M45-QueueRunner-AutoRestart` 保留不動**，
+  兩個併存（一個管開機、一個管中途死掉）。
+
+  踩到的坑記一下免得下次重犯：`New-ScheduledTaskTrigger` 的
+  `-RepetitionDuration ([TimeSpan]::MaxValue)` 會產生非法 XML
+  （`P99999999DT23H59M59S`），要改用有限長度。
 
 ## 紀錄（續）
 
@@ -332,7 +357,7 @@ COUNT(*) 查詢在 ESA 端逾時（不是本機網路），主查詢本身不做
 commit。`crosscal_massrange_table` 與 `hyades_literature_check` 不碰
 共用程式碼、也幾乎不吃算力，可以立刻平行做。
 
-**算力歸屬**：沿用 2026-08-19 那條指示（本機 ARM64 8 核桌機的
+**算力歸屬**：沿用 2026-08-19 那條指示（本機 x64 8 核桌機的
 `queue.txt` 留給既有排隊項目），下面需要跑 pipeline 的兩項請排到
 其他機器（x64 協作機、Kaggle、或雲算力）。這是延續前一輪的假設，
 使用者若要改回本機跑可以直接推翻這條。
@@ -420,3 +445,4 @@ PR #11 合併後要回頭重新核對 D8、重跑一次驗證確認數值結果�
 | 2026-08-22 | Codex | M45 BP15 前向模型成對 smoke：建立隔離輸入並檢查 alpha 是否穩定 | **探索完成；正式比較待排程** | `docs/planning/M45_BP15_FORWARD_SMOKE_2026-08-22.md`、`results/bp15_forward_smoke_summary.json` | 三個 3k paired seeds 的 alpha 差仍不穩定，不能下 BP15 科學結論。下一任務應拆到獨立節點，以 40k、至少 5 paired seeds 跑 BP20/BP15；不可把兩邊非配對平均當效果。 |
 | 2026-08-23 | Codex | BP15/BP20 正式成對前向比較派工前置檢查 | **完成；等待 Kaggle 登入／帳號分配** | `scripts/diagnostics/prepare_bp15_paired_dispatch.py`、`scripts/diagnostics/summarize_bp15_formal_paired.py`、`results/bp15_formal_paired_dispatch.json`、`docs/planning/M45_BP15_FORMAL_PAIRED_DISPATCH_2026-08-23.md` | 已驗證 BP15 三個隔離輸入存在，生成 offsets 0–4 的 10 個唯一 job tag，明定逐 offset paired 分析與驗收規則；另實際建立 82.2 MB 暫存 Kaggle payload，確認自訂輸入可被 kernel 根目錄讀取。新彙整器 fail-closed：缺任何配對就拒算平均。本機缺 `kaggle_accounts.json`／access token，未送出雲端長跑，也未把派工表誤寫成結果。 |
 | 2026-08-21 | Claude session（本機） | `mass_dependent_fbin`（D14 衍生） | 進行中（腳本已寫好並排進本機佇列，等結果） | `inject_massdep_fbin.py`（新檔）、`queue.txt`，分支 `mass-dep-fbin`（PR #86） | 依本文件規則改成「保留原任務列、在尾端新增狀態列」，不再直接改寫既有列（2026-08-21 CodeRabbit review）。腳本已依 review 修正四處：分片檔名帶 `--trial-offset`（否則各分片互相覆寫）、保存 trial id 並只對兩邊都成功的試驗配對相減、不完整批次不下結論且以非零碼結束（避免被佇列記成 ok）、結論只在淨偏移真的小於統計誤差 0.144 時才印 |
+| 2026-08-23 | Claude session（本機） | 新增第三個算力來源：GCP SSH worker `gcp1`（e2-highcpu-8） | **完成，已正式派工** | `docs/reference/CLOUD_WORKERS.md`、`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`（分支 `claude/cloud-workers-ssh-2026-08-22`，PR #103）、`ssh_workers.json`／`cloud_queue.txt`（本機新增，不進版控） | 使用者建好 GCP VM 後協助完成連線設定：GCP 瀏覽器內建 SSH 建立的帳號跟我們自己金鑰登入的帳號是**兩個不同 Linux 帳號、各自獨立家目錄**（本機憑證、GitHub Deploy Key、裝的套件都要各自處理一次，不會互通，這是踩到才發現的坑，已記進 `CLOUD_WORKERS.md`），另外修好 SSH host-key 驗證、GitHub Deploy Key（需請 repo admin `helmet-png` 加，非 admin 協作者的帳號連 repo Settings 頁面都是 404）。全鏈路 push→run→status→pull 已用 `kaggle_smoketest.py` 驗證通過。**已派第一項真正工作**：`d2_membership_threshold_p06_p07_retry`（D2 敏感度掃描，正式規模 `n_syn=40000`，先跑 0.6／0.7 兩個門檻，見上方 D2 進度說明），本機 `queue.txt` 對應項目已停用避免重複算。**分工原則**：`ssh_workers.json`／`cloud_queue.txt` 都是本機私有設定（不進版控，跟 `kaggle_accounts.json` 同一類），要用 `gcp1` 派工的人自己的機器需要各自設定連線，不能直接沿用這台機器的檔案；要排新工作進 `cloud_queue.txt` 前，先確認同一件事沒有同時排在 `queue.txt`／`kaggle_queue.txt`，避免三邊重複算力（本機、Kaggle、GCP 現在是三個獨立但要互相避開的算力池） |

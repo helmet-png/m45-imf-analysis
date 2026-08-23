@@ -157,34 +157,30 @@ radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --config
 # 是這次發現 bug 的源頭。其餘受影響項目（P9a-redo/P9c/P6b/P12）先記在
 # LIMITATIONS.md／WORK_BOARD.md 待認領清單，優先度較低，之後再排。=====
 #
-# 2026-08-20：p6_lowmass_v2 插隊到這裡之前，先誠實記一筆——它其實
-# 從 2026-08-16 20:48 就在跑，但這台機器四天內被 Windows 強制重開機
-# 至少 4 次（`Get-WinEvent` 查到 1074/109 事件，多半是「其他（不在
-# 計劃之中）」由 StartMenuExperienceHost 發起，疑似 Windows Update
-# 累積更新到期自動重開，8/15 那次是明確的 OS 升級；8/19 21:11 那次
-# 還有一筆 41/6008「非正常關機」），每次重開後開機自動重啟腳本
-# （`M45-QueueRunner-AutoRestart`）都正確把 run_queue.py 叫回來，
-# 但 `profile_lowmass.py` 沒有像 `fit_real.py` 那樣的逐次重複續傳
-# 機制（只在最後 `np.savez` 一次），所以每次重開機都等於把 p6_lowmass_v2
-# 歸零重跑，四天來一次都沒跑完。這不是這次才發現的新任務失敗，是把
-# 已經卡住的東西誠實標記出來，不是隱藏它——完整記錄見對話與
-# `LIMITATIONS.md`（待補一條）。**根治需要兩件事都做**：(1) 幫
-# `profile_lowmass.py` 補上跟 `fit_real.py` 一樣的 manifest／逐次
-# 存檔機制，(2) 查清楚並處理 Windows 自動重開機（多半是待處理的
-# Windows Update，`sconfig`／群組原則或 `UxSettings` 可以關掉自動
-# 重開），這裡先不動——只是把它從佇列最前面挪開，讓下面優先度更高
-# 的 radial_final_reruns 先跑（它用的 `fit_real.py` 已經有續傳保護，
-# 不怕重開機）。
-#
 # ===== 2026-08-20：radial_final_reruns（WORK_BOARD.md「第 2 步四項
 # 到齊後新解鎖的工作」，A5，最優先）。四項合計單次 prelim 已知耗時
 # 5,298–29,319 秒，乘上 5 次重複，數十小時等級——`fit_real.py` 有
 # manifest＋逐次重複續傳保護，就算再被 Windows 強制重開機也不會歸零。
 # 目標：確認 r3(2.50) > rall(2.43) 這個非單調現象是真實訊號還是統計
 # 雜訊（prelim 版單次無誤差棒，這批要看誤差棒重不重疊）。=====
-radial_r1_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final
-radial_r2_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final
-radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,3 --tag _radial_r3_final
+# （2026-08-22：這個區塊在 PR #87 的分支裡曾經整段消失——只有這一側改了
+# 這裡，git 三方合併不會標成 conflict，會直接悄悄刪掉，靠比對 merge-base
+# 才抓到。這裡補回來，四項仍在本機排隊／執行中，不能弄丟。）
+#
+# （2026-08-23 巡檢：上面那則 2026-08-22 筆記本身是過時資訊造成的誤判——
+# 這四項單機 --repeats 5 版本已經被 kaggle_queue.txt 的 20 片式分工
+# （radial_r1/r2/r3/rall_final_rep0-4，--repeats 1 --repeat-offset N）
+# 取代，兩邊用的是**同一個 --tag**，會寫進同一個
+# results/fit_real_radial_r1_final.npz。r3／rall 已經用 Kaggle 分片跑完
+# 並拼接（見 scripts/tools/concat_radial_final.py、RESULTS_LOG.md），
+# r1 4/5、r2 1/5 也快到齊。這裡的單機版本今天早上被 run_queue.py 排到、
+# 開始跑 radial_r1_final，發現時還沒寫出檔案就手動中止，改成停用這四項，
+# 避免（a）浪費本機算力重算 Kaggle 已經算過的東西，（b）算完後把 Kaggle
+# 拼接好的結果覆寫掉。四項全部停用，改用下面加 _v3 尾碼的行占位，
+# 不刪掉歷史紀錄。）
+# radial_r1_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final
+# radial_r2_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final
+# radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,3 --tag _radial_r3_final
 # rall 刻意不帶 --radius-range：這是四項裡唯一的「真正全樣本」對照組，
 # 不是「0-5.1 度」這個切片。文件裡寫的「0-5.1 度」是描述目前樣本的
 # 實際涵蓋範圍（cone 搜尋半徑 5.0 度，見 config.toml 的 radius_deg），
@@ -193,31 +189,33 @@ radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --
 # 搜尋半徑）悄悄變成錯誤的裁切，讓 rall 不再是真正的「全部」
 # （2026-08-20 CodeRabbit review 建議加這個旗標，評估後決定不採用，
 # 理由記在這裡）。
-radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
-
-# p6_lowmass_v2 已移到本檔最尾端（2026-08-21，使用者決定）。
+# radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
 #
-# **移動的理由，只寫查得到證據的部分**：這一項是 5 個冪次 × 3 次重複
-# ＝ 15 次擬合，而 run_queue.py 是循序執行，擺在這個位置會把它後面
-# 所有項目擋在後面。同類工作的單次成本量級可以從 logs/queue_done.txt
-# 查到（radial_r1_final 5 次重複共 72,814 秒，平均約 4 小時/次；那是
-# 355 顆的核心切片，這一項是全樣本 1,078 顆、成本只會更高），15 次的
-# 總量級足以讓後面的項目等上很久。
+# ===== 2026-08-21：使用者選 C——先跑完其餘 8 項，這一項移到佇列最後 =====
+# 實測第 1 次擬合花了 67,213 秒 = 18.7 小時（見 logs/p6_lowmass_v2.log），
+# 15 次擬合合計約 280 小時 ≈ 11.7 天。它擋住本機佇列其餘 8 項（run_queue
+# 是循序執行），其中 c5_davform_* 對應的 C5 是現役缺陷．優先度 高。
+# 詳細評估與四個選項見 PR #90 與 WORK_BOARD.md 同日期段落。
 #
-# **兩個先前寫在這裡、但查證後不成立或無法查證的說法，已經拿掉**
-# （2026-08-21 CodeRabbit review 抓到，實際查證後確認它說得對）：
-#   1.「跑的是沒有續傳機制的舊版」——**現在不成立**。profile_lowmass.py
-#      已於 PR #85 接上 scripts/tools/checkpoint.py，每次重複算完就存檔，
-#      重開機後會讀回既有進度、不會從頭重算。原本那句描述的是 2026-08-20
-#      15:16 那個「用舊程式碼啟動、還在跑」的行程，不是現在 repo 裡的
-#      程式碼，寫在這裡會讓人用錯誤的理由繼續延後 A3。
-#   2.「單次 18.7 小時、全項 11.7 天」——PR #90 引用 logs/p6_lowmass_v2.log
-#      為證，但本機那個檔案只有 7 行、沒有任何一行擬合完成時間，且檔案
-#      時間（08-20 10:34）早於 PR 所述的啟動時間（15:16），無法佐證。
-#      這個數字可能是對的，但在能重新量到之前不當成既定事實寫在這裡。
+# **上面「18.7 小時／11.7 天」引用 PR #90 的 logs/p6_lowmass_v2.log 為證，
+# 但查證後這個引用站不住腳**（2026-08-21 CodeRabbit review 抓到）：本機
+# 那個檔案只有 7 行、沒有任何一行擬合完成時間，且檔案時間（08-20 10:34）
+# 早於 PR 所述的啟動時間（15:16），無法佐證。這個數字可能是對的，但在
+# 能重新量到之前不當成既定事實。另外「跑的是沒有續傳機制的舊版」這個
+# 說法**現在也不成立**：profile_lowmass.py 已於 PR #85 接上
+# scripts/tools/checkpoint.py，每次重複算完就存檔，重開機後會讀回既有
+# 進度、不會從頭重算。
 #
-# 移動時它還沒開始跑，所以零損失。四個選項的比較見 PR #90。
-p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+# 這一行停用，改成檔案最後的 p6_lowmass_v3（換 label 才不會被 done 檔擋掉）。
+# p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+# 這一行停用，改成檔案最後的 p11_outlierfrac_v3（換 label 才不會被 done 檔擋掉）。
+# **為什麼一定要停用而不是留著**（2026-08-21 CodeRabbit review）：
+# run_queue.py 依 logs/queue_done.txt 的 label 判斷要不要跳過。在
+# done 檔還沒有 p11_outlierfrac_v2 的環境（例如換一台機器、或清過
+# done 檔），這行會先被執行，而它指向的仍是那個無 manifest 的舊輸出
+# 檔，可能再產生一次假完成，然後把 v3 想檢查的 manifest 狀態弄髒。
+# p6 已經用同樣方式停用過（見上面幾行），這裡比照辦理。
+# p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
 # ===== 2026-08-14：headline p2_final2 重跑（A1 精修 bug + A2 金屬量先驗
 # 兩個修正一起套用，見 LIMITATIONS.md）。**排在這裡而不是 Kaggle**：
@@ -252,7 +250,13 @@ p11_outlierfrac_v2|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --
 #              「亮端截斷後的 BHAC15 比較做不出可信數字」這個結論）
 #   若不撞牆 -> 照 D1 原計畫用同一個 --g-bright 跑一次 PARSEC 對照組比較
 # 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
-d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+# 2026-08-21：這個重複項目已停用。10:35 那次正式規模跑出結論了——
+# 仍然撞牆（f_bin 貼上界、alpha 貼下界），確認是真實簡併不是雜訊，
+# 見 LIMITATIONS.md D1 與 RESULTS_LOG.md 同日期行。用完全相同的
+# 指令再跑一次只會得到同樣的 WallError（種子與設定都一樣），純浪費
+# 19 分鐘。要繼續 D1 必須先改設定（放寬搜尋範圍或放寬亮端截斷），
+# 那是需要判斷的科學決定，不是重排就能解決的。
+# d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
 
 # ===== 2026-08-19：B/C/D 待認領清單裡「純換參數重跑、不用寫新腳本」
 # 的兩項（見 WORK_BOARD.md「待認領工作：B/C/D 類補齊」表）=====
@@ -278,6 +282,73 @@ d10_config_cd_real|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C,D
 # 振幅文獻上多在 0.01-0.1 mag 量級，前主序光變可以到 0.2-0.3，掃到 0.40
 # 是為了讓曲線的斜率看得清楚，不是主張真的有那麼大。
 c19_extra_scatter_sweep|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --extra-scatter-sweep 0.05,0.10,0.20,0.30,0.40 --tag _c19_scatter
+
+# ===== 2026-08-19：D1（BHAC15 比較）診斷用途，不是 headline 數字 =====
+# 煙霧測試規模（n_syn=5000, refines=3）在對稱亮端截斷 G>=8.9 下撞牆
+# （f_bin 貼上界 0.950、alpha 貼下界 1.500），詳見 LIMITATIONS.md D1。
+# 這裡用正式規模重跑一次，確認撞牆是蒙地卡羅雜訊還是真實簡併：
+#   若還撞牆 -> 是真實效應，D1 完成條件需要重新評估（放寬範圍或接受
+#              「亮端截斷後的 BHAC15 比較做不出可信數字」這個結論）
+#   若不撞牆 -> 照 D1 原計畫用同一個 --g-bright 跑一次 PARSEC 對照組比較
+# 優先度低於上面所有項目——這是 D1 的可行性確認，不是任何論文數字。
+# 需要 fit_real.py 的 --g-bright 旗標（PR #65 分支，尚未合併進 main）。
+# 2026-08-21：這個重複項目已停用。10:35 那次正式規模跑出結論了——
+# 仍然撞牆（f_bin 貼上界、alpha 貼下界），確認是真實簡併不是雜訊，
+# 見 LIMITATIONS.md D1 與 RESULTS_LOG.md 同日期行。用完全相同的
+# 指令再跑一次只會得到同樣的 WallError（種子與設定都一樣），純浪費
+# 19 分鐘。要繼續 D1 必須先改設定（放寬搜尋範圍或放寬亮端截斷），
+# 那是需要判斷的科學決定，不是重排就能解決的。
+# d1_bhac_check|fit_real.py --procs 8 --n-syn 40000 --refines 3,3 --configs C --fix-mh 0.0 --g-bright 8.9 --grid bhac15_gaia_logt7.6-8.4.dat --tag _bhac_check
+
+# ===== 2026-08-21：extinction_form_test（C5，**現役缺陷．優先度 高**）=====
+# C5 的完成條件第 1 項：「兩種 dav_distribution 各跑一次注入回收，涵蓋
+# dav ∈ {0.10, ..., 1.20}」。切換分布的程式碼（joint_fit.py 的
+# dav_distribution、injection_recovery.py 的 --dav-distribution）**已經
+# 在 main 上並過了 CodeRabbit review**，缺的只是實際跑這兩趟。
+#
+# 為什麼是現役缺陷而不是一般敏感度測試：對數常態在大 dav 時中位數遠低於
+# 平均值，不含 dav 的模型只能壓低 A_V 去配合大多數幾乎沒被紅化的星——
+# 實測注入 dav >= 0.20 時 A_V 在 15 次擬合裡有 12 次被壓到 0.000。
+# item4_davsweep 那條曲線在 dav >= 0.20 的每一點都受影響，而那條曲線
+# 正是「+0.178 差異消光修正量是不是只是 dav=0.30 的一點值」的判讀依據。
+#
+# 兩趟除了 --dav-distribution 之外**所有設定完全相同**（同樣的 dav 點、
+# trials、refines、n-syn、scenarios），這是「一次只動一個變因」的要求；
+# 兩者的 A_V 系統誤差差值就是「分布形式選擇」這一項的代價。
+# dav 點涵蓋到 1.20（既有的 item4_davsweep 只到 0.60，C5 明確要求到 1.20）。
+c5_davform_lognormal|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution lognormal --tag _c5_lognormal
+c5_davform_truncexp|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution trunc_exp --tag _c5_truncexp
+
+# ===== p11_outlierfrac_v3 移到 p6 之前（2026-08-21 CodeRabbit review）=====
+# 原本 p11_v3 排在 p6_v3 後面，但 p6 是「移到最後」的那一項（15 次擬合、
+# 成本最高），run_queue.py 循序執行會讓 p6 擋住 p11——跟「p6 排最後」這個
+# 決定本身矛盾。把 p11 整段移到 p6 之前，p6 才真的是佇列最後一項。
+# ===== 2026-08-21 10:36：p11_outlierfrac_v2 重排（上一次是靜默跳過）=====
+# 10:35 那次「ok（14 秒）」是假的完成：既有的 results/profile_outlierfrac.npz
+# （無 manifest 的舊檔）讓 checkpoint.check_manifest() 判定「已滿足重複
+# 次數」，什麼都沒算就結束，還把同一批壞資料原樣寫回去、印出「四個 frac
+# 的 alpha 全部精確 2.500、散布 0.000、跨度 0.000」——那正是
+# LIMITATIONS.md 記載的舊 P11 壞結果特徵（精修沒對 alpha 生效）。照那個
+# 輸出的判讀文字，會得出「0.01 不是主要誤差來源、B2 可降級為已驗證安全」
+# 這個基於垃圾資料的錯誤結論。
+#
+# 已處理：(1) 舊檔改名成 profile_outlierfrac_legacy_no_manifest.npz 移開；
+# (2) 主工作樹的 scripts/tools/checkpoint.py 換成 PR #89 的版本（無
+# manifest 的舊檔一律擋下、不再靜默信任）。這裡換 label 重排。
+p11_outlierfrac_v3|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
+# ===== 2026-08-21：p6_lowmass_v2 重排到佇列最後（使用者選項 C）=====
+# 換 label 的理由：原本的 p6_lowmass_v2 會被記進 logs/queue_done.txt
+# （中止也算一筆），而派工是用「label 不在 done 裡」篩選的，沿用同一個
+# label 不會重跑。
+#
+# 跟先前那次的差別（很重要）：現在主工作樹的 profile_lowmass.py 已經是
+# 帶續傳機制的新版（每跑完一次重複就 checkpoint.save_progress()），所以
+# 這次即使中途重開機也不會全部歸零，可以分多次累積跑完 11.7 天的工作量。
+# 舊的 results/profile_lowmass.npz（2026-08-15、無 manifest、未精修的粗
+# 網格結果）已改名成 profile_lowmass_legacy_no_manifest.npz 移開，否則
+# 新版會判定「既有結果已滿足重複次數」直接跳過什麼都不算。
+p6_lowmass_v3|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
 # ===== 2026-08-20：mass_dependent_fbin（D14 衍生，見 WORK_BOARD.md
 # 「對照 Hobart et al. 2026 的鞏固工作」表）=====
@@ -312,4 +383,25 @@ massdep_fbin|inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines
 #     信任沿用，改成中止並要求人明確決定
 #   - preflight.py --gate c（PR #96）：沒有 manifest 時照樣判定量化簽章，
 #     不再因為「資訊不足」而跳過最強的那道檢查
-p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+#
+# **2026-08-23 停用（PR #87 review）**：這一行跟上面「p6_lowmass_v3」
+# （2026-08-21 那個區塊）是同一支指令、逐字元相同，兩邊各自獨立把
+# p6_lowmass_v2 換了新 label 想搬到佇列尾端，合併時沒發現對方也做了
+# 同一件事，結果變成兩個不同 label 排隊做同一份 11.7 天的計算——不只
+# 白算一次：查過 profile_lowmass.py 的 out_path（`results/profile_lowmass
+# {args.tag}.npz`），兩邊都沒帶 --tag，**確定**會搶著讀寫同一份
+# results/profile_lowmass.npz、同一個 checkpoint（checkpoint.py 是照
+# out_path 鍵入，不是照 run_queue.py 的 label），先跑完的那份會被
+# 另一個當成續傳基準或直接覆寫。保留 p6_lowmass_v3（上面），這裡停用，
+# 不刪除是留下「兩邊都做過同一件事」這個沿革。
+# p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
+# D2 敏感度掃描（WORK_BOARD.md「B/C/D 類補齊」表）：membership_threshold
+# 這一項先前卡在缺原始 Gaia 查詢 CSV（fetch_gaia.py 的 COUNT(*) 在伺服端
+# 逾時），已用 --top 繞過（PR #92）重抓到 data/m45_r5_g18_plx4.csv，
+# 現在可以真的跑掃描了。
+# 2026-08-23：改派到新上線的 GCP SSH worker（gcp1，見
+# cloud_queue.txt／docs/reference/CLOUD_WORKERS.md），這台機器早先
+# 就評估過正式規模（5 門檻 x n_syn=40000）數百小時，不適合排本機
+# 8 核佇列——停用這裡，避免 gcp1 跟本機各自重算一次浪費算力。
+# d2_membership_threshold|scripts/diagnostics/sensitivity_sweep.py --target membership_threshold --procs 8 --n-syn 40000 --refines 3,3
