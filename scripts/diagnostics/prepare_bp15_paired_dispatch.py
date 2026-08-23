@@ -26,6 +26,8 @@ BP15_INPUTS = [
 
 
 def command(sample: str, offset: int, n_syn: int) -> dict:
+    if n_syn != 40_000:
+        raise ValueError("formal BP15/BP20 dispatch requires n_syn=40000")
     tag = f"_bp{sample}_formal_40k_rep{offset}"
     args = [
         "--procs", "4", "--n-syn", str(n_syn), "--repeats", "1",

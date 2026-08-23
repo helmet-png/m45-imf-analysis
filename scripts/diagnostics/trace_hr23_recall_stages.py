@@ -82,7 +82,8 @@ def main():
         "hr23_probability_threshold": args.hr23_prob,
         "pipeline_probability_threshold": args.pipeline_prob,
         "external_members": len(hr), "stage_totals": totals,
-        "stage_fractions": {k: v / len(hr) for k, v in totals.items()},
+        "stage_fractions": ({k: v / len(hr) for k, v in totals.items()}
+                            if hr else {k: 0.0 for k in totals}),
         "by_G_bin": by_bin, "stars": rows,
         "limits": [
             "The saved baseline is an intermediate project snapshot, not necessarily the original Gaia query universe.",
