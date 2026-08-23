@@ -1,0 +1,39 @@
+name: Append-only file check
+
+# 這是這個 repo 的第一個 CI workflow（2026-08-21 CodeRabbit review 建議
+# 新增）。範圍刻意縮到最小：只驗證 .gitattributes 標成 merge=union 的
+# 兩個附加型清單檔（results/RESULTS_LOG.md、WORK_BOARD.md）沒有既有行
+# 被改掉或刪掉，不做其他檢查——.gitattributes 裡已經寫明 union 合併策略
+# 不驗證這個契約本身，這支 workflow 補上那道驗證。
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "results/RESULTS_LOG.md"
+      - "WORK_BOARD.md"
+
+# 這個 workflow 只需要讀取內容，不需要寫回任何東西（2026-08-21 CodeRabbit
+# review）——限到最小權限，且不要讓 checkout 把 token 寫進本機 git 設定：
+# 這支 workflow 會 checkout PR 的程式碼、執行 PR 自己帶來的
+# check_append_only.py，若 token 被 persist 下來，惡意的 PR 內容理論上
+# 可以讀取／濫用它，即使這個 repo 目前是私人維護、風險不高，這種零成本
+# 的最小權限也該當預設做法，不要等有事才補。
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout（含完整歷史，才能讀到 base ref 的舊版檔案）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify append-only contract
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 scripts/tools/check_append_only.py "$BASE_SHA"

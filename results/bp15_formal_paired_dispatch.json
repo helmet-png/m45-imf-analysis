@@ -1,0 +1,343 @@
+{
+  "status": "ready_for_external_account_assignment",
+  "purpose": "Formal paired BP20/BP15 diagnostic; not a new headline IMF.",
+  "n_synthetic": 40000,
+  "refines": "3,3",
+  "paired_offsets": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "pairing_rule": "For each offset, run BP20 and BP15 once with exactly the same offset; analyse BP15-BP20 per offset.",
+  "bp15_inputs_verified": [
+    "results/cmd_members_bp15_smoke.csv",
+    "results/errmodel_bp15_smoke.npz",
+    "results/selection_bp15_smoke.npz"
+  ],
+  "jobs": [
+    {
+      "sample": "BP20",
+      "repeat_offset": 0,
+      "tag": "_bp20_formal_40k_rep0",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "0",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp20_formal_40k_rep0"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py"
+      ]
+    },
+    {
+      "sample": "BP15",
+      "repeat_offset": 0,
+      "tag": "_bp15_formal_40k_rep0",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "0",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp15_formal_40k_rep0",
+        "--members-file",
+        "cmd_members_bp15_smoke.csv",
+        "--errmodel-file",
+        "errmodel_bp15_smoke.npz",
+        "--selection-file",
+        "selection_bp15_smoke.npz"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py",
+        "results/cmd_members_bp15_smoke.csv",
+        "results/errmodel_bp15_smoke.npz",
+        "results/selection_bp15_smoke.npz"
+      ]
+    },
+    {
+      "sample": "BP20",
+      "repeat_offset": 1,
+      "tag": "_bp20_formal_40k_rep1",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "1",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp20_formal_40k_rep1"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py"
+      ]
+    },
+    {
+      "sample": "BP15",
+      "repeat_offset": 1,
+      "tag": "_bp15_formal_40k_rep1",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "1",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp15_formal_40k_rep1",
+        "--members-file",
+        "cmd_members_bp15_smoke.csv",
+        "--errmodel-file",
+        "errmodel_bp15_smoke.npz",
+        "--selection-file",
+        "selection_bp15_smoke.npz"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py",
+        "results/cmd_members_bp15_smoke.csv",
+        "results/errmodel_bp15_smoke.npz",
+        "results/selection_bp15_smoke.npz"
+      ]
+    },
+    {
+      "sample": "BP20",
+      "repeat_offset": 2,
+      "tag": "_bp20_formal_40k_rep2",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "2",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp20_formal_40k_rep2"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py"
+      ]
+    },
+    {
+      "sample": "BP15",
+      "repeat_offset": 2,
+      "tag": "_bp15_formal_40k_rep2",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "2",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp15_formal_40k_rep2",
+        "--members-file",
+        "cmd_members_bp15_smoke.csv",
+        "--errmodel-file",
+        "errmodel_bp15_smoke.npz",
+        "--selection-file",
+        "selection_bp15_smoke.npz"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py",
+        "results/cmd_members_bp15_smoke.csv",
+        "results/errmodel_bp15_smoke.npz",
+        "results/selection_bp15_smoke.npz"
+      ]
+    },
+    {
+      "sample": "BP20",
+      "repeat_offset": 3,
+      "tag": "_bp20_formal_40k_rep3",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "3",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp20_formal_40k_rep3"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py"
+      ]
+    },
+    {
+      "sample": "BP15",
+      "repeat_offset": 3,
+      "tag": "_bp15_formal_40k_rep3",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "3",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp15_formal_40k_rep3",
+        "--members-file",
+        "cmd_members_bp15_smoke.csv",
+        "--errmodel-file",
+        "errmodel_bp15_smoke.npz",
+        "--selection-file",
+        "selection_bp15_smoke.npz"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py",
+        "results/cmd_members_bp15_smoke.csv",
+        "results/errmodel_bp15_smoke.npz",
+        "results/selection_bp15_smoke.npz"
+      ]
+    },
+    {
+      "sample": "BP20",
+      "repeat_offset": 4,
+      "tag": "_bp20_formal_40k_rep4",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "4",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp20_formal_40k_rep4"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py"
+      ]
+    },
+    {
+      "sample": "BP15",
+      "repeat_offset": 4,
+      "tag": "_bp15_formal_40k_rep4",
+      "args": [
+        "--procs",
+        "4",
+        "--n-syn",
+        "40000",
+        "--repeats",
+        "1",
+        "--repeat-offset",
+        "4",
+        "--configs",
+        "C",
+        "--refines",
+        "3,3",
+        "--grid",
+        "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "--tag",
+        "_bp15_formal_40k_rep4",
+        "--members-file",
+        "cmd_members_bp15_smoke.csv",
+        "--errmodel-file",
+        "errmodel_bp15_smoke.npz",
+        "--selection-file",
+        "selection_bp15_smoke.npz"
+      ],
+      "extra_files": [
+        "measure_overconfidence.py",
+        "injection_recovery.py",
+        "results/cmd_members_bp15_smoke.csv",
+        "results/errmodel_bp15_smoke.npz",
+        "results/selection_bp15_smoke.npz"
+      ]
+    }
+  ],
+  "acceptance": [
+    "Each job must produce a complete NPZ with a manifest matching its planned tag and offset.",
+    "Do not average all BP20 and BP15 values separately; pair by repeat_offset first.",
+    "Report the paired mean and paired standard error, plus all five individual differences.",
+    "This uses a narrower local PARSEC grid for controlled comparison and cannot replace the headline grid by itself."
+  ],
+  "payload_check": "passed_with_temporary_local_payload"
+}

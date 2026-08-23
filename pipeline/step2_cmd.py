@@ -48,6 +48,41 @@ def bp_rp_excess_sigma(gmag: np.ndarray) -> np.ndarray:
     return 0.0059898 + 8.817481e-12 * g**7.618399
 
 
+def photometric_quality_masks(
+        g, bp, rp, snr_g, snr_bp, snr_rp, excess_factor, *,
+        g_bright_limit, min_flux_snr_g, min_flux_snr_bp,
+        min_flux_snr_rp, excess_sigma_limit) -> tuple[np.ndarray, np.ndarray]:
+    """Return the shared SNR/brightness and BP/RP-excess quality masks.
+
+    Keyword thresholds make controlled diagnostics (for example BP15) reuse
+    the production Gaia quality formulas without mutating global config.
+    """
+    g = np.asarray(g, float)
+    bp = np.asarray(bp, float)
+    rp = np.asarray(rp, float)
+    snr_g = np.asarray(snr_g, float)
+    snr_bp = np.asarray(snr_bp, float)
+    snr_rp = np.asarray(snr_rp, float)
+    excess_factor = np.asarray(excess_factor, float)
+    brightness = np.ones(g.shape, dtype=bool)
+    if g_bright_limit is not None:
+        brightness = ~(g < g_bright_limit)
+    snr_mask = brightness
+    for values, limit in ((snr_g, min_flux_snr_g),
+                          (snr_bp, min_flux_snr_bp),
+                          (snr_rp, min_flux_snr_rp)):
+        if limit > 0:
+            snr_mask &= np.isfinite(values) & (values >= limit)
+    residual = excess_factor - bp_rp_excess_expected(bp - rp)
+    sigma = bp_rp_excess_sigma(g)
+    if excess_sigma_limit > 0:
+        excess_mask = (np.isfinite(residual) & np.isfinite(sigma) & (sigma > 0)
+                       & (np.abs(residual) < excess_sigma_limit * sigma))
+    else:
+        excess_mask = np.ones(g.shape, dtype=bool)
+    return snr_mask, excess_mask
+
+
 def apply_quality_cuts(t: Table, cfg) -> tuple[Table, dict]:
     """套用測光品質篩選，回傳 (篩選後的表, 各條件砍掉幾顆的統計)。"""
     n0 = len(t)

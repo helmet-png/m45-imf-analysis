@@ -88,6 +88,28 @@ def main():
     ap.add_argument("--plxmin", type=float, default=4.0,
                     help="視差下限（mas）；給 0 表示不切，對照跑用")
     ap.add_argument("--force", action="store_true", help="已有檔案也重抓")
+    ap.add_argument("--ra", type=float, default=None,
+                    help="錐形中心 RA（度），跳過 Sesame 名稱解析。"
+                         "**要重現既有樣本時一定要用**：Sesame 對 M45 回的是"
+                         "RA=56.86909，跟 config.toml [target] 註解裡記的"
+                         "56.60083 差 0.27 度，錐形位置跟著偏，實測會讓既有"
+                         "cmd_members.csv 的 1,078 顆成員有 2 顆落到新錐形外面。"
+                         "做敏感度比較時輸入天區必須跟原本一致，否則量到的差異"
+                         "會混進「天區不同」這個額外變因。")
+    ap.add_argument("--dec", type=float, default=None,
+                    help="錐形中心 Dec（度），跟 --ra 一起給。見 --ra 的說明。")
+    ap.add_argument("--top", type=int, default=None,
+                    help="跳過 count_sources() 的精確計數，直接用這個上限查。"
+                         "**這是為了繞過伺服器端的硬限制，不是效能微調**："
+                         "count_sources() 會對 18 億列的 gaia_source 做錐形+"
+                         "星等+視差篩選再 COUNT(*)，M45 這組參數實測在 ESA 端"
+                         "跑 183 秒後被伺服器自己的 statement timeout 砍掉"
+                         "（錯誤是 canceling statement due to statement "
+                         "timeout，不是本機網路問題），整條 D2 敏感度掃描因此"
+                         "卡住（見 WORK_BOARD.md D2 進度說明）。主查詢本身不做"
+                         "COUNT、只取前 N 列，反而跑得動。給值時會檢查實際取回"
+                         "的列數有沒有頂到上限，頂到就中止並要求調大，不會靜默"
+                         "給出一份被截斷的資料。")
     a = ap.parse_args()
     server = _load_server()
 
@@ -99,8 +121,16 @@ def main():
         print(f"已存在，跳過：{out.name}（要重抓加 --force）")
         return
 
-    ra, dec = server.resolve_name(a.target)
-    print(f"{a.target} -> RA={ra:.5f}, Dec={dec:.5f}")
+    if (a.ra is None) != (a.dec is None):
+        ap.error("--ra 與 --dec 要嘛都給、要嘛都不給（只給一個會靜默用"
+                 "Sesame 的另一半座標，錐形中心變成兩個來源的混合）")
+    if a.ra is not None:
+        ra, dec = a.ra, a.dec
+        print(f"{a.target} -> RA={ra:.5f}, Dec={dec:.5f}（手動指定，"
+              f"跳過 Sesame）")
+    else:
+        ra, dec = server.resolve_name(a.target)
+        print(f"{a.target} -> RA={ra:.5f}, Dec={dec:.5f}（Sesame 解析）")
 
     params = {
         "mode": "cone", "ra": ra, "dec": dec, "radius": a.radius,
@@ -109,14 +139,27 @@ def main():
     if a.plxmin > 0:
         params["parallax_min"] = a.plxmin
 
-    n = server.count_sources(params)
-    print(f"符合條件：{n:,} 顆")
+    if a.top is not None:
+        n = a.top
+        print(f"跳過精確計數，直接用上限 {n:,} 查（--top）")
+    else:
+        n = server.count_sources(params)
+        print(f"符合條件：{n:,} 顆")
 
     adql = server.build_adql(params, top=n)
     print("查詢中…（大天區不切視差時會走 async，可能要數分鐘）")
     data = server.run_tap_query(adql, "csv")
-    out.write_bytes(data)
     rows = data.count(b"\n") - 1
+    # 頂到上限就可能被截斷。**先檢查再寫檔**——寫下去之後下游沒有任何一步
+    # 看得出這份資料是完整的還是被切一半的，那正是這個專案最怕的
+    # 「檔案存在、數字看起來正常、其實不是我們以為的那個」。
+    if a.top is not None and rows >= a.top:
+        print(f"錯誤：取回 {rows:,} 列，等於或超過 --top {a.top:,} 的上限，"
+              f"資料**可能被截斷**。把 --top 調大再跑一次（M45 這組參數的"
+              f"實際量級約 7,000 顆，設 20000 有足夠餘裕）。沒有寫檔。",
+              flush=True)
+        raise SystemExit(1)
+    out.write_bytes(data)
     print(f"寫入 {out}（{rows:,} 列，{len(data):,} bytes）")
 
 

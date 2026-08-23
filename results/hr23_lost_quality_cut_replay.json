@@ -1,0 +1,420 @@
+{
+  "status": "exact_replay_of_saved_step2_quality_cut_formulas",
+  "queried_stars": 62,
+  "exclusive_first_failure_counts": {
+    "bright_limit": 1,
+    "G_signal_to_noise": 0,
+    "BP_signal_to_noise": 37,
+    "RP_signal_to_noise": 2,
+    "BP_RP_excess": 22,
+    "passes_all_replayed_cuts": 0
+  },
+  "sequential_accounting": [
+    {
+      "cut": "bright_limit",
+      "failed_at_this_cut": 1,
+      "remaining": 61
+    },
+    {
+      "cut": "G_signal_to_noise",
+      "failed_at_this_cut": 0,
+      "remaining": 61
+    },
+    {
+      "cut": "BP_signal_to_noise",
+      "failed_at_this_cut": 37,
+      "remaining": 24
+    },
+    {
+      "cut": "RP_signal_to_noise",
+      "failed_at_this_cut": 2,
+      "remaining": 22
+    },
+    {
+      "cut": "BP_RP_excess",
+      "failed_at_this_cut": 22,
+      "remaining": 0
+    }
+  ],
+  "by_G_bin": {
+    "G < 4": {
+      "bright_limit": 1,
+      "G_signal_to_noise": 0,
+      "BP_signal_to_noise": 0,
+      "RP_signal_to_noise": 0,
+      "BP_RP_excess": 0,
+      "passes_all_replayed_cuts": 0
+    },
+    "4 <= G < 5.2": {
+      "bright_limit": 0,
+      "G_signal_to_noise": 0,
+      "BP_signal_to_noise": 0,
+      "RP_signal_to_noise": 0,
+      "BP_RP_excess": 0,
+      "passes_all_replayed_cuts": 0
+    },
+    "5.2 <= G < 8": {
+      "bright_limit": 0,
+      "G_signal_to_noise": 0,
+      "BP_signal_to_noise": 0,
+      "RP_signal_to_noise": 0,
+      "BP_RP_excess": 0,
+      "passes_all_replayed_cuts": 0
+    },
+    "8 <= G < 12": {
+      "bright_limit": 0,
+      "G_signal_to_noise": 0,
+      "BP_signal_to_noise": 0,
+      "RP_signal_to_noise": 0,
+      "BP_RP_excess": 2,
+      "passes_all_replayed_cuts": 0
+    },
+    "12 <= G < 16": {
+      "bright_limit": 0,
+      "G_signal_to_noise": 0,
+      "BP_signal_to_noise": 2,
+      "RP_signal_to_noise": 2,
+      "BP_RP_excess": 10,
+      "passes_all_replayed_cuts": 0
+    },
+    "16 <= G < 18": {
+      "bright_limit": 0,
+      "G_signal_to_noise": 0,
+      "BP_signal_to_noise": 35,
+      "RP_signal_to_noise": 0,
+      "BP_RP_excess": 10,
+      "passes_all_replayed_cuts": 0
+    },
+    "G >= 18": {
+      "bright_limit": 0,
+      "G_signal_to_noise": 0,
+      "BP_signal_to_noise": 0,
+      "RP_signal_to_noise": 0,
+      "BP_RP_excess": 0,
+      "passes_all_replayed_cuts": 0
+    }
+  },
+  "stars": [
+    {
+      "source_id": "64094037476647040",
+      "Gmag": 14.9738245,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "64131150292139648",
+      "Gmag": 13.846435,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "64453685154291968",
+      "Gmag": 17.73309,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "64837242912474624",
+      "Gmag": 8.88526,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "64950625753906176",
+      "Gmag": 17.653503,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "64997187496822912",
+      "Gmag": 17.813745,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65000417312240896",
+      "Gmag": 15.7003355,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65003612767943040",
+      "Gmag": 17.898127,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65042645428743680",
+      "Gmag": 17.786415,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65078929312363392",
+      "Gmag": 16.412167,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65131121756446592",
+      "Gmag": 13.487999,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65162492198224768",
+      "Gmag": 17.780386,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65173620458875008",
+      "Gmag": 16.997486,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65200283613608704",
+      "Gmag": 17.136478,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65202383854448384",
+      "Gmag": 17.039532,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65202418214188544",
+      "Gmag": 14.805443,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65206674525036672",
+      "Gmag": 17.452063,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65216363971331072",
+      "Gmag": 17.420778,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65223583812996864",
+      "Gmag": 17.106117,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65226092073881856",
+      "Gmag": 17.303078,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65226401312036864",
+      "Gmag": 13.536427,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65228772133391488",
+      "Gmag": 17.9169,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65230764996027776",
+      "Gmag": 8.228746,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65241313435901568",
+      "Gmag": 14.320809,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65241313437941504",
+      "Gmag": 14.404743,
+      "first_failure": "RP_signal_to_noise"
+    },
+    {
+      "source_id": "65244435877629824",
+      "Gmag": 17.847445,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65265674492422784",
+      "Gmag": 17.757893,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65266494828710400",
+      "Gmag": 14.178851,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65277975278721408",
+      "Gmag": 16.776691,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "65280036863012864",
+      "Gmag": 17.349085,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65282716920396160",
+      "Gmag": 15.445732,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65283094877491200",
+      "Gmag": 17.706953,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "65283232316451328",
+      "Gmag": 3.863349,
+      "first_failure": "bright_limit"
+    },
+    {
+      "source_id": "65298208867376384",
+      "Gmag": 17.7707,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66451429065390080",
+      "Gmag": 16.797077,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "66453181412027392",
+      "Gmag": 17.699118,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66460225158376192",
+      "Gmag": 17.770643,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66642641008348416",
+      "Gmag": 16.535604,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "66714177981308800",
+      "Gmag": 17.279522,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66714418501518848",
+      "Gmag": 16.843014,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66716136489019008",
+      "Gmag": 17.665154,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66717987616472704",
+      "Gmag": 17.494467,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66728089380491648",
+      "Gmag": 17.542105,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66728089380492160",
+      "Gmag": 17.551449,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66728265476081408",
+      "Gmag": 17.19236,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66729635568719872",
+      "Gmag": 17.617458,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66767843597097856",
+      "Gmag": 17.77927,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66771764904729984",
+      "Gmag": 17.683437,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66782931820393216",
+      "Gmag": 16.98477,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "66797156751286912",
+      "Gmag": 16.827679,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "66798526845337344",
+      "Gmag": 13.832768,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "66801623514684416",
+      "Gmag": 14.265003,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "66828870789879168",
+      "Gmag": 16.177582,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "66834054814431232",
+      "Gmag": 16.563644,
+      "first_failure": "BP_RP_excess"
+    },
+    {
+      "source_id": "66894772769437952",
+      "Gmag": 17.874992,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "68283421593270400",
+      "Gmag": 17.57024,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "68364544933829376",
+      "Gmag": 13.592579,
+      "first_failure": "RP_signal_to_noise"
+    },
+    {
+      "source_id": "68581694185489920",
+      "Gmag": 17.913898,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "69806039039416832",
+      "Gmag": 17.622309,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "69812945346809344",
+      "Gmag": 15.99179,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "69912309413652864",
+      "Gmag": 17.451437,
+      "first_failure": "BP_signal_to_noise"
+    },
+    {
+      "source_id": "70091259227969920",
+      "Gmag": 17.84341,
+      "first_failure": "BP_signal_to_noise"
+    }
+  ],
+  "effective_step2_cmd_config": {
+    "g_bright_limit": 4.0,
+    "min_flux_snr_g": 50.0,
+    "min_flux_snr_bp": 20.0,
+    "min_flux_snr_rp": 20.0,
+    "bp_rp_excess_sigma": 3.0
+  },
+  "limits": [
+    "Gaia DR3 fields were queried on 2026-08-22; the saved baseline may have originated from a different retrieval date but the same DR3 source IDs.",
+    "The replay covers apply_quality_cuts in the current branch only; it does not prove older pipeline code used identical settings."
+  ]
+}

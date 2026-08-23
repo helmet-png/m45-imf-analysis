@@ -1,0 +1,114 @@
+{
+  "status": "catalogue_overlap_diagnostic_not_membership_truth",
+  "external_catalogue": "saved Hunt & Reffert 2023 M45 snapshot",
+  "external_rows": 1721,
+  "cmd_rows": 1078,
+  "source_id_overlap_all_hr23_rows": 1073,
+  "threshold_summaries": [
+    {
+      "threshold": 0.5,
+      "external_members": 1014,
+      "in_cmd_members": 809,
+      "recall": 0.7978303747534516,
+      "by_G_bin": [
+        {
+          "G_bin": "G < 4",
+          "external_members": 1,
+          "in_cmd_members": 0,
+          "recall": 0.0
+        },
+        {
+          "G_bin": "4 <= G < 5.2",
+          "external_members": 0,
+          "in_cmd_members": 0,
+          "recall": null
+        },
+        {
+          "G_bin": "5.2 <= G < 8",
+          "external_members": 26,
+          "in_cmd_members": 26,
+          "recall": 1.0
+        },
+        {
+          "G_bin": "8 <= G < 12",
+          "external_members": 141,
+          "in_cmd_members": 134,
+          "recall": 0.950354609929078
+        },
+        {
+          "G_bin": "12 <= G < 16",
+          "external_members": 330,
+          "in_cmd_members": 305,
+          "recall": 0.9242424242424242
+        },
+        {
+          "G_bin": "16 <= G < 18",
+          "external_members": 432,
+          "in_cmd_members": 344,
+          "recall": 0.7962962962962963
+        },
+        {
+          "G_bin": "G >= 18",
+          "external_members": 84,
+          "in_cmd_members": 0,
+          "recall": 0.0
+        }
+      ]
+    },
+    {
+      "threshold": 0.7,
+      "external_members": 529,
+      "in_cmd_members": 433,
+      "recall": 0.8185255198487713,
+      "by_G_bin": [
+        {
+          "G_bin": "G < 4",
+          "external_members": 1,
+          "in_cmd_members": 0,
+          "recall": 0.0
+        },
+        {
+          "G_bin": "4 <= G < 5.2",
+          "external_members": 0,
+          "in_cmd_members": 0,
+          "recall": null
+        },
+        {
+          "G_bin": "5.2 <= G < 8",
+          "external_members": 15,
+          "in_cmd_members": 15,
+          "recall": 1.0
+        },
+        {
+          "G_bin": "8 <= G < 12",
+          "external_members": 88,
+          "in_cmd_members": 86,
+          "recall": 0.9772727272727273
+        },
+        {
+          "G_bin": "12 <= G < 16",
+          "external_members": 172,
+          "in_cmd_members": 158,
+          "recall": 0.9186046511627907
+        },
+        {
+          "G_bin": "16 <= G < 18",
+          "external_members": 219,
+          "in_cmd_members": 174,
+          "recall": 0.7945205479452054
+        },
+        {
+          "G_bin": "G >= 18",
+          "external_members": 34,
+          "in_cmd_members": 0,
+          "recall": 0.0
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "HR23 probabilities and this pipeline probabilities are different catalogue products.",
+    "Recall below 100% can reflect deliberately different spatial, probability, magnitude or quality selections.",
+    "This diagnostic never labels a non-overlap as a non-member and never adds it to the IMF sample."
+  ]
+}

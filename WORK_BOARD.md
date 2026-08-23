@@ -36,6 +36,83 @@
 | 2026-08-12 | Claude session（本機，交接給另一台電腦的 agent） | Kaggle dataset 掛載問題根因排查（見 `LIMITATIONS.md`「Kaggle 掛載問題根因排查」一節） | 交接中，等另一台機器用不同帳號接手 | `LIMITATIONS.md`、`kaggle_queue.txt`、`kaggle_sync.py`（已加 in-kernel 等待，不用再改）、`kaggle_accounts.json`（不進版控，新 agent 要自己建） | 本機已排除「純時序」「帳號未驗證」兩個假設；使用者實測發現 Kaggle 網頁版 Notebook Editor 本身卡在「Editor loading」，換瀏覽器/無痕都無效，懷疑是 Kaggle 平台（可能是 Firebase 服務）暫時異常，不是帳號或我們程式的問題，但這個假設也還沒證實。**交接給另一台電腦、用另一個 Kaggle 帳號**測試是為了排除「同一帳號被限制」這個殘餘可能性，兩台機器同時測也能交叉驗證是不是平台性問題。新 agent 開始前**先讀 `LIMITATIONS.md` 那一節的完整診斷過程**，不要重新從頭排查已經排除的假設 |
 | 2026-08-12 | Claude session（新機器，x64，接手交接） | Kaggle dataset 掛載問題根因排查（接續上一行） | 進行中，卡在第 2 點需要真人登入操作 | `LIMITATIONS.md`（已補「2026-08-12（新機器接手交接...）」段落）、`kaggle_accounts.json`（本機新增 `justinlan11` 帳號，不進版控） | 匿名瀏覽器測試部分排除第 1 點（平台前端目前渲染正常，但只測到唯讀頁面）；使用者提供第三個帳號 `justinlan11`（API token），用它重跑 `kaggle_smoketest.py`，**撞到跟 helmetalbert／teammate2 一模一樣的錯誤**（`FileNotFoundError: waited 280s...`），且已核對本機產生的 `dataset-metadata.json`／`kernel-metadata.json` 設定正確，排除「我們自己設定寫錯」。三個獨立帳號都一樣，帳號層級限制的可能性進一步降低。**唯一還沒排除、下一步該做的是第 2 點**（網頁手動 Add Input 測試），需要真人登入操作，AI agent 做不到，回報使用者需要親自測試或提供登入方式 |
 | 2026-08-12 | Claude session（新機器，x64） | Kaggle dataset 掛載問題根因排查（接續上兩行，**找到真正根因並修好**） | **完成** | `kaggle_sync.py`（`make_kernel()` 的 `base` 路徑修正）、`LIMITATIONS.md`（新增「2026-08-12：真正的根因找到了」一節，回頭訂正「平台異常」「帳號限制」兩個假設） | 使用者親自登入無痕視窗，手動網頁上傳 dataset＋Add Input＋`os.walk('/kaggle/input')`，印出真實路徑是 `/kaggle/input/datasets/<帳號>/<slug>/`，比 `kaggle_sync.py` 原本寫死的 `/kaggle/input/<slug>/` 多兩層。改一行路徑字串，用 `justinlan11` 帳號重跑驗證：修好前等滿 280 秒才 `ERROR`，修好後 **10.7 秒 `COMPLETE`**。純粹是我們自己的路徑 bug，不是 Kaggle 平台問題也不是帳號限制，這兩個假設已在 `LIMITATIONS.md` 回頭訂正。過程中發現的「頁面崩潰了」React 錯誤是使用者瀏覽器擴充功能干擾，跟這個 bug 無關，已在文件中記錄避免以後誤判成同一件事。`kaggle_queue.txt` 現在可以考慮恢復派工，留給使用者/負責的 session 決定 |
+| 2026-08-22 | Claude session（本機） | 新增 SSH 雲端運算節點支援（GCP/Oracle 補充算力，環境設定，不對應 LIMITATIONS.md 條目） | 程式完成，等使用者提供 VM 連線資訊後端到端驗證 | 新增 `ssh_workers.py`／`ssh_workers.json.example`／`ssh_sync.py`／`cloud_queue.py`／`docs/reference/CLOUD_WORKERS.md`，分支 `claude/cloud-workers-ssh-2026-08-22`（PR #103） | 使用者評估 Kaggle 平台不穩（見上方 Editor loading 卡死的相關記錄）後決定補充 GCP $300 試用＋Oracle Always Free。**跟 Kaggle 帳號共用同一個「worker」抽象與同一份佇列檔**（`cloud_queue.py`），不是三套分開的 dispatcher；SSH worker 是持久機器，架構刻意跟 Kaggle 的一次性容器不同（git pull 而非整包重傳，見 `ssh_workers.py` 開頭說明）。VM 只用唯讀 Deploy Key 讀 GitHub，不放可寫入憑證，結果一律本機 scp 拉回。`py_compile`／空佇列 dry-run 已驗證，**SSH 路徑本身還沒有真實帳號可以端到端測試**，這部分留給使用者提供連線資訊後續跑 |
+| 2026-08-23 | Claude session（本機） | SSH 雲端運算節點端到端驗證（接續上一行） | **完成**，`gcp1`（GCP e2-highcpu-8）已可正式派工 | `docs/reference/CLOUD_WORKERS.md`（新增「已知陷阱」一節）、`cloud_queue.py`（更新驗證狀態說明），`ssh_workers.json`（本機，含真實 IP，不進版控） | 使用者建好 VM（`asia-east1-c`，e2-highcpu-8）並提供連線資訊，實測 `push`→`run`→`status`→`pull` 全部跑通（`kaggle_smoketest.py` 印出 CPU count=8、numpy 正常運作）。過程中踩到一個先前沒預料到的坑：**GCP 依公鑰結尾的名字建帳號，瀏覽器登入帳號跟 `ssh_workers.json` 指定的帳號如果名字不同會是兩個互相隔離的 Linux 帳號**，各自要分別裝 Python 套件、各自要有自己的 GitHub Deploy Key（各踩了一次 `ModuleNotFoundError: No module named 'numpy'` 跟 `Host key verification failed`/`git clone` 卡住），已補進 `CLOUD_WORKERS.md` 並給出避免的做法（第一次就用同一個帳號名稱操作）。GitHub host key 驗證用了已經被使用者手動核對過的同一把 GitHub ED25519 指紋交叉比對，沒有繞過人工核對這一步。**還沒驗證的部分**：目前只測過輕量 smoke test，長時間、高負載的重運算（例如 `--procs 4` 跑好幾小時）還沒實測過，第一次派正式工作時建議觀察一次記憶體用量 |
+
+## `p6_lowmass_v2` 成本過高、擋住本機佇列（2026-08-21 10:26）——**使用者已決定：移到佇列最後**
+
+**這一節原本記的兩個數字，2026-08-21 覆查時無法佐證，已訂正**（原文
+保留在下方引用區塊，不要當成既定事實引用）：
+
+> 原文：本機 `p6_lowmass_v2`（2026-08-20 15:16 啟動）的第 1 次擬合花了
+> 67,213 秒 = 18.7 小時（見 `logs/p6_lowmass_v2.log`），15 次合計約
+> 280 小時 ≈ 11.7 天。
+
+覆查發現 `logs/p6_lowmass_v2.log` 在本機只有 7 行、**沒有任何一行擬合
+完成時間**，且檔案時間（08-20 10:34）早於上面所述的啟動時間（15:16），
+無法佐證 67,213 秒這個數字。它可能是對的（log 也可能被後續重啟覆寫），
+但在能重新量到之前不當既定事實用。
+
+**可以查證的成本量級**：這項工作是 5 個低質量段冪次 × 3 次重複 =
+**15 次擬合**（這是設定本身，確定）。同類工作的單次成本可從
+`logs/queue_done.txt` 查到：`radial_r1_final` 5 次重複共 72,814 秒，
+平均約 4 小時／次，而那是 355 顆的核心切片；`p6_lowmass_v2` 是全樣本
+1,078 顆，單次成本只會更高。15 次的總量級足以讓後面的項目等很久。
+
+**原先列出的三個問題，2026-08-21 覆查後的現況**（只有第 2 項確定成立）：
+1. ~~**幾乎不可能跑完**：沒有續傳機制~~ **這一點已不成立**（2026-08-21
+   訂正）：`profile_lowmass.py` 已於 PR #85 接上
+   `scripts/tools/checkpoint.py`，每次重複算完就存檔，重開機後讀回既有
+   進度、不會從頭重算。原文描述的是 2026-08-20 15:16 那個用舊程式碼啟動
+   的行程，不是現在 repo 裡的程式碼。**重開機不再等於全部白費**，這一點
+   對取捨影響很大，不要再用它當延後的理由。
+2. **擋住本機佇列後面的項目**（這一點成立）：`run_queue.py` 循序執行。
+   以 `main` 目前的 `queue.txt` 為準，排在它後面的是
+   `p11_outlierfrac_v2`／`d1_bhac_check`／`c13_bias_floor_nsyn4x`／
+   `d10_config_cd_real`／`c19_extra_scatter_sweep`，共 **6 筆項目
+   （5 個相異標籤——`d1_bhac_check` 重複出現兩次，兩行位元組相同，
+   第二筆會被 `read_done()` 依標籤去重跳過）**。
+   原文寫「8 項」並列出 `c5_davform_lognormal`／`c5_davform_truncexp`，
+   但那兩項來自**尚未合併的 PR #87**，`main` 上的 `queue.txt` 目前
+   grep 不到（PR #87 合併後才會變成 8 筆）。C5 是**現役缺陷．優先度 高**
+   這一點沒有變，只是對應的佇列項目還沒進 `main`。
+3. **Kaggle 可行性待確認**（原本寫「Kaggle 也裝不下」）：這一點繫於單次
+   擬合時數，而上面說明該數字目前無法佐證，所以整條降級為待確認，**不要
+   當成已確認的限制拿去做決策**。方向上仍成立的部分只有：照 `p6b` 那樣
+   按軸拆片救不了「單次擬合」本身，只能拆重複次數。
+
+**已確認沒問題的部分**：精修有真的生效（第 1 次的 alpha=2.633 不落在
+0.20 的粗網格上），所以這條路線的**方法是對的**。
+
+**使用者已於 2026-08-21 決定採用選項 C**（把這一項移到佇列最後），
+已在 PR #96 實作，`queue.txt` 內留有說明。以下四個選項與代價保留作為
+當時的決策依據：
+
+| 選項 | 做法 | 代價 |
+|---|---|---|
+| A. 維持現狀 | 讓它繼續跑 | 持續擋住後面的項目 |
+| B. 降重複次數 | 改成 `--repeats 1`（5 次擬合 ≈ 94 小時） | 沒有誤差棒，d(alpha)/d(p) 的斜率不確定度無法量化 |
+| **C（已採用）**. 先跑完後面的項目再回頭 | 把這一項移到佇列最後 | A1/A3 這個最大單一系統誤差（0.248）繼續懸著 |
+| D. 減少掃描點 | 5 個冪次減成 3 個（0.9/1.3/1.7） | 斜率擬合只剩 3 點，但仍可量方向與量級 |
+
+**不建議的做法**：把 `--refines 3,3` 降回 `--refines 3`——那正是 A1
+要修的精修 bug 本身，降回去等於白跑。
+
+**實際執行時的狀態**：移動當下 `p6_lowmass_v2` 還沒開始跑（`run_queue.py`
+仍在跑 `radial_r2_final`，`logs/queue_done.txt` 沒有 p6 的紀錄），所以
+這次移動是**零損失**，不需要殺掉任何正在跑的東西。
+
+**之後真的要跑它之前**：**一定要先手動把 `results/profile_lowmass.npz`
+（2026-08-15 的舊檔、無 manifest、是未精修的粗網格結果）移開**——這是
+目前唯一可靠的做法，不要指望程式擋下來。
+
+**為什麼不能指望程式擋**（2026-08-21 訂正，原文誤稱「有兩道保護會擋
+下來」）：`main` 上的 `checkpoint.check_manifest()` 目前對無 manifest 的
+舊檔仍然只印一行警告就「視為信任沿用」（已用 `git show
+origin/main:scripts/tools/checkpoint.py` 核對過），**會直接沿用那批壞
+結果**。真正會擋下來的兩道保護都還在**未合併的 PR** 裡：PR #89 把
+`check_manifest()` 改成中止、PR #96 讓 `preflight.py --gate c` 在沒有
+manifest 時照樣判定量化簽章。**這兩個 PR 合併之前，程式不會攔你。**
 
 ## 待認領工作（2026-08-12，`multi_stage_best()` 精修 bug 修好後還沒排的重跑）
 
@@ -116,6 +193,25 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 
 **D2 進度說明（2026-08-19）**：`scripts/diagnostics/sensitivity_sweep.py` 已寫好，涵蓋兩種目標：
 - `--target membership_threshold`：重新套用 `results/baseline.dat` 的成員機率門檻 -> 重跑第 2/3 步 -> 用 config C 跑一次前向模型，量 alpha 敏感度。**流程已驗證可行**（本機用小規模參數試跑通過），但完整掃描需要原始 Gaia 查詢 CSV（`data/m45_r5_g18_plx4.csv`，6,956 顆未篩選），這台機器原本沒有，追查後發現產生它的 `fetch_gaia.py` 依賴另一個私有 repo `github.com/helmet-png/gaia-dr3-export`——已 clone 到 `Documents/` 同層解鎖依賴，但重抓時卡在第一步：`fetch_gaia.py` 會先送一個 `SELECT COUNT(*)` 查詢決定要抓幾筆，這個查詢對 18 億列的 `gaia_source` 做 5 度錐形 + G<=18 + parallax>=4 篩選，**手動重現並拿到完整錯誤內文，確認是 ESA 伺服器端主動取消**：`SQL exception: ERROR: canceling statement due to statement timeout`（等了 183 秒後被砍），不是本機網路或帳號問題，是這個特定 COUNT 查詢在伺服端太重、撞到它自己的 statement timeout。**已知可能的解法**（留給下一個 session，這是 `gaia-dr3-export` 那個獨立 repo 的程式，不在這個專案範圍內改）：跳過精確計數，直接在主查詢用一個夠大的 `TOP`（例如 20000，M45 這個天區遠不會到這個量級）取代 `count_sources()` 那一步。**下一個 session 檢查 `data/m45_r5_g18_plx4.csv` 是否已成功抓到**，有的話直接跑 `python scripts/diagnostics/sensitivity_sweep.py --target membership_threshold`（預設掃 0.5/0.6/0.7/0.8/0.9 五個門檻，`--n-syn 40000 --refines 3,3` 較準，示範用可以先 `--n-syn 5000 --refines 3` 求快），沒有的話重跑 `python scripts/data_prep/fetch_gaia.py --target M45 --radius 5.0 --gmax 18.0 --plxmin 4.0 --force`。
+
+**2026-08-21：阻擋已解除，檔案抓到了**。原因確認是 `count_sources()` 那個
+COUNT(*) 查詢在 ESA 端逾時（不是本機網路），主查詢本身不做 COUNT、只取前 N 列
+反而跑得動。已幫 `fetch_gaia.py` 加兩個旗標（**改的是本專案的檔案，不是那個
+私有 repo**）：`--top` 跳過精確計數（並在取回列數頂到上限時中止、不靜默給
+截斷資料），`--ra`／`--dec` 跳過 Sesame 名稱解析。
+
+**`--ra`／`--dec` 不是可有可無**：Sesame 對 M45 回 RA=56.86909，跟
+`config.toml [target]` 註解記的 56.60083 差 0.27 度，錐形位置跟著偏——實測
+用 Sesame 座標抓到 6,986 顆，既有 `cmd_members.csv` 的 1,078 顆成員有 **2 顆
+落到錐形外面**（覆蓋率 99.81%）。改用 config 的座標後抓到 **6,956 顆，跟本表
+原本記載的數字完全一致，成員覆蓋率 1,078/1,078 = 100%**。敏感度比較的輸入
+天區必須跟原本一致，否則量到的差異會混進「天區不同」這個額外變因。
+
+正確的重抓指令是：
+`python scripts/data_prep/fetch_gaia.py --target M45 --ra 56.60083 --dec 24.11389 --radius 5.0 --gmax 18.0 --plxmin 4.0 --top 20000 --force`
+（檔案在 `.gitignore` 裡，不進版控，換機器要自己重抓一次。**`--force` 是必要的**：`fetch_gaia.py` 第 120 行對已存在的輸出檔會直接印「已存在，跳過」就結束，不加的話在已經抓過的機器上重跑這行等於什麼都沒做，卻看不出來——2026-08-21 CodeRabbit review 抓到。乾淨的新機器上不帶 `--force` 也會動，但照著這行複製貼上的人多半是想重抓。)
+
+**下一步**：可以跑 `python scripts/diagnostics/sensitivity_sweep.py --target membership_threshold` 了。
 - `--target stars_per_cluster`：這個設定要真的重跑 pyUPMASK 聚類，不是重新套門檻能測的。這台機器沒有 `pyUPMASK/` 目錄（未驗證能不能跑），腳本會誠實報告做不到，不會編造數字——已內建這個可行性檢查，**不要跳過檢查直接猜答案**。留給有 pyUPMASK 環境的 session。
 
 
@@ -205,8 +301,23 @@ B 類，沒有非 A/B 類項目排在中間，`queue.txt` 已經符合要求，�
 |---|---|---|
 | `empirical_ml_relation_test`（D11，**現役缺陷．優先度 中高**）**2026-08-21：可行性評估已完成，開工前先做評估文件第三節那五項查證** | **起手式（2026-08-22 CodeRabbit review 訂正順序）：先完成評估文件第三節那五項查證（波段轉換在紅端的適用範圍、食雙星彙編在 M ≲ 0.4 M☉ 的樣本量、消光處理一致性、經驗關係的金屬量覆蓋、dM/dM_V 誤差傳播），優先做前兩項（成本最低、且可能直接否決整條路線），通過後再做其餘三項——五項查證全部完成後才決定是否投入，順序不能反過來**。**「不得蒐集食雙星資料」指下載／整理可拿來擬合的資料集、開始寫實作，不含第二項查證本身需要的文獻盤點（數 Torres+2010／Benedict+2016／Iglesias-Marzoa+2017 裡 M ≲ 0.4 M☉ 有幾顆星）——那是完成第二項查證的必要步驟，不算「開始蒐集」（2026-08-23 CodeRabbit review：原文字面上會把第二項自己需要的動作也禁掉）。五項全過之後才動手：蒐集公開食雙星質量-光度資料（同一批文獻來源：Torres et al. 2010、Benedict et al. 2016、Iglesias-Marzoa et al. 2017，都可公開取得），仿 `pipeline/step5_imf.py` 的 `assign_masses()` 架構寫一條獨立於任何等時線的經驗質量估計路徑（M_V vs mass 的平滑擬合，方法可參考 Hobart et al. 2026 用的 B-spline + GCV 判準，或用更簡單的多項式/樣條，先求有再求精）。**這條關係是 M_V（Johnson V 波段）對質量，不是 Gaia G 波段對質量**——Hobart et al. 2026 明確指出兩者不等價，用顏色相依轉換（Riello et al. 2021 的 Gaia EDR3 光度轉換）把 Gaia 觀測轉成 M_V，這一步的轉換方法、消光處理、金屬量涵蓋範圍、未解析聯星處理、誤差傳播都要先定好並記錄下來，不能直接把 M_V-mass 關係套在 Gaia G/GBP/GRP 上 | 先固定 Gaia→M_V 波段轉換方法、消光處理、誤差傳播鏈；再用這條經驗關係重跑低質量段（<0.5 M☉）alpha，跟 PARSEC／MIST 兩條既有結果放在同一張表比較；alpha 差異要拆解成「質量-光度關係本身的差異」跟「波段轉換/金屬量/未解析聯星造成的額外差異」兩部分分別量化，不能混在一起報一個數字。**2026-08-21 可行性評估**（`docs/planning/PLAN_D11_經驗質光關係_可行性評估.md`，只評估、沒有實作）：質量精度**以 Gaia G 為準時**不是瓶頸（低質量段 dM/dG 不陡，0.05 mag 測光差只造成約 1.55–2.08% 質量誤差，適用 0.30–0.40 M☉）——但**口徑還不對**：經驗關係定義在 M_V，正確導數是 dM/dM_V，本機網格沒有 V 波段算不出來，在補上之前這只是待驗證的預期（2026-08-21 CodeRabbit review）；**目前初步判讀紅端的顏色覆蓋可能是主要風險**（2026-08-22 CodeRabbit review：dM/dM_V 本身還沒驗證前不能寫成定案）——要檢驗的樣本集中在 BP−RP ≈ 2.4–3.5，BP−RP ≥ 2.663（約 M ≤ 0.40 M☉）就佔 51.9%（559/1078） |
 | ~~`bright_end_completeness_check`（D12）~~ **2026-08-20 初步查證完成，發現新問題見 LIMITATIONS.md** | 已查 HIPPARCOS+Gaia DR3 交叉比對：Alcyone 完全沒有 Gaia 視差解（資料層級限制，不是 pipeline 問題）；**意外發現 G=4.0–5.2 之間確認是星團成員（視差符合）的星也整批不在 `cmd_members.csv` 裡，範圍比 `g_bright_limit=4.0` 這條線本身更大，根因還沒追到**（需要原始 Gaia 查詢檔或針對這幾顆星的小量查詢，逐步比對 `run_pipeline.py` 第 1、2 步中介輸出） | 已達成基本查證；**新解鎖的下一步**：追出 G=4.0–5.2 這段星消失的具體原因（pyUPMASK 成員機率判定 vs `step2_cmd.py` 測光品質篩選），若是誤判排除，高質量段樣本數可望增加 |
+| `d12_bright_end_root_cause`（D12） | 2026-08-20 Codex 完成：`65205373152172032`（G=4.173）在 pyUPMASK 後的 P=0.0017，於 P>=0.7 成員門檻前離開；HIP 17851（G=5.203）P=0.9999 且保留。詳見 `docs/planning/DIAGNOSIS_M45_BRIGHT_END_LOSS_2026-08-20.md`。沒有原始 Gaia 表，未推測未通過成員門檻星的第 2 步測光狀態。 | 完成（最小診斷）；8–10 顆外部亮星的小量 Gaia 欄位查詢仍待做 |
+| `d12_bright_external_crosscheck`（D12） | 2026-08-20 Codex 完成：Hipparcos Hp<=6 的 17 顆亮星交叉 Gaia DR3，13 顆取得 Gaia 資料並回查 baseline/CMD。確認至少兩顆 G<4 高 P 星只因亮端切割未進 CMD；G=4.173 的已知例子則在成員門檻前離開。詳見 `docs/planning/M45_HIPPARCOS_BRIGHT_CROSSCHECK_2026-08-20.md`。 | 完成；若要量化對 IMF 的影響，需有外部**成員**目錄後才能做回收率 |
+| `d12_bright_hr23_crosscheck`（D12） | 2026-08-21 Codex 完成：以保存的 HR23 M45 快照核對 17 顆 Hipparcos 亮星。HIP 17573 是外部 P=0.749、pipeline P=0.9999、但 G<4 因亮端設定未進 CMD 的明確例子；G=4.173 的低 pipeline-P 星不在此快照，未被誤稱為外部成員。詳見 `docs/planning/M45_BRIGHT_HR23_MEMBERSHIP_CROSSCHECK_2026-08-21.md`。 | 完成；完整外部成員目錄回收率仍待做 |
 | ~~`system_stellar_mf_doc`（D14）~~ **已完成 2026-08-19** | 在 `PAPER_OUTLINE.md` 與 `pipeline/joint_fit.py`／`fit_real.py` 相關函式註解裡加一句話，明確說明目前 `alpha`／`binary_fraction` 對應 system MF 還是 stellar MF 空間、合成星團生成邏輯的抽樣順序 | 已達成：答案是 **system MF**（主星質量分布的冪次）。說明寫進 `PAPER_OUTLINE.md` 3.4 節、`fit_real.py` 檔頭、`pipeline/joint_fit.py` 抽樣段落三處，另外實算兩種定義的差（`scripts/diagnostics/system_vs_stellar_mf.py`：f_bin=0.45 時 stellar 比 system 陡 +0.066），見 `LIMITATIONS.md` D14 |
 | `mass_dependent_fbin`（D14 衍生，2026-08-19 做 D14 時發現） | `synthesise()` 裡決定「誰帶伴星」的 Bernoulli(`f_bin`) 與主星質量 `m1` **完全獨立**，等於假設雙星比例不隨質量變化。這是已知簡化但從沒量化過代價。**Torres+2025 對 Pleiades 觀測到的是雙星比例隨半徑呈雙峰**——這支持「雙星比例不是常數」，但半徑相依不等於質量相依，兩者沒有直接證據連結，除非另外查到質量分層或明確的質量-半徑關聯，質量相依性本身仍是**待驗證假設**，不是有直接觀測支持的結論（2026-08-23 CodeRabbit review）。起手式比照 `profile_lowmass.py`：讓 `f_bin` 變成質量的簡單函數（兩段常數或線性內插），注入一個有質量相依性的假資料、用現有的常數 `f_bin` 模型去擬合，量 alpha 被推歪多少。**先做注入回收，不要直接把它升格成自由參數**——dav 的教訓是「參數可以放進模型卻完全不被資料約束」 | 給出「雙星比例質量相依性的強度 vs alpha 偏移」的具體數字；若偏移遠小於統計誤差 0.144 就記為可忽略並結案，不必升格成自由參數。**2026-08-20 進度**：`inject_massdep_fbin.py` 已寫好並排進 `queue.txt`（標籤 `massdep_fbin`，排在 c19_extra_scatter_sweep 之後），照本表要求「先做注入回收、不要直接升格成自由參數」。生成端新增 `JointModel.set_mass_dependent_fbin(contrast, m_break=0.5)`（**只影響生成，不呼叫時逐位元等同原本行為，已實測驗證**），擬合端用完全不變的常數 f_bin 模型。**設計上刻意固定整體雙星比例**：兩段的 f_bin 由樣本比例加權後恰好等於名目 f_bin——**這是寫 `set_mass_dependent_fbin()` 時的設計驗證**（contrast=0.10/0.20/0.30 三種強度下逐星 f_bin 平均都精確等於名目值 0.570，2026-08-20 confirmed），不是正式 sweep 的一部分，否則就同時動了「質量相依性」與「整體雙星比例」兩個變因，量到的 alpha 偏移分不清是哪一個造成的。**正式排入 `queue.txt` 的 sweep 是另一組值：contrast=0.0/0.15/0.30**（標籤 `massdep_fbin`，見上），**目前整組都還沒跑**（`queue.txt` 裡還在排隊，`logs/queue_done.txt` 沒有這個標籤），contrast=0.15 不是已驗證過的數字。**contrast=0 是必要的對照組**——C13 記錄這套注入回收本身的 alpha 偏差地板約 -0.050，跟要測的量級接近，不扣掉地板就無法判讀 |
+| `mass_dependent_fbin_smoke`（D14 衍生） | 2026-08-22 Codex 完成 5 個假星團的注入回收：兩個示範性質量相依雙星規則使固定比例模型的 alpha 相對控制組平均偏移 -0.12、-0.21，但範圍跨過正負值（粗網格，僅篩檢）。詳見 `docs/planning/SMOKE_MASS_DEPENDENT_BINARY_FRACTION_2026-08-22.md`。不修改 headline 模型、不重跑既有 M45 結果。 | 已完成：若要升級，先做多種子、固定整體雙星比例且更細網格的注入回收 |
+| `d12_hr23_cmd_recall_by_magnitude`（D12） | 2026-08-22 Codex 完成：保存的 HR23 高機率（P≥0.7）M45 快照在 CMD 的總重疊率為 81.9%；G=5.2–16 為 91.9–100%，G=16–18 為 79.5%，G≥18 為 0%（CMD 最暗 G=17.925）。不把 HR23 當真值、不重跑 membership/IMF。詳見 `docs/planning/M45_HR23_CMD_RECALL_BY_MAGNITUDE_2026-08-22.md`。 | 已完成；若要轉成完整度量化，需預先固定外部目錄版本、門檻、天空範圍及品質規則 |
+| `mass_dependent_fbin_matched_fast`（D14 衍生） | 2026-08-22 Codex 完成：整體 `f_bin` 固定、60 個共同種子、較細 alpha/f_bin 網格。contrast=0.15 的平均額外 alpha 偏移約 0.000（95% 區間 -0.055 到 +0.055），contrast=0.30 為 +0.042（-0.028 到 +0.111）；平均偏移低於 0.144，但單次散布仍為 0.213/0.268。詳見 `docs/planning/ASSESSMENT_MASS_DEPENDENT_FBIN_MATCHED_FAST_2026-08-22.md`。 | 已完成中成本 gate；正式七參數驗證仍值得跑，優先 contrast=0 與 0.30；不取代 `mass-dep-fbin` 分支 |
+| `d12_hr23_recall_stage_trace`（D12） | 2026-08-22 Codex 完成：HR23 P≥0.7 的 529 顆中，433 顆進 CMD、62 顆 baseline P≥0.7 但未進 CMD、34 顆不在 baseline（全為 G≥18）、0 顆因 baseline P<0.7 離開。G=16–18 的後段流失為 45/219（20.5%）。詳見 `docs/planning/M45_HR23_RECALL_STAGE_TRACE_2026-08-22.md`。只追蹤保存檔，未重跑 membership/IMF。 | 已完成定位；精確分解 62 顆的測光品質切割需原始 Gaia 表或小量欄位查詢，目前阻塞 |
+| `d12_hr23_lost_quality_fields`（D12） | 2026-08-22 Codex 完成：只查詢已定位的 62 個 Gaia DR3 source_id，依現行 step2 順序重播後，1 顆敗在 G<4、37 顆敗在 BP SNR<20、2 顆敗在 RP SNR<20、22 顆敗在 BP/RP excess 3σ；0 顆原因不明。G=16–18 的 45 顆中 35 顆首先敗在 BP SNR。詳見 `docs/planning/M45_HR23_LOST_QUALITY_REPLAY_2026-08-22.md`。 | 已完成根因分解；下一步若做門檻敏感度，只先檢查品質與回收數，不直接重跑／解讀 IMF |
+| `d12_hr23_quality_threshold_sweep`（D12） | 2026-08-22 Codex 完成：候選限定 smoking test。現行 BP20/3σ 回收 0/62；BP15/3σ 回收 16（全為 G=16–18，BP 誤差最大 0.072 mag）；BP10/3σ 回收 24；BP20/5σ 只回收 5。詳見 `docs/planning/M45_HR23_QUALITY_THRESHOLD_SWEEP_2026-08-22.md`。 | 已完成候選篩檢；若要測 BP15/3σ，必須先在完整輸入與控制場重建 selection 並通過暗端紅藍驗證，不能直接重跑／解讀 IMF |
+| `d12_bp15_colour_error_gate`（D12） | 2026-08-22 Codex 完成：BP15/3σ 找回的 16 顆 HR23 候選星，BP−RP 顏色誤差中位數 0.062 mag；現有 CMD 同為 G=16–18 的 459 顆是 0.025 mag，候選星約大 2.48 倍。詳見 `docs/planning/M45_BP15_COLOUR_ERROR_GATE_2026-08-22.md`。 | 已完成候選品質 gate；BP15 只能保留為 selection 重建候選，須先量化完整場／控制場污染並通過 G≥17 紅藍驗證，不直接重跑 IMF |
+| `d12_bp15_candidate_cmd_sides`（D12） | 2026-08-22 Codex 完成：16 顆 BP15 候選中，10 顆在同 G 局部 CMD 中位數紅側、6 顆在藍側；4 顆達局部最紅 10%、3 顆達最藍 10%，顯示兩側都有尾端，不能只驗證整體回收。詳見 `docs/planning/M45_BP15_CANDIDATE_CMD_SIDES_2026-08-22.md`。 | 已完成候選紅藍篩檢；正式 selection 重建必須預先分開檢查 G≥17 紅／藍，任一側失敗即停止，不重跑 IMF |
+| `d12_bp15_candidate_mass_location`（D12） | 2026-08-22 Codex 完成：用已保存 Step 5 的逐星 G−mass 映射近似定位，16 顆 BP15 候選全低於 0.30 M☉（中位 0.173、範圍 0.161–0.219），0 顆進入 alpha 控制的 >0.5 M☉ 段。詳見 `docs/planning/M45_BP15_CANDIDATE_MASS_LOCATION_2026-08-22.md`。 | 已完成質量段 gate；主要價值是低質量完整性／nuisance 測試，不能說對 alpha 完全無影響，仍須 selection 紅藍驗證後才做前向 smoke |
+| `d12_bp15_sample_scale`（D12） | 2026-08-22 Codex 完成：若 16 顆候選全被接受，整體 CMD 樣本增加 1.48%、<0.3 M☉ 樣本增加 4.32%、G=16–18 增加 3.49%，>0.5 M☉ alpha 段直接增加 0 顆。詳見 `docs/planning/M45_BP15_SAMPLE_SCALE_2026-08-22.md`。 | 已完成規模 gate；足以支持 selection smoke，但這是假設性上限記帳，未含新增背景污染，不能直接當完整度或 IMF 結論 |
+| `d12_bp15_selection_input_restore`（D12） | 2026-08-22 Codex 完成：新增有 TOP 20000 截斷防護的公開 ARI Gaia TAP 查詢，使用專案既有 CDS Sesame 中心取得 M45 5°、G≤18、parallax≥4 mas 的 6,956 列原始場；修正 `build_selection.py` 已移動模組的匯入路徑。詳見 `docs/planning/M45_BP15_SELECTION_INPUT_READY_2026-08-22.md`。 | 原始輸入已恢復；CSV 依 gitignore 不上傳但可重建。下一步建立獨立 BP15 smoke selection，不能覆寫正式 BP20 `data/selection.npz` |
+| `d12_bp15_selection_smoke`（D12） | 2026-08-22 Codex 完成：用修正後 6,956 列完整場建立獨立 BP15 selection；整體差 +0.0163、最差星等箱 +0.0451、G≥17 紅藍對比誤差 +0.0846，三項都通過但整體與紅藍餘裕偏小。BP15 相對現有 CMD 淨增 58 顆，現有 1,078 顆零遺失。詳見 `docs/planning/M45_BP15_SELECTION_SMOKE_2026-08-22.md`。 | 低餘裕通過，只解鎖一次 diagnostic 前向 smoke；正式 BP20 不覆寫。若參數貼邊、seed 不一致或 alpha 位移達統計誤差量級即停止 |
 | `stick_out_fraction_constraint`（D13，成本高，建議先評估） | 這個任務會牽動 `pipeline/joint_fit.py` 核心概似函數，不建議直接動手改——先寫一份成本評估（要新增什麼似然項、`f_bin` 與 alpha 的簡併目前實際有多嚴重、值不值得為了這個投入架構層級改動），放進 `docs/planning/` 討論後再決定要不要真的做 | 有一份明確的成本/效益評估文件，使用者或後續 session 能據此決定要不要排進時程 |
 
 **另外**：`WORK_BOARD.md` 前面「PDMF → IMF 第 5 步（N-body）」條目的做法設想（目前偏向「直接模擬＋等第 2 步結果再定初始條件」）建議加入 **Hobart et al. 2026 的模擬器路線**當優先評估的候選方案——用中等規模的 N-body 模擬網格（不需要到他們的 550–942 次，先抓幾十到百來次評估可行性）訓練一個機器學習模擬器（Python 生態可用 `scikit-learn` 的 `GaussianProcessRegressor`，或找 `AUTOEMULATE`（Stoffel et al. 2025）本身是否能裝），再用既有的 `emcee` 或改用 HMC 套件（如 `numpyro`）抽初始條件的後驗分布，取代暴力網格搜尋（他們自己算過暴力法對這個維度的參數空間要一個世紀）。這個做法概念上適合我們的算力限制（單台 ARM64 8 核桌機），但實際可行性（訓練資料要多少組模擬才夠、模擬器預測誤差多大）還沒驗證過，先當第 5 步「正式跑」設想中優先評估的候選方案，不是已確定要採用的定論，也不是另開新工作項，是補充第 5 步原本「正式模擬」規劃的一個選項。
@@ -300,4 +411,12 @@ PR #11 合併後要回頭重新核對 D8、重跑一次驗證確認數值結果�
 | 2026-08-17/18 | Claude session（新機器，Acer AI 16，x64） | 大量收尾工作：`radial_r2/r3/rall` 發現已被另一 session 搶先做完（PR #60），headline 剩 5 次重複、`p6b_inject_lowmass_v2`、`verify_bprperr_v2` 重新派 Kaggle 工，PR #54/#55 重新套用避免衝突 | **多項進行中，見下方分述** | 分支 `claude/repeat-offset-reapply`（PR #62）、`claude/pr54-reapply`（PR #63）、`kaggle_queue.txt`、`logs/queue_done.txt`（本機，不進版控） | 使用者提供 6 組 Kaggle 帳號憑證（寫入本機 `kaggle_accounts.json`，gitignored，已用輕量 API 呼叫驗證有效），要求「繼續跑 Kaggle 跟 work board 剩下工作」。**過程中發現本機 `run_queue.py` 背景行程在機器重開機（Windows 更新，非人為操作）後被砍掉、閒置近 16 小時沒人發現**，重啟後緊接著 `git pull` 才發現 `radial_r2/r3/rall` 已經被另一個 session（PR #60）做完並合併，本機那份重算的 `radial_r2`（285 分鐘跑出來的）確認作廢，`taskkill` 停掉還在跑的 `radial_r3` 避免繼續白算。**PR #55（`--repeat-offset`）核實後發現其實沒合併**（先前 WebFetch 查到的「已合併」是錯的），且分支基於舊版 main、直接合併會蓋掉 main 後來加的續傳/鎖檔/manifest 驗證功能——改成只把核心種子偏移邏輯重新套用到目前 main（`fit_real.py`），同時比照加了 `inject_lowmass.py` 的 `--trial-offset`（解決 `p6b_inject_lowmass_v2` 一直因為 3 個 trial 加起來超過 Kaggle 12 小時上限而失敗的根因），開 PR #62。**PR #54 同樣核實後是「dirty」無法直接合併**（基於更舊的 main），只把其中真正完成的部分（D5 `p6b4_boundary_retest` 補測結果、C5 `--dav-distribution` 截尾指數消光分布的能力＋煙霧測試）重新套用到目前 main，其餘（散落腳本搬移、`run_queue.py` 314 行改動等）main 上已經有更新版本不需要。更新 `kaggle_queue.txt`：移除已定案的 `p9a_redo_v2`／`p9c_redo_v2`，加 headline 剩餘 5 次重複（`--repeat-offset 5,6,7,8,9`）、`p6b_inject_lowmass_v2` 拆 3 個 `--trial-offset`、`verify_bprperr_off_v2`／`on_v2`，用 `kaggle_queue.py` 派工。本機 `run_queue.py` 也重啟，接手 `p6_lowmass_v2`→`p11_outlierfrac_v2`→`p2_final2_v3`（本機完整 10 次重複版本，跟 Kaggle 拆分版本並行，互不衝突）。**踩到一個坑值得記下來**：Kaggle 派工背景執行時切換 git 分支，`kaggle_sync.py` 會打包到當下工作目錄的檔案版本——`p6b` 的 `t0`／`t1` 因此打包到還沒有 `--trial-offset` 的舊版 `inject_lowmass.py`，Kaggle 端 argparse 直接報錯（3.9 分鐘就結束，不是真的算完），已加重試項目並修好，往後派工進行中不要切分支 |
 | 2026-08-18 | Claude session（新機器，Acer AI 16，x64） | `bhac15_isochrone_test`（C1、D1，接續上一行，**外部服務恢復、網格建置完成**） | **網格已備妥並驗證；`fit_real.py` 實際比較還沒跑** | 新增 `pipeline/bhac.py`、`scripts/data_prep/build_bhac_grid.py`；`pipeline/net.py` 通用化支援多組憑證鏈（原本寫死只給 PARSEC 用，加 `chain_name` 參數）；`LIMITATIONS.md`（C1／D1 更新） | 重試連線發現伺服器恢復（不再逾時），但卡在跟 PARSEC 當初一樣的憑證鏈缺失問題（`CERTIFICATE_VERIFY_FAILED`），比照 `setup/setup_ca.ps1` 抓 `perso.ens-lyon.fr` 的憑證鏈解決。下載到 `BHAC15_iso.GAIA`（178KB，Gaia 濾光片版本，30 個年齡格點 0.5 Myr–10 Gyr、單一太陽金屬量），寫轉檔程式時踩到一個一次性 bug：檔案裡的標頭行前面帶一個空格，`re.match()` 從位置 0 比對漏配，改成先 `lstrip()` 才解決。轉出 `bhac15_gaia_logt7.6-8.4.dat`（170 列、6 個年齡格點落在 M45 相關範圍），用 `pipeline.isochrones.load_grid()`／`isochrone_at()` 驗證讀取正常。**確認質量範圍只到 0.015–1.4 M_sun**，不蓋過 M45 擬合上限 2.50 M_sun，且只有太陽金屬量一組，MH 維度形同鎖死——這些限制已誠實記在 D1，不是驗證了全範圍。**還沒做的部分**：真正跑一次 `fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat` 跟 P3（`build_dr2_grid.py`）同樣的濾光片/模型效應分解比較，這步需要 `fit_real.py` 等級的計算量，本機當時兩條佇列（`run_queue.py`／`kaggle_queue.py`）都在跑，沒有排進去，留給下一個人接手 |
 | 2026-08-20 | Codex | PR #11 多星團控制場／選擇函數續跑（D8） | **完成本輪** | `prepare_cluster_tier2.py`、`cluster_forward_validation.py`、`data/cluster_*_control_field.csv`、分支 `codex/ngc3532-praesepe-generalization` | 使用 ARI Gaia DR3 鏡像補齊控制場；NGC 3532 在 G>=17 紅藍驗證失敗，未跑前向；Praesepe 三項選擇函數檢查通過，但 smoke test 的 2/2 個 B 擬合 f_bin=1 貼邊，安全標為 diagnostic_only、沒有報 IMF。 |
+| 2026-08-20 | Codex | stick_out_fraction_constraint（D13）：聯星比例第二制約的成本／效益評估 | 進行中 | 分支 codex/stickout-fbin-assessment；將新增 docs/planning 評估文件 | 接續 Praesepe 前向 smoke test 的 f_bin=1 貼邊現象。只評估凸出星比例如何成為獨立似然項、目前簡併的診斷方式與實作成本；不直接改 pipeline/joint_fit.py，也不重跑既有 IMF。 |
+| 2026-08-20 | Codex | stick_out_fraction_constraint（D13）：完成聯星比例第二制約的成本／效益診斷 | **完成：保留為模型檢查，不直接改似然** | `scripts/diagnostics/assess_stickout_fraction.py`、`results/stickout_fraction_assessment_p2final_v3.json`、`docs/planning/ASSESSMENT_CMD_STICKOUT_FBIN_2026-08-20.md`，分支 `codex/stickout-fbin-assessment` | 讀取 M45 headline 已完成的 10 次重複，不重跑 IMF。真實凸出比例 5.78% 落在模型 5.80%–7.04% 內，故目前模型沒有明顯矛盾；但此摘要與 Hess 似然來自同一張 CMD，不能當獨立 binomial likelihood 硬加，否則會重複計數。若要升格，先做注入回收，並改成排他區域或校正的聯合似然。 |
+| 2026-08-20 | Codex | crosscal_massrange_table（多星團校驗軸 A）：Pang+2024／本專案／Hobart+2026 的 M45 質量函數口徑對照 | 進行中 | 分支 `codex/stickout-fbin-assessment`；將新增可查證文獻對照表 | D13 完成後接續的低算力工作。優先從原始或正式出版來源核對 Pang+2024 的質量範圍、MF 定義、雙星處理、估計器與完整度；未知資料明確標未知，不把初步的「大幅收斂」當定論。 |
+| 2026-08-20 | Codex | crosscal_massrange_table（多星團校驗軸 A）：完成 Pang+2024／本專案／Hobart+2026 的 M45 質量函數口徑核對 | **完成：Pang 質量範圍由未知改為已查證** | `docs/planning/CROSSCAL_M45_PANG_HOBART_2026-08-20.md`、`scripts/diagnostics/check_massrange_crosscal.py`，分支 `codex/stickout-fbin-assessment` | 原始公開 PDF 的 Table 1／註解／Figure 3／方法節確認：Pang M45 是 PDMF、0.28–2.00 M☉、未分箱最大似然+MCMC、以三個 q 分布做聯星校正後採 uniform-q。Hobart PDMF 切到同範圍為 1.952，Pang 為 2.010±0.090；僅能說質量範圍已對齊、中心相近，不能忽略兩者聯星校正不同。 |
+| 2026-08-20 | Codex | hyades_literature_check（多星團校驗軸 B）：先查 Hyades 文獻再決定是否排進 pipeline | 進行中 | 分支 `codex/stickout-fbin-assessment`；將新增文獻篩選報告 | 接續已完成 Pang 口徑核對的低算力工作。只從原始／正式來源核對年齡定年、金屬量、既有 MF 口徑與近距離的大角尺度風險；不直接執行 pipeline，也不把文獻數字寫成本專案結果。 |
+| 2026-08-20 | Codex | hyades_literature_check（多星團校驗軸 B）：完成文獻篩選與執行決策 | **完成：保留候選，但暫不直接執行** | `docs/planning/HYADES_LITERATURE_SCREEN_2026-08-20.md`，分支 `codex/stickout-fbin-assessment` | 已用原始／正式來源核對 LDB 年齡、光譜金屬量、既有 mass function/聯星研究與 Gaia 空間尺度。Hyades 可增加老年齡、金屬富有的對照點，但現有 5°設定只涵蓋約 4.1 pc，遠小於約 10 pc潮汐尺度；先做 5°／12°／20° 成員與選擇函數 smoke test，通過後才排傳統法。 |
+| 2026-08-22 | Codex | M45 BP15 前向模型成對 smoke：建立隔離輸入並檢查 alpha 是否穩定 | **探索完成；正式比較待排程** | `docs/planning/M45_BP15_FORWARD_SMOKE_2026-08-22.md`、`results/bp15_forward_smoke_summary.json` | 三個 3k paired seeds 的 alpha 差仍不穩定，不能下 BP15 科學結論。下一任務應拆到獨立節點，以 40k、至少 5 paired seeds 跑 BP20/BP15；不可把兩邊非配對平均當效果。 |
+| 2026-08-23 | Codex | BP15/BP20 正式成對前向比較派工前置檢查 | **完成；等待 Kaggle 登入／帳號分配** | `scripts/diagnostics/prepare_bp15_paired_dispatch.py`、`scripts/diagnostics/summarize_bp15_formal_paired.py`、`results/bp15_formal_paired_dispatch.json`、`docs/planning/M45_BP15_FORMAL_PAIRED_DISPATCH_2026-08-23.md` | 已驗證 BP15 三個隔離輸入存在，生成 offsets 0–4 的 10 個唯一 job tag，明定逐 offset paired 分析與驗收規則；另實際建立 82.2 MB 暫存 Kaggle payload，確認自訂輸入可被 kernel 根目錄讀取。新彙整器 fail-closed：缺任何配對就拒算平均。本機缺 `kaggle_accounts.json`／access token，未送出雲端長跑，也未把派工表誤寫成結果。 |
 | 2026-08-21 | Claude session（本機） | `mass_dependent_fbin`（D14 衍生） | 進行中（腳本已寫好並排進本機佇列，等結果） | `inject_massdep_fbin.py`（新檔）、`queue.txt`，分支 `mass-dep-fbin`（PR #86） | 依本文件規則改成「保留原任務列、在尾端新增狀態列」，不再直接改寫既有列（2026-08-21 CodeRabbit review）。腳本已依 review 修正四處：分片檔名帶 `--trial-offset`（否則各分片互相覆寫）、保存 trial id 並只對兩邊都成功的試驗配對相減、不完整批次不下結論且以非零碼結束（避免被佇列記成 ok）、結論只在淨偏移真的小於統計誤差 0.144 時才印 |

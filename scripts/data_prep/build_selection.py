@@ -23,7 +23,7 @@ sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod          # noqa: E402
 from pipeline import selection as selmod       # noqa: E402
-from selection_probe import load, G_BRIGHT     # noqa: E402
+from scripts.diagnostics.selection_probe import load, G_BRIGHT  # noqa: E402
 
 
 def load_all_field():

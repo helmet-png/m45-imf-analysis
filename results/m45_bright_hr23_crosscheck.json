@@ -1,0 +1,176 @@
+{
+  "hr23_snapshot": "data/hr23_Melotte_22.csv",
+  "bright_input": "results/m45_hipparcos_gaia_bright_crosscheck_2026-08-20.csv",
+  "rows": [
+    {
+      "hip": "16664",
+      "gaia_source_id": "68486384567412992",
+      "gaia_g": "6.667793",
+      "pipeline_probability": "0.0000",
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": "not_in_snapshot_is_not_nonmember"
+    },
+    {
+      "hip": "17309",
+      "gaia_source_id": "57111696260204800",
+      "gaia_g": "5.656581",
+      "pipeline_probability": "0.0000",
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": "not_in_snapshot_is_not_nonmember"
+    },
+    {
+      "hip": "17489",
+      "gaia_source_id": "65287458566524928",
+      "gaia_g": "5.441325",
+      "pipeline_probability": "1.0000",
+      "in_cmd_members": true,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.98879232163637,
+      "guardrail": ""
+    },
+    {
+      "hip": "17499",
+      "gaia_source_id": "65271996684817280",
+      "gaia_g": "3.698209",
+      "pipeline_probability": "0.6371",
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.337524363629664,
+      "guardrail": ""
+    },
+    {
+      "hip": "17527",
+      "gaia_source_id": "69812945346809600",
+      "gaia_g": "5.640408",
+      "pipeline_probability": "0.9999",
+      "in_cmd_members": true,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.719525509337474,
+      "guardrail": ""
+    },
+    {
+      "hip": "17531",
+      "gaia_source_id": null,
+      "gaia_g": null,
+      "pipeline_probability": null,
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": ""
+    },
+    {
+      "hip": "17573",
+      "gaia_source_id": "65283232316451328",
+      "gaia_g": "3.863349",
+      "pipeline_probability": "0.9999",
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.748793602143097,
+      "guardrail": ""
+    },
+    {
+      "hip": "17579",
+      "gaia_source_id": "66798496781121792",
+      "gaia_g": "5.752026",
+      "pipeline_probability": "1.0000",
+      "in_cmd_members": true,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.834278211698342,
+      "guardrail": ""
+    },
+    {
+      "hip": "17608",
+      "gaia_source_id": null,
+      "gaia_g": null,
+      "pipeline_probability": null,
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": ""
+    },
+    {
+      "hip": "17702",
+      "gaia_source_id": "66714384142368256",
+      "gaia_g": "2.896132",
+      "pipeline_probability": null,
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": "not_in_snapshot_is_not_nonmember"
+    },
+    {
+      "hip": "17776",
+      "gaia_source_id": "64940906245415808",
+      "gaia_g": "5.428299",
+      "pipeline_probability": "0.9999",
+      "in_cmd_members": true,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.732001147085209,
+      "guardrail": ""
+    },
+    {
+      "hip": "17847",
+      "gaia_source_id": "66526127137440128",
+      "gaia_g": "3.615795",
+      "pipeline_probability": "0.8397",
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.383635308495666,
+      "guardrail": ""
+    },
+    {
+      "hip": "17851",
+      "gaia_source_id": "66529975427235712",
+      "gaia_g": "5.203287",
+      "pipeline_probability": "0.9999",
+      "in_cmd_members": true,
+      "hr23_in_saved_snapshot": true,
+      "hr23_probability": 0.380279737372266,
+      "guardrail": ""
+    },
+    {
+      "hip": "17954",
+      "gaia_source_id": null,
+      "gaia_g": null,
+      "pipeline_probability": null,
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": ""
+    },
+    {
+      "hip": "18471",
+      "gaia_source_id": "65319619282119808",
+      "gaia_g": "5.531594",
+      "pipeline_probability": "0.0000",
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": "not_in_snapshot_is_not_nonmember"
+    },
+    {
+      "hip": "19009",
+      "gaia_source_id": "66010696701152384",
+      "gaia_g": "5.107828",
+      "pipeline_probability": null,
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": "not_in_snapshot_is_not_nonmember"
+    },
+    {
+      "hip": "19038",
+      "gaia_source_id": null,
+      "gaia_g": null,
+      "pipeline_probability": null,
+      "in_cmd_members": false,
+      "hr23_in_saved_snapshot": false,
+      "hr23_probability": null,
+      "guardrail": ""
+    }
+  ]
+}

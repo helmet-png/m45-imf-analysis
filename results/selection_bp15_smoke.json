@@ -1,0 +1,150 @@
+{
+  "status": "selection_smoke_pass_low_margin",
+  "thresholds": {
+    "g": 50.0,
+    "bp": 15.0,
+    "rp": 20.0
+  },
+  "quality_cut_overrides": {
+    "g_bright_limit": 4.0,
+    "bp_rp_excess_sigma": 3.0
+  },
+  "raw_field_rows": 6956,
+  "p_ge_0p7_and_g_ge_4_rows": 1295,
+  "observed_bp15_quality_pass": 1136,
+  "isolated_forward_inputs": {
+    "members": "results/cmd_members_bp15_smoke.csv",
+    "errmodel": "results/errmodel_bp15_smoke.npz",
+    "selection": "results/selection_bp15_smoke.npz"
+  },
+  "source_id_accounting_vs_current_cmd": {
+    "overlap": 1078,
+    "bp15_only": 58,
+    "current_cmd_only": 0,
+    "net_change": 58
+  },
+  "monte_carlo_repeats": 2000,
+  "overall": {
+    "n": 1276,
+    "observed": 0.890282131661442,
+    "predicted": 0.906590909090909,
+    "difference": 0.016308777429467014
+  },
+  "magnitude_bins": [
+    {
+      "n": 29,
+      "observed": 0.9310344827586207,
+      "predicted": 0.9426896551724139,
+      "difference": 0.011655172413793213,
+      "g_lo": 8.0,
+      "g_hi": 9.0
+    },
+    {
+      "n": 44,
+      "observed": 0.9090909090909091,
+      "predicted": 0.9340681818181821,
+      "difference": 0.024977272727273014,
+      "g_lo": 9.0,
+      "g_hi": 10.0
+    },
+    {
+      "n": 54,
+      "observed": 0.9629629629629629,
+      "predicted": 0.9560370370370372,
+      "difference": -0.006925925925925669,
+      "g_lo": 10.0,
+      "g_hi": 11.0
+    },
+    {
+      "n": 67,
+      "observed": 0.9402985074626866,
+      "predicted": 0.9436791044776119,
+      "difference": 0.003380597014925324,
+      "g_lo": 11.0,
+      "g_hi": 12.0
+    },
+    {
+      "n": 68,
+      "observed": 0.9411764705882353,
+      "predicted": 0.9325073529411765,
+      "difference": -0.0086691176470588,
+      "g_lo": 12.0,
+      "g_hi": 13.0
+    },
+    {
+      "n": 101,
+      "observed": 0.8613861386138614,
+      "predicted": 0.8748168316831682,
+      "difference": 0.013430693069306776,
+      "g_lo": 13.0,
+      "g_hi": 14.0
+    },
+    {
+      "n": 96,
+      "observed": 0.8541666666666666,
+      "predicted": 0.8722708333333333,
+      "difference": 0.0181041666666667,
+      "g_lo": 14.0,
+      "g_hi": 15.0
+    },
+    {
+      "n": 188,
+      "observed": 0.898936170212766,
+      "predicted": 0.913372340425532,
+      "difference": 0.014436170212765997,
+      "g_lo": 15.0,
+      "g_hi": 16.0
+    },
+    {
+      "n": 316,
+      "observed": 0.9208860759493671,
+      "predicted": 0.9269794303797466,
+      "difference": 0.006093354430379505,
+      "g_lo": 16.0,
+      "g_hi": 17.0
+    },
+    {
+      "n": 278,
+      "observed": 0.8129496402877698,
+      "predicted": 0.8580377697841726,
+      "difference": 0.04508812949640273,
+      "g_lo": 17.0,
+      "g_hi": 18.0
+    }
+  ],
+  "worst_magnitude_bin_abs_difference": 0.04508812949640273,
+  "faint_g_ge_17": {
+    "colour_split_median": 3.2496244999999995,
+    "red": {
+      "n": 139,
+      "observed": 0.7050359712230215,
+      "predicted": 0.7924460431654676,
+      "difference": 0.0874100719424461
+    },
+    "blue": {
+      "n": 139,
+      "observed": 0.920863309352518,
+      "predicted": 0.9236294964028777,
+      "difference": 0.002766187050359692
+    },
+    "observed_red_minus_blue": -0.2158273381294965,
+    "predicted_red_minus_blue": -0.1311834532374101,
+    "contrast_error": 0.08464388489208641
+  },
+  "gates": {
+    "overall_abs_difference_lt_0p02": true,
+    "all_magnitude_bins_abs_difference_lt_0p08": true,
+    "faint_red_blue_contrast_error_abs_lt_0p10": true
+  },
+  "gate_margins": {
+    "overall_to_limit": 0.0036912225705329864,
+    "worst_magnitude_bin_to_limit": 0.03491187050359727,
+    "faint_red_blue_contrast_to_limit": 0.015356115107913598
+  },
+  "limits": [
+    "This is an isolated selection-function smoking test, not a new official selection.",
+    "The saved baseline membership probabilities are reused; membership is not rerun.",
+    "Passing does not establish background contamination after membership selection.",
+    "No forward model or IMF was rerun."
+  ]
+}

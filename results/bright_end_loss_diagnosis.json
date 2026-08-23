@@ -1,0 +1,71 @@
+{
+  "purpose": "Read-only trace of selected bright stars through saved checkpoints",
+  "inputs": {
+    "baseline": "results\\baseline.dat",
+    "cmd_members": "data\\cmd_members.csv"
+  },
+  "raw_gaia_table_available": false,
+  "bright_interval_baseline_rows": [
+    {
+      "source_id": 53164002842376832,
+      "gmag": 4.065172,
+      "parallax_mas": 17.619441960173923,
+      "membership_probability": 0.0,
+      "ruwe": 2.4463112
+    },
+    {
+      "source_id": 65205373152172032,
+      "gmag": 4.172742,
+      "parallax_mas": 7.067028703633884,
+      "membership_probability": 0.0017,
+      "ruwe": 2.3298006
+    },
+    {
+      "source_id": 66529975427235712,
+      "gmag": 5.203287,
+      "parallax_mas": 7.241378315608465,
+      "membership_probability": 0.9999,
+      "ruwe": 1.3034941
+    },
+    {
+      "source_id": 65296907494549120,
+      "gmag": 4.2610216,
+      "parallax_mas": 9.544445082693732,
+      "membership_probability": 0.0,
+      "ruwe": 2.3145595
+    }
+  ],
+  "traced_sources": [
+    {
+      "source_id": 65205373152172032,
+      "in_baseline": true,
+      "gmag_baseline": 4.172742,
+      "parallax_mas_baseline": 7.067028703633884,
+      "pmra_masyr_baseline": 13.075219935615861,
+      "pmdec_masyr_baseline": -48.403789627642766,
+      "ruwe_baseline": 2.3298006,
+      "membership_probability": 0.0017,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": false,
+      "in_cmd_members": false,
+      "stage": "membership_threshold",
+      "step2_quality_status": "not_evaluable_not_passed_to_step2"
+    },
+    {
+      "source_id": 66529975427235712,
+      "in_baseline": true,
+      "gmag_baseline": 5.203287,
+      "parallax_mas_baseline": 7.241378315608465,
+      "pmra_masyr_baseline": 19.49605376673818,
+      "pmdec_masyr_baseline": -47.64989929604236,
+      "ruwe_baseline": 1.3034941,
+      "membership_probability": 0.9999,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": true,
+      "stage": "retained",
+      "step2_quality_status": "retained"
+    }
+  ],
+  "interpretation_guardrail": "A source below P=0.7 is excluded before step 2.  Without the raw Gaia table, this diagnostic cannot test its hypothetical step-2 photometry status."
+}
