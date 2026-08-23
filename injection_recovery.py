@@ -240,6 +240,79 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
         extras = [extra_axis]          # 單一陣列：維持舊呼叫端的行為
     cur = list(axes) + extras
     bounds = [(a.min(), a.max()) for a in cur]
+    # 2026-08-23：跟 model.bounds（真正生效的先驗）取交集，理由見
+    # LIMITATIONS.md 新增條目——搜尋軸的名目邊界有時刻意開得比先驗寬
+    # （例如這支模組自己的 COARSE 常數，A_V 軸開到 1.0，但
+    # config.toml [joint_fit] av_max 當時沒有跟著從 0.6 放寬，logage
+    # 軸開到 8.40、av_max 仍是 8.30），此時任何超出先驗的格點在
+    # log_prior() 都會被直接判 -inf、永遠選不到，真正的「牆」是先驗
+    # 邊界，不是搜尋軸本身的邊界。check_walls()／report() 都直接沿用
+    # 這裡回傳的 bounds 判斷貼牆，若不取交集，會在先驗邊界被貼住時
+    # 誤判成「還沒到牆」，讓角落解悄悄當成收斂解通過——這正是
+    # CONTRIBUTING.md 第六節第 2 條「先驗、搜尋軸、網格涵蓋三層邊界
+    # 必須一致」在貼牆偵測這裡的變體。只會讓 bounds 變緊不會變寬，
+    # 所以只要現有結果從未真的貼到先驗牆（headline 與 radial 系列的
+    # A_V 都遠低於 0.6，查證過程見 LIMITATIONS.md），這個改動對它們的
+    # 數值結果逐位元不變，只有貼牆偵測本身變準。`axes` 一律是模型的前
+    # N 個核心參數、`extra_axis` 一律接在後面（呼叫端與 JointModel 的
+    # bounds 都遵守同一個「六參數在前，dav／低質量段冪次視情況接在
+    # 第七維」的固定順序——見 JointModel.enable_dav_fit()／
+    # enable_lowmass_fit() 都是 vstack 到 self.bounds 尾端），所以就算
+    # `model.bounds` 跟 `cur` 維度數不一致（例如這次呼叫沒開 dav，
+    # model.bounds 只有 6 維，但 bounds 因為 extra_axis 有 7 維），
+    # 前面對得上的那幾維位置對應仍然成立，只有多出來的尾端維度沒有
+    # 對應的先驗可以收緊——那幾維維持原本的搜尋軸邊界，不是整批放棄
+    # 交集（2026-08-23 CodeRabbit review：原本長度不符就整批跳過，
+    # 會讓明明對得上的前幾維也白白錯過收緊機會）。
+    model_bounds = getattr(model, "bounds", None)
+    if model_bounds is not None:
+        n = min(len(model_bounds), len(bounds))
+        # strict=True（2026-08-23 CodeRabbit review nitpick）：bounds[:n]
+        # 跟 model_bounds[:n] 已經用同一個 n 切過，長度理論上一定相等，
+        # 這裡只是讓「萬一以後邏輯改動導致兩者長度分歧」當場報錯，不要
+        # 讓 zip() 預設的截斷行為悄悄吃掉多出來的那幾維。
+        merged = [(max(lo, float(mlo)), min(hi, float(mhi)))
+                  for (lo, hi), (mlo, mhi) in zip(bounds[:n], model_bounds[:n],
+                                                   strict=True)]
+        # 2026-08-23 CodeRabbit review：搜尋軸跟先驗如果根本沒有重疊
+        # （例如網格開錯範圍、或先驗事後改過沒同步更新網格常數），
+        # 交集會是空的（lo > hi），後面的貼牆判斷會拿一個下界大於
+        # 上界的無效區間去算容忍帶，安靜地算出沒有意義的數字。
+        # 這種情況不該悄悄放行——立刻中止並點名是哪一維，讓人去確認
+        # 網格常數跟 config.toml 先驗是不是真的對不上。
+        #
+        # **2026-08-23 CodeRabbit review 第二輪追加**：上面那個檢查只擋
+        # 得住「連續區間本身反了」，擋不住「連續區間有效、但離散網格軸
+        # 剛好一個格點都沒落在裡面」——例如網格步距 0.2、真正先驗恰好
+        # 卡在 (0.61, 0.65) 這種比一個格距還窄的範圍，merged 的 (lo,hi)
+        # 是合法區間（lo<hi）不會觸發上面的檢查，但 log_prior() 會讓
+        # 這個維度上每一個實際格點都判 -inf，grid_best_parallel() 在
+        # 這一維上等於在搜尋一個永遠選不到合法解的空間——這不是貼牆，
+        # 是網格解析度細不過先驗寬度，同樣要當場中止，不能讓後面的
+        # 搜尋悄悄跑完再回傳一個被 -inf 決定的無意義最佳點。
+        for i, (lo, hi) in enumerate(merged):
+            if lo > hi:
+                nm = names[i] if names and i < len(names) else f"dim{i}"
+                raise ValueError(
+                    f"搜尋軸跟先驗的交集是空的（{nm}：搜尋軸 "
+                    f"{bounds[i]}，先驗 {tuple(model_bounds[i])}，交集 "
+                    f"({lo:.4g}, {hi:.4g}) 下界大於上界）——網格常數跟 "
+                    f"model 的先驗完全對不上，不是單純貼牆，先去確認"
+                    f"這兩邊的範圍設定。")
+            axis = np.asarray(cur[i])
+            n_in = int(((axis >= lo) & (axis <= hi)).sum())
+            if n_in == 0:
+                nm = names[i] if names and i < len(names) else f"dim{i}"
+                raise ValueError(
+                    f"搜尋軸跟先驗的交集是有效區間，但這一維的網格格點"
+                    f"沒有任何一個落在裡面（{nm}：交集 ({lo:.4g}, "
+                    f"{hi:.4g})，搜尋軸 {axis.size} 個格點、步距約 "
+                    f"{(axis.max() - axis.min()) / max(axis.size - 1, 1):.4g}，"
+                    f"全部落在交集之外）——這一維的網格解析度比先驗寬度"
+                    f"還粗，這一維的每個格點在 log_prior() 都會判 -inf，"
+                    f"grid_best_parallel() 在這一維上選不到任何合法解，"
+                    f"不是貼牆，先去確認網格步距或先驗範圍是不是設錯了。")
+        bounds = merged + bounds[n:]
     best, lp = grid_best_parallel(model, cur, n_proc)
     for r in refines:
         nxt = []

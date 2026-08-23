@@ -18,6 +18,8 @@ GSP-Spec 則用 RVS 高解析度光譜，金屬量更可靠但只有亮星才有
 """
 from __future__ import annotations
 
+import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -25,10 +27,47 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, r"C:\Users\Alber\Claude\gaia-export")
 
 from pipeline.table_compat import Table  # noqa: E402
-import server  # noqa: E402
+
+
+def _load_server():
+    """找到 gaia-export 姊妹專案並匯入它的 server.py，回傳該模組。
+
+    跟 `fetch_gaia.py`／`gaia_radial_velocity.py`／`prep.py` 的
+    `_load_server()` 同一套邏輯：只認環境變數 `GAIA_EXPORT_PATH` 與跟本
+    repo 同層的候選目錄，不 fallback 到任何機器特定的寫死路徑——這支腳本
+    原本寫死 `C:\\Users\\Alber\\Claude\\gaia-export`，換一台機器就會
+    找不到（或更糟：如果那個路徑剛好存在但是別的、過期的 checkout，會被
+    靜默接受，跑出錯的結果卻不報錯）。2026-08-13 CodeRabbit review 已在
+    `gaia_radial_velocity.py`／`fetch_gaia.py`／`prep.py` 修過同一個問題，
+    這支腳本當時漏改，補上跟其他 `scripts/data_prep/` 腳本一致的可攜寫法。
+    """
+    candidates = [os.environ.get("GAIA_EXPORT_PATH")] + [
+        HERE.parent / name for name in ("gaia-dr3-export", "gaia-export")
+    ]
+    for c in candidates:
+        if not c:
+            continue
+        c = Path(c)
+        server_py = c / "server.py"
+        if c.is_dir() and server_py.is_file():
+            sys.path.insert(0, str(c))
+            import server
+            if Path(server.__file__).resolve() != server_py.resolve():
+                spec = importlib.util.spec_from_file_location("server", server_py)
+                server = importlib.util.module_from_spec(spec)
+                sys.modules["server"] = server
+                spec.loader.exec_module(server)
+            return server
+    raise FileNotFoundError(
+        "找不到 gaia-export 專案（含 server.py 的目錄）。"
+        "設定環境變數 GAIA_EXPORT_PATH 指向它，或把它 clone 到跟本 repo 同一層"
+        "（github.com/helmet-png/gaia-dr3-export）。"
+    )
+
+
+server = _load_server()
 
 COLS = [
     "source_id",
