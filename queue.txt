@@ -383,7 +383,18 @@ massdep_fbin|inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines
 #     信任沿用，改成中止並要求人明確決定
 #   - preflight.py --gate c（PR #96）：沒有 manifest 時照樣判定量化簽章，
 #     不再因為「資訊不足」而跳過最強的那道檢查
-p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+#
+# **2026-08-23 停用（PR #87 review）**：這一行跟上面「p6_lowmass_v3」
+# （2026-08-21 那個區塊）是同一支指令、逐字元相同，兩邊各自獨立把
+# p6_lowmass_v2 換了新 label 想搬到佇列尾端，合併時沒發現對方也做了
+# 同一件事，結果變成兩個不同 label 排隊做同一份 11.7 天的計算——不只
+# 白算一次：查過 profile_lowmass.py 的 out_path（`results/profile_lowmass
+# {args.tag}.npz`），兩邊都沒帶 --tag，**確定**會搶著讀寫同一份
+# results/profile_lowmass.npz、同一個 checkpoint（checkpoint.py 是照
+# out_path 鍵入，不是照 run_queue.py 的 label），先跑完的那份會被
+# 另一個當成續傳基準或直接覆寫。保留 p6_lowmass_v3（上面），這裡停用，
+# 不刪除是留下「兩邊都做過同一件事」這個沿革。
+# p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
 # D2 敏感度掃描（WORK_BOARD.md「B/C/D 類補齊」表）：membership_threshold
 # 這一項先前卡在缺原始 Gaia 查詢 CSV（fetch_gaia.py 的 COUNT(*) 在伺服端
