@@ -419,8 +419,22 @@ def pull(worker_name: str, label: str) -> bool:
         f"cd {q_dir} && test -f {shlex.quote(marker)} && "
         f"find results -type f -newer {shlex.quote(marker)} "
         f"! -name '.start_*'")
-    r = ssh_workers.remote_run(w, find_cmd, timeout=30)
-    if r.returncode != 0 or not r.stdout.strip():
+    # 2026-08-23 CodeRabbit review 第三輪：查詢本身失敗（逾時／連線斷）
+    # 跟「查詢成功但沒有新檔案」是兩回事，先前兩者都直接回傳初始值
+    # ok=True，cloud_queue.py 會把「根本沒查到」誤判成「查了、確定沒
+    # 新結果」而寫進 done-log，之後不會再重試下載，結果可能就這樣
+    # 遺失。只有查詢真的成功且沒有新檔案，才算「查了、確定沒有」。
+    try:
+        r = ssh_workers.remote_run(w, find_cmd, timeout=30)
+    except subprocess.TimeoutExpired:
+        print(f"  查詢 {label} 的 results/ 逾時，保留工作供下一輪重試",
+              flush=True)
+        return False
+    if r.returncode != 0:
+        print(f"  查詢 {label} 的 results/ 失敗：{r.stderr.strip()[:200]}",
+              flush=True)
+        return False
+    if not r.stdout.strip():
         print(f"  {label} 目前沒有新的 results/ 檔案可抓（標記檔遺失或"
              f"工作還沒寫出東西），略過", flush=True)
         return ok

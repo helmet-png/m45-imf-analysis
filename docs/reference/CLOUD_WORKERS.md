@@ -122,11 +122,15 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 的 `--minimal`（控制要不要把 `pipeline/`／`data/`／`isochrones/` 一起
 打包上傳到 kernel）是不同機制：SSH worker 是持久機器，`push` 已經把
 整個 repo 跟靜態資料同步過一次，不需要另外的「精簡打包」選項。如果
-之後要指定的腳本本身支援類似 `--minimal` 的自訂旗標，透過
-`--args "--minimal"` 傳給它，例如
-`python ssh_sync.py run --worker gcp1 --script some_script.py --args "--minimal" --label smoketest`——
-`--minimal` 是要傳給 `--script` 指定的那支腳本的參數，不是
-`ssh_sync.py run` 自己的參數。）
+之後要指定的腳本本身支援類似 `--minimal` 的自訂旗標，**要用
+`--args=值` 的等號寫法**，例如
+`python ssh_sync.py run --worker gcp1 --script some_script.py --args=--minimal --label smoketest`
+——`--minimal` 是要傳給 `--script` 指定的那支腳本的參數，不是
+`ssh_sync.py run` 自己的參數。（2026-08-23 訂正：原本寫
+`--args "--minimal"`（空白分隔）看起來合理，但實測會被 argparse
+誤判成獨立的 `--minimal` 選項而報錯「expected one argument」——
+因為值本身也是 `--` 開頭，argparse 分不清它是 `--args` 的值還是
+下一個選項，只有 `--args=值` 這種等號寫法才能明確綁定。）
 
 確認整輪跑得通之後，才把工作排進 `cloud_queue.txt`、跑
 `python cloud_queue.py` 正式派工。
