@@ -31,6 +31,20 @@
 建好後記下**公開 IP**與**登入帳號**（GCP 通常是你 Google 帳號本地化
 的名稱；Oracle image 常是 `ubuntu`）。
 
+**已知陷阱（2026-08-23 實測踩到，不是理論風險）：GCP 用公鑰結尾的名字
+建帳號，帳號之間完全隔離**——瀏覽器主控台的「SSH」按鈕預設用你 Google
+帳號本地化的名稱登入（例如 `albertren888`），但 `ssh_workers.json`
+裡填的 `user`（例如 `helmet`）如果是不同名字，GCP 會**另外建一個獨立
+帳號**，兩個帳號各自有自己的 home 目錄——瀏覽器帳號底下裝的 pip 套件、
+產生的 deploy key，`ssh_workers.json` 那個帳號完全看不到，會在
+`ssh_sync.py push`（`git clone` 卡在 Deploy Key 沒登記）跟第一次
+`run`（`ModuleNotFoundError: No module named 'numpy'`）分別各踩一次坑。
+**避免的辦法**：從一開始就決定好 `ssh_workers.json` 要填的 `user`，
+瀏覽器 SSH 按鈕旁邊的下拉選單選「以自訂使用者名稱開啟」，直接用那個
+名字登入，後面第 2、3 步全部在同一個帳號底下做，不會有兩份互相看不到
+的環境。已經像上面這樣兩個帳號分岔了也沒關係，兩邊各補一次（`pip3
+install`、產生 deploy key＋登記到 GitHub）就好，不用重建 VM。
+
 ## 2. VM 上裝環境（SSH 進去手動跑一次）
 
 ```bash
