@@ -166,9 +166,21 @@ radial_rall|fit_real.py --procs 8 --n-syn 40000 --repeats 1 --refines 3 --config
 # （2026-08-22：這個區塊在 PR #87 的分支裡曾經整段消失——只有這一側改了
 # 這裡，git 三方合併不會標成 conflict，會直接悄悄刪掉，靠比對 merge-base
 # 才抓到。這裡補回來，四項仍在本機排隊／執行中，不能弄丟。）
-radial_r1_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final
-radial_r2_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final
-radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,3 --tag _radial_r3_final
+#
+# （2026-08-23 巡檢：上面那則 2026-08-22 筆記本身是過時資訊造成的誤判——
+# 這四項單機 --repeats 5 版本已經被 kaggle_queue.txt 的 20 片式分工
+# （radial_r1/r2/r3/rall_final_rep0-4，--repeats 1 --repeat-offset N）
+# 取代，兩邊用的是**同一個 --tag**，會寫進同一個
+# results/fit_real_radial_r1_final.npz。r3／rall 已經用 Kaggle 分片跑完
+# 並拼接（見 scripts/tools/concat_radial_final.py、RESULTS_LOG.md），
+# r1 4/5、r2 1/5 也快到齊。這裡的單機版本今天早上被 run_queue.py 排到、
+# 開始跑 radial_r1_final，發現時還沒寫出檔案就手動中止，改成停用這四項，
+# 避免（a）浪費本機算力重算 Kaggle 已經算過的東西，（b）算完後把 Kaggle
+# 拼接好的結果覆寫掉。四項全部停用，改用下面加 _v3 尾碼的行占位，
+# 不刪掉歷史紀錄。）
+# radial_r1_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,1 --tag _radial_r1_final
+# radial_r2_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final
+# radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,3 --tag _radial_r3_final
 # rall 刻意不帶 --radius-range：這是四項裡唯一的「真正全樣本」對照組，
 # 不是「0-5.1 度」這個切片。文件裡寫的「0-5.1 度」是描述目前樣本的
 # 實際涵蓋範圍（cone 搜尋半徑 5.0 度，見 config.toml 的 radius_deg），
@@ -177,7 +189,7 @@ radial_r3_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --
 # 搜尋半徑）悄悄變成錯誤的裁切，讓 rall 不再是真正的「全部」
 # （2026-08-20 CodeRabbit review 建議加這個旗標，評估後決定不採用，
 # 理由記在這裡）。
-radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
+# radial_rall_final|fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --tag _radial_rall_final
 #
 # ===== 2026-08-21：使用者選 C——先跑完其餘 8 項，這一項移到佇列最後 =====
 # 實測第 1 次擬合花了 67,213 秒 = 18.7 小時（見 logs/p6_lowmass_v2.log），
@@ -372,3 +384,9 @@ massdep_fbin|inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines
 #   - preflight.py --gate c（PR #96）：沒有 manifest 時照樣判定量化簽章，
 #     不再因為「資訊不足」而跳過最強的那道檢查
 p6_lowmass_v2|profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+
+# D2 敏感度掃描（WORK_BOARD.md「B/C/D 類補齊」表）：membership_threshold
+# 這一項先前卡在缺原始 Gaia 查詢 CSV（fetch_gaia.py 的 COUNT(*) 在伺服端
+# 逾時），已用 --top 繞過（PR #92）重抓到 data/m45_r5_g18_plx4.csv，
+# 現在可以真的跑掃描了。
+d2_membership_threshold|scripts/diagnostics/sensitivity_sweep.py --target membership_threshold --procs 8 --n-syn 40000 --refines 3,3
