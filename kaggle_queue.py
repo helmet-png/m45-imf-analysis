@@ -49,6 +49,9 @@ HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "kaggle_queue.txt"
 DONE = HERE / "logs" / "kaggle_queue_done.txt"
 LOCK = HERE / "logs" / "kaggle_queue.lock"
+# 逾時放棄槽位、但遠端 kernel 其實還活著的工作記在這裡，之後每輪回頭查一次。
+# 見 MAX_WAIT_HOURS 的說明與 sweep_orphans()。
+ORPHANS = HERE / "logs" / "kaggle_orphans.txt"
 POLL_SECS = 60
 # 免費 CPU notebook 的執行時間上限文件說約 9-12 小時，但 2026-08-19 實測
 # --refines 3,3,3 的 headline recipe 單次重複跑了 62544-62604 秒
@@ -160,6 +163,105 @@ def mark_done(label: str, status: str, secs: float, account: str) -> None:
     with open(DONE, "a", encoding="utf-8") as f:
         f.write(f"{label}\t{status}\t{secs:.0f}s\t{account}\t"
                 f"{datetime.now():%Y-%m-%d %H:%M:%S}\n")
+
+
+def read_orphans() -> list[dict]:
+    """讀「逾時放棄槽位、但遠端可能還活著」的工作清單。"""
+    if not ORPHANS.exists():
+        return []
+    out = []
+    for line in ORPHANS.read_text(encoding="utf-8").splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 3 and parts[0].strip():
+            out.append({"label": parts[0], "kid": parts[1], "account": parts[2]})
+    return out
+
+
+def write_orphans(rows: list[dict]) -> None:
+    # 寫到暫存檔再 os.replace()（2026-08-22 CodeRabbit review）：直接
+    # write_text() 覆寫時若中途被中止（斷電、被砍行程），會留下截斷或
+    # 空的 ORPHANS 檔，把既有的孤兒記錄整批弄丟——跟這支 PR 要防的
+    # 「工作悄悄不見」是同一類問題，只是換成孤兒清單本身遺失。
+    # os.replace() 在 POSIX 與 Windows 都保證是單一系統呼叫等級的原子
+    # 操作，不會有「新檔案寫一半、舊檔案已經被砍」的中間狀態（跟
+    # scripts/tools/checkpoint.py 的 atomic_savez() 同一個理由）。
+    ORPHANS.parent.mkdir(exist_ok=True)
+    tmp = ORPHANS.with_name(ORPHANS.name + ".tmp")
+    try:
+        tmp.write_text(
+            "".join(f"{r['label']}\t{r['kid']}\t{r['account']}\n" for r in rows),
+            encoding="utf-8")
+        os.replace(tmp, ORPHANS)
+    except BaseException:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def add_orphan(label: str, kid: str, account: str) -> None:
+    rows = [r for r in read_orphans() if r["label"] != label]
+    rows.append({"label": label, "kid": kid, "account": account})
+    write_orphans(rows)
+
+
+def sweep_orphans(accounts: dict, envs: dict) -> None:
+    """回頭處理「逾時時還在跑、所以沒被判定完成」的 kernel。
+
+    **這個機制補的是一個真的丟掉過結果的漏洞**（2026-08-22）：
+    `MAX_WAIT_HOURS` 到了之後，程式會做最後一次狀態查詢，但
+    `check_status_once()` 對「還在跑」與「這次查不到」都回傳 `None`，
+    而逾時分支只要拿到 `None` 就 `mark_done(..., "timeout")` 放棄槽位。
+    問題是「還在跑」跟「查不到」都不代表這個 kernel 不會完成——
+    `radial_rall_final_rep0` 與 `rep3` 就是這樣在 73,114 秒（20.3 小時）
+    被標成 timeout，事後直接查 Kaggle 發現兩個都是 **complete**，
+    等於差點白丟 40 機時；而且 label 一旦進了 DONE 檔就不會再被派工，
+    只能靠人工發現。
+
+    放棄槽位本身是對的（一個卡住的 kernel 不該永久佔住一個帳號），
+    錯的是「放棄槽位」與「放棄這個工作」被綁在一起。這裡把兩者拆開：
+    槽位照樣釋放去接下一個工作，但把 (label, kid, account) 記進
+    ORPHANS，之後每輪回頭查一次，完成了就補拉、補記 DONE。
+    """
+    rows = read_orphans()
+    if not rows:
+        return
+    keep = []
+    for r in rows:
+        name = r["account"]
+        if name not in envs:
+            # 帳號設定變了（改名或移除），留著也查不了，記一筆讓人看得到
+            print(f"  孤兒工作 {r['label']} 的帳號 {name} 已不在設定裡，"
+                  f"保留紀錄但無法自動處理", flush=True)
+            keep.append(r)
+            continue
+        st = probe_kernel_status(r["kid"], envs[name])
+        if st == "complete":
+            if pull(r["kid"], r["label"], envs[name]):
+                mark_done(r["label"], "ok_recovered", 0, name)
+                print(f"  孤兒工作 {r['label']} 事後確認已完成，結果已補拉"
+                      f"回來（原本被標成 timeout 丟掉的那批）", flush=True)
+            else:
+                keep.append(r)      # 拉不下來，下一輪再試，不要記 DONE
+        elif st in ("error", "cancelled"):
+            # **要看 pull() 的回傳值**（2026-08-22 CodeRabbit review）：
+            # 原本忽略回傳值、不管拉不拉得到 log 都 mark_done()，這支
+            # 腳本存在的理由正是「不要在還沒確認拿到東西之前就放棄」，
+            # 這裡若拉 log 失敗（網路瞬斷、Kaggle 那端暫時不給）卻照樣
+            # 記 DONE，這個 label 就再也不會被回頭查、log 永久拿不到——
+            # 跟這支 PR 本身要修的那個問題是同一個形狀。
+            if pull(r["kid"], r["label"], envs[name]):
+                mark_done(r["label"], f"{st}_recovered", 0, name)
+                print(f"  孤兒工作 {r['label']} 事後確認為 {st}", flush=True)
+            else:
+                keep.append(r)   # log 拉不下來，下一輪再試，不要記 DONE
+        else:
+            # "running" 還在跑、"unknown" 查不到、"missing" 遠端沒了——
+            # 前兩者都要繼續等；"missing" 理論上該放棄，但 probe 對
+            # 「打錯 slug」跟「真的不存在」分不開，保守留著讓人工判斷。
+            keep.append(r)
+    write_orphans(keep)
 
 
 def run(cmd: list[str], env: dict | None = None) -> subprocess.CompletedProcess:
@@ -391,6 +493,10 @@ def main() -> None:
               flush=True)
 
     while True:
+        # 0) 先回頭處理逾時被釋放、但遠端可能已經跑完的工作。放在派新工作
+        #    之前，這樣補拉回來的結果能立刻反映到這一輪的判斷裡。
+        sweep_orphans(accounts, envs)
+
         done = read_done()
         pending = [it for it in read_queue() if it["label"] not in done
                    and it["label"] not in
@@ -524,8 +630,27 @@ def main() -> None:
                           f"{slot['item']['label']} 逾時前最後一查，其實已經"
                           f"結束：{final_status}，已補拉結果", flush=True)
                 else:
-                    mark_done(slot["item"]["label"], "timeout",
+                    # 最後一查不是終止狀態 = 「還在跑」或「這次查不到」。
+                    # **兩種都不代表這個 kernel 不會完成**，所以只釋放槽位、
+                    # 不把工作judged 成失敗：記進 ORPHANS，之後每輪回頭查。
+                    # 舊版在這裡直接 mark_done(..., "timeout")，label 一進
+                    # DONE 檔就不會再被派工也不會再被拉，radial_rall_final_
+                    # rep0/rep3 就是這樣在 20.3 小時被丟掉，事後查證兩個
+                    # 其實都是 complete（差點白丟 40 機時）。
+                    # **順序很重要**（2026-08-22 CodeRabbit review）：
+                    # add_orphan() 必須先於 mark_done()。若程序在兩者之間
+                    # 被中止，反過來的順序會讓 label 進了 DONE（不會再被
+                    # 派工、也不會被 sweep_orphans() 查）卻沒進 ORPHANS
+                    # （sweep_orphans() 找不到它去回收）——這正是這支 PR
+                    # 要修的那類遺失，只是換了個發生的時間點。
+                    add_orphan(slot["item"]["label"], slot["kid"], name)
+                    mark_done(slot["item"]["label"], "timeout_orphaned",
                              time.time() - slot["t0"], name)
+                    print(f"[{datetime.now():%H:%M:%S}] [{name}] "
+                          f"{slot['item']['label']} 等待逾時，釋放槽位但"
+                          f"**不放棄這個工作**——遠端可能還在跑，已記進 "
+                          f"{ORPHANS.name}，之後每輪回頭查，完成就補拉。",
+                          flush=True)
                 slots[name] = None
                 continue
 
