@@ -145,7 +145,11 @@ Write-SelfLog "腳本開始執行"
 
 try {
     Set-Location -Path $repo -ErrorAction Stop
-    Restart-QueueIfNotRunning -ScriptName "run_queue.py" -LogFile "queue_runner8.log"
+    # **2026-08-23 起使用者決定：本機不再跑計算，全部排到雲端**——
+    # 不再自動重啟 run_queue.py（讀 queue.txt 那支本機 8 核佇列）。
+    # 新工作一律排 cloud_queue.txt 交給 cloud_queue.py（GCP/Kaggle）。
+    # 若之後要恢復本機運算，把下面這行的註解拿掉即可，不用改別的地方。
+    # Restart-QueueIfNotRunning -ScriptName "run_queue.py" -LogFile "queue_runner8.log"
     Restart-QueueIfNotRunning -ScriptName "cloud_queue.py" -LogFile "cloud_queue_runner.log"
 }
 catch {
