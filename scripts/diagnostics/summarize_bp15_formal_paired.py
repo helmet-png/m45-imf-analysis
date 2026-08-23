@@ -41,7 +41,10 @@ def load_one(path: Path, sample: str, offset: int) -> dict:
     for field, expected in expected_inputs.items():
         if manifest.get(field) != expected:
             raise ValueError(f"{path.name}: manifest {field} does not match {expected}")
-    if int(manifest.get("n_syn", -1)) != 40_000 or manifest.get("refines") != "3,3":
+    if (int(manifest.get("n_syn", -1)) != 40_000
+            or manifest.get("refines") != "3,3"
+            or manifest.get("seed_scheme")
+            != "fit-real-offset-v1:2000+13*(rep+repeat_offset)"):
         raise ValueError(f"{path.name}: not the formal 40k/refines=3,3 recipe")
     return {"alpha": float(c[0, 3]), "logage": float(c[0, 0]),
             "f_bin": float(c[0, 2]), "manifest": manifest}

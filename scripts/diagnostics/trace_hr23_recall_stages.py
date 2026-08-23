@@ -62,12 +62,12 @@ def main():
     for star in hr:
         source_id = star["GaiaDR3"]
         base = baseline.get(source_id)
-        if source_id in cmd_ids:
-            stage = "in_cmd"
-        elif base is None:
+        if base is None:
             stage = "not_in_saved_baseline"
         elif float(base["probs_final"]) < args.pipeline_prob:
             stage = "baseline_below_pipeline_probability"
+        elif source_id in cmd_ids:
+            stage = "in_cmd"
         else:
             stage = "baseline_pass_probability_not_in_cmd"
         gbin = bin_label(float(star["Gmag"]))

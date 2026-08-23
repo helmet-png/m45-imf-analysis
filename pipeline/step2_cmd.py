@@ -66,8 +66,8 @@ def photometric_quality_masks(
     excess_factor = np.asarray(excess_factor, float)
     brightness = np.ones(g.shape, dtype=bool)
     if g_bright_limit is not None:
-        brightness = g >= g_bright_limit
-    snr_mask = np.isfinite(g) & brightness & np.isfinite(bp) & np.isfinite(rp)
+        brightness = ~(g < g_bright_limit)
+    snr_mask = brightness
     for values, limit in ((snr_g, min_flux_snr_g),
                           (snr_bp, min_flux_snr_bp),
                           (snr_rp, min_flux_snr_rp)):
