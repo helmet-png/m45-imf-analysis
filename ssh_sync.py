@@ -79,15 +79,41 @@ _HOME_CACHE: dict[str, str] = {}
 
 def _get_home(worker_name: str, w: dict) -> str:
     """查一次遠端 $HOME 並快取，查不到回傳空字串（呼叫端要自行決定
-    退回原樣是否可接受，見 _expand_tilde()）。"""
+    退回原樣是否可接受，見 _expand_tilde()）。
+
+    **只快取查詢成功的結果**（2026-08-23 CodeRabbit review：實際踩到
+    才發現）：原本不管查詢成功或失敗都寫進 `_HOME_CACHE`，若第一次
+    呼叫剛好遇到暫時性的連線問題（例如 SSH 逾時、遠端機器忙於跑計算
+    導致連線變慢），空字串會被永久快取住——`cloud_queue.py` 是常駐
+    行程，之後**這一輪程序活著的期間**，同一個 worker 的每一次
+    `poll()`／`pull()` 都會沿用這個空字串、印警告、讓 `remote_dir`
+    裡的 `~` 保留原樣，導致 `cd '~/m45_membership'` 每次都失敗（`~`
+    被 `shlex.quote()` 包住後不會被 shell 展開，見上面 `_expand_tilde()`
+    的說明）——遠端工作本身其實還在正常跑，但本機再也偵測不到它跑完，
+    也永遠拉不回結果，而且不會有任何看起來像「壞掉」的錯誤訊息，只有
+    反覆印的警告，容易被當成雜訊忽略。改成只有查詢真的成功才寫進
+    快取，失敗不快取，下一次呼叫會重新嘗試查詢。"""
     if worker_name in _HOME_CACHE:
         return _HOME_CACHE[worker_name]
     try:
         r = ssh_workers.remote_run(w, "echo $HOME", timeout=15)
     except subprocess.TimeoutExpired:
+        print(f"  （查詢 {worker_name} 的 $HOME 逾時 15 秒）")
         r = None
-    home = r.stdout.strip() if r is not None and r.returncode == 0 else ""
-    _HOME_CACHE[worker_name] = home
+    home = ""
+    if r is not None:
+        if r.returncode == 0:
+            home = r.stdout.strip()
+        else:
+            # 原本失敗時完全不印 stderr，警告訊息只說「查不到」，看不出
+            # 真正原因（連線被拒、逾時、認證失敗都長一樣）——實際除錯時
+            # 踩到一次「手動用互動式 shell 重現都成功、常駐行程卻反覆
+            # 失敗」的情況，查不出差異在哪，補上這行方便下次直接看
+            # stderr 判斷。
+            print(f"  （查詢 {worker_name} 的 $HOME 失敗，returncode="
+                 f"{r.returncode}，stderr={r.stderr.strip()[:200]!r}）")
+    if home:
+        _HOME_CACHE[worker_name] = home
     return home
 
 
