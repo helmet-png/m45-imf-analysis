@@ -18,8 +18,8 @@
 ### 原 D8：PR #11 多星團驗證的四項程式正確性問題
 
 **曾經的問題**：貼牆偵測曾被過度放行、選擇函數缺暗端紅藍檢查、SNR
-校準缺獨立控制場，另有 Tier 1 的 NSS null 風險；而且程式修正合併後尚未
-用真實多星團資料重跑，無法確定安全機制真的生效。
+校準缺獨立控制場，另曾通報 Tier 1 的 NSS null 風險；而且程式修正合併後
+尚未用真實多星團資料重跑，無法確定前三項安全機制真的生效。
 
 **怎麼解決的**：PR #11 合併後，以 `main` commit `d9a09f4` 和已保存的
 NGC 3532／Praesepe Gaia、控制場資料重跑 selection；只有通過 selection
@@ -30,6 +30,8 @@ NGC 3532／Praesepe Gaia、控制場資料重跑 selection；只有通過 select
 阻止前向；Praesepe selection 通過，但 B 設定 2/2 次 `f_bin=1.000` 貼牆，
 均被標成 `diagnostic_only`，有效擬合數 0 並跳過注入回收。這解決的是程式
 正確性，不是星團科學模型：兩個殘留問題已分為 LIMITATIONS D16、D17。
+NSS null 項目沒有由這次重跑驗證；核對 `main` 後發現所指的
+`cluster_imf_tier1.py` 不存在，因此以「對 main 不適用」結案。
 
 **日期**：2026-08-23
 
