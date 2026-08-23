@@ -1,0 +1,18 @@
+hip,gaia_source_id,gaia_g,gaia_parallax_mas,gaia_pmra_masyr,gaia_pmdec_masyr,gaia_ruwe,baseline_probability,in_cmd_members,crossmatch_status
+16664,68486384567412992,6.667793,5.4993,9.908,-28.201,1.069,0.0000,false,hip_identifier
+17309,57111696260204800,5.656581,6.2758,4.457,-13.021,1.030,0.0000,false,hip_identifier
+17489,65287458566524928,5.441325,7.3852,19.849,-44.966,0.963,1.0000,true,hip_identifier
+17499,65271996684817280,3.698209,8.3457,20.542,-46.081,2.768,0.6371,false,hip_identifier
+17527,69812945346809600,5.640408,7.2222,20.218,-46.124,0.899,0.9999,true,hip_identifier
+17531,,,,,,,,,false,no Gaia source within 1.08 arcsec cone
+17573,65283232316451328,3.863349,7.6713,19.516,-45.527,3.542,0.9999,false,hip_identifier
+17579,66798496781121792,5.752026,7.3053,20.331,-46.022,0.880,1.0000,true,hip_identifier
+17608,,,,,,,,,false,no Gaia source within 1.08 arcsec cone
+17702,66714384142368256,2.896132,,,,,,false,hip_identifier but absent baseline
+17776,64940906245415808,5.428299,7.6909,19.695,-47.113,1.071,0.9999,true,hip_identifier
+17847,66526127137440128,3.615795,8.1184,19.079,-46.193,4.117,0.8397,false,hip_identifier
+17851,66529975427235712,5.203287,7.2414,19.496,-47.650,1.303,0.9999,true,hip_identifier
+17954,,,,,,,,,false,no Gaia record returned by HIP identifier query
+18471,65319619282119808,5.531594,22.5957,70.674,-114.026,0.830,0.0000,false,hip_identifier
+19009,66010696701152384,5.107828,3.1252,2.368,-15.323,1.288,,false,hip_identifier but absent baseline
+19038,,,,,,,,,false,no Gaia record returned by HIP identifier query

@@ -38,33 +38,51 @@ CodeRabbit 的審查是**輔助**，不是取代 `WORK_BOARD.md`／PR review 流
 它抓程式面的問題（bug、重複實作、效率），跑不動這個專案的實際計算，
 數字對不對還是要靠 `results/RESULTS_LOG.md` 跟人／其他 agent 交叉核對。
 
-**2026-08-21 起：CodeRabbit 的留言沒回覆／沒 resolve，PR 合併按鈕會被鎖住**
-（起因：查了當時開著的 11 個 PR，42 則 CodeRabbit 留言裡 41 則完全沒人
-回覆——不是有人查過覺得不重要，是真的沒人看過）。機制是兩個設定疊起來：
-`.coderabbit.yaml` 開了 `reviews.request_changes_workflow: true`（CodeRabbit
-會用正式的「Request changes」狀態卡住 PR，直到全部留言 resolved、最新
-commit 已重新審過才自動轉 Approved），加上 GitHub branch protection 把
-main 分支的 required approving review count 提高到至少 1（原本是 0，
-CodeRabbit 卡在 Changes Requested 也不會真的擋合併）。
+**2026-08-21～22：merge 關卡的完整實驗過程（結論見下方最新狀態）**。
+起因：查了當時開著的 11 個 PR，42 則 CodeRabbit 留言裡 41 則完全沒人
+回覆——不是有人查過覺得不重要，是真的沒人看過。2026-08-21 因此加了兩個
+設定疊起來的硬關卡：`.coderabbit.yaml` 開 `reviews.request_changes_workflow:
+true`（CodeRabbit 用正式的「Request changes」狀態卡住 PR，直到全部留言
+resolved、最新 commit 已重新審過才自動轉 Approved），加上 GitHub branch
+protection 把 `required_approving_review_count` 從 0 提高到 1（CodeRabbit
+卡在 Changes Requested 才會真的擋合併；這兩個設定分開套用，前者在版控裡
+跟著 PR 合併生效，後者要另外用 GitHub API／網頁設定套用）。
 
-**這兩個設定不是同一個 PR 套用的**（2026-08-21 CodeRabbit review 要求
-講清楚）：`.coderabbit.yaml` 那個開關在版控裡，跟著 PR 合併生效；
-**branch protection 那一半不在版控裡**，必須另外用 GitHub API／網頁設定
-套用（已於 2026-08-21 套用，`required_approving_review_count = 1`）。
-在 branch protection 套用之前，光有 `request_changes_workflow` **不會**
-真的鎖住合併按鈕——這一點如果搞混，會以為合併了這個 PR 就有保護。
-
-**副作用要知道**：required review count = 1 代表**每個 PR 都需要另一個
-人／帳號按 Approve**，GitHub 不允許自己 approve 自己開的 PR。這是刻意的
-（這個機制的目的就是「不能自己說了算」），但也代表 AI agent 沒辦法自己
-把 PR 合併掉，一定要由人來看過並 approve。
+**這個硬關卡 2026-08-22 已經取消**（`required_approving_review_count`
+改回 0）——**不是因為判斷錯了，是實際跑起來代價太高**：CodeRabbit 免費
+方案的審查額度遠比預期緊（一次處理十幾個 PR 的合併就會整個打光，接著
+好幾個小時額度都沒回來），而 `required_approving_review_count=1` 的硬
+關卡讓「額度用完」直接等於「PR 永久卡住、誰都合併不了」，且每次 merge
+都會讓其他 PR 產生新的 git 衝突，光是解衝突就要重複跑很多輪，體感成本
+遠超過 41/42 留言沒人回這件事本身的損失。**現在的做法是「不強制擋，但
+要清楚可見」**：`request_changes_workflow` 保持開著（CodeRabbit 照常送
+正式 Review，Approved／Changes requested／Commented 三種狀態清楚可辨），
+但 `required_approving_review_count=0`，任何人隨時可以直接按 merge，
+**合併前自行判斷 CodeRabbit 的意見要不要處理**，不是被按鈕鎖死。
 
 **這不是自動修**——CodeRabbit 本身沒有辦法設定成自動觸發 autofix（官方
-文件明講一定要手動下 `@coderabbitai autofix` 或按 checkbox），這個機制
-只保證「沒處理就合併不了」，不保證有人幫你處理。收到 CodeRabbit 留言時
-還是要照這個檔案下面的流程回覆＋resolve（或確認站不住腳就說明理由），
-PR 才會解鎖。如果 CodeRabbit 誤判某則已經處理好的留言、卡住不放，找
+文件明講一定要手動下 `@coderabbitai autofix` 或按 checkbox）。收到
+CodeRabbit 留言，還是要照這個檔案下面的流程回覆＋resolve（或確認站不住
+腳就說明理由）。如果 CodeRabbit 誤判某則已經處理好的留言、卡住不放，找
 不到問題就直接在 GitHub UI 手動 resolve 該討論串。
+
+**「Review completed」是個陷阱，不能只看這個綠燈**（2026-08-22 發現）：
+CodeRabbit 在 commit status 上永遠顯示 `context=CodeRabbit`／
+`description="Review completed"`／`state=success`，**即使它因為額度用完
+（"Review rate limited"）根本沒有送出正式 Review 也一樣**——這個綠燈只
+代表「CodeRabbit 的自動化跑完了」，不代表「真的審過、審查結果可信」，
+兩者混在同一個燈號裡，肉眼從 PR 頁面或 `gh pr checks` 完全分不出來。
+**唯一可靠的判定：拿最後一則正式 Review 的 `commit_id`，跟 PR 目前的
+head SHA 比對**——相等才代表這次 push 真的被審過。已經寫成工具，合併前
+先跑：
+```
+scripts/tools/coderabbit_status.sh <PR 編號...>   # 查指定 PR
+scripts/tools/coderabbit_status.sh                # 查全部 open PR
+```
+輸出會明確標示每個 PR 是「✅ 已審過且核准」「🔴 已審過但還有意見」
+「💬 已審過但只是留言」，還是「⚠ 還沒有針對目前這個 commit 的正式
+review（多半是額度用完被跳過）」——只有前三種才代表 CodeRabbit 真的
+看過目前這次 push，「⚠」那一種不能當「審過沒問題」。
 
 **注意 `@coderabbitai resolve` 的用法**（2026-08-21 CodeRabbit review
 訂正，原本這裡寫錯）：這個指令**必須以 PR 的頂層留言送出**（不是在
@@ -116,6 +134,20 @@ comments。所以它只適合「所有留言都已經處理完、只是要一次
    運作得好，不要因為這條新規則就跟著鬆動；這條規則管的是**規劃階段
    的推理與判斷該用什麼語氣寫**，不是要重新設計那些已經運作良好的
    結構化標記系統。
+
+---
+
+## 零之三、開始新工作前——也要查 `QUEUE_ALERTS.md`
+
+**2026-08-23 起新增**：`run_queue.py` 的 Gate B（開跑前檢查）／Gate C
+（跑完後驗收）沒過時，不會讓整條佇列停下來（機器繼續跑下一項，不留著
+空轉），但也不會只印一行警告到 `logs/queue_runner8.log` 就沒事——那樣
+需要有人主動去翻 log 才會發現，跟 CodeRabbit 額度用完時「Review
+completed」照樣顯示綠燈是同一種「訊號存在但沒人看＝沒有」的風險。
+兩道關卡沒過時會改寫進 `QUEUE_ALERTS.md`，**任何 session 開始碰這個
+repo 的工作前，先讀一次這份文件，看有沒有「待處理」的項目**，處理完
+（或確認不是問題）要把該列狀態改成「已處理」——不要刪掉那一列，完整
+格式與 Gate B／C 各自該怎麼收尾寫在 `QUEUE_ALERTS.md` 檔頭。
 
 ---
 

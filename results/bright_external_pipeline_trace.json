@@ -1,0 +1,218 @@
+{
+  "purpose": "Read-only trace of selected bright stars through saved checkpoints",
+  "inputs": {
+    "baseline": "results\\baseline.dat",
+    "cmd_members": "data\\cmd_members.csv"
+  },
+  "raw_gaia_table_available": false,
+  "bright_interval_baseline_rows": [
+    {
+      "source_id": 53164002842376832,
+      "gmag": 4.065172,
+      "parallax_mas": 17.619441960173923,
+      "membership_probability": 0.0,
+      "ruwe": 2.4463112
+    },
+    {
+      "source_id": 65205373152172032,
+      "gmag": 4.172742,
+      "parallax_mas": 7.067028703633884,
+      "membership_probability": 0.0017,
+      "ruwe": 2.3298006
+    },
+    {
+      "source_id": 66529975427235712,
+      "gmag": 5.203287,
+      "parallax_mas": 7.241378315608465,
+      "membership_probability": 0.9999,
+      "ruwe": 1.3034941
+    },
+    {
+      "source_id": 65296907494549120,
+      "gmag": 4.2610216,
+      "parallax_mas": 9.544445082693732,
+      "membership_probability": 0.0,
+      "ruwe": 2.3145595
+    }
+  ],
+  "traced_sources": [
+    {
+      "source_id": 68486384567412992,
+      "in_baseline": true,
+      "gmag_baseline": 6.6677933,
+      "parallax_mas_baseline": 5.499261717069541,
+      "pmra_masyr_baseline": 9.908477390662677,
+      "pmdec_masyr_baseline": -28.200916576228252,
+      "ruwe_baseline": 1.0691016,
+      "membership_probability": 0.0,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": false,
+      "in_cmd_members": false,
+      "stage": "membership_threshold",
+      "step2_quality_status": "not_evaluable_not_passed_to_step2"
+    },
+    {
+      "source_id": 57111696260204800,
+      "in_baseline": true,
+      "gmag_baseline": 5.656581,
+      "parallax_mas_baseline": 6.275847073158987,
+      "pmra_masyr_baseline": 4.456738460568601,
+      "pmdec_masyr_baseline": -13.021036089567593,
+      "ruwe_baseline": 1.0300382,
+      "membership_probability": 0.0,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": false,
+      "in_cmd_members": false,
+      "stage": "membership_threshold",
+      "step2_quality_status": "not_evaluable_not_passed_to_step2"
+    },
+    {
+      "source_id": 65287458566524928,
+      "in_baseline": true,
+      "gmag_baseline": 5.4413247,
+      "parallax_mas_baseline": 7.385246890845397,
+      "pmra_masyr_baseline": 19.84914439143686,
+      "pmdec_masyr_baseline": -44.96559622643841,
+      "ruwe_baseline": 0.9633128,
+      "membership_probability": 1.0,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": true,
+      "stage": "retained",
+      "step2_quality_status": "retained"
+    },
+    {
+      "source_id": 65271996684817280,
+      "in_baseline": true,
+      "gmag_baseline": 3.6982086,
+      "parallax_mas_baseline": 8.345685150896063,
+      "pmra_masyr_baseline": 20.541505263518896,
+      "pmdec_masyr_baseline": -46.081450017195756,
+      "ruwe_baseline": 2.7675414,
+      "membership_probability": 0.6371,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": false,
+      "in_cmd_members": false,
+      "stage": "membership_threshold",
+      "step2_quality_status": "not_evaluable_not_passed_to_step2"
+    },
+    {
+      "source_id": 69812945346809600,
+      "in_baseline": true,
+      "gmag_baseline": 5.6404076,
+      "parallax_mas_baseline": 7.222157170572348,
+      "pmra_masyr_baseline": 20.218136384021552,
+      "pmdec_masyr_baseline": -46.12398123648605,
+      "ruwe_baseline": 0.89882505,
+      "membership_probability": 0.9999,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": true,
+      "stage": "retained",
+      "step2_quality_status": "retained"
+    },
+    {
+      "source_id": 65283232316451328,
+      "in_baseline": true,
+      "gmag_baseline": 3.863349,
+      "parallax_mas_baseline": 7.671309961502887,
+      "pmra_masyr_baseline": 19.515752191840225,
+      "pmdec_masyr_baseline": -45.52730972393302,
+      "ruwe_baseline": 3.5421169,
+      "membership_probability": 0.9999,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": false,
+      "stage": "step2_or_missing_join",
+      "step2_quality_status": "raw_table_needed"
+    },
+    {
+      "source_id": 66798496781121792,
+      "in_baseline": true,
+      "gmag_baseline": 5.752026,
+      "parallax_mas_baseline": 7.3052753639807255,
+      "pmra_masyr_baseline": 20.33140314206862,
+      "pmdec_masyr_baseline": -46.022054798281474,
+      "ruwe_baseline": 0.8798977,
+      "membership_probability": 1.0,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": true,
+      "stage": "retained",
+      "step2_quality_status": "retained"
+    },
+    {
+      "source_id": 66714384142368256,
+      "in_baseline": false,
+      "in_cmd_members": false,
+      "stage": "not_evaluable"
+    },
+    {
+      "source_id": 64940906245415808,
+      "in_baseline": true,
+      "gmag_baseline": 5.428299,
+      "parallax_mas_baseline": 7.690936370750085,
+      "pmra_masyr_baseline": 19.695020996577448,
+      "pmdec_masyr_baseline": -47.112981495474266,
+      "ruwe_baseline": 1.0705914,
+      "membership_probability": 0.9999,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": true,
+      "stage": "retained",
+      "step2_quality_status": "retained"
+    },
+    {
+      "source_id": 66526127137440128,
+      "in_baseline": true,
+      "gmag_baseline": 3.6157947,
+      "parallax_mas_baseline": 8.118448445799721,
+      "pmra_masyr_baseline": 19.07896807307441,
+      "pmdec_masyr_baseline": -46.193244590476716,
+      "ruwe_baseline": 4.116527,
+      "membership_probability": 0.8397,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": false,
+      "stage": "step2_or_missing_join",
+      "step2_quality_status": "raw_table_needed"
+    },
+    {
+      "source_id": 66529975427235712,
+      "in_baseline": true,
+      "gmag_baseline": 5.203287,
+      "parallax_mas_baseline": 7.241378315608465,
+      "pmra_masyr_baseline": 19.49605376673818,
+      "pmdec_masyr_baseline": -47.64989929604236,
+      "ruwe_baseline": 1.3034941,
+      "membership_probability": 0.9999,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": true,
+      "in_cmd_members": true,
+      "stage": "retained",
+      "step2_quality_status": "retained"
+    },
+    {
+      "source_id": 65319619282119808,
+      "in_baseline": true,
+      "gmag_baseline": 5.5315943,
+      "parallax_mas_baseline": 22.595746845601735,
+      "pmra_masyr_baseline": 70.67438488767382,
+      "pmdec_masyr_baseline": -114.02624412163671,
+      "ruwe_baseline": 0.8303468,
+      "membership_probability": 0.0,
+      "membership_threshold": 0.7,
+      "passes_membership_threshold": false,
+      "in_cmd_members": false,
+      "stage": "membership_threshold",
+      "step2_quality_status": "not_evaluable_not_passed_to_step2"
+    },
+    {
+      "source_id": 66010696701152384,
+      "in_baseline": false,
+      "in_cmd_members": false,
+      "stage": "not_evaluable"
+    }
+  ],
+  "interpretation_guardrail": "A source below P=0.7 is excluded before step 2.  Without the raw Gaia table, this diagnostic cannot test its hypothetical step-2 photometry status."
+}

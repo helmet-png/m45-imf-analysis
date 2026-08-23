@@ -61,6 +61,7 @@ import checkpoint                                                 # noqa: E402
 # fit_real.py 自己另外維護的一份跟共用版本不同步過，見下面
 # _preflight_report() 的說明）。
 MANIFEST_KEY = checkpoint.MANIFEST_KEY
+SEED_SCHEME = "fit-real-offset-v1:2000+13*(rep+repeat_offset)"
 
 
 def build_manifest(args) -> dict:
@@ -71,6 +72,7 @@ def build_manifest(args) -> dict:
     混進同一個檔案卻看不出來。這裡把「會不會被 load_partial 誤判成同一批」
     的所有輸入都列進來，缺一個都可能造成誤判。"""
     return {
+        "tag": args.tag,
         "grid": args.grid,
         "n_syn": args.n_syn,
         "refines": args.refines,
@@ -87,6 +89,12 @@ def build_manifest(args) -> dict:
         # 相同，rep < len(reps) 會直接跳過重算，把 offset 0 的結果當成 offset 1
         # 的結果沿用。
         "repeat_offset": args.repeat_offset,
+        # 續傳安全不只取決於 offset，也取決於 offset 如何換成種子。
+        # 規則若改變，即使其他旗標相同，舊 repeats 也不可混入新結果。
+        "seed_scheme": SEED_SCHEME,
+        "members_file": args.members_file,
+        "errmodel_file": args.errmodel_file,
+        "selection_file": args.selection_file,
     }
 
 
@@ -97,6 +105,9 @@ def build_manifest(args) -> dict:
 MANIFEST_LEGACY_DEFAULTS = {
     "g_bright": None,
     "repeat_offset": 0,
+    "members_file": "data/cmd_members.csv",
+    "errmodel_file": "data/errmodel.npz",
+    "selection_file": "data/selection.npz",
 }
 
 sys.path.insert(0, str(HERE))
@@ -278,6 +289,12 @@ def main():
                          "預設 None＝沿用 config.toml 的 g_bright_limit（4.0）、"
                          "且不砍觀測端，行為與加入這個旗標前完全相同。"
                          "用於等時線網格質量涵蓋不足時做同基準比較（D1）")
+    ap.add_argument("--members-file", default="data/cmd_members.csv",
+                    help="CMD member CSV relative to the repository root")
+    ap.add_argument("--errmodel-file", default="data/errmodel.npz",
+                    help="Photometric-error NPZ relative to the repository root")
+    ap.add_argument("--selection-file", default="data/selection.npz",
+                    help="Selection-function NPZ relative to the repository root")
     args = ap.parse_args()
     if args.repeats < 1:
         # --repeats 0（或負數）讓 for rep in range(args.repeats) 完全不
@@ -294,8 +311,8 @@ def main():
 
     cfg = cfgmod.load()
     c3 = cfg.step3_age
-    clean = Table.read(HERE / "data" / "cmd_members.csv", format="csv")
-    errmodel = dict(np.load(HERE / "data" / "errmodel.npz"))
+    clean = Table.read(HERE / args.members_file, format="csv")
+    errmodel = dict(np.load(HERE / args.errmodel_file))
     grid = isomod.load_grid(isomod.CACHE / args.grid)
     plx = np.asarray(clean["parallax"], float)
     dm = 5.0 * np.log10(1000.0 / (np.median(plx) - c3.parallax_zero_point)) - 5.0
@@ -338,11 +355,12 @@ def main():
         # config.toml 讀 g_bright_limit=4.0；這裡覆寫掉。
         base.g_bright = args.g_bright
     base.use_native_bprp_err = args.native_bprp_err
-    if args.native_bprp_err and "e_bp_native" not in errmodel:
-        print("錯誤：--native-bprp-err 需要 errmodel.npz 含 e_bp_native/"
-              "e_rp_native 鍵，目前載入的檔案沒有，先重建 errmodel.npz")
+    if args.native_bprp_err and not {"e_bp_native", "e_rp_native"}.issubset(errmodel):
+        print(f"錯誤：--native-bprp-err 需要 {args.errmodel_file} 含 "
+              "e_bp_native/e_rp_native 鍵，目前載入的檔案沒有，請先重建 "
+              f"{args.errmodel_file}")
         sys.exit(1)
-    sel = selmod.load(HERE / "data" / "selection.npz")
+    sel = selmod.load(HERE / args.selection_file)
     print(f"真實觀測 {len(color):,} 顆，距離模數 {dm:.4f}，"
           f"n_synthetic {args.n_syn:,}")
     print(f"等時線網格：{args.grid}\n")
@@ -369,6 +387,11 @@ def main():
     out_path = HERE / "results" / f"fit_real{args.tag}.npz"
     manifest = build_manifest(args)
     partial = checkpoint.load_partial(out_path)
+    if partial and checkpoint.load_manifest(out_path) is None:
+        print(f"錯誤：{out_path.name} 有既有結果但沒有 manifest，無法確認其"
+              "亂數種子規則；為避免混合不可比的 repeats，拒絕續傳。請換一個 "
+              "--tag，或先明確遷移舊結果。", flush=True)
+        sys.exit(1)
     checkpoint.check_manifest(out_path, manifest, partial,
                               legacy_defaults=MANIFEST_LEGACY_DEFAULTS)
     # `__attempted_*` 是 checkpoint.py 內部的記帳鍵（每個 config 存一份，

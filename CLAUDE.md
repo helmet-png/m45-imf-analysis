@@ -7,7 +7,9 @@
 這個 repo 現在有多個 AI agent（Claude、Codex 等）與多個人同時工作。
 **協作規則見 `CONTRIBUTING.md`（給所有人與所有 agent 讀，不是 Claude 專屬）**：
 `main` 分支所有人都要走 PR、`results/RESULTS_LOG.md` 記錄每次新結果、
-commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`。**另外
+commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`，也先讀一次
+`QUEUE_ALERTS.md`（`CONTRIBUTING.md` 零之三，2026-08-23 起）——`run_queue.py`
+的開跑前檢查／跑完驗收沒過時會寫在那裡，不是只印在 log 裡等人翻。**另外
 （`CONTRIBUTING.md` 零之二，2026-08-15 起）**：寫進規劃類文件（`docs/planning/`
 底下這些、`WORK_BOARD.md` 備註、PR 描述）的「結論」「判斷」「建議」，
 預設只代表寫下當下的想法，不是定案——語氣用「初步判讀」而非「結論是」，

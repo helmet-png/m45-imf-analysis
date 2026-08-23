@@ -50,6 +50,19 @@
 # 待辦項目。kaggle_queue.py 已經加了 recover_running_slots()（開機時
 # 掃描接回已在跑的 kernel，不會重推打斷進度），重啟這支跟重啟
 # run_queue.py 一樣安全，一併加進來顧。
+#
+# **2026-08-23 換成顧 cloud_queue.py，不再顧 kaggle_queue.py**：
+# cloud_queue.py 是 kaggle_queue.py 的上位替代——同一份 kaggle_accounts.json
+# 底下的所有帳號、加上新的 SSH worker，都由它透過同一份佇列檔
+# （cloud_queue.txt）統一派工，功能上完全涵蓋 kaggle_queue.py。**不能
+# 兩支同時開機自動跑**：兩支腳本的單例鎖各自獨立、互相不認得對方，
+# 若都自動重啟，可能同時對同一個 Kaggle 帳號各自派一個工作，在 Kaggle
+# 那端互相打架（例如同時 push 不同 kernel 到同一個帳號的同一個 dataset
+# slug）。cloud_queue.py 另外支援團隊集中式派工（自動從 origin/main
+# 同步 cloud_queue.txt，隊員不用碰真實憑證就能加工作，見該檔案開頭
+# 說明），是接下來唯一該常駐的派工器。若還有工作卡在 `kaggle_queue.txt`
+# 裡沒排完，先手動搬進 `cloud_queue.txt`（格式完全相同）再交給
+# cloud_queue.py，不要讓兩份佇列檔各自派工。
 
 $repo = $PSScriptRoot
 $selfLog = Join-Path $repo "logs\autorestart.log"
@@ -133,7 +146,7 @@ Write-SelfLog "腳本開始執行"
 try {
     Set-Location -Path $repo -ErrorAction Stop
     Restart-QueueIfNotRunning -ScriptName "run_queue.py" -LogFile "queue_runner8.log"
-    Restart-QueueIfNotRunning -ScriptName "kaggle_queue.py" -LogFile "kaggle_queue_runner.log"
+    Restart-QueueIfNotRunning -ScriptName "cloud_queue.py" -LogFile "cloud_queue_runner.log"
 }
 catch {
     Write-SelfLog "例外，重啟失敗：$($_.Exception.Message)"

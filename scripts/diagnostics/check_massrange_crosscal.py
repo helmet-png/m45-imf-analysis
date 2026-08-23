@@ -14,11 +14,9 @@
   「質量範圍」這一個變因，不是完整的端到端重現。
 - 不證明任何一方是對的。它只能說明「這些數字有多少差距可以用口徑解釋」，
   剩下的差距才需要物理或方法論解釋。
-- **Pang et al. (2024) 的實際擬合質量範圍本專案尚未查證**（只有 alpha
-  數字是從他們 Table 1 解析出來的）。下方把 Pang 的數字跟 0.30-2.50 的
-  換算值並排，是**假設**他們用類似範圍，這個假設還沒核對過原文，
-  不能當已驗證的結論——這正是本專案對 Tang et al. (2019) 做過、
-  但對 Pang+2024 還沒做的那種口徑核對。
+- Pang et al. (2024) 的 Pleiades 質量範圍已在原文 Table 1／Figure 3
+  核對為 0.28–2.00 M_sun；這支腳本仍不重現其資料或雙星校正，只用
+  Hobart 的理想分段冪律隔離「換成這個質量範圍」的效應。
 
 不寫任何檔案，純診斷輸出。
 
@@ -28,20 +26,55 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
 import numpy as np
+from scipy.optimize import minimize_scalar
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from pipeline.step5_imf import mle_powerlaw  # noqa: E402
+
+
+def mle_powerlaw(masses: np.ndarray, m_lo: float, m_hi: float) -> dict:
+    """Numerical copy of ``pipeline.step5_imf.mle_powerlaw``.
+
+    The diagnostic intentionally runs in the lightweight forward-model
+    environment, which has SciPy but not the unrelated Astropy dependency
+    imported by the whole step-5 module.  Keeping this 20-line estimator
+    verbatim prevents that optional dependency from blocking a pure
+    mass-range calculation; any changes to the canonical estimator should be
+    mirrored here and the outputs rechecked.
+    """
+    m = np.asarray(masses, float)
+    m = m[np.isfinite(m) & (m >= m_lo) & (m <= m_hi)]
+    n = len(m)
+    if n < 10:
+        return {"alpha": np.nan, "alpha_err": np.nan, "n": n}
+    slog = np.sum(np.log(m))
+
+    def neg_ll(alpha):
+        if abs(alpha - 1.0) < 1e-8:
+            alpha = 1.0 + 1e-8
+        denom = m_hi ** (1 - alpha) - m_lo ** (1 - alpha)
+        if denom == 0 or (1 - alpha) / denom <= 0:
+            return 1e18
+        c = (1 - alpha) / denom
+        return -(n * np.log(c) - alpha * slog)
+
+    r = minimize_scalar(neg_ll, bounds=(0.1, 5.0), method="bounded")
+    alpha = float(r.x)
+    h = 1e-3
+    d2 = (neg_ll(alpha + h) - 2 * neg_ll(alpha) + neg_ll(alpha - h)) / h ** 2
+    err = float(1.0 / np.sqrt(d2)) if d2 > 0 else np.nan
+    return {"alpha": alpha, "alpha_err": err, "n": n,
+            "m_lo": m_lo, "m_hi": m_hi}
 
 try:  # Windows 主控台預設 cp950，輸出中文/數學符號會炸
     sys.stdout.reconfigure(encoding="utf-8")
 except (AttributeError, OSError):
     pass
 
-RNG = np.random.default_rng(42)
 N_SAMPLE = 400_000
 
 # --- Hobart et al. (2026) 為 Pleiades 發表的三段冪律 ---------------------
@@ -64,6 +97,7 @@ HOBART_PLEIADES_ALPHA_HIGH_BINARY_CORRECTED = 3.11
 
 # --- 要拿來重新擬合的質量範圍 -------------------------------------------
 RANGES = [
+    (0.28, 2.00, "0.28-2.00（Pang+2024 Pleiades；已原文核對）"),
     (0.30, 2.50, "0.30-2.50（本專案 alpha_naive／傳統法主表）"),
     (0.50, 2.50, "0.50-2.50（本專案 alpha_forward 的 Kroupa >0.5 段）"),
     (0.91, 2.50, "0.91-2.50（Hobart 自己的 alpha_high 起點，回收檢查）"),
@@ -74,9 +108,9 @@ RANGES = [
 # 數值（不是字串），下面的比較與判讀文字全部從這裡算出來，不要另外
 #手動抄一份數字進 print 字串——避免上面的常數改了、下面判讀文字忘記
 #跟著動，兩邊silently 不一致（2026-08-20 CodeRabbit review 提醒）。
-PANG_M45 = {"label": "Pang+2024 M45（單一冪律，**擬合質量範圍未查證**）",
+PANG_M45 = {"label": "Pang+2024 M45（PDMF，0.28-2.00，已原文核對）",
             "alpha": 2.01, "err": 0.09,
-            "provenance": "Pang et al. 2024 Table 1，本專案解析；質量範圍待核對原文"}
+            "provenance": "Pang et al. 2024 Table 1/註解與 Figure 3；統一 q 分布結果"}
 OUR_NAIVE = {"label": "本專案 alpha_naive（0.30-2.50 單一冪律）",
              "alpha": 1.978, "err": 0.069,
              "provenance": "x64 機器獨立重跑驗證，見 WORK_BOARD.md 2026-08-12 條目"}
@@ -87,7 +121,8 @@ REFERENCE_VALUES = [PANG_M45, OUR_NAIVE, OUR_FORWARD]
 
 
 def sample_broken(mx1: float, mx2: float, a_med: float, a_high: float,
-                  lo: float, hi: float, n: int = N_SAMPLE) -> np.ndarray:
+                  lo: float, hi: float, n: int = N_SAMPLE,
+                  rng: np.random.Generator | None = None) -> np.ndarray:
     """從分段冪律抽樣，只產生落在 [lo, hi] 內的質量。
 
     分段之間用連續性常數接起來：相鄰兩段在斷點處的 phi(m) 必須相等，
@@ -116,12 +151,14 @@ def sample_broken(mx1: float, mx2: float, a_med: float, a_high: float,
     weights = np.asarray(weights, float)
     weights /= weights.sum()
 
-    counts = RNG.multinomial(n, weights)
+    if rng is None:
+        rng = np.random.default_rng(42)
+    counts = rng.multinomial(n, weights)
     out = []
     for (a, b, slope), k in zip(segments, counts):
         if k == 0:
             continue
-        u = RNG.random(k)
+        u = rng.random(k)
         if abs(slope - 1.0) < 1e-9:
             out.append(a * (b / a) ** u)
         else:
@@ -142,7 +179,14 @@ def main() -> None:
     recovered = {}
     for mf_name, params in HOBART_PLEIADES.items():
         for lo, hi, label in RANGES:
-            masses = sample_broken(lo=lo, hi=hi, **params)
+            # Give each named comparison its own fixed seed.  This keeps a
+            # previously reported row unchanged when a new mass range is
+            # inserted above it (a global RNG stream did not have that
+            # property).
+            key = f"{mf_name}|{lo:.3f}|{hi:.3f}".encode()
+            seed = int.from_bytes(hashlib.sha256(key).digest()[:8], "little")
+            masses = sample_broken(lo=lo, hi=hi, rng=np.random.default_rng(seed),
+                                   **params)
             fit = mle_powerlaw(masses, lo, hi)
             print(f"{mf_name:<34} {label:<46} {fit['alpha']:>14.3f}")
             recovered[(mf_name, lo)] = fit["alpha"]
@@ -169,12 +213,14 @@ def main() -> None:
     # 下面所有差值都從 recovered（上面表格算出來的）與具名常數計算，
     # 不要手動抄一份數字進判讀文字——常數改了，這裡會自動跟著動。
     pdmf_030 = recovered[("PDMF（未修雙星／動力學）", 0.30)]
+    pdmf_pang = recovered[("PDMF（未修雙星／動力學）", 0.28)]
     pdmf_050 = recovered[("PDMF（未修雙星／動力學）", 0.50)]
     imf_050 = recovered[("stellar IMF（已修雙星＋動力學）", 0.50)]
     pdmf_high = HOBART_PLEIADES["PDMF（未修雙星／動力學）"]["a_high"]
     imf_high = HOBART_PLEIADES["stellar IMF（已修雙星＋動力學）"]["a_high"]
 
     diff_naive = OUR_NAIVE["alpha"] - pdmf_030
+    diff_pang = PANG_M45["alpha"] - pdmf_pang
     diff_forward_vs_pdmf = OUR_FORWARD["alpha"] - pdmf_050
     diff_forward_vs_imf = OUR_FORWARD["alpha"] - imf_050
     # 不報告差異顯著度（sigma）：Hobart 的 PDMF 參數、我們重擬合的抽樣
@@ -194,13 +240,18 @@ def main() -> None:
         f"PDMF({pdmf_high}) 與 stellar IMF({imf_high}) 之間，需要重新核對 Hobart 原文 Table 4"
     )
 
-    print("初步判讀（不是定案）：把三方數字換算到同一個質量範圍之後，原本 1.3 的")
+    print("更新後判讀（仍不是端到端重現）：Pang 的實際質量範圍已核對為 0.28-2.00；")
+    print("把 Hobart 的 PDMF 換到該範圍後，Pang 與 Hobart 的差距可以直接列出。原本 1.3 的")
     print("跨度大幅收斂。這支持「質量範圍這項口徑因素可能解釋部分 alpha 差異」這個")
     print("假說——**這支腳本只隔離了質量範圍一個變因，沒有測 Pang+2024 的實際質量")
-    print("範圍、選擇函數、觀測誤差、未解析雙星或動力學修正，不足以支持「主要來自")
+    print("選擇函數、觀測誤差、未解析雙星或動力學修正，不足以支持「主要來自")
     print("口徑而非物理」這種更廣的判讀，也不排除還有其他變因造成剩下的差距**。")
     print()
     print("兩組比較要分開講，不要混成一個數字：")
+    print(f"  [Pang PDMF vs Hobart PDMF] Pang {PANG_M45['alpha']:.3f} vs "
+          f"Hobart PDMF@0.28-2.00 = {pdmf_pang:.3f}")
+    print(f"      差 {diff_pang:+.3f}。Pang 做了雙星校正，Hobart 這列尚未修雙星；")
+    print("      分段參數不確定度與重擬合抽樣誤差尚未傳播，不報告顯著度。")
     print(f"  [未修雙星 vs 未修雙星] alpha_naive {OUR_NAIVE['alpha']:.3f} vs "
           f"Hobart PDMF@0.30-2.50 = {pdmf_030:.3f}")
     print(f"      差 {diff_naive:+.3f}。Hobart 參數不確定度尚未傳播，"
@@ -221,7 +272,7 @@ def main() -> None:
           f"不能只叫它動力學修正。")
     print()
     print("還沒理清、不能當已驗證結論的地方：")
-    print("  1. Pang+2024 的擬合質量範圍尚未查證，上面的並排是假設不是核對結果。")
+    print("  1. Pang 與 Hobart 的雙星校正模型不同，兩者的 alpha 不能視為同一套校正。")
     print(f"  2. 我們的 alpha_forward 已修雙星，理應落在 Hobart 未修({pdmf_050:.3f})與")
     print(f"     已修({imf_050:.3f})之間，實際卻落在 {pdmf_050:.3f} 稍下方"
           f"——為什麼雙星修正沒有把")
