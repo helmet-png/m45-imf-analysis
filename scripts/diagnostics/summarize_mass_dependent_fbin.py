@@ -52,12 +52,19 @@ def main():
                 f"Input {args.input[index]} has a different execution contract; "
                 "refusing to combine incomparable trials")
     summaries = {}
+    reference_seeds = None
     for name in sources[0]["profiles"]:
         trials = [trial for source in sources
                   for trial in source["profiles"][name]["trials"]]
         seeds = [trial["seed"] for trial in trials]
         if len(seeds) != len(set(seeds)):
             raise ValueError(f"Duplicate seed found for {name}; refusing to double-count")
+        if reference_seeds is None:
+            reference_seeds = set(seeds)
+        elif set(seeds) != reference_seeds:
+            raise ValueError(
+                f"Profile {name} has a different seed set; refusing to combine "
+                "unpaired trials")
         shifts = np.asarray([t["alpha_shift_relative_to_constant_control"]
                              for t in trials], float)
         selected_fbin = np.asarray([t["realised_selected_binary_fraction"]

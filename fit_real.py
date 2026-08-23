@@ -72,6 +72,7 @@ def build_manifest(args) -> dict:
     混進同一個檔案卻看不出來。這裡把「會不會被 load_partial 誤判成同一批」
     的所有輸入都列進來，缺一個都可能造成誤判。"""
     return {
+        "tag": args.tag,
         "grid": args.grid,
         "n_syn": args.n_syn,
         "refines": args.refines,

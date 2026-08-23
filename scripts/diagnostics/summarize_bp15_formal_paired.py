@@ -13,6 +13,8 @@ RESULTS = ROOT / "results"
 
 
 def load_one(path: Path, sample: str, offset: int) -> dict:
+    if offset < 0:
+        raise ValueError("repeat_offset must be non-negative")
     if not path.exists():
         raise FileNotFoundError(path)
     with np.load(path, allow_pickle=False) as raw:
@@ -23,8 +25,7 @@ def load_one(path: Path, sample: str, offset: int) -> dict:
     if c.shape != (1, 7):
         raise ValueError(f"{path.name}: expected one config-C row, got {c.shape}")
     expected_tag = f"_bp{sample}_formal_40k_rep{offset}"
-    if manifest.get("tag") not in (None, expected_tag):
-        # Older manifests do not carry tag, but a conflicting tag is unsafe.
+    if manifest.get("tag") != expected_tag:
         raise ValueError(f"{path.name}: manifest tag does not match {expected_tag}")
     if int(manifest.get("repeat_offset", -1)) != offset:
         raise ValueError(f"{path.name}: wrong repeat_offset")
@@ -41,8 +42,9 @@ def main() -> None:
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
     offsets = [int(x) for x in args.offsets.split(",") if x.strip()]
-    if len(offsets) < 5 or len(set(offsets)) != len(offsets):
-        raise ValueError("Need at least five unique offsets")
+    if (len(offsets) < 5 or len(set(offsets)) != len(offsets)
+            or any(offset < 0 for offset in offsets)):
+        raise ValueError("Need at least five unique non-negative offsets")
 
     pairs = []
     missing = []
