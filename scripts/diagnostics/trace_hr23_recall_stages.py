@@ -92,6 +92,7 @@ def main():
         ],
     }
     out = ROOT / args.output
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"external_members": len(hr), "stage_totals": totals,
                       "by_G_bin": by_bin}, indent=2))

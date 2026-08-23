@@ -48,7 +48,7 @@ def main():
         "current_G16_to_18_count": faint,
         "bp15_candidate_count": n_candidates,
         "bp15_candidate_count_at_least_0p5": n_candidates_at_least_0p5,
-        "hypothetical_increase_if_all_16_are_accepted": {
+        "hypothetical_increase_if_all_candidates_are_accepted": {
             "relative_to_all_current_cmd_percent": 100 * n_candidates / len(cmd),
             "relative_to_current_below_0p3_percent": 100 * n_candidates / below_03,
             "relative_to_current_G16_to_18_percent": 100 * n_candidates / faint,

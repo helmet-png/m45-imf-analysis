@@ -10,7 +10,7 @@
   "current_G16_to_18_count": 459,
   "bp15_candidate_count": 16,
   "bp15_candidate_count_at_least_0p5": 0,
-  "hypothetical_increase_if_all_16_are_accepted": {
+  "hypothetical_increase_if_all_candidates_are_accepted": {
     "relative_to_all_current_cmd_percent": 1.484230055658627,
     "relative_to_current_below_0p3_percent": 4.324324324324325,
     "relative_to_current_G16_to_18_percent": 3.485838779956427,

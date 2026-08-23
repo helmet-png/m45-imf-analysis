@@ -29,6 +29,7 @@ from pipeline.step2_cmd import (  # noqa: E402
 
 THRESHOLDS = {"g": 50.0, "bp": 15.0, "rp": 20.0}
 G_BRIGHT = 4.0
+EXCESS_SIGMA_LIMIT = 3.0
 
 
 def value(row, key):
@@ -72,7 +73,8 @@ def quality_masks(d):
         d["snr_rp"], d["excess"], g_bright_limit=G_BRIGHT,
         min_flux_snr_g=THRESHOLDS["g"],
         min_flux_snr_bp=THRESHOLDS["bp"],
-        min_flux_snr_rp=THRESHOLDS["rp"], excess_sigma_limit=3.0,
+        min_flux_snr_rp=THRESHOLDS["rp"],
+        excess_sigma_limit=EXCESS_SIGMA_LIMIT,
     )
 
 
@@ -179,6 +181,10 @@ def main():
         "status": ("selection_smoke_pass_low_margin" if low_margin else
                    "selection_smoke_pass" if passed else "selection_smoke_fail"),
         "thresholds": THRESHOLDS,
+        "quality_cut_overrides": {
+            "g_bright_limit": G_BRIGHT,
+            "bp_rp_excess_sigma": EXCESS_SIGMA_LIMIT,
+        },
         "raw_field_rows": len(raw),
         "p_ge_0p7_and_g_ge_4_rows": len(selected_rows),
         "observed_bp15_quality_pass": int(observed.sum()),

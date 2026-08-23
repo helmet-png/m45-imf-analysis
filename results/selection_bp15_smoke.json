@@ -5,6 +5,10 @@
     "bp": 15.0,
     "rp": 20.0
   },
+  "quality_cut_overrides": {
+    "g_bright_limit": 4.0,
+    "bp_rp_excess_sigma": 3.0
+  },
   "raw_field_rows": 6956,
   "p_ge_0p7_and_g_ge_4_rows": 1295,
   "observed_bp15_quality_pass": 1136,
