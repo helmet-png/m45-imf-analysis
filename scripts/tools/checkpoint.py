@@ -130,7 +130,7 @@ def acquire_write_lock(out_path: Path, timeout_s: float = 1800.0) -> Path:
         except FileExistsError:
             if time.time() - t0 > timeout_s:
                 print(f"警告：等待 {lock_path.name} 超過 {timeout_s:.0f} 秒"
-                      f"（可能是上一個行程異常結束沒清掉鎖檔），強制視為"
+                      "（可能是上一個行程異常結束沒清掉鎖檔），強制視為"
                       f"可以繼續，手動確認沒有另一個行程還在寫這個檔案。",
                       flush=True)
                 try:
@@ -216,24 +216,57 @@ def _load_partial_strict(out_path: Path) -> dict:
     return _retry_permission_error(lambda: _read_npz_dict(out_path))
 
 
-def load_manifest(out_path: Path) -> dict | None:
-    """回傳既有存檔裡的 manifest dict；沒有存檔或沒有 manifest 回傳 None。
+# load_manifest_status() 的三種狀態。**必須分得出來**（2026-08-21
+# CodeRabbit review）：原本三種情況都回 None，check_manifest() 一律報成
+# 「加 manifest 檢查之前存的舊檔」並建議人工補 manifest——但「檔案根本
+# 讀不開／manifest 是壞掉的 JSON」是資料損毀，跟「舊檔沒有這個欄位」
+# 完全是兩回事，用同一句話描述會把損毀的原因蓋掉，還會叫人去補一個
+# 補不了的東西。
+MANIFEST_OK = "ok"                   # 讀到了，第二個回傳值是 dict
+MANIFEST_ABSENT = "absent"           # 檔案讀得開，就是沒有 MANIFEST_KEY
+MANIFEST_UNREADABLE = "unreadable"   # 檔案打不開，或 manifest 不是合法 JSON
 
-    同 `load_partial()`：用 `with` 確保 `NpzFile` 立刻關閉，見該函式的
-    說明。"""
+
+def load_manifest_status(out_path: Path) -> tuple[str, dict | None, str]:
+    """回傳 (狀態, manifest dict 或 None, 錯誤說明)。狀態是上面三個常數
+    之一。`load_manifest()` 是這支函式的簡化包裝，保留給只在意「有沒有」
+    的呼叫端。
+
+    同 `load_partial()`：用 `with` 確保 `NpzFile` 立刻關閉，見該函式說明。"""
     if not out_path.exists():
-        return None
+        return MANIFEST_ABSENT, None, "檔案不存在"
     try:
         with np.load(out_path, allow_pickle=False) as d:
             if MANIFEST_KEY not in d.files:
-                return None
-            return json.loads(str(d[MANIFEST_KEY]))
-    except Exception:                                             # noqa: BLE001
-        return None
+                return MANIFEST_ABSENT, None, ""
+            raw = str(d[MANIFEST_KEY])
+    except Exception as e:                                        # noqa: BLE001
+        return MANIFEST_UNREADABLE, None, f"讀取 npz 失敗：{e}"
+    try:
+        parsed = json.loads(raw)
+    except Exception as e:                                        # noqa: BLE001
+        return MANIFEST_UNREADABLE, None, f"manifest 不是合法 JSON：{e}"
+    # **頂層型別必須是 JSON 物件**（2026-08-21 CodeRabbit review）：
+    # json.loads() 對 "null"／"[1,2]"／"3" 都會成功回傳 None／list／int，
+    # 這些若被標成 MANIFEST_OK，check_manifest() 裡的 _old() 會對它呼叫
+    # .get() 而丟未處理的 AttributeError——變成看起來像程式壞掉，而不是
+    # 「這個檔案的 manifest 損毀」這個真正的原因。
+    if not isinstance(parsed, dict):
+        return (MANIFEST_UNREADABLE, None,
+                "manifest 的頂層不是 JSON 物件，而是 "
+                f"{type(parsed).__name__}（manifest 必須是 key-value 對應）")
+    return MANIFEST_OK, parsed, ""
+
+
+def load_manifest(out_path: Path) -> dict | None:
+    """回傳既有存檔裡的 manifest dict；沒有存檔、沒有 manifest、或讀不出來
+    一律回傳 None。要分辨這三種情況請用 `load_manifest_status()`。"""
+    return load_manifest_status(out_path)[1]
 
 
 def check_manifest(out_path: Path, manifest: dict, partial: dict,
-                   legacy_defaults: dict | None = None) -> None:
+                   legacy_defaults: dict | None = None,
+                   supports_tag: bool = True) -> None:
     """比對這次的執行設定跟既有部分結果的 manifest 是否一致，不一致就
     `sys.exit(1)`（原本是 fit_real.py main() 內嵌的邏輯，逐字抽成共用
     函式）。`partial` 為空（沒有既有部分結果）時不檢查，直接放行。
@@ -245,7 +278,12 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
     **完全沒有 manifest 的舊檔則是另一回事，一律擋下不放行**（2026-08-21
     修正，理由與實際案例見函式內註解）：`legacy_defaults` 處理的是「這個
     旗標當時不存在」，而沒有 manifest 代表「整份設定都不知道」，兩者不能
-    用同一套寬容邏輯。"""
+    用同一套寬容邏輯。
+
+    `supports_tag`：呼叫端有沒有 `--tag` 旗標。「換一個 `--tag` 另存」這個
+    建議只有部分腳本做得到——`profile_lowmass.py` 與
+    `profile_outlierfrac.py` 的輸出路徑寫死、根本沒有 `--tag`（2026-08-21
+    CodeRabbit review）。傳 `False` 時那個選項會換成對應的說法。"""
     # **以「檔案存不存在」決定要不要檢查，不是以 partial 空不空**
     # （2026-08-21 CodeRabbit review）：原本寫 `if not partial: return`，
     # 但一個既有的 .npz 只要沒有結果陣列（例如只寫了 metadata、或上次
@@ -255,9 +293,19 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
     # 就要驗，驗過之後才輪到「有沒有既有結果要比對設定」。
     if not out_path.exists():
         return
-    old_manifest = load_manifest(out_path)
+    status, old_manifest, detail = load_manifest_status(out_path)
     legacy_defaults = legacy_defaults or {}
-    if old_manifest is None:
+    if status == MANIFEST_UNREADABLE:
+        # 跟「沒有 manifest」分開：這是資料損毀，不是舊格式。用同一句
+        # 「加 manifest 之前存的舊檔」描述會把損毀的原因蓋掉，還會叫人去
+        # 補一個補不了的東西（2026-08-21 CodeRabbit review）。
+        print(f"錯誤：{out_path.name} 有既有結果，但 manifest **讀不出來**"
+              f"（{detail}）。這不是「舊檔沒有 manifest」，是這個檔案或它的"
+              " manifest 已經損毀——先確認檔案本身完不完整（例如上次存檔"
+              "被中斷、或磁碟問題），不要直接補一個 manifest 蓋過去，"
+              f"那會把損毀的結果偽裝成可信的。", flush=True)
+        sys.exit(1)
+    if status == MANIFEST_ABSENT:
         # **不能「視為信任沿用」**（2026-08-21 實際踩到，案例見下）。
         # 沒有 manifest 的舊檔正是最不該信任的那一種：它是加 manifest
         # 檢查之前存的，而那個「之前」涵蓋了 multi_stage_best() 精修
@@ -276,22 +324,34 @@ def check_manifest(out_path: Path, manifest: dict, partial: dict,
         #
         # 改成擋下來並說明選項：沿用舊檔必須是人明確決定的動作，
         # 不能是預設行為。
+        # 選項 2 要看呼叫端有沒有 --tag：profile_lowmass.py 與
+        # profile_outlierfrac.py 的輸出路徑寫死、沒有這個旗標，對它們印
+        # 這個選項等於叫人執行一個不存在的東西（2026-08-21 CodeRabbit
+        # review）。
+        opt2 = "    2. 這次要另存 -> 加一個不同的 --tag；\n"
+        if not supports_tag:
+            opt2 = ("    2. 這次要另存 -> 這支腳本的輸出路徑寫死、沒有 "
+                    "--tag，要另存只能先把既有檔案改名移開（同選項 1）；\n")
+        # 「有既有結果」跟「檔案在但沒有任何結果陣列」要講清楚是哪一種：
+        # 上面已改成用檔案存不存在決定要不要驗，所以這裡 partial 有可能
+        # 是空的（例如上次存檔在寫入結果前被中斷），照原本一律說「有既有
+        # 結果」會讓人去找一個根本不存在的結果。
         _has = "有既有結果" if partial else "存在（但沒有任何結果陣列）"
         print(f"錯誤：{out_path.name} {_has}，但**沒有 manifest**"
-              f"（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
-              f"設定、什麼版本的程式碼算出來的。\n"
-              f"  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
-              f"multi_stage_best() 精修 bug 還在的那段時期，沿用會讓"
-              f"「為了修那個 bug 而排的重跑」直接跳過、什麼都不算，"
-              f"卻回報成功（見 LIMITATIONS.md A1、"
-              f"docs/reference/PREFLIGHT.md）。\n"
-              f"  三個選項擇一：\n"
+              "（是加 manifest 檢查之前存的舊檔），無法確認它是用什麼"
+              "設定、什麼版本的程式碼算出來的。\n"
+              "  不自動沿用的理由：沒有 manifest 的舊檔涵蓋了 "
+              "multi_stage_best() 精修 bug 還在的那段時期，沿用會讓"
+              "「為了修那個 bug 而排的重跑」直接跳過、什麼都不算，"
+              "卻回報成功（見 LIMITATIONS.md A1、"
+              "docs/reference/PREFLIGHT.md）。\n"
+              "  三個選項擇一：\n"
               f"    1. 這次要重算 -> 把 {out_path.name} 移開"
               f"（例如改名成 {out_path.stem}_legacy_no_manifest.npz）"
-              f"再跑；\n"
-              f"    2. 這次要另存 -> 加一個不同的 --tag；\n"
-              f"    3. 確定舊檔可信 -> 自己核對過它的算法與設定之後，"
-              f"手動補上 manifest 再跑。", flush=True)
+              "再跑；\n"
+              + opt2
+              + f"    3. 確定舊檔可信 -> 自己核對過它的算法與設定之後，"
+                f"手動補上 manifest 再跑。", flush=True)
         sys.exit(1)
 
     if not partial:
