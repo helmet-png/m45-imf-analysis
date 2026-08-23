@@ -16,6 +16,9 @@ BP15−BP20 的 alpha 差值改變正負號。因此正式比較的單位不是�
 - 每項：`n_syn=40000`、config C、`refines=3,3`、單次 repeat、4 CPU。
 - BP15 的三個隔離輸入已存在並由腳本檢查：成員 CSV、誤差模型、selection model。
 - 每項有獨立 output tag，因此不會覆寫正式 headline 或彼此覆寫。
+- 已用暫存資料夾實際建立一次 BP15 的 Kaggle payload（82.2 MB）並檢查三個
+  自訂輸入與正式 BP20 預設輸入都會落在 kernel 可讀的位置；此檢查沒有登入、
+  沒有上傳、沒有送出 job。
 
 可機讀派工表：`results/bp15_formal_paired_dispatch.json`。
 產生／驗證方法：

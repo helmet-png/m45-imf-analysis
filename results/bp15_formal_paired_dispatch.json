@@ -338,5 +338,6 @@
     "Do not average all BP20 and BP15 values separately; pair by repeat_offset first.",
     "Report the paired mean and paired standard error, plus all five individual differences.",
     "This uses a narrower local PARSEC grid for controlled comparison and cannot replace the headline grid by itself."
-  ]
+  ],
+  "payload_check": "passed_with_temporary_local_payload"
 }

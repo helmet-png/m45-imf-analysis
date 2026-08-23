@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "results"
+sys.path.insert(0, str(ROOT))
 GRID = "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat"
 BP15_INPUTS = [
     RESULTS / "cmd_members_bp15_smoke.csv",
@@ -50,6 +53,8 @@ def main() -> None:
     ap.add_argument("--n-syn", type=int, default=40_000)
     ap.add_argument("--write", action="store_true",
                     help="Write results/bp15_formal_paired_dispatch.json")
+    ap.add_argument("--payload-check", action="store_true",
+                    help="Build a temporary BP15 Kaggle payload and verify paths")
     args = ap.parse_args()
     offsets = [int(x) for x in args.seeds.split(",") if x.strip()]
     if len(offsets) < 5 or len(offsets) != len(set(offsets)) or min(offsets) < 0:
@@ -79,6 +84,26 @@ def main() -> None:
             "This uses a narrower local PARSEC grid for controlled comparison and cannot replace the headline grid by itself.",
         ],
     }
+    if args.payload_check:
+        # Test the real packager without credentials or any network call.  This
+        # is deliberately a temporary directory: no queued job is modified.
+        from kaggle_sync import build_payload
+        bp15 = next(job for job in jobs if job["sample"] == "BP15")
+        with tempfile.TemporaryDirectory(prefix="m45_bp15_payload_") as tmp:
+            payload = Path(tmp) / "payload"
+            build_payload("fit_real.py", bp15["extra_files"], payload)
+            expected = [
+                payload / "fit_real.py",
+                payload / "cmd_members_bp15_smoke.csv",
+                payload / "errmodel_bp15_smoke.npz",
+                payload / "selection_bp15_smoke.npz",
+                payload / "pipeline",
+                payload / "data" / "cmd_members.csv",
+            ]
+            missing_payload = [str(p.name) for p in expected if not p.exists()]
+            if missing_payload:
+                raise RuntimeError("Payload check failed: " + ", ".join(missing_payload))
+        plan["payload_check"] = "passed_with_temporary_local_payload"
     if args.write:
         (RESULTS / "bp15_formal_paired_dispatch.json").write_text(
             json.dumps(plan, indent=2) + "\n", encoding="utf-8")
