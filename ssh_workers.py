@@ -60,6 +60,13 @@ def load_workers() -> dict[str, dict]:
             "port": int(info.get("port", 22)),
             "remote_dir": info.get("remote_dir", "~/m45_membership"),
             "procs": int(info.get("procs", 4)),
+            # 預設 "python3"（直接吃系統 Python，搭配 --break-system-packages
+            # 安裝，適合單一用途的專用運算節點）。想改用 venv 隔離就把這裡
+            # 指到 venv 的絕對路徑（例如 "~/m45_venv/bin/python3"），
+            # 見 docs/reference/CLOUD_WORKERS.md 第 2 節——CodeRabbit
+            # 2026-08-23 review 建議 venv 為預設做法，這裡用可設定欄位
+            # 讓兩種都支援，不強迫已經裝好、正常在跑的既有 worker 重裝。
+            "python_bin": info.get("python_bin") or "python3",
         }
     return out
 

@@ -24,11 +24,14 @@ worker 名稱可以是 `kaggle_accounts.json` 裡的帳號、也可以是
 `ssh_workers.json` 裡的 SSH 節點——由 `load_all_workers()` 合併解析，
 留空就交給任何有空的槽位。
 
-**這是 v1**：SSH 這條路徑還沒有被真實運算工作驗證過（`ssh_workers.json`
-填好、confirmed 能連上之前，這支程式邏輯上完整但沒有實測過完整一輪
-push→run→poll→pull），第一次真的拿去跑重運算時建議先用一個小型
-smoke-test 腳本走一輪確認，不要直接派正式工作上去（跟當初
-kaggle_smoketest.py 的用法一樣）。
+**驗證狀態**：2026-08-23 已用 `kaggle_smoketest.py` 在真實 GCP VM
+（e2-highcpu-8）上完整跑過一輪 push→run→status→pull，機制沒問題
+（過程中發現的坑是 GCP 帳號隔離、不是這支程式的邏輯錯誤，見
+`docs/reference/CLOUD_WORKERS.md`「已知陷阱」一節）。但這只驗證了
+輕量腳本的路徑，**還沒有真正拿去跑過長時間的重運算**（`--procs 4`
+以上、跑好幾小時的那種）——第一次派正式工作前，建議先觀察一次記憶體
+用量（見 `CLOUD_WORKERS.md` 的 e2-highcpu-8 記憶體尖峰說明），不要
+一開始就派滿載工作。
 
 用法：
     python cloud_queue.py

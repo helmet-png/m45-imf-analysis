@@ -65,56 +65,67 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-# 2026-08-23 CodeRabbit review 訂正：worker 名稱 -> 已經展開過 `~` 的
-# remote_dir 絕對路徑，每個 worker 在這個行程裡只透過 SSH 解析一次、
-# 快取在這裡，後面所有函式一律用 _get_worker() 拿 worker dict，不要
-# 各自重新呼叫 ssh_workers.load_workers() 再各自處理 remote_dir——
-# 理由見 _resolve_remote_dir() 的說明。
-_RESOLVED_DIRS: dict[str, str] = {}
+# 2026-08-23 CodeRabbit review 訂正：worker 名稱 -> 遠端 $HOME 絕對路徑，
+# 每個 worker 在這個行程裡只透過 SSH 查一次、快取在這裡，後面所有函式
+# 一律用 _get_worker() 拿已經展開好 `~` 的 worker dict，不要各自重新
+# 呼叫 ssh_workers.load_workers() 再各自處理——理由見 _expand_tilde()
+# 的說明。2026-08-23 第二輪：原本只展開 remote_dir，後來新增的
+# python_bin 欄位（見 ssh_workers.py）一樣可能填 `~/...` 形式，是同一個
+# `shlex.quote()` 會擋住 `~` 展開的問題，改成共用同一個展開函式跟同一份
+# $HOME 快取，不要重新發明第二套。
+_HOME_CACHE: dict[str, str] = {}
 
 
-def _resolve_remote_dir(worker_name: str, w: dict) -> str:
-    """把 `w['remote_dir']` 開頭的 `~` 展開成遠端 home 目錄的絕對路徑。
+def _get_home(worker_name: str, w: dict) -> str:
+    """查一次遠端 $HOME 並快取，查不到回傳空字串（呼叫端要自行決定
+    退回原樣是否可接受，見 _expand_tilde()）。"""
+    if worker_name in _HOME_CACHE:
+        return _HOME_CACHE[worker_name]
+    try:
+        r = ssh_workers.remote_run(w, "echo $HOME", timeout=15)
+    except subprocess.TimeoutExpired:
+        r = None
+    home = r.stdout.strip() if r is not None and r.returncode == 0 else ""
+    _HOME_CACHE[worker_name] = home
+    return home
 
-    **為什麼一定要展開，不能讓 `~` 原樣留著交給後面的呼叫點各自處理**：
-    push()／run()／poll()／kill()／pull() 每個呼叫點都會對 remote_dir
-    做 `shlex.quote()` 再組進遠端指令字串，這是對的（避免特殊字元／
-    CWE-78，見 ensure_repo() 的說明）——但 `shlex.quote("~/m45_membership")`
-    的結果是整段用單引號包起來（`'~/m45_membership'`），而 `~` 展開是
-    shell 的**詞法**規則，只在參數完全沒被引號包住時才會生效；一旦被
-    單引號包住，bash 會把它當成字面上名叫 `~` 的目錄，`cd
-    '~/m45_membership'` 會因為找不到這個字面目錄直接失敗。等於每個
-    呼叫點各自 quote 的當下都重新踩進同一個 bug。改成在每個 worker
-    第一次用到時，就用一次 SSH 查出遠端 home 目錄、把 `~` 換成絕對
-    路徑，之後快取起來給所有呼叫點共用——絕對路徑本身不含 `~`，後面
-    不管哪個呼叫點怎麼 `shlex.quote()` 都不影響展開的結果。
+
+def _expand_tilde(worker_name: str, w: dict, path: str) -> str:
+    """把 `path` 開頭的 `~` 展開成遠端 home 目錄的絕對路徑，不是 `~` 開頭
+    就原樣傳回。
+
+    **為什麼一定要在這裡展開，不能讓 `~` 原樣留著交給後面的呼叫點各自
+    處理**：push()／run()／poll()／kill()／pull() 每個呼叫點都會對
+    remote_dir（跟現在的 python_bin）做 `shlex.quote()` 再組進遠端指令
+    字串，這是對的（避免特殊字元／CWE-78，見 ensure_repo() 的說明）——
+    但 `shlex.quote("~/m45_membership")` 的結果是整段用單引號包起來
+    （`'~/m45_membership'`），而 `~` 展開是 shell 的**詞法**規則，只在
+    參數完全沒被引號包住時才會生效；一旦被單引號包住，bash 會把它當成
+    字面上名叫 `~` 的目錄，`cd '~/m45_membership'` 會因為找不到這個字面
+    目錄直接失敗。等於每個呼叫點各自 quote 的當下都重新踩進同一個 bug。
+    改成在每個 worker 第一次用到時，就用一次 SSH 查出遠端 home 目錄、
+    把 `~` 換成絕對路徑，之後快取起來給所有呼叫點共用——絕對路徑本身
+    不含 `~`，後面不管哪個呼叫點怎麼 `shlex.quote()` 都不影響展開的結果。
     """
-    if worker_name in _RESOLVED_DIRS:
-        return _RESOLVED_DIRS[worker_name]
-    remote_dir = w["remote_dir"]
-    if remote_dir == "~" or remote_dir.startswith("~/"):
-        try:
-            r = ssh_workers.remote_run(w, "echo $HOME", timeout=15)
-        except subprocess.TimeoutExpired:
-            r = None
-        home = r.stdout.strip() if r is not None and r.returncode == 0 else ""
-        if home:
-            remote_dir = home if remote_dir == "~" else home + remote_dir[1:]
-        else:
-            print(f"  警告：無法查詢 {worker_name} 的遠端 home 目錄，"
-                 f"remote_dir 的 ~ 保留原樣，後續指令可能因此失敗")
-    _RESOLVED_DIRS[worker_name] = remote_dir
-    return remote_dir
+    if path != "~" and not path.startswith("~/"):
+        return path
+    home = _get_home(worker_name, w)
+    if not home:
+        print(f"  警告：無法查詢 {worker_name} 的遠端 home 目錄，"
+             f"{path!r} 的 ~ 保留原樣，後續指令可能因此失敗")
+        return path
+    return home if path == "~" else home + path[1:]
 
 
 def _get_worker(worker_name: str) -> dict:
-    """回傳 worker 設定字典，`remote_dir` 已經解析成絕對路徑（見
-    `_resolve_remote_dir()`）。除了 push() 因為要組「worker 不存在」的
-    友善錯誤訊息、額外自己查了一次 `ssh_workers.load_workers()` 之外，
-    其餘函式一律從這裡拿 worker dict，不要繞過去重新解析。"""
+    """回傳 worker 設定字典，`remote_dir`／`python_bin` 都已經解析成
+    絕對路徑（見 `_expand_tilde()`）。除了 push() 因為要組「worker 不
+    存在」的友善錯誤訊息、額外自己查了一次 `ssh_workers.load_workers()`
+    之外，其餘函式一律從這裡拿 worker dict，不要繞過去重新解析。"""
     workers = ssh_workers.load_workers()
     w = dict(workers[worker_name])
-    w["remote_dir"] = _resolve_remote_dir(worker_name, w)
+    w["remote_dir"] = _expand_tilde(worker_name, w, w["remote_dir"])
+    w["python_bin"] = _expand_tilde(worker_name, w, w["python_bin"])
     return w
 
 
@@ -264,6 +275,7 @@ def run(worker_name: str, script: str, args: str, label: str) -> bool:
     q_label = shlex.quote(label)
     q_script = shlex.quote(script)
     q_dir = shlex.quote(remote_dir)
+    q_python = shlex.quote(w.get("python_bin") or "python3")
     # results/.start_<label> 是給 pull() 用的時間戳記標記檔（不是真正的
     # 結果檔）——worker 是持久機器，results/ 目錄是所有 label 共用的，
     # 一個 worker 可能陸續跑過很多個 label；pull() 靠這個標記檔的 mtime
@@ -272,7 +284,7 @@ def run(worker_name: str, script: str, args: str, label: str) -> bool:
     # pull() 的說明。這裡在啟動工作的同一個指令裡建立，時間點早於
     # python3 開始寫任何結果，之後 pull() 只抓比它新的檔案就不會漏。
     inner = (f"echo $$ > logs/{q_label}.pid; "
-            f"python3 -u {q_script} {args}; "
+            f"{q_python} -u {q_script} {args}; "
             f"echo $? > logs/{q_label}.exit")
     cmd = (f"cd {q_dir} && mkdir -p logs results && "
           f"rm -f logs/{q_label}.exit logs/{q_label}.pid && "
@@ -411,6 +423,22 @@ def pull(worker_name: str, label: str) -> bool:
     混在一起分不清楚」那類 bug 的同一種模式。改成用 run() 啟動時建立的
     `results/.start_<label>` 時間戳記標記檔，只挑「比它新」的檔案傳
     回來（`find ... -newer`），排除標記檔本身。
+
+    **已知未解決的限制（2026-08-23 CodeRabbit review 指出，決定不動這裡
+    的實作，記在這裡而不是假裝解決了）**：時間戳只能分辨「比標記檔新」，
+    分不出「是哪個 label 產生的」。如果同一個 worker 上**同時**有兩個
+    label 在跑（例如你手動開兩個終端機分別對同一個 worker 呼叫
+    `ssh_sync.py run`），一個 label 的 `pull()` 可能會把另一個 label
+    在同一時間窗口寫出的檔案也一起抓進來。真正的修法是讓每個 label
+    寫進各自專屬的遠端輸出目錄，但這需要改動每支計算腳本本身寫死的
+    `results/` 輸出路徑（`fit_real.py`／`profile_lowmass.py` 等全部
+    腳本、以及本機／Kaggle 佇列既有的慣例都假設這個路徑），牽動面遠超過
+    這支同步工具，不在這次的範圍內處理。**目前的防線是流程上的，不是
+    程式上的**：`cloud_queue.py` 的槽位設計保證同一個 worker 同一時間
+    只會有一個槽位在跑（見 `main()` 的 `slots` 字典，一個 worker 名稱
+    對應一個槽位），透過 `cloud_queue.py` 派工不會踩到這個問題；只有
+    繞過佇列、手動對同一個 worker 平行呼叫 `run()` 才會踩到，見
+    `docs/reference/CLOUD_WORKERS.md` 的對應警告。
     """
     w = _get_worker(worker_name)
     remote_dir = w["remote_dir"]
