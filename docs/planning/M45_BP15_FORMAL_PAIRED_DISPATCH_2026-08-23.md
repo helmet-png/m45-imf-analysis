@@ -41,3 +41,8 @@ BP15−BP20 的 alpha 差值改變正負號。因此正式比較的單位不是�
 2. 報告五個差值、差值平均與 paired standard error。
 3. 若方向仍大量翻轉，結論是「尚未測出穩定 BP15 效果」；不是把平均硬說成偵測。
 4. 即使有差異，這也是選擇門檻診斷，不會取代正式 BP20 headline。
+
+另有 `scripts/diagnostics/summarize_bp15_formal_paired.py` 作為 fail-closed
+彙整器：它會檢查每個 NPZ 的合成星數、精修層數、repeat offset 與完整配對。
+目前預期的 10 個結果尚不存在，因此它正確回報 `blocked_incomplete_formal_pairs`，
+不會在只有部分工作回傳時就先算平均數。
