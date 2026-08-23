@@ -4,7 +4,8 @@
     "n_synthetic": 3000,
     "paired_seeds": [
       2000,
-      2013
+      2013,
+      2026
     ],
     "refines": [
       3,
@@ -72,25 +73,55 @@
         "q_gamma": 0.5555555555555558,
         "dav": -0.16666666666666635
       }
+    },
+    {
+      "seed": 2026,
+      "bp20": {
+        "logage": 7.933333333333331,
+        "av": 0.5111111111111112,
+        "f_bin": 0.561111111111111,
+        "alpha": 2.3666666666666663,
+        "mh": -0.08333333333333331,
+        "q_gamma": -0.6999999999999997,
+        "dav": 0.4333333333333333
+      },
+      "bp15": {
+        "logage": 8.033333333333331,
+        "av": 0.2666666666666666,
+        "f_bin": 0.5055555555555556,
+        "alpha": 2.0999999999999996,
+        "mh": 0.033333333333333375,
+        "q_gamma": -0.6999999999999998,
+        "dav": 0.44999999999999996
+      },
+      "bp15_minus_bp20": {
+        "logage": 0.10000000000000053,
+        "av": -0.24444444444444458,
+        "f_bin": -0.05555555555555536,
+        "alpha": -0.2666666666666666,
+        "mh": 0.1166666666666667,
+        "q_gamma": -1.1102230246251565e-16,
+        "dav": 0.016666666666666663
+      }
     }
   ],
   "paired_delta_mean": {
-    "logage": 0.12222222222222134,
-    "av": -0.2111111111111111,
-    "f_bin": -0.25555555555555554,
-    "alpha": 0.09999999999999964,
-    "mh": 0.15833333333333338,
-    "q_gamma": 1.0277777777777777,
-    "dav": -0.11666666666666647
+    "logage": 0.11481481481481441,
+    "av": -0.22222222222222224,
+    "f_bin": -0.1888888888888888,
+    "alpha": -0.022222222222222438,
+    "mh": 0.1444444444444445,
+    "q_gamma": 0.6851851851851851,
+    "dav": -0.07222222222222209
   },
   "paired_delta_range": {
     "logage": 0.04444444444444162,
-    "av": 0.044444444444444786,
-    "f_bin": 0.08888888888888885,
-    "alpha": 0.3333333333333339,
+    "av": 0.05555555555555586,
+    "f_bin": 0.24444444444444458,
+    "alpha": 0.5333333333333332,
     "mh": 0.08333333333333334,
-    "q_gamma": 0.944444444444444,
-    "dav": 0.09999999999999976
+    "q_gamma": 1.5,
+    "dav": 0.18333333333333302
   },
   "stopped_incomplete_runs": {
     "n_synthetic": 10000,
@@ -98,7 +129,7 @@
     "reason": "both paired jobs exceeded 55 minutes when sharing one machine; no atomic result file was produced"
   },
   "interpretation": [
-    "The alpha delta changed sign (-0.067 then +0.267), so these runs cannot establish a BP15 effect.",
+    "The alpha delta changed sign across the paired seeds, so these runs cannot establish a BP15 effect.",
     "The isolated BP15 inputs and custom fit entrypoint are verified and reproducible.",
     "A formal comparison needs matched BP20/BP15 runs at 40000 synthetic systems and multiple paired seeds on separate workers."
   ]
