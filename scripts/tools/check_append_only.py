@@ -79,11 +79,13 @@ def check(base_ref: str) -> int:
             base_text = _file_at_ref(base_ref, rel)
             if base_text is not None:
                 any_base_file = True
-                base_counts.update(l for l in base_text.splitlines() if l.strip())
+                base_counts.update(
+                    line for line in base_text.splitlines() if line.strip())
             cur_path = HERE / rel
             if cur_path.is_file():
                 cur_text = cur_path.read_text(encoding="utf-8", errors="replace")
-                cur_counts.update(l for l in cur_text.splitlines() if l.strip())
+                cur_counts.update(
+                    line for line in cur_text.splitlines() if line.strip())
         if not any_base_file:
             print(f"  {label}：{base_ref} 上都沒有這些檔案，跳過（視為這個 PR 新增）")
             continue
