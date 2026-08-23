@@ -1,0 +1,25 @@
+{
+  "status": "hypothetical_sample_scale_not_membership_or_imf_result",
+  "current_cmd_count": 1078,
+  "current_finite_saved_mass_count": 1078,
+  "current_mass_bins": {
+    "below_0p3": 370,
+    "0p3_to_0p5": 279,
+    "at_least_0p5": 429
+  },
+  "current_G16_to_18_count": 459,
+  "bp15_candidate_count": 16,
+  "bp15_candidate_count_at_least_0p5": 0,
+  "hypothetical_increase_if_all_candidates_are_accepted": {
+    "relative_to_all_current_cmd_percent": 1.484230055658627,
+    "relative_to_current_below_0p3_percent": 4.324324324324325,
+    "relative_to_current_G16_to_18_percent": 3.485838779956427,
+    "relative_to_alpha_segment_at_least_0p5_percent": 0.0
+  },
+  "limits": [
+    "The increases are bookkeeping scenarios, not proof that all 16 candidates should be accepted.",
+    "No background contaminants are counted because the full field/control selection has not been rebuilt.",
+    "The saved step5 masses are used only for bin location and predate p2final_v3.",
+    "No membership model, selection function, forward model or IMF was rerun."
+  ]
+}

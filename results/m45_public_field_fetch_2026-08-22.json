@@ -1,0 +1,21 @@
+{
+  "status": "complete_bounded_public_tap_query",
+  "rows": 6956,
+  "top_guard": 20000,
+  "tap": "https://gaia.ari.uni-heidelberg.de/tap/sync",
+  "query_geometry": {
+    "ra_deg": 56.60083,
+    "dec_deg": 24.11389,
+    "radius_deg": 5.0
+  },
+  "cuts": {
+    "phot_g_mean_mag_max": 18.0,
+    "parallax_min_mas": 4.0
+  },
+  "local_ignored_output": "data/m45_r5_g18_plx4.csv",
+  "reproduce": "python scripts/data_prep/fetch_m45_field_public_tap.py",
+  "limits": [
+    "The raw CSV is gitignored because it is reproducible and approximately 1.64 MB.",
+    "This fetch does not perform membership, quality selection, a forward fit or an IMF fit."
+  ]
+}

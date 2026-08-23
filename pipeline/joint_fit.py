@@ -263,11 +263,12 @@ class JointModel:
             return fbin
         f_lo = fbin - contrast * w_hi
         f_hi = fbin + contrast * w_lo
-        # 機率必須落在 [0,1]。contrast 太大時會超出，這裡夾住並且**不**
-        # 事後修正另一段——夾住之後樣本平均會偏離原本的 f_bin，那代表
-        # 這個 contrast 對這個 f_bin 來說太大、設計上就不該用，呼叫端
-        # 應該挑更小的 contrast，而不是讓程式默默改掉它的意思。
-        return np.where(hi, np.clip(f_hi, 0.0, 1.0), np.clip(f_lo, 0.0, 1.0))
+        # contrast 太大會讓機率超界，也會破壞「固定整體 f_bin」的控制變因。
+        # 不可偷偷 clip，否則診斷測到的是另一個沒有明說的模型。
+        if not (0.0 <= f_lo <= 1.0 and 0.0 <= f_hi <= 1.0):
+            raise ValueError(
+                "mass-dependent binary fractions fall outside [0, 1]")
+        return np.where(hi, f_hi, f_lo)
 
     def log_prior(self, theta):
         nb = len(self.bounds)
@@ -283,7 +284,8 @@ class JointModel:
             lp += -0.5 * ((theta[4] - self._mh_mean) / self._mh_sigma) ** 2
         return lp
 
-    def synthesise(self, theta, return_binary_flag=False):
+    def synthesise(self, theta, return_binary_flag=False,
+                   return_source_index=False):
         """由參數生成合成星團，回傳套用選擇函數後的 (顏色, 星等[, 是否雙星])。
 
         `return_binary_flag=True` 時多回傳一個布林陣列，標出每顆合成星
@@ -354,11 +356,39 @@ class JointModel:
         # 一個後處理步驟，這裡沒有做，報出來的 alpha 也不是那個東西。
         # 另外第 (2) 步與 m1 獨立，等於假設**雙星比例不隨質量變化**——
         # 這是已知的簡化，不是疏忽（見 LIMITATIONS.md）。
-        # 預設 _effective_fbin() 直接回傳純量 fbin，這行與加入它之前逐位元
-        # 相同；只有呼叫過 set_mass_dependent_fbin() 的**生成端**模型才會
-        # 拿到逐星的 f_bin 陣列（見 LIMITATIONS.md D14 衍生的
-        # mass_dependent_fbin 待認領工作）。
-        is_bin = d["u_bin"][:n] < self._effective_fbin(fbin, m1)
+        # A diagnostic may set ``binary_fraction_profile`` to
+        # ``(mass_break, f_below, f_above)``.  This deliberately affects only
+        # synthetic *injections*: normal production fits do not set it and
+        # therefore retain the original mass-independent Bernoulli(f_bin).
+        # Keeping this switch on the model rather than adding a fitted theta
+        # parameter prevents a diagnostic from silently changing the headline
+        # model.
+        binary_profile = getattr(self, "binary_fraction_profile", None)
+        binary_contrast = getattr(self, "binary_fraction_contrast", None)
+        if binary_contrast is not None:
+            mass_break, contrast = map(float, binary_contrast)
+            if not (mi.min() < mass_break < mi.max()):
+                raise ValueError("binary_fraction_contrast mass break is outside the isochrone")
+            hi = m1 >= mass_break
+            w_hi = float(hi.mean())
+            w_lo = 1.0 - w_hi
+            f_below = fbin - contrast * w_hi
+            f_above = fbin + contrast * w_lo
+            if not (0.0 <= f_below <= 1.0 and 0.0 <= f_above <= 1.0):
+                raise ValueError("mass-dependent binary fractions fall outside [0, 1]")
+            p_bin = np.where(hi, f_above, f_below)
+        elif binary_profile is None:
+            # Main's supported diagnostic API.  With no diagnostic setting,
+            # _effective_fbin returns the original scalar fbin unchanged.
+            p_bin = self._effective_fbin(fbin, m1)
+        else:
+            mass_break, f_below, f_above = map(float, binary_profile)
+            if not (mi.min() < mass_break < mi.max()):
+                raise ValueError("binary_fraction_profile mass break is outside the isochrone")
+            if not (0.0 <= f_below <= 1.0 and 0.0 <= f_above <= 1.0):
+                raise ValueError("binary_fraction_profile fractions must be in [0, 1]")
+            p_bin = np.where(m1 < mass_break, f_below, f_above)
+        is_bin = d["u_bin"][:n] < p_bin
         if is_bin.any():
             u = d["u_q"][:n][is_bin]
             qg, qm = qgamma, self.c3.binary_q_min
@@ -497,6 +527,8 @@ class JointModel:
                                         d["z_snr"][:n], d["u_sel"][:n])
         if keep.sum() < 50:
             return None
+        if return_source_index:
+            return (bp - rp)[keep], g[keep], is_bin[keep], np.flatnonzero(keep)
         if return_binary_flag:
             return (bp - rp)[keep], g[keep], is_bin[keep]
         return (bp - rp)[keep], g[keep]
