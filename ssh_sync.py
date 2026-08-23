@@ -6,8 +6,9 @@ VM）背景執行，跟 kaggle_sync.py 是同一個角色，但架構故意不�
 
 **運作方式**：
   1. push：確保 worker 上有這個 repo 的最新程式碼（第一次 git clone，
-     之後 git pull），確保靜態資料（data/、isochrones/）都在，缺什麼
-     才補傳什麼。
+     之後 git pull——`data/` 底下的檔案跟著這一步進來，因為它們本來
+     就有進版控），確保 isochrones/ 這類真的被 .gitignore 排除、
+     git pull 帶不到的靜態資料都在，缺什麼才補傳什麼。
   2. run：用 `setsid bash -c '...; echo $? > logs/<label>.exit'` 讓
      腳本在 SSH 連線斷掉後繼續在背景跑，同時把它包在 bash -c 裡讓
      bash（不是 python3 本身）的 PID 寫進 <label>.pid——bash 只有在
@@ -181,30 +182,40 @@ def ensure_repo(w: dict, branch: str = "main") -> bool:
 
 
 def ensure_static_data(w: dict) -> bool:
-    """補齊 worker 上缺少或內容過期的靜態資料（isochrones/、data/ 底下
-    不進版控的那些檔案）——用 kaggle_sync.py 已經維護的同一份白名單，
-    不重複列一次清單（清單漏更新是這個專案踩過的坑，見 kaggle_sync.py
+    """補齊 worker 上缺少或內容過期的靜態資料（isochrones/ 底下不進版控
+    的那些網格檔）——用 kaggle_sync.py 已經維護的同一份白名單，不重複
+    列一次清單（清單漏更新是這個專案踩過的坑，見 kaggle_sync.py
     NEEDED_ISOCHRONE_GLOBS 旁邊 2026-08-10 的說明）。只上傳「本機有、
     worker 上還沒有／內容不同」的檔案——這是跟 Kaggle 每次全部重傳的
     關鍵差異，VM 是持久機器，資料傳過一次就不必再傳。
 
+    **只處理 isochrones/，不處理 data/**（2026-08-23 修正，使用者實測
+    踩到才發現）：`kaggle_sync.NEEDED_DATA_FILES` 列的三個檔案
+    （`cmd_members.csv`／`errmodel.npz`／`selection.npz`）其實**都有進
+    版控**，跟 isochrones/ 網格檔（真的被 .gitignore 排除、git pull
+    帶不到）不是同一類。原本這裡把兩份清單一視同仁，各自 scp 上去——
+    但 `ensure_repo()` 的 `git pull` 早就已經帶來這三個檔案的最新版本，
+    scp 再蓋一次是多餘的，而且如果本機工作目錄剛好對這幾個檔案有還沒
+    commit 的本地修改（多人協作、剛好有其他 session 動過），scp 上去的
+    內容會跟 git 記錄的版本不一致，讓 VM 的 git 工作目錄多一筆沒 commit
+    的差異——下次 `git pull --ff-only` 若剛好遇到這個檔案在 GitHub 上
+    也被改過，可能因為本機修改擋在前面而失敗。改成只信任 git 本身帶來
+    的版本，不再用 scp 覆寫任何有進版控的檔案。
+
     **用 sha256 比對內容，不是只看檔案存不存在**（2026-08-22 CodeRabbit
     review 訂正）：原本只查 `test -f`，只要遠端路徑上有同名檔案就跳過
-    上傳——如果本機的 isochrone 網格或 `data/` 底下的檔案換了新版本
-    （內容變了、檔名沒變，例如重新產生同一份 errmodel.npz），worker 上
-    的舊檔案會永遠不會被換掉，之後在這台 worker 上跑的每個工作都在用
-    過期資料算，而且不會有任何錯誤訊息——這正是這個專案已經吃過虧的
-    「靜默用錯資料」那類 bug，不是理論風險。sha256 要在本機和遠端都算
-    一次，比對雜湊值而不是比對檔案大小／mtime——mtime 在 scp 傳輸後不
-    一定保留，大小相同但內容不同的機率雖低但不是零。
+    上傳——如果本機的 isochrone 網格換了新版本（內容變了、檔名沒變），
+    worker 上的舊檔案會永遠不會被換掉，之後在這台 worker 上跑的每個
+    工作都在用過期資料算，而且不會有任何錯誤訊息——這正是這個專案已經
+    吃過虧的「靜默用錯資料」那類 bug，不是理論風險。sha256 要在本機和
+    遠端都算一次，比對雜湊值而不是比對檔案大小／mtime——mtime 在 scp
+    傳輸後不一定保留，大小相同但內容不同的機率雖低但不是零。
     """
     remote_dir = w["remote_dir"]
     q_dir = shlex.quote(remote_dir)
-    ssh_workers.remote_run(
-        w, f"mkdir -p {q_dir}/data {q_dir}/isochrones", timeout=30)
+    ssh_workers.remote_run(w, f"mkdir -p {q_dir}/isochrones", timeout=30)
     ok = True
-    for sub, names in (("data", kaggle_sync.NEEDED_DATA_FILES),
-                       ("isochrones", kaggle_sync.NEEDED_ISOCHRONE_GLOBS)):
+    for sub, names in (("isochrones", kaggle_sync.NEEDED_ISOCHRONE_GLOBS),):
         for name in names:
             local = HERE / sub / name
             if not local.exists():
@@ -477,8 +488,17 @@ def pull(worker_name: str, label: str) -> bool:
               flush=True)
         return False
     if not r.stdout.strip():
+        # 2026-08-23 修正：沒有新檔案可抓時，原本直接 return，漏了清掉
+        # 標記檔——這裡沒有「這次抓失敗要保留基準點重試」的顧慮（根本
+        # 沒有東西在抓，下面 if ok: 清標記檔的理由同樣適用），留著不清
+        # 只會讓 results/ 底下累積一堆孤兒 .start_<label> 檔案（實測
+        # smoke test 這種不寫 results/ 的腳本就會踩到）。清掉失敗
+        # （連線問題）不影響回傳值，反正下次 run() 一開始就會重新
+        # touch 覆寫，不清也不會造成錯誤結果，只是不夠乾淨。
         print(f"  {label} 目前沒有新的 results/ 檔案可抓（標記檔遺失或"
              f"工作還沒寫出東西），略過", flush=True)
+        ssh_workers.remote_run(
+            w, f"cd {q_dir} && rm -f {shlex.quote(marker)}", timeout=30)
         return ok
     remote_files = [ln for ln in r.stdout.strip().splitlines() if ln.strip()]
     for rel in remote_files:

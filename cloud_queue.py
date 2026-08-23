@@ -33,6 +33,21 @@ worker 名稱可以是 `kaggle_accounts.json` 裡的帳號、也可以是
 用量（見 `CLOUD_WORKERS.md` 的 e2-highcpu-8 記憶體尖峰說明），不要
 一開始就派滿載工作。
 
+**集中式團隊派工（2026-08-23 新增）**：真實憑證（`kaggle_accounts.json`／
+`ssh_workers.json`）只放在跑這支程式的機器上，不會、也不需要分給每個
+隊員。隊員自己的機器完全不需要拿到任何 token 或 SSH 私鑰——只要對
+`cloud_queue.txt` 開分支、加一行工作、開 PR、合併（照 `CONTRIBUTING.md`
+的既有流程），這支程式**每一輪都會自動把 `cloud_queue.txt` 從
+`origin/main` 同步下來**（`sync_queue_file()`），不用手動通知、也不用
+重啟這支程式，下一輪（預設 60 秒內）就會撿到新工作開始派。反過來說，
+**這台機器上的 `cloud_queue.txt` 不要手動編輯**——下一輪同步會被
+`origin/main` 上的版本蓋掉，想加工作一律走 PR，維持「誰都可以查看
+佇列在跑什麼、誰都不用碰真實憑證」這個集中式模式的核心好處。結果
+下載下來後（`cloud_results/`／`kaggle_results/`）目前還是要靠操作這台
+機器的人手動 commit 進 `results/`／`results/RESULTS_LOG.md` 才會讓
+隊員看到——這步還沒自動化，是刻意的：自動 commit 未經檢查的結果，跟
+這個專案「先確認方法沒有邏輯問題再產出最終數據」的原則衝突。
+
 用法：
     python cloud_queue.py
 """
@@ -116,6 +131,47 @@ def release_lock():
             LOCK.unlink()
     except (FileNotFoundError, ValueError, OSError):
         pass
+
+
+def sync_queue_file(branch: str = "main") -> None:
+    """把 `cloud_queue.txt` 從 `origin/<branch>` 同步下來，讓隊員 PR
+    合併進去的新工作不用重啟這支程式就會被撿到——集中式團隊派工模式
+    的核心機制，見檔案開頭的說明。
+
+    只同步這一個檔案（`git checkout origin/<branch> -- cloud_queue.txt`），
+    不對整個工作目錄跑 `git pull`：這台機器可能正在用其他檔案（例如
+    `kaggle_accounts.json`／`ssh_workers.json` 不進版控不受影響，但
+    `pipeline/`／`config.toml` 這類已經被目前這個 process 讀進記憶體的
+    模組，中途整包 pull 也不會讓已載入的程式碼重新生效，反而只會增加
+    「跟本機其他未儲存修改衝突」的風險），只精確更新這一個檔案最單純、
+    風險最小。
+
+    刻意用 `git checkout origin/<branch> -- <file>` 而不是 `git pull`：
+    這台機器上的 `cloud_queue.txt` 本來就不該有本機獨有的修改（見檔案
+    開頭「不要手動編輯」的說明），直接用遠端版本蓋過去最單純，不需要
+    處理合併衝突的情況。
+
+    同步失敗（離線、git 帳號憑證過期等）只印警告、不中斷派工迴圈——
+    沿用本機現有的佇列內容照常運作，只是暫時看不到新加的工作，等下次
+    同步成功再撿到，不因為輔助功能失敗就讓派工整個停擺。
+    """
+    try:
+        r = subprocess.run(["git", "fetch", "origin", branch],
+                           cwd=str(HERE), capture_output=True, text=True,
+                           timeout=30)
+        if r.returncode != 0:
+            print(f"  同步 {QUEUE.name} 失敗（git fetch：{r.stderr.strip()[:200]}），"
+                 f"這輪沿用本機現有內容", flush=True)
+            return
+        r = subprocess.run(
+            ["git", "checkout", f"origin/{branch}", "--", QUEUE.name],
+            cwd=str(HERE), capture_output=True, text=True, timeout=15)
+        if r.returncode != 0:
+            print(f"  同步 {QUEUE.name} 失敗（git checkout："
+                 f"{r.stderr.strip()[:200]}），這輪沿用本機現有內容",
+                 flush=True)
+    except subprocess.TimeoutExpired:
+        print(f"  同步 {QUEUE.name} 逾時，這輪沿用本機現有內容", flush=True)
 
 
 def read_queue() -> list[dict]:
@@ -329,6 +385,7 @@ def main() -> None:
              flush=True)
 
     while True:
+        sync_queue_file()
         done = read_done()
         pending = [it for it in read_queue() if it["label"] not in done
                   and it["label"] not in
@@ -420,8 +477,15 @@ def main() -> None:
             slots[name] = None
 
         if not pending and all(s is None for s in slots.values()):
-            print("雲端佇列已清空，結束。", flush=True)
-            return
+            # **不像 kaggle_queue.py 那樣「清空就結束」**（2026-08-23 為
+            # 集中式團隊派工模式改的）：隊員隨時可能開 PR 把新工作合併進
+            # `cloud_queue.txt`，如果這支程式因為「暫時沒事做」就結束，
+            # 之後合併的工作不會有人接，等於要有人一直手動盯著重啟——
+            # 違背「隊員不用碰真實憑證也能自由調度」的目標。繼續等待，
+            # 靠 sync_queue_file() 下一輪自動撿新工作；真的要停這支程式
+            # 用 Ctrl+C。
+            print("佇列目前空了，繼續常駐等待新工作（Ctrl+C 結束）。",
+                 flush=True)
         time.sleep(POLL_SECS)
 
 

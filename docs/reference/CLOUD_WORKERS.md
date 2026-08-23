@@ -198,3 +198,41 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 | 已知失敗模式 | dataset 掛載時序競態（`kaggle_queue.py` 的 `BACKOFFS`） | 目前未知——是新路徑，第一次真的派重運算前建議先觀察一輪 |
 | 核數 | 免費 CPU notebook 約 4 vCPU | 依 VM 規格（GCP 8 vCPU／Oracle 2 vCPU） |
 | 結果回傳 | `kaggle kernels output` 下載 | `scp` 拉 `results/` 回本機 |
+
+## 集中式團隊派工（2026-08-23 新增）
+
+科展隊員不用拿到任何真實憑證（Kaggle token、VM 的 SSH 私鑰）就能自己
+排工作、讓它自動被派到某個帳號或 worker 上執行——真實憑證只放在
+`cloud_queue.py` 常駐執行的那台機器（目前是這台）。運作方式跟這個 repo
+既有的協作流程一致，不是另外發明一套：
+
+**隊員這邊要做的事**（跟平常提 PR 一樣）：
+1. `git checkout -b <你的名字>/queue-<簡短描述>`
+2. 編輯 `cloud_queue.txt`，在檔案尾端加一行（格式見檔案開頭註解，跟
+   `kaggle_queue.txt` 完全相同）：
+   ```
+   我的實驗|profile_lowmass.py|--procs 4 --n-syn 40000|inject_lowmass.py|false|
+   ```
+   最後一欄（worker 名稱）留空，交給任何有空的帳號／worker 接；標籤
+   （最前面那欄）要取一個目前佇列裡沒出現過的名字，避免跟別人或跟
+   `logs/cloud_queue_done.txt`（本機、不進版控）裡已完成的標籤重複。
+3. commit、push、開 PR，照 `CONTRIBUTING.md` 的規則自行合併（低風險、
+   單純加一行資料，不用等審查）。
+
+**接下來自動發生的事**：跑 `cloud_queue.py` 的那台機器每一輪
+（預設 60 秒）都會自動把 `cloud_queue.txt` 從 `origin/main` 同步下來
+（`sync_queue_file()`），PR 一合併，下一輪就會偵測到新工作、找一個
+閒置的帳號或 worker 開始跑，不需要另外通知操作那台機器的人。
+
+**還沒自動化的部分**：工作跑完的結果目前還是要靠操作那台機器的人
+手動確認、commit 進 `results/`、寫 `results/RESULTS_LOG.md`，才會
+讓其他隊員在 `git pull` 之後看到——這步刻意保留人工確認，不自動
+commit 未經檢查的結果（跟這個專案「先確認方法沒有邏輯問題再產出
+最終數據」的原則一致）。想知道自己的工作跑得怎麼樣，目前只能問
+操作那台機器的人，還沒有隊員自己能查的狀態頁面。
+
+**這個模式的信任邊界**：能開 PR 改 `cloud_queue.txt` 的人（也就是這個
+GitHub repo 的協作者）事實上就能讓運算機器跑任意腳本＋任意參數——
+跟這個專案既有的「GitHub repo 存取權限＝信任邊界」模型一致（多 agent／
+多人協作本來就建立在這個假設上），不是額外新增的風險，但值得知道：
+這不是對公開網路開放的系統，是對「已經是這個 repo 協作者」的人開放。
