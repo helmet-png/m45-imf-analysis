@@ -267,8 +267,24 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
     model_bounds = getattr(model, "bounds", None)
     if model_bounds is not None:
         n = min(len(model_bounds), len(bounds))
-        bounds = [(max(lo, float(mlo)), min(hi, float(mhi)))
-                  for (lo, hi), (mlo, mhi) in zip(bounds[:n], model_bounds[:n])] + bounds[n:]
+        merged = [(max(lo, float(mlo)), min(hi, float(mhi)))
+                  for (lo, hi), (mlo, mhi) in zip(bounds[:n], model_bounds[:n])]
+        # 2026-08-23 CodeRabbit review：搜尋軸跟先驗如果根本沒有重疊
+        # （例如網格開錯範圍、或先驗事後改過沒同步更新網格常數），
+        # 交集會是空的（lo > hi），後面的貼牆判斷會拿一個下界大於
+        # 上界的無效區間去算容忍帶，安靜地算出沒有意義的數字。
+        # 這種情況不該悄悄放行——立刻中止並點名是哪一維，讓人去確認
+        # 網格常數跟 config.toml 先驗是不是真的對不上。
+        for i, (lo, hi) in enumerate(merged):
+            if lo > hi:
+                nm = names[i] if names and i < len(names) else f"dim{i}"
+                raise ValueError(
+                    f"搜尋軸跟先驗的交集是空的（{nm}：搜尋軸 "
+                    f"{bounds[i]}，先驗 {tuple(model_bounds[i])}，交集 "
+                    f"({lo:.4g}, {hi:.4g}) 下界大於上界）——網格常數跟 "
+                    f"model 的先驗完全對不上，不是單純貼牆，先去確認"
+                    f"這兩邊的範圍設定。")
+        bounds = merged + bounds[n:]
     best, lp = grid_best_parallel(model, cur, n_proc)
     for r in refines:
         nxt = []
