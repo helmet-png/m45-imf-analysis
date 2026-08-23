@@ -95,6 +95,19 @@ def main():
         "queried_stars": len(rows), "exclusive_first_failure_counts": counts,
         "sequential_accounting": sequential, "by_G_bin": by_g_bin,
         "stars": stars,
+        # 2026-08-23 CodeRabbit review：本檔案原本沒有記錄實際套用的門檻值，
+        # 只有 exact_replay_of_saved_step2_quality_cut_formulas 這個 status
+        # 字串，讀者無法從輸出本身判斷這次跑的是 BP15 還是 BP20 設定——
+        # 要靠外部記憶「這次跑的時候 config.toml 是什麼」，容易被下游文件
+        # 誤讀成另一組設定的結果。config.toml 讀進來的值就是實際套用的值，
+        # 直接照抄進輸出，不用另外傳參數。
+        "effective_step2_cmd_config": {
+            "g_bright_limit": cfg.g_bright_limit,
+            "min_flux_snr_g": cfg.min_flux_snr_g,
+            "min_flux_snr_bp": cfg.min_flux_snr_bp,
+            "min_flux_snr_rp": cfg.min_flux_snr_rp,
+            "bp_rp_excess_sigma": cfg.bp_rp_excess_sigma,
+        },
         "limits": [
             "Gaia DR3 fields were queried on 2026-08-22; the saved baseline may have originated from a different retrieval date but the same DR3 source IDs.",
             "The replay covers apply_quality_cuts in the current branch only; it does not prove older pipeline code used identical settings.",

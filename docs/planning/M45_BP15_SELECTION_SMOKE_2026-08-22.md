@@ -39,7 +39,7 @@ RA=56.60083°、Dec=24.11389°，重新下載得到原本預期的 6,956 列；�
 
 ## 能下的結論
 
-已驗證：BP15 的一維 selection model 在預先使用的三項 smoking-test 門檻下
+已驗證：BP15 selection model（三波段星等＋BP-RP 顏色係數＋excess curve，不是一維）在預先使用的三項 smoking-test 門檻下
 沒有失敗，因此可以進入下一個成本受控的前向模型 smoke。
 
 不能下的結論：

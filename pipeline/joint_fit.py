@@ -367,6 +367,8 @@ class JointModel:
         binary_contrast = getattr(self, "binary_fraction_contrast", None)
         if binary_contrast is not None:
             mass_break, contrast = map(float, binary_contrast)
+            if not (mi.min() < mass_break < mi.max()):
+                raise ValueError("binary_fraction_contrast mass break is outside the isochrone")
             hi = m1 >= mass_break
             w_hi = float(hi.mean())
             w_lo = 1.0 - w_hi

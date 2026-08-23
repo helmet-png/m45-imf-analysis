@@ -406,6 +406,13 @@
       "first_failure": "BP_signal_to_noise"
     }
   ],
+  "effective_step2_cmd_config": {
+    "g_bright_limit": 4.0,
+    "min_flux_snr_g": 50.0,
+    "min_flux_snr_bp": 20.0,
+    "min_flux_snr_rp": 20.0,
+    "bp_rp_excess_sigma": 3.0
+  },
   "limits": [
     "Gaia DR3 fields were queried on 2026-08-22; the saved baseline may have originated from a different retrieval date but the same DR3 source IDs.",
     "The replay covers apply_quality_cuts in the current branch only; it does not prove older pipeline code used identical settings."

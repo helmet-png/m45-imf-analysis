@@ -10,10 +10,44 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "results"
 
+EXPECT_N_SYN = 3000
+EXPECT_REFINES = "3,3"
+# 2026-08-23 CodeRabbit review：原本 row() 只讀 C，不驗證 manifest——
+# 若某個檔案被錯誤結果覆蓋或置換（例如 BP15 那份不小心被 BP20 的輸出
+# 覆寫），輸出仍會照樣印出固定的 paired seeds 與 BP15-BP20 差值，不會
+# 有任何警示。selection_file 是唯一能分辨「這份輸出真的是 BP15 smoke
+# 輸入跑出來的、不是 BP20」的欄位，一併驗證。
+EXPECT_SELECTION = {
+    "bp20": "data/selection.npz",
+    "bp15": "results/selection_bp15_smoke.npz",
+}
 
-def row(name: str) -> list[float]:
-    with np.load(RESULTS / name, allow_pickle=False) as data:
-        return np.asarray(data["C"], float)[0].tolist()
+
+def row(name: str, *, kind: str, repeat_offset: int) -> list[float]:
+    path = RESULTS / name
+    with np.load(path, allow_pickle=False) as data:
+        if "__manifest__" not in data.files:
+            raise ValueError(f"{name}：沒有 manifest，無法驗證這份輸出的設定")
+        man = json.loads(str(data["__manifest__"]))
+        C = np.asarray(data["C"], float)
+    if C.shape[0] < 1:
+        raise ValueError(f"{name}：C 是空的，沒有任何結果列")
+    if man.get("n_syn") != EXPECT_N_SYN:
+        raise ValueError(
+            f"{name}：n_syn={man.get('n_syn')!r}，預期 {EXPECT_N_SYN}")
+    if man.get("refines") != EXPECT_REFINES:
+        raise ValueError(
+            f"{name}：refines={man.get('refines')!r}，預期 {EXPECT_REFINES!r}")
+    if man.get("repeat_offset") != repeat_offset:
+        raise ValueError(
+            f"{name}：repeat_offset={man.get('repeat_offset')!r}，"
+            f"預期 {repeat_offset}")
+    if man.get("selection_file") != EXPECT_SELECTION[kind]:
+        raise ValueError(
+            f"{name}：selection_file={man.get('selection_file')!r}，"
+            f"預期 {EXPECT_SELECTION[kind]!r}（這份輸出可能不是真的用"
+            f"{kind.upper()} 輸入跑出來的）")
+    return C[0].tolist()
 
 
 def main() -> None:
@@ -21,9 +55,9 @@ def main() -> None:
     pairs = []
     # Each offset is a new paired Monte-Carlo draw.  Keep this list explicit
     # so a missing or mismatched output cannot silently be averaged in.
-    for seed, suffix in [(2000, ""), (2013, "_rep1"), (2026, "_rep2")]:
-        bp20 = row(f"fit_real_bp20_control_3k{suffix}.npz")
-        bp15 = row(f"fit_real_bp15_smoke_3k{suffix}.npz")
+    for offset, (seed, suffix) in enumerate([(2000, ""), (2013, "_rep1"), (2026, "_rep2")]):
+        bp20 = row(f"fit_real_bp20_control_3k{suffix}.npz", kind="bp20", repeat_offset=offset)
+        bp15 = row(f"fit_real_bp15_smoke_3k{suffix}.npz", kind="bp15", repeat_offset=offset)
         pairs.append({
             "seed": seed,
             "bp20": dict(zip(names, bp20)),

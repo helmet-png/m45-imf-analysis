@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -29,10 +30,24 @@ def main():
         .read_text(encoding="utf-8")
     )
     wanted = set(gate["recovered_source_ids"])
-    candidates = [
-        row for row in load_csv(ROOT / "data" / "hr23_passprob_notcmd_gaia_photometry.csv")
-        if row["source_id"] in wanted
-    ]
+    photometry_rows = load_csv(ROOT / "data" / "hr23_passprob_notcmd_gaia_photometry.csv")
+    # 2026-08-23 CodeRabbit review：原本直接用 list comprehension 篩選，
+    # wanted 裡缺失的 source_id 會被靜默跳過（candidate_count 比預期少，
+    # 沒有任何警示），CSV 裡若同一個 source_id 重複列則會被重複計入
+    # （紅藍側統計灌水）。兩種情況都要先擋下來，不能算完才發現樣本數不對。
+    id_counts = Counter(row["source_id"] for row in photometry_rows)
+    missing = sorted(wanted - set(id_counts))
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} 個 recovered_source_ids 在 "
+            f"hr23_passprob_notcmd_gaia_photometry.csv 裡找不到：{missing}")
+    duplicated = sorted(sid for sid in wanted if id_counts[sid] > 1)
+    if duplicated:
+        raise RuntimeError(
+            f"{len(duplicated)} 個 source_id 在 "
+            f"hr23_passprob_notcmd_gaia_photometry.csv 裡出現超過一次："
+            f"{duplicated}")
+    candidates = [row for row in photometry_rows if row["source_id"] in wanted]
     cmd = load_csv(ROOT / "data" / "cmd_members.csv")
     cmd_g = np.asarray([number(row, "phot_g_mean_mag") for row in cmd])
     cmd_colour = np.asarray([number(row, "bp_rp") for row in cmd])
