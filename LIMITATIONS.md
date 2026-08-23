@@ -1032,7 +1032,7 @@ Bernoulli(`f_bin`) 決定誰帶伴星，伴星質量 `m2 = q·m1`（`q ~ q^q_gam
 說明已寫進 `PAPER_OUTLINE.md` 3.4 節、`fit_real.py` 檔頭、
 `pipeline/joint_fit.py` 抽樣段落三處。
 
-**兩種定義差多少（實算）**：`scripts/analysis/system_vs_stellar_mf.py`
+**兩種定義差多少（實算）**：`scripts/diagnostics/system_vs_stellar_mf.py`
 （本次新增，可重跑）用專案實際參數（alpha=2.35、q_gamma=−0.50、
 q_min=0.10、量測窗 0.5–2.5 M☉）做四百萬次蒙地卡羅，把伴星也放進同一個
 量測窗後重做截斷冪律 MLE：stellar MF 比 system MF **陡**，
