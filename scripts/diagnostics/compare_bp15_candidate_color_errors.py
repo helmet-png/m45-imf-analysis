@@ -4,29 +4,27 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from pipeline.table_compat import Table as _CompatTable  # noqa: E402
+
+_astropy = types.ModuleType("astropy")
+_astropy_table = types.ModuleType("astropy.table")
+_astropy_table.Table = _CompatTable
+_astropy.table = _astropy_table
+sys.modules.setdefault("astropy", _astropy)
+sys.modules.setdefault("astropy.table", _astropy_table)
+
+from pipeline.step2_cmd import (  # noqa: E402
+    bp_rp_excess_expected, bp_rp_excess_sigma,
+)
 MAG_ERR_COEF = 2.5 / np.log(10)
-
-
-def expected_excess(color):
-    c = np.asarray(color, float)
-    return np.where(
-        c < 0.5,
-        1.154360 + 0.033772*c + 0.032277*c**2,
-        np.where(
-            c < 4.0,
-            1.162004 + 0.011464*c + 0.049255*c**2 - 0.005879*c**3,
-            1.057572 + 0.140537*c,
-        ),
-    )
-
-
-def excess_sigma(g):
-    return 0.0059898 + 8.817481e-12 * np.asarray(g, float)**7.618399
 
 
 def load(path):
@@ -75,8 +73,9 @@ def main():
     bp_snr = column(candidates, "phot_bp_mean_flux_over_error")
     rp_snr = column(candidates, "phot_rp_mean_flux_over_error")
     residual_sigma = np.abs(
-        column(candidates, "phot_bp_rp_excess_factor") - expected_excess(colour)
-    ) / excess_sigma(g)
+        column(candidates, "phot_bp_rp_excess_factor")
+        - bp_rp_excess_expected(colour)
+    ) / bp_rp_excess_sigma(g)
     recovered = (
         np.isfinite(g) & (g >= 16) & (g < 18)
         & np.isfinite(g_snr) & (g_snr >= 50)

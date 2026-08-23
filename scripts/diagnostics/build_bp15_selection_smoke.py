@@ -24,7 +24,7 @@ sys.modules.setdefault("astropy.table", _astropy_table)
 
 from pipeline import selection as selmod  # noqa: E402
 from pipeline.step2_cmd import (  # noqa: E402
-    bp_rp_excess_expected, bp_rp_excess_sigma, photometric_error_model,
+    photometric_error_model, photometric_quality_masks,
 )
 
 THRESHOLDS = {"g": 50.0, "bp": 15.0, "rp": 20.0}
@@ -67,19 +67,13 @@ def arrays(rows):
 
 
 def quality_masks(d):
-    colour = d["bp"] - d["rp"]
-    snr = (
-        np.isfinite(d["g"]) & (d["g"] >= G_BRIGHT)
-        & np.isfinite(d["bp"]) & np.isfinite(d["rp"])
-        & np.isfinite(d["snr_g"]) & (d["snr_g"] >= THRESHOLDS["g"])
-        & np.isfinite(d["snr_bp"]) & (d["snr_bp"] >= THRESHOLDS["bp"])
-        & np.isfinite(d["snr_rp"]) & (d["snr_rp"] >= THRESHOLDS["rp"])
+    return photometric_quality_masks(
+        d["g"], d["bp"], d["rp"], d["snr_g"], d["snr_bp"],
+        d["snr_rp"], d["excess"], g_bright_limit=G_BRIGHT,
+        min_flux_snr_g=THRESHOLDS["g"],
+        min_flux_snr_bp=THRESHOLDS["bp"],
+        min_flux_snr_rp=THRESHOLDS["rp"], excess_sigma_limit=3.0,
     )
-    residual = d["excess"] - bp_rp_excess_expected(colour)
-    excess = np.isfinite(residual) & (
-        np.abs(residual) < 3.0 * bp_rp_excess_sigma(d["g"])
-    )
-    return snr, excess
 
 
 def make_excess_curve(d, snr, excess):

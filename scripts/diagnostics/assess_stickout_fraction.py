@@ -114,7 +114,7 @@ def main():
     errmodel = dict(np.load(ROOT / "data" / "errmodel.npz"))
     grid = isomod.load_grid(isomod.CACHE / args.grid)
     samples = np.asarray(np.load(ROOT / args.result)["C"], float)
-    if samples.ndim != 2 or samples.shape[1] < 7:
+    if samples.ndim != 2 or samples.shape[1] != 7:
         raise ValueError("Expected completed config-C samples with seven parameters")
     theta_ref = np.mean(samples, axis=0)
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
