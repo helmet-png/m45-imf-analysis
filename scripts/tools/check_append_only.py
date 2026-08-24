@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CI 用：驗證附加型清單檔（見 .gitattributes 的 merge=union 那兩個）
+"""CI 用：驗證附加型清單檔（見 .gitattributes 的 merge=union 清單）
 沒有既有行被改掉或刪掉，只允許新增。
 
 **為什麼需要這個**（2026-08-21 CodeRabbit review）：`.gitattributes` 的
@@ -37,18 +37,20 @@ HERE = Path(__file__).resolve().parents[2]
 # 職責不同，但涵蓋的檔案必須是同一組，否則會有檔案「用 union 合併卻沒被
 # 驗證」或「被驗證但沒有用 union」的落差。
 #
-# **每個 group 是「必須合起來看的一組檔案」**（2026-08-23 CodeRabbit
-# review）：`WORK_BOARD.md` 依 `CONTRIBUTING.md` 零之四規則，任務完成後
-# 允許把那一行**搬**到 `WORK_BOARD_DONE.md`——單獨看 `WORK_BOARD.md`
-# 這是「刪除既有行」，會被逐檔案比對的舊版邏輯誤判成違規；但那一行的
-# 完整內容其實原封不動出現在 `WORK_BOARD_DONE.md` 裡，沒有真的遺失或
-# 被改掉，只是換了檔案。改成把同一組的檔案內容合起來看 append-only：
-# 「合併後的多重集合」不能少任何一行，行可以在組內的檔案之間搬動，
-# 但內容不能真的消失或被改掉。`results/RESULTS_LOG.md` 沒有這種「搬去
-# 別的檔案」的機制，維持單檔案一組。
+# **`WORK_BOARD.md` 已從這組移出**（2026-08-24）：原本兩個檔案合起來看
+# append-only，是因為舊格式下 `WORK_BOARD.md` 的每一行都是一筆帶日期的
+# 歷史紀錄，任務完成後允許把那一行搬到 `WORK_BOARD_DONE.md`，單獨看
+# `WORK_BOARD.md` 會被誤判成「刪除既有行」。2026-08-24 改成統一大表格＋
+# 每個任務只有一行的格式後，`CONTRIBUTING.md` 零之四已經明講「狀態變動
+# 直接覆蓋對應行的儲存格，不再 append 新一行」——`WORK_BOARD.md` 現在
+# 本質上就是會被就地編輯的現況板，append-only 契約對它已經不成立，
+# 繼續放在這個 group 裡會擋下所有正常的狀態更新。真正需要維持
+# append-only 的是 `WORK_BOARD_DONE.md`（歷史封存，任何時候都不該有
+# 既有行消失或被改掉）與 `results/RESULTS_LOG.md`，兩者現在都是各自
+# 獨立的單檔案 group。
 APPEND_ONLY_GROUPS: list[list[str]] = [
     ["results/RESULTS_LOG.md"],
-    ["WORK_BOARD.md", "WORK_BOARD_DONE.md"],
+    ["WORK_BOARD_DONE.md"],
 ]
 
 
