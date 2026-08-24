@@ -122,7 +122,7 @@
 
 | 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |
 |---|---|---|
-| ~~`praesepe_fbin_wall_residual`（D17）~~ | Codex 使用已保存的 clean CMD、固定 HR23 年齡／消光 PARSEC 軌跡與 `_postmerge_d8` 結果，只讀計算殘差；不增加 seed、不重跑前向模型 | **殘差定位完成，缺陷未解除**：G=10–14 對得上，G=14–18 中位偏亮 0.511 mag，足以解釋 `f_bin=1`；仍不能引用 alpha／聯星率。詳見 `docs/planning/D17_PRAESEPE_CMD_RESIDUAL_2026-08-24.md`。 |
+| ~~`praesepe_fbin_wall_residual`（D17）~~ | Codex 使用已保存的 clean CMD、固定 HR23 年齡／消光、太陽金屬量 PARSEC 軌跡與 `_postmerge_d8` 結果，只讀計算殘差；開始前已讀 `QUEUE_ALERTS.md`，無待處理列；結果生成 commit `20c6c18337cc9b31f156a39f9e37bd3c2f800415` | **殘差定位完成，缺陷未解除**：G=10–14 對得上，G=14–18 中位偏亮 0.511 mag，初步支持暗端失配驅動 `f_bin=1`；仍不能引用 alpha／聯星率。詳見 `docs/planning/D17_PRAESEPE_CMD_RESIDUAL_2026-08-24.md`。 |
 
 ### B/C/D 類補齊（2026-08-13 查證過程）
 
