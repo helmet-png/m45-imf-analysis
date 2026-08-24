@@ -49,7 +49,6 @@ worker 缺本機專屬資料造成的，這個坑以後可能在別的資料檔�
 |---|---|---|---|---|
 | p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3 | results/profile_lowmass.npz |
 | p6b_inject_lowmass_v2（A1） | 尚未進行 | 指派時間：2026-08-12 | inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 | results/inject_lowmass.npz |
-| limepy_radial_crosscheck（A5、B5） | 進行中 | 開始日期：2026-08-24 | results/limepy_multimass.npz、results/fit_real_radial_r1_final.npz、results/fit_real_radial_r2_final.npz、results/fit_real_radial_r3_final.npz、results/fit_real_radial_rall_final.npz | results/limepy_radial_crosscheck.json（正式 `_final` 誤差棒對照） |
 | nbody_prior_from_radial（A5） | 尚未進行 | 指派時間：2026-08-12 | mcluster_sse -N 400 -S 0.3/0.5/0.7（各跑數組，圍繞 pilot 參數 -P 0 -R 2.3 -Q 0.5 擾動） | nbody_setup/ 下的模擬網格輸出（檔名依 nbody_setup/README.md 命名慣例，尚未產生） |
 | pdmf_step4_radius_expansion（A5） | 尚未進行 | 指派時間：2026-08-12 | config.toml [target] radius_deg 改為 8–17°；scripts/data_prep/fetch_gaia.py → scripts/drivers/run_pipeline.py 第 1–5 步 | 新的 data/cmd_members.csv 與 results/ 下對應的第 1–5 步輸出（含 pyUPMASK 六格驗證圖） |
 | bhac15_isochrone_test（C1、D1） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat --procs 8 --n-syn 40000 --repeats 5 --configs A,C | results/fit_real_bhac.npz（規劃中的檔名，比照 fit_real_dr2.npz 命名慣例） |
@@ -87,13 +86,6 @@ p6b_inject_lowmass_v2：驗證低質量段冪次的可辨識性——這個數�
 Kaggle 上同類工作曾多次重派，但沒有找到明確的完成結論，認領前務必
 先查 results/ 與 RESULTS_LOG.md 確認是否已經有可用結果，避免重工。
 耗時未查證。
-
-limepy_radial_crosscheck：認領人：Codex 本機 session（分支
-`codex/limepy-radial-crosscheck`）。LIMEPY 多質量平衡模型本身已經擬合完成
-（phi0=3.44、r0=2.50 pc），這是第 3 步唯一剩下的驗收動作——把模型
-預測的 α(<r) 拿去跟觀測值比對。觀測端的有誤差棒版本（radial_final_reruns）
-已於 2026-08-23 全部到齊，不用再等，現在就可以做。耗時未查證，是
-純比對計算，不涉及重新跑合成星團，預期是輕量級工作。
 
 nbody_prior_from_radial：N-body 模擬（第 5 步）的初步校準方向，
 不是正式版本。前置的三個定義不一致（分箱方式、半徑維度、質量範圍
