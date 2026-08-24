@@ -119,10 +119,10 @@ bhac15_isochrone_test：BHAC15 等時線的網格轉換與涵蓋範圍確認
 上限 2.50 M_sun，比較結果要誠實標注只驗證了低質量段。耗時未查證，
 量級應與同類 fit_real.py 全量跑（--configs A,C --repeats 5）相當。
 
-sensitivity_sweep_membership_threshold：量成員判定門檻
+sensitivity_sweep_membership_threshold：認領人：本機 Claude session，
+透過 gcp1（GCP e2-highcpu-8）派工。量成員判定門檻
 （membership_threshold）對頭條數字的敏感度，這是 D2 待補齊的敏感度
-測試之一。認領人：本機 Claude session，透過 gcp1（GCP e2-highcpu-8）
-派工。第一批（0.6／0.7）已於 2026-08-24 在 gcp1 實測完成，耗時 600.4
+測試之一。第一批（0.6／0.7）已於 2026-08-24 在 gcp1 實測完成，耗時 600.4
 分鐘（約 10 小時），結果見 results/RESULTS_LOG.md 同日期那行：門檻
 從現行預設 0.7 放寬到 0.6，成員數 1,297→1,308（測光篩選後 n_obs
 1,078→1,087），alpha 完全不變（2.367→2.367，跨度 0.000，對照注入
