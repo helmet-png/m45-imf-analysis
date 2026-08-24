@@ -66,6 +66,17 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _rm_marker_best_effort(w: dict, q_dir: str, marker: str) -> None:
+    """刪掉 pull() 用的 `.start_<label>` 標記檔，逾時／連線問題不當一回事——
+    這一步只是清潔，失敗頂多留下一個孤兒標記檔（下次同一個 label 的
+    run() 一開始就會重新 touch 覆寫），不值得讓 pull() 因為這步失敗。"""
+    try:
+        ssh_workers.remote_run(
+            w, f"cd {q_dir} && rm -f {shlex.quote(marker)}", timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 # 2026-08-23 CodeRabbit review 訂正：worker 名稱 -> 遠端 $HOME 絕對路徑，
 # 每個 worker 在這個行程裡只透過 SSH 查一次、快取在這裡，後面所有函式
 # 一律用 _get_worker() 拿已經展開好 `~` 的 worker dict，不要各自重新
@@ -79,15 +90,40 @@ _HOME_CACHE: dict[str, str] = {}
 
 def _get_home(worker_name: str, w: dict) -> str:
     """查一次遠端 $HOME 並快取，查不到回傳空字串（呼叫端要自行決定
-    退回原樣是否可接受，見 _expand_tilde()）。"""
+    退回原樣是否可接受，見 _expand_tilde()）。
+
+    **只快取查詢成功的結果**（2026-08-23 CodeRabbit review：實際踩到
+    才發現）：原本不管查詢成功或失敗都寫進 `_HOME_CACHE`，若第一次
+    呼叫剛好遇到暫時性的連線問題（例如 SSH 逾時），空字串會被永久
+    快取住——`cloud_queue.py` 是常駐行程，之後**這一輪程序活著的
+    期間**，同一個 worker 的每一次 `poll()`／`pull()` 都會沿用這個
+    空字串、印警告、讓 `remote_dir` 裡的 `~` 保留原樣，導致
+    `cd '~/m45_membership'` 每次都失敗（`~` 被 `shlex.quote()` 包住
+    後不會被 shell 展開，見上面 `_expand_tilde()` 的說明）——遠端
+    工作本身其實還在正常跑，但本機再也偵測不到它跑完，也永遠拉不回
+    結果，而且不會有任何看起來像「壞掉」的錯誤訊息，只有反覆印的
+    警告，容易被當成雜訊忽略。改成只有查詢真的成功才寫進快取，失敗
+    不快取，下一次呼叫會重新嘗試查詢。"""
     if worker_name in _HOME_CACHE:
         return _HOME_CACHE[worker_name]
     try:
         r = ssh_workers.remote_run(w, "echo $HOME", timeout=15)
     except subprocess.TimeoutExpired:
+        print(f"  （查詢 {worker_name} 的 $HOME 逾時 15 秒）")
         r = None
-    home = r.stdout.strip() if r is not None and r.returncode == 0 else ""
-    _HOME_CACHE[worker_name] = home
+    home = ""
+    if r is not None:
+        if r.returncode == 0:
+            home = r.stdout.strip()
+        else:
+            # 2026-08-23：原本失敗時完全不印 stderr，警告訊息只說「查不到」，
+            # 看不出真正原因（連線被拒、逾時、認證失敗都長一樣），除錯只能
+            # 用另一個互動式 shell 手動重現——已經踩到一次「手動測都成功、
+            # 常駐行程卻每次都失敗」的情況，查不出差異在哪，補上這行。
+            print(f"  （查詢 {worker_name} 的 $HOME 失敗，returncode="
+                 f"{r.returncode}，stderr={r.stderr.strip()[:200]!r}）")
+    if home:
+        _HOME_CACHE[worker_name] = home
     return home
 
 
@@ -159,8 +195,19 @@ def ensure_repo(w: dict, branch: str = "main") -> bool:
     remote_dir = w["remote_dir"]
     q_dir = shlex.quote(remote_dir)
     q_branch = shlex.quote(branch)
-    check = ssh_workers.remote_run(
-        w, f"test -d {q_dir}/.git && echo YES || echo NO", timeout=30)
+    # 2026-08-24 修正：這兩個 remote_run() 呼叫原本沒接
+    # subprocess.TimeoutExpired——本機網路短暫異常（實測發生過，見
+    # cloud_queue.py 對應的說明）時逾時會讓例外直接往上炸，讓
+    # ensure_repo() 沒機會走到自己的「回傳 False」錯誤處置，一路往上
+    # 讓呼叫端也沒接住。雖然 cloud_queue.py 現在的主迴圈有整段 try 兜底
+    # 不會讓整支程式崩潰，但這裡直接接住能維持 push() 原本「失敗就回傳
+    # False」的正確語意，錯誤處置在正確的層級發生，不必依賴外層兜底。
+    try:
+        check = ssh_workers.remote_run(
+            w, f"test -d {q_dir}/.git && echo YES || echo NO", timeout=30)
+    except subprocess.TimeoutExpired:
+        print(f"  無法連線到 worker：連線逾時（30 秒）")
+        return False
     if check.returncode != 0:
         print(f"  無法連線到 worker：{(check.stderr or check.stdout).strip()[:300]}")
         return False
@@ -170,7 +217,11 @@ def ensure_repo(w: dict, branch: str = "main") -> bool:
     else:
         url = _repo_ssh_url()
         cmd = (f"git clone --branch {q_branch} {shlex.quote(url)} {q_dir}")
-    r = ssh_workers.remote_run(w, cmd, timeout=180)
+    try:
+        r = ssh_workers.remote_run(w, cmd, timeout=180)
+    except subprocess.TimeoutExpired:
+        print(f"  git 同步逾時（180 秒），本機網路或 VM 可能異常")
+        return False
     print(r.stdout.strip())
     if r.returncode != 0:
         print(f"  git 同步失敗：{r.stderr.strip()[:500]}")
@@ -213,7 +264,11 @@ def ensure_static_data(w: dict) -> bool:
     """
     remote_dir = w["remote_dir"]
     q_dir = shlex.quote(remote_dir)
-    ssh_workers.remote_run(w, f"mkdir -p {q_dir}/isochrones", timeout=30)
+    try:
+        ssh_workers.remote_run(w, f"mkdir -p {q_dir}/isochrones", timeout=30)
+    except subprocess.TimeoutExpired:
+        print(f"  建立 isochrones/ 目錄逾時（30 秒），本機網路或 VM 可能異常")
+        return False
     ok = True
     for sub, names in (("isochrones", kaggle_sync.NEEDED_ISOCHRONE_GLOBS),):
         for name in names:
@@ -246,10 +301,17 @@ def ensure_static_data(w: dict) -> bool:
             if remote_hash and remote_hash == _sha256(local):
                 continue
             print(f"  上傳 {sub}/{name}（worker 上缺少或內容不同）...")
-            r = subprocess.run(
-                ssh_workers.scp_base(w) +
-                [str(local), f"{w['user']}@{w['host']}:{remote_dir}/{sub}/{name}"],
-                capture_output=True, text=True, timeout=1800)
+            try:
+                r = subprocess.run(
+                    ssh_workers.scp_base(w) +
+                    [str(local),
+                     f"{w['user']}@{w['host']}:{remote_dir}/{sub}/{name}"],
+                    capture_output=True, text=True, timeout=1800)
+            except subprocess.TimeoutExpired:
+                print(f"  上傳 {sub}/{name} 逾時（30 分鐘），本機網路或 "
+                     f"VM 可能異常")
+                ok = False
+                continue
             if r.returncode != 0:
                 print(f"  上傳失敗：{r.stderr.strip()[:300]}")
                 ok = False
@@ -460,10 +522,14 @@ def pull(worker_name: str, label: str) -> bool:
     (out_dir / "results").mkdir(parents=True, exist_ok=True)
     ok = True
     for f in (f"logs/{label}.out", f"logs/{label}.err", f"logs/{label}.exit"):
-        r = subprocess.run(
-            ssh_workers.scp_base(w) +
-            [f"{w['user']}@{w['host']}:{remote_dir}/{f}", str(out_dir / f)],
-            capture_output=True, text=True, timeout=60)
+        try:
+            r = subprocess.run(
+                ssh_workers.scp_base(w) +
+                [f"{w['user']}@{w['host']}:{remote_dir}/{f}", str(out_dir / f)],
+                capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            print(f"  抓 {f} 逾時，略過（不影響下面 results/ 的抓取）")
+            continue
         if r.returncode != 0:
             print(f"  抓 {f} 失敗（可能該檔案不存在）：{r.stderr.strip()[:200]}")
 
@@ -497,17 +563,21 @@ def pull(worker_name: str, label: str) -> bool:
         # touch 覆寫，不清也不會造成錯誤結果，只是不夠乾淨。
         print(f"  {label} 目前沒有新的 results/ 檔案可抓（標記檔遺失或"
              f"工作還沒寫出東西），略過", flush=True)
-        ssh_workers.remote_run(
-            w, f"cd {q_dir} && rm -f {shlex.quote(marker)}", timeout=30)
+        _rm_marker_best_effort(w, q_dir, marker)
         return ok
     remote_files = [ln for ln in r.stdout.strip().splitlines() if ln.strip()]
     for rel in remote_files:
         dest = out_dir / "results" / Path(rel).relative_to("results")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        rr = subprocess.run(
-            ssh_workers.scp_base(w) +
-            [f"{w['user']}@{w['host']}:{remote_dir}/{rel}", str(dest)],
-            capture_output=True, text=True, timeout=1800)
+        try:
+            rr = subprocess.run(
+                ssh_workers.scp_base(w) +
+                [f"{w['user']}@{w['host']}:{remote_dir}/{rel}", str(dest)],
+                capture_output=True, text=True, timeout=1800)
+        except subprocess.TimeoutExpired:
+            print(f"  抓 {rel} 逾時（30 分鐘）")
+            ok = False
+            continue
         if rr.returncode != 0:
             print(f"  抓 {rel} 失敗：{rr.stderr.strip()[:300]}")
             ok = False
@@ -516,8 +586,7 @@ def pull(worker_name: str, label: str) -> bool:
         # 成功抓完才清掉標記檔——清早了、萬一這次有檔案抓失敗要重試，
         # 下一輪 pull 就會找不到基準時間點，把整批檔案都當成「新的」
         # 重抓一次（多花一點頻寬，但不會漏抓，比留著標記檔更安全）。
-        ssh_workers.remote_run(
-            w, f"cd {q_dir} && rm -f {shlex.quote(marker)}", timeout=30)
+        _rm_marker_best_effort(w, q_dir, marker)
     return ok
 
 
