@@ -1,7 +1,7 @@
 # D8：多星團程式合併後重跑驗證
 
-日期：2026-08-23  
-程式版本：`main` commit `d9a09f4`  
+日期：2026-08-23
+程式版本：`main` commit `d9a09f4`
 工作分支：`codex/d8-postmerge-closeout`
 
 ## 一句話結論
