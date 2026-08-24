@@ -194,10 +194,35 @@ def read_queue() -> list[dict]:
 
 
 def read_done() -> set[str]:
+    """回傳「不用再排進 pending」的標籤集合。
+
+    2026-08-24 修正：**`push_failed` 不算數，不永久噤聲**——實測踩到：
+    這台機器（不是 worker）短暫網路中斷（DNS 解不到 github.com、SSH
+    連不上 VM）時，`start_slot()` 的 `push()` 會失敗，被 `mark_done()`
+    記成 `push_failed`。但這是「連工作都還沒真的開始」的建置階段失敗，
+    不是工作本身跑錯——網路一恢復，同一個工作理論上就能正常跑，但原本
+    這裡把任何狀態都當「已處理」永久排除，導致網路一恢復，`cloud_queue.py`
+    也不會自動重試，卡在「佇列已清空」空等，直到有人發現才手動刪
+    `logs/cloud_queue_done.txt` 裡那一行。跟 `run_queue.py` 的
+    `read_done()` 排除 `stalled_giveup`／`preflight_fail`（環境性、
+    建置階段失敗，不代表工作本身壞掉）是同一個理由、同一個修法——這裡
+    當初沒照著做，是遺漏不是刻意簡化。`error`／`cancelled`／`timeout`
+    這類「工作真的跑過、有明確失敗結果」的狀態維持原行為（不自動重試，
+    避免真正壞掉的工作卡住佇列），只有 `push_failed` 排除在外。
+    """
     if not DONE.exists():
         return set()
-    return {l.split("\t")[0] for l in
-            DONE.read_text(encoding="utf-8").splitlines() if l.strip()}
+    out = set()
+    for l in DONE.read_text(encoding="utf-8").splitlines():
+        if not l.strip():
+            continue
+        parts = l.split("\t")
+        label = parts[0]
+        status = parts[1] if len(parts) > 1 else ""
+        if status == "push_failed":
+            continue
+        out.add(label)
+    return out
 
 
 def mark_done(label: str, status: str, secs: float, worker: str) -> None:
