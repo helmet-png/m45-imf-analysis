@@ -270,8 +270,23 @@ def ensure_static_data(w: dict) -> bool:
         print("  建立 isochrones/ 目錄逾時（30 秒），本機網路或 VM 可能異常")
         return False
     ok = True
+    # 2026-08-24 CodeRabbit review 訂正：worker／網路真的不通時，原本會對
+    # 白名單裡每一個檔案各自等一輪 sha256sum 逾時（120 秒）再等一輪 scp
+    # 上傳逾時（1800 秒），累加起來單次 push() 可能卡住
+    # 「檔案數 × 1930 秒」——這段時間裡 cloud_queue.py 主迴圈的
+    # `for name, kind in workers.items()` 是同步跑的，等於這個 worker
+    # 連不上的這段期間，其他 worker（包含還連得上的）全部要排隊等它，
+    # 不是只有這個 worker 自己受影響。第一次遇到連線層級的逾時
+    # （sha256sum 或 scp 逾時，不是「檔案內容不同」這種正常業務判斷）
+    # 就直接放棄這個 worker 剩下的檔案，當這一輪 push() 失敗，下一輪
+    # `cloud_queue.py` 重新嘗試——比每個檔案都賭一次「這次會不會通」
+    # 便宜太多，且不影響「已經連得上」時的正常行為。
+    connection_ok = True
     for sub, names in (("isochrones", kaggle_sync.NEEDED_ISOCHRONE_GLOBS),):
         for name in names:
+            if not connection_ok:
+                ok = False
+                break
             local = HERE / sub / name
             if not local.exists():
                 continue    # 本機也沒有就不管——跟 kaggle_sync.py 的行為一致
@@ -295,9 +310,11 @@ def ensure_static_data(w: dict) -> bool:
                     timeout=120)
                 remote_hash = check.stdout.strip() if check.returncode == 0 else ""
             except subprocess.TimeoutExpired:
-                print(f"  查詢 {sub}/{name} 遠端雜湊逾時，當作內容不同"
-                     f"處理（會觸發上傳）")
-                remote_hash = ""
+                print(f"  查詢 {sub}/{name} 遠端雜湊逾時，判斷連線本身"
+                     f"有問題，放棄這個 worker 剩下的檔案，下一輪重試")
+                connection_ok = False
+                ok = False
+                continue
             if remote_hash and remote_hash == _sha256(local):
                 continue
             print(f"  上傳 {sub}/{name}（worker 上缺少或內容不同）...")
@@ -308,8 +325,9 @@ def ensure_static_data(w: dict) -> bool:
                      f"{w['user']}@{w['host']}:{remote_dir}/{sub}/{name}"],
                     capture_output=True, text=True, timeout=1800)
             except subprocess.TimeoutExpired:
-                print(f"  上傳 {sub}/{name} 逾時（30 分鐘），本機網路或 "
-                     f"VM 可能異常")
+                print(f"  上傳 {sub}/{name} 逾時（30 分鐘），判斷連線本身"
+                     f"有問題，放棄這個 worker 剩下的檔案，下一輪重試")
+                connection_ok = False
                 ok = False
                 continue
             if r.returncode != 0:
@@ -566,7 +584,13 @@ def pull(worker_name: str, label: str) -> bool:
         _rm_marker_best_effort(w, q_dir, marker)
         return ok
     remote_files = [ln for ln in r.stdout.strip().splitlines() if ln.strip()]
+    # 理由同 ensure_static_data()：連線層級的逾時發生一次，就別讓剩下
+    # 每個檔案都各自再賭一次 30 分鐘（2026-08-24 CodeRabbit review）。
+    connection_ok = True
     for rel in remote_files:
+        if not connection_ok:
+            ok = False
+            break
         dest = out_dir / "results" / Path(rel).relative_to("results")
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -575,7 +599,9 @@ def pull(worker_name: str, label: str) -> bool:
                 [f"{w['user']}@{w['host']}:{remote_dir}/{rel}", str(dest)],
                 capture_output=True, text=True, timeout=1800)
         except subprocess.TimeoutExpired:
-            print(f"  抓 {rel} 逾時（30 分鐘）")
+            print(f"  抓 {rel} 逾時（30 分鐘），判斷連線本身有問題，"
+                 f"放棄剩下的檔案，下一輪重試")
+            connection_ok = False
             ok = False
             continue
         if rr.returncode != 0:
