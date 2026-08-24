@@ -11,13 +11,16 @@
    `injection_recovery.py`、`LIMITATIONS.md`、`PAPER_OUTLINE.md`、
    `queue.txt`）的工作之前，先讀完下面的表格，確認沒有人已經在做
    同一件事或高度重疊的事。
-2. 開始工作時，把對應行的狀態改成「進行中」，並補上開始日期。放棄
-   或暫停時改回「尚未進行」並在說明文字補一句原因。真的做完時，
-   照 `CONTRIBUTING.md` 零之四把整行連同說明文字搬到 `WORK_BOARD_DONE.md`，
-   這裡刪掉——不要用刪除線或「已完成」字樣蓋在原本的行上，那樣會讓
-   同一件事的新舊說明混在同一格裡，越堆越難讀。要查某任務目前狀態，
-   先看它還在不在這份文件裡；不在了就代表已完成，去 `WORK_BOARD_DONE.md`
-   找完整記錄。
+2. 開始工作時，把對應行的狀態改成「進行中」，補上開始日期，並在
+   下方說明文字的第一句寫明認領人是誰（人類協作者姓名、或哪一種
+   agent／哪一台機器）——表格本身沒有獨立的認領人欄位，這句話是
+   唯一能讓其他人知道「該去問誰」的地方，漏寫等於規則 1 要求的
+   查重無法真的落實。放棄或暫停時改回「尚未進行」並在說明文字補一句
+   原因。真的做完時，照 `CONTRIBUTING.md` 零之四把整行連同說明文字
+   搬到 `WORK_BOARD_DONE.md`，這裡刪掉——不要用刪除線或「已完成」
+   字樣蓋在原本的行上，那樣會讓同一件事的新舊說明混在同一格裡，越堆
+   越難讀。要查某任務目前狀態，先看它還在不在這份文件裡；不在了就
+   代表已完成，去 `WORK_BOARD_DONE.md` 找完整記錄。
 3. 看不出算不算重複、範圍該怎麼分——不要用猜的、也不要因為怕衝突
    就不寫：在說明文字裡寫清楚困惑點，讓開這個任務的人或使用者看到
    後決定怎麼分工。
@@ -44,22 +47,22 @@ worker 缺本機專屬資料造成的，這個坑以後可能在別的資料檔�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3（5 個低質量段冪次 x 3 次重複，共 15 次擬合） | results/profile_lowmass.npz |
+| p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3 | results/profile_lowmass.npz |
 | p6b_inject_lowmass_v2（A1） | 尚未進行 | 指派時間：2026-08-12 | inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 | results/inject_lowmass.npz |
-| limepy_radial_crosscheck（A5、B5） | 尚未進行 | 指派時間：2026-08-13 | results/limepy_multimass.npz（已擬合好的 King 模型）+ results/fit_real_radial_r1/r2/r3/rall_final.npz（觀測值，已到齊） | 模型預測 α(<r) 與觀測 α(<r) 在 r1/r2/r3/rall 四個半徑的逐項對照表 |
-| nbody_prior_from_radial（A5） | 尚未進行 | 指派時間：2026-08-12 | mcluster_sse 產生的初始條件，圍繞 pilot 參數（400 顆星、質量分層度 0.5、virial Q=0.5）小幅擾動，掃質量分層度 0.3/0.5/0.7 | 至少 3–5 組模擬跑完的 α(r) 曲線，跟觀測 α(<r) 的擬合優度比較 |
-| pdmf_step4_radius_expansion（A5） | 尚未進行 | 指派時間：2026-08-12 | 改大 config.toml 的 radius_deg（8–17°），重跑 fetch_gaia.py → run_pipeline.py 第 1–5 步 | 新的全樣本 α，含大半徑下的 pyUPMASK 六格驗證圖 |
-| bhac15_isochrone_test（C1、D1） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat（網格已建置好） | 跟 PARSEC-EDR3／PARSEC-DR2／MIST-DR2 同格式的濾光片/模型效應分解比較表 |
-| sensitivity_sweep_membership_threshold（D2） | 進行中 | 開始日期：2026-08-23（已派工到 gcp1） | scripts/diagnostics/sensitivity_sweep.py --target membership_threshold --n-syn 40000，先跑 0.6／0.7 兩個門檻 | LIMITATIONS.md D2 要記的「改動這個值，頭條數字變化多少」對照表 |
-| extinction_form_test（C5，現役缺陷．優先度高） | 尚未進行 | 指派時間：2026-08-13（已排入 queue.txt，尚未輪到） | injection_recovery.py，c5_davform_lognormal／c5_davform_truncexp 兩趟（只有 --dav-distribution 不同，dav 掃到 1.20） | 兩種消光分布形式下 alpha／A_V 偏差的量化比較 |
-| pyupmask_completeness_test（C8） | 尚未進行 | 指派時間：2026-08-13 | 原始 Gaia 座標範圍內注入已知數量、已知位置的合成成員星，混進真實場星資料重跑 pyUPMASK | 完整度隨半徑/星等變化的曲線（不是單一全域數字） |
-| extra_scatter_sensitivity（C19） | 尚未進行 | 指派時間：2026-08-13（已排入 queue.txt 為 c19_extra_scatter_sweep，尚未輪到） | injection_recovery.py，合成 CMD 疊加額外高斯散布項，掃過幾個散布量級 | 散布量級 vs alpha 偏移的敏感度曲線 |
-| configCD_real_data_compare（D10） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --configs C,D（其餘旗標與既有 --repeats 相同） | C、D 兩組 alpha 中心值與統計誤差的比較 |
-| empirical_ml_relation_test（D11，現役缺陷．優先度中高） | 尚未進行 | 指派時間：2026-08-19 | 先完成 docs/planning/PLAN_D11_經驗質光關係_可行性評估.md 第三節五項查證（波段轉換在紅端的適用範圍、食雙星彙編樣本量、消光處理一致性、金屬量覆蓋、dM/dM_V 誤差傳播），全過才動手蒐集食雙星資料、寫獨立質量估計路徑 | 低質量段（<0.5 M☉）alpha 用經驗關係重跑的結果，跟 PARSEC／MIST 對照表 |
-| mass_dependent_fbin（D14 衍生） | 尚未進行 | 指派時間：2026-08-19（腳本已寫好，已排入 queue.txt 為 massdep_fbin，尚未輪到） | inject_massdep_fbin.py，contrast=0.0/0.15/0.30 三組注入回收 | 雙星比例質量相依性強度 vs alpha 偏移的具體數字 |
-| praesepe_pr11_close_out（D8、A5） | 尚未進行 | 指派時間：2026-08-20 | 審查並重跑驗證 PR #11（codex/ngc3532-praesepe-generalization）分支對 D8 四項正確性問題的修法，確認有效後合併 | PR #11 合併、D8 在 LIMITATIONS.md 標記解決、Praesepe 的 Tier1／Tier2 數字與文獻口徑對照表 |
-| comaber_tier1（A5、D8） | 尚未進行 | 指派時間：2026-08-19 | cluster_imf_tier1.py 等同一套腳本，跑 Coma Berenices 的 Tier1（誤差核算框架＋動力學年齡＋徑向 α(r) 診斷）；PR #11 合併前需明確 checkout commit c631e733de40b7c9110e9c00eab1c8b39b53821a | 跟 PDMF_TO_IMF_PLAN.md 第八節同結構的誤差預算表，含跟 Kraus & Hillenbrand (2007)／Tang et al. (2019) 的口徑對照 |
-| bp15_bp20_paired_comparison（D12） | 尚未進行 | 指派時間：2026-08-23（派工前置檢查已完成，等 Kaggle 帳號分配） | 用已生成的 offsets 0–4、10 個 job tag，跑 BP20／BP15 兩套選擇函數的正式成對比較（40k、至少 5 個 paired seeds） | 逐 offset 配對後的 alpha 差異，判斷 BP15（找回的紅端候選星）納入後對頭條數字有沒有影響 |
+| limepy_radial_crosscheck（A5、B5） | 尚未進行 | 指派時間：2026-08-13 | results/limepy_multimass.npz、results/fit_real_radial_r1_final.npz、results/fit_real_radial_r2_final.npz、results/fit_real_radial_r3_final.npz、results/fit_real_radial_rall_final.npz | results/limepy_radial_crosscheck.json（規劃中的檔名，腳本尚未寫） |
+| nbody_prior_from_radial（A5） | 尚未進行 | 指派時間：2026-08-12 | mcluster_sse -N 400 -S 0.3/0.5/0.7（各跑數組，圍繞 pilot 參數 -P 0 -R 2.3 -Q 0.5 擾動） | nbody_setup/ 下的模擬網格輸出（檔名依 nbody_setup/README.md 命名慣例，尚未產生） |
+| pdmf_step4_radius_expansion（A5） | 尚未進行 | 指派時間：2026-08-12 | config.toml [target] radius_deg 改為 8–17°；scripts/data_prep/fetch_gaia.py → scripts/drivers/run_pipeline.py 第 1–5 步 | 新的 data/cmd_members.csv 與 results/ 下對應的第 1–5 步輸出（含 pyUPMASK 六格驗證圖） |
+| bhac15_isochrone_test（C1、D1） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat --procs 8 --n-syn 40000 --repeats 5 --configs A,C | results/fit_real_bhac.npz（規劃中的檔名，比照 fit_real_dr2.npz 命名慣例） |
+| sensitivity_sweep_membership_threshold（D2） | 進行中 | 開始日期：2026-08-24 | scripts/diagnostics/sensitivity_sweep.py --target membership_threshold --values 0.5,0.8,0.9 --procs 4 --n-syn 40000 --refines 3,3 | results/sensitivity_membership_threshold.npz（0.6／0.7 兩點已寫入，這批補上 0.5／0.8／0.9） |
+| extinction_form_test（C5，現役缺陷．優先度高） | 尚未進行 | 指派時間：2026-08-13 | injection_recovery.py --dav-distribution lognormal／truncexp（queue.txt 標籤 c5_davform_lognormal、c5_davform_truncexp） | results/injection_recovery_davform_lognormal.npz、results/injection_recovery_davform_truncexp.npz（規劃中的檔名） |
+| pyupmask_completeness_test（C8） | 尚未進行 | 指派時間：2026-08-13 | 尚無腳本；輸入是原始 Gaia 座標範圍內的合成注入星＋真實場星資料 | 尚無腳本；規劃輸出是完整度隨半徑/星等分箱的曲線檔 |
+| extra_scatter_sensitivity（C19） | 尚未進行 | 指派時間：2026-08-13 | injection_recovery.py（queue.txt 標籤 c19_extra_scatter_sweep，散布量級參數見 queue.txt 該行） | results/injection_recovery_extra_scatter.npz（規劃中的檔名） |
+| configCD_real_data_compare（D10） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --configs C,D --repeats 5（--repeats 比照既有頭條設定） | results/fit_real_configCD_compare.npz（規劃中的檔名） |
+| empirical_ml_relation_test（D11，現役缺陷．優先度中高） | 尚未進行 | 指派時間：2026-08-19 | docs/planning/PLAN_D11_經驗質光關係_可行性評估.md 第三節五項查證（尚未開始） | 五項查證的查證結果（文件更新，尚無獨立輸出檔） |
+| mass_dependent_fbin（D14 衍生） | 尚未進行 | 指派時間：2026-08-19 | inject_massdep_fbin.py --contrast 0.0,0.15,0.30（queue.txt 標籤 massdep_fbin） | results/inject_massdep_fbin.npz（規劃中的檔名） |
+| praesepe_pr11_close_out（D8、A5） | 尚未進行 | 指派時間：2026-08-20 | PR #11（分支 codex/ngc3532-praesepe-generalization） | PR #11 合併紀錄；Praesepe Tier1／Tier2 結果檔（沿用 cluster_imf_tier1.py／prepare_cluster_tier2.py 既有輸出命名） |
+| comaber_tier1（A5、D8） | 尚未進行 | 指派時間：2026-08-19 | cluster_imf_tier1.py（Coma Berenices，checkout commit c631e733de40b7c9110e9c00eab1c8b39b53821a 或其後代 commit） | Coma Berenices 的 Tier1 結果檔（沿用 cluster_imf_tier1.py 既有輸出命名，星團名稱換成 Coma Ber） |
+| bp15_bp20_paired_comparison（D12） | 尚未進行 | 指派時間：2026-08-23 | scripts/diagnostics/prepare_bp15_paired_dispatch.py 產生的 offsets 0–4、10 個 job tag（40k、至少 5 個 paired seeds） | scripts/diagnostics/summarize_bp15_formal_paired.py 的彙整輸出 |
 
 ## 待辦事項說明
 
@@ -118,12 +121,21 @@ bhac15_isochrone_test：BHAC15 等時線的網格轉換與涵蓋範圍確認
 
 sensitivity_sweep_membership_threshold：量成員判定門檻
 （membership_threshold）對頭條數字的敏感度，這是 D2 待補齊的敏感度
-測試之一。示範規模（n_syn=5000）跑過一次，門檻=0.70 時 alpha=2.633、
-耗時 23,142 秒（約 6.4 小時）；用這個數字外推，正式規模
-（n_syn=40000）單一門檻約 50+ 小時，5 個門檻合計數百小時，不適合
-本機循序佇列，已改派到 gcp1（GCP e2-highcpu-8）跑 0.6／0.7 兩個
-門檻。另一個掃描目標 stars_per_cluster 需要真的重跑 pyUPMASK 聚類，
-這台機器沒有 pyUPMASK 環境，留給有環境的人。
+測試之一。認領人：本機 Claude session，透過 gcp1（GCP e2-highcpu-8）
+派工。第一批（0.6／0.7）已於 2026-08-24 在 gcp1 實測完成，耗時 600.4
+分鐘（約 10 小時），結果見 results/RESULTS_LOG.md 同日期那行：門檻
+從現行預設 0.7 放寬到 0.6，成員數 1,297→1,308（測光篩選後 n_obs
+1,078→1,087），alpha 完全不變（2.367→2.367，跨度 0.000，對照注入
+回收統計誤差 0.144 為 0 倍）。但有重要但書（2026-08-24 CodeRabbit
+review 指出）：兩個門檻都沿用同一份用 0.7 樣本迴歸出的
+selection.npz，沒有隨門檻重新迴歸選擇函數係數，這個簡化可能讓量出
+的敏感度系統性偏低，只能說「固定 selection 係數的條件下，0.6–0.7
+沒有偵測到 alpha 變化」，不能下「membership_threshold 不是重要誤差
+來源」這種無條件結論，完整訂正見 LIMITATIONS.md D2 同日期段落。剩下
+三個門檻（0.5／0.8／0.9）已排入 cloud_queue.txt 等 gcp1 執行，同樣
+沿用這份 selection.npz，不會單獨解決上述但書。另一個掃描目標
+stars_per_cluster 需要真的重跑 pyUPMASK 聚類，這台機器沒有
+pyUPMASK 環境，留給有環境的人。
 
 extinction_form_test：測消光分布形式（對數常態 vs 截尾指數）對
 A_V 系統誤差有沒有影響，這是現役缺陷、優先度高（污染範圍已知，見
