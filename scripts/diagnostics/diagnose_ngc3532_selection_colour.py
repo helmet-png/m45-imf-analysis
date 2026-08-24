@@ -24,10 +24,15 @@ def load(path: Path) -> dict[str, np.ndarray]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     names = rows[0].keys()
-    return {
-        name: np.asarray([float(row[name]) if row[name] else np.nan for row in rows])
-        for name in names
-    }
+    output = {}
+    for name in names:
+        if name == "source_id":
+            # Gaia identifiers exceed float64's exact integer range.
+            output[name] = np.asarray([int(row[name]) for row in rows], dtype=np.int64)
+        else:
+            output[name] = np.asarray(
+                [float(row[name]) if row[name] else np.nan for row in rows], dtype=float)
+    return output
 
 
 def expected_excess(colour: np.ndarray) -> np.ndarray:
@@ -72,7 +77,8 @@ def magnitude_bins(mask: np.ndarray, red: np.ndarray, blue: np.ndarray,
     for lo in np.arange(17.0, 18.0, 0.25):
         row = {"g_lo": float(lo), "g_hi": float(lo + 0.25)}
         for label, side in (("red", red), ("blue", blue)):
-            use = mask & side & (g >= lo) & (g < lo + 0.25)
+            upper = g <= lo + 0.25 if np.isclose(lo + 0.25, FAINT_MAX_G) else g < lo + 0.25
+            use = mask & side & (g >= lo) & upper
             n = int(use.sum())
             row[label] = {
                 "n": n,
