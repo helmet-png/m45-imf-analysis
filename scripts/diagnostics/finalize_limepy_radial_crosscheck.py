@@ -17,17 +17,26 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 TAGS = ("r1", "r2", "r3", "rall")
 ALPHA_COLUMN = 3
+EXPECTED_RADIUS = {"r1": "0,1", "r2": "0,2", "r3": "0,3", "rall": None}
+FIXED_SETTINGS = (
+    "fix_mh", "free_lowmass", "g_bright", "grid", "n_syn",
+    "native_bprp_err", "refines",
+)
 
 
 def load_final(tag: str) -> tuple[np.ndarray, dict]:
     path = ROOT / "results" / f"fit_real_radial_{tag}_final.npz"
-    with np.load(path, allow_pickle=True) as data:
+    with np.load(path, allow_pickle=False) as data:
         values = np.asarray(data["C"], dtype=float)
         manifest = json.loads(str(data["__manifest__"].item()))
     if values.shape != (5, 7):
         raise ValueError(f"{path.name}: expected C shape (5, 7), got {values.shape}")
     if manifest.get("n_syn") != 40000 or manifest.get("refines") != "3,3":
         raise ValueError(f"{path.name}: unexpected formal-run manifest: {manifest}")
+    if manifest.get("radius_range") != EXPECTED_RADIUS[tag]:
+        raise ValueError(
+            f"{path.name}: radius_range={manifest.get('radius_range')!r}, "
+            f"expected {EXPECTED_RADIUS[tag]!r}")
     offsets = manifest.get("aggregated_repeat_offsets")
     if offsets is not None and offsets != [0, 1, 2, 3, 4]:
         raise ValueError(f"{path.name}: unexpected repeat offsets: {offsets}")
@@ -72,6 +81,14 @@ def main() -> None:
             "difference_over_observed_sem": difference / summary["sem"],
         })
 
+    reference = manifests["r1"]
+    for tag in TAGS[1:]:
+        for key in FIXED_SETTINGS:
+            if manifests[tag].get(key) != reference.get(key):
+                raise ValueError(
+                    f"{tag}: fixed setting {key!r} differs from r1: "
+                    f"{manifests[tag].get(key)!r} != {reference.get(key)!r}")
+
     increments = []
     for index in range(1, len(TAGS)):
         inner, outer = TAGS[index - 1], TAGS[index]
@@ -95,6 +112,17 @@ def main() -> None:
                 f"results/fit_real_radial_{tag}_final.npz" for tag in TAGS
             ],
             "formal_run_manifests": manifests,
+            "manifest_validation": {
+                "checked_fixed_settings": list(FIXED_SETTINGS),
+                "checked_radius_range": EXPECTED_RADIUS,
+                "metadata_absent_from_all_manifests": [
+                    "tag", "seed_scheme", "input_file_metadata"
+                ],
+                "offset_metadata_absent": [
+                    tag for tag in TAGS
+                    if "aggregated_repeat_offsets" not in manifests[tag]
+                ],
+            },
         },
         "absolute_comparison": rows,
         "paired_radial_increments": increments,

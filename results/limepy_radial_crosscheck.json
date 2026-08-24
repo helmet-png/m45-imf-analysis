@@ -67,6 +67,32 @@
         "radius_range": null,
         "refines": "3,3"
       }
+    },
+    "manifest_validation": {
+      "checked_fixed_settings": [
+        "fix_mh",
+        "free_lowmass",
+        "g_bright",
+        "grid",
+        "n_syn",
+        "native_bprp_err",
+        "refines"
+      ],
+      "checked_radius_range": {
+        "r1": "0,1",
+        "r2": "0,2",
+        "r3": "0,3",
+        "rall": null
+      },
+      "metadata_absent_from_all_manifests": [
+        "tag",
+        "seed_scheme",
+        "input_file_metadata"
+      ],
+      "offset_metadata_absent": [
+        "r3",
+        "rall"
+      ]
     }
   },
   "absolute_comparison": [
