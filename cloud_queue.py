@@ -299,6 +299,24 @@ def fetch_slot(name: str, kind: str, item: dict, slot: dict) -> bool:
 TERMINAL = {"complete", "error", "cancelled"}
 
 
+def _kaggle_handle(name: str, item: dict) -> dict:
+    """組出 Kaggle 槽位需要的 `kid`／`work_dir`，給正常路徑（
+    `_probe_and_recover()`）跟例外 fallback 共用（2026-08-24 CodeRabbit
+    review 訂正）——原本例外 fallback 手動組的槽位只有
+    `{"phase":..., "item":..., "kind":...}`，沒有 `**handle`，
+    `kind == "kaggle"` 時下一輪 `probe_slot()` 讀 `slot["kid"]`
+    會直接 `KeyError`，而這個 `KeyError` 又被主迴圈自己新加的寬鬆
+    `except Exception` 接住、槽位被保留——變成每一輪都重演同一個
+    `KeyError`，直到 `MAX_WAIT_HOURS` 到期才被錯記成 `timeout`，這段
+    期間這個 worker 完全派不了任何工作。不重複組裝邏輯，兩處呼叫這
+    一份。"""
+    accounts = kaggle_accounts.load_accounts()
+    username = accounts[name]["username"]
+    slug = item["label"].replace("_", "-")
+    return {"kid": f"{username}/m45-imf-run-{slug}",
+           "work_dir": HERE / "kaggle_work" / name}
+
+
 def _probe_and_recover(name: str, kind: str, item: dict) -> dict | None:
     """查一次 `name` 這個 worker 上有沒有 `item['label']` 已經在跑／跑完
     的痕跡，回傳可以直接放進 `slots[name]` 的槽位 dict，或 `None`（代表
@@ -320,13 +338,10 @@ def _probe_and_recover(name: str, kind: str, item: dict) -> dict | None:
     「可能在跑」，回傳 `phase="probe"` 的槽位，不貿然當空。
     """
     if kind == "kaggle":
+        handle = _kaggle_handle(name, item)
         accounts = kaggle_accounts.load_accounts()
-        username = accounts[name]["username"]
-        slug = item["label"].replace("_", "-")
-        kid = f"{username}/m45-imf-run-{slug}"
         env = kaggle_accounts.env_for(accounts[name])
-        st = kaggle_queue.probe_kernel_status(kid, env)
-        handle = {"kid": kid, "work_dir": HERE / "kaggle_work" / name}
+        st = kaggle_queue.probe_kernel_status(handle["kid"], env)
     else:
         st = ssh_sync.poll(name, item["label"])
         handle = {}
@@ -417,8 +432,21 @@ def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
                      f"預期例外（{type(e).__name__}: {e}），保守當成"
                      f"可能在跑，下一輪重試", flush=True)
                 traceback.print_exc()
+                # 2026-08-24 CodeRabbit review 訂正：fallback 槽位一定要
+                # 帶齊 kind=="kaggle" 需要的 kid／work_dir，理由見
+                # _kaggle_handle() 的說明——這裡再包一層 try 是因為連
+                # _kaggle_handle() 本身（讀 kaggle_accounts.json）都有
+                # 可能失敗，不能讓「補 handle」這個動作本身變成第二個
+                # 沒接住的例外，寧可 handle 缺失也不要讓這層 except 自己
+                # 再炸一次。
+                handle = {}
+                if kind == "kaggle":
+                    try:
+                        handle = _kaggle_handle(name, item)
+                    except Exception:                          # noqa: BLE001
+                        pass
                 slot = {"phase": "probe", "item": item, "kind": kind,
-                       "t0": time.time(), "retries": 0}
+                       **handle, "t0": time.time(), "retries": 0}
             if slot is not None:
                 slots[name] = slot
                 break
@@ -504,8 +532,17 @@ def main() -> None:
                      f"發生未預期例外（{type(e2).__name__}: {e2}），保守"
                      f"當成可能在跑，下一輪重試", flush=True)
                 traceback.print_exc()
+                # 理由同 recover_running_slots() 的同類 fallback：帶齊
+                # kind=="kaggle" 需要的 kid／work_dir，見 _kaggle_handle()。
+                fallback_handle = {}
+                if kind == "kaggle":
+                    try:
+                        fallback_handle = _kaggle_handle(name, item)
+                    except Exception:                          # noqa: BLE001
+                        pass
                 recovered = {"phase": "probe", "item": item, "kind": kind,
-                            "t0": time.time(), "retries": 0}
+                            **fallback_handle, "t0": time.time(),
+                            "retries": 0}
             if recovered is not None:
                 slots[name] = recovered
                 print(f"  [{name}] {item['label']} 啟動回報失敗，但查到"
