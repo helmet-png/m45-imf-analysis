@@ -73,15 +73,18 @@ DONE = HERE / "logs" / "cloud_queue_done.txt"
 LOCK = HERE / "logs" / "cloud_queue.lock"
 POLL_SECS = 60
 MAX_WAIT_HOURS = 20
-# **已知未解決的限制（2026-08-24 CodeRabbit review 指出，決定先記錄、
-# 不在這輪動手改）**：ssh_sync.run() 送出啟動指令逾時（60 秒）時會
-# 回傳 True、當作「可能已經啟動」建立 running 槽位（見 run() 的說明），
-# 但如果那次其實根本沒送達（不是「送達但回應沒收到」），poll() 會
-# 一直回傳 "missing"，這個槽位要等滿 MAX_WAIT_HOURS（20 小時）才會被
-# 判定逾時釋放——不是無限卡住，但 20 小時對一個從沒真的啟動過的工作
-# 來說太久。正確修法是幫「missing」單獨開一個比 20 小時短很多的專屬
-# 逾時，而不是共用給「工作真的在跑、只是算很久」用的 MAX_WAIT_HOURS，
-# 這牽動 probe_slot() 的狀態機，範圍比這輪其他修正大，留給下一輪處理。
+# 2026-08-24：ssh_sync.run() 送出啟動指令逾時（60 秒）時會回傳 True、
+# 當作「可能已經啟動」建立 running 槽位（見 run() 的說明），但如果那次
+# 其實根本沒送達（不是「送達但回應沒收到」），poll() 會一直回傳
+# "missing"。原本這種槽位沿用 MAX_WAIT_HOURS（20 小時）才判定逾時釋放
+# ——不是無限卡住，但 20 小時對一個從沒真的啟動過的工作太久，這段
+# 期間這個 worker 完全派不了別的工作（CodeRabbit review 兩輪都指出
+# 這一點，第一輪先記錄下來，這裡實際修掉）。獨立給「missing」一個短
+# 很多的專屬逾時，跟「工作真的在跑、只是算很久」用的 MAX_WAIT_HOURS
+# 分開——見主迴圈裡 `first_missing_at` 那段的用法。
+MISSING_TIMEOUT_S = 900     # 15 分鐘，遠大於單次 poll 間隔（60 秒），
+                            # 排除單次查詢時序差的誤判，同時遠短於
+                            # MAX_WAIT_HOURS
 # 只用在 backend=="kaggle" 的槽位——理由見檔案開頭說明。
 KAGGLE_BACKOFFS = [60, 120, 240, 480]
 
@@ -604,8 +607,31 @@ def main() -> None:
                     continue
 
                 status = probe_slot(name, kind, item, slot)
+                if status != "missing":
+                    # 曾經連續 missing 過、現在變別的狀態了（真的查到
+                    # running／terminal），代表那次 missing 只是時序上
+                    # 剛好沒同步到，不是真的沒啟動——清掉計時基準，不然
+                    # 下次萬一又短暫 missing 會沿用舊的起算時間，提早
+                    # 誤判。
+                    slot.pop("first_missing_at", None)
+                if status == "missing":
+                    # 用獨立、短很多的逾時判斷「這個工作是不是根本沒
+                    # 送達」，不要沿用給「工作真的在跑、只是算很久」用
+                    # 的 MAX_WAIT_HOURS（20 小時）——理由見
+                    # MISSING_TIMEOUT_S 旁邊的說明。
+                    first_missing = slot.setdefault("first_missing_at",
+                                                     time.time())
+                    if time.time() - first_missing > MISSING_TIMEOUT_S:
+                        print(f"  [{name}] {item['label']} 連續 "
+                             f"{MISSING_TIMEOUT_S // 60} 分鐘查不到遠端有"
+                             f"這個工作的痕跡，判定啟動指令其實沒送達，"
+                             f"釋放槽位讓下一輪重派", flush=True)
+                        mark_done(item["label"], "push_failed",
+                                 time.time() - slot["t0"], name)
+                        slots[name] = None
+                    continue
                 if status not in TERMINAL:
-                    continue    # running/missing/unknown：下一輪再看
+                    continue    # running／unknown：下一輪再看
 
                 if (kind == "kaggle" and status == "error"
                        and kaggle_queue.is_mount_race_failure(item["label"])
