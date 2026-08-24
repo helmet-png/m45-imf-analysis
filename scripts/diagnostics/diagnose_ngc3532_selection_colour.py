@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from math import comb
 from pathlib import Path
 
 import numpy as np
@@ -65,9 +66,43 @@ def stats(mask: np.ndarray, cuts: dict[str, np.ndarray], arrays: dict[str, np.nd
     return result
 
 
+def magnitude_bins(mask: np.ndarray, red: np.ndarray, blue: np.ndarray,
+                   passed: np.ndarray, g: np.ndarray) -> list[dict]:
+    rows = []
+    for lo in np.arange(17.0, 18.0, 0.25):
+        row = {"g_lo": float(lo), "g_hi": float(lo + 0.25)}
+        for label, side in (("red", red), ("blue", blue)):
+            use = mask & side & (g >= lo) & (g < lo + 0.25)
+            n = int(use.sum())
+            row[label] = {
+                "n": n,
+                "kept": int((use & passed).sum()),
+                "survival": float((use & passed).sum() / n) if n else None,
+            }
+        rows.append(row)
+    return rows
+
+
+def fisher_two_sided(blue_fail: int, blue_n: int, red_fail: int, red_n: int) -> float:
+    """Two-sided Fisher exact p-value for fail rate versus colour side."""
+    total_fail = blue_fail + red_fail
+    total = blue_n + red_n
+    lo = max(0, total_fail - red_n)
+    hi = min(total_fail, blue_n)
+    denom = comb(total, total_fail)
+    probabilities = {
+        k: comb(blue_n, k) * comb(red_n, total_fail - k) / denom
+        for k in range(lo, hi + 1)
+    }
+    observed = probabilities[blue_fail]
+    return float(sum(value for value in probabilities.values() if value <= observed + 1e-15))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=ROOT / "data/cluster_NGC_3532_gaia.csv")
+    parser.add_argument("--validation-report", type=Path,
+                        default=ROOT / "results/cluster_tier2_prep_NGC_3532_postmerge.json")
     parser.add_argument("--output", type=Path, default=ROOT / "results/ngc3532_selection_colour_rootcause.json")
     args = parser.parse_args()
     d = load(args.input)
@@ -104,7 +139,32 @@ def main() -> None:
         "red": stats(red, cuts, arrays),
         "blue": stats(blue, cuts, arrays),
     }
+    all_passed = np.logical_and.reduce(list(cuts.values()))
+    output["magnitude_bins"] = magnitude_bins(faint, red, blue, all_passed, g)
+    output["failed_sources"] = []
+    for index in np.flatnonzero(faint & ~all_passed):
+        output["failed_sources"].append({
+            "source_id": int(d["source_id"][index]),
+            "side": "red" if red[index] else "blue",
+            "g": float(g[index]),
+            "bp_rp": float(colour[index]),
+            "failed_cuts": [name for name, passed in cuts.items() if not passed[index]],
+            "bp_snr": float(d["phot_bp_mean_flux_over_error"][index]),
+            "excess_residual_sigma": float(residual_sigma[index]),
+        })
     output["observed_red_minus_blue"] = output["red"]["survival"] - output["blue"]["survival"]
+    red_excess_fail = output["red"]["cuts"]["bp_rp_excess"]["fail_alone"]
+    blue_excess_fail = output["blue"]["cuts"]["bp_rp_excess"]["fail_alone"]
+    output["bp_rp_excess_colour_fisher_two_sided_p"] = fisher_two_sided(
+        blue_excess_fail, output["blue"]["n"], red_excess_fail, output["red"]["n"])
+    validation = json.loads(args.validation_report.read_text(encoding="utf-8"))["selection_validation"]
+    output["selection_model"] = {
+        key: validation[key] for key in (
+            "observed_survival_red", "observed_survival_blue",
+            "predicted_survival_red", "predicted_survival_blue",
+            "red_minus_blue_error", "pass_faint_colour_split",
+        )
+    }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(output, ensure_ascii=False, indent=2))
