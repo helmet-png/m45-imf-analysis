@@ -220,6 +220,13 @@ CodeRabbit review 指出這是四個檢定共用同一個假說家族卻沒有�
 不要手動中止（`fit_real.py` 的 checkpoint 是每完成一次重複才存檔，
 中止當下正在跑的那次重複會直接損失那次的算力，不會保留部分進度）。
 
+**2026-08-24 再更新（使用者進一步確認）**：d10 跑完後**不要**讓
+`run_queue.py` 自動接著跑 `queue.txt` 排在後面的下一項（`item2_repeat`
+等）——照 PR #116 的方向，d10 是本機最後一項，跑完就照 #116 的做法
+停用本機自動重啟。之後 WORK_BOARD 上的工作一律改排 `cloud_queue.txt`
+交給 `cloud_queue.py`（gcp1／Kaggle），本機恢復成只保留 `cloud_queue.py`
+常駐。
+
 ## 待認領工作：對照 Hobart et al. 2026 的鞏固工作（2026-08-19，完整比較見 `docs/planning/PLAN_文獻對照_Hobart2026.md`）
 
 **這個表原本 15 行，13 行（全部 D12／BP15 相關診斷鏈）已完成，見
