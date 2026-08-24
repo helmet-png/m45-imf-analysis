@@ -73,6 +73,15 @@ DONE = HERE / "logs" / "cloud_queue_done.txt"
 LOCK = HERE / "logs" / "cloud_queue.lock"
 POLL_SECS = 60
 MAX_WAIT_HOURS = 20
+# **已知未解決的限制（2026-08-24 CodeRabbit review 指出，決定先記錄、
+# 不在這輪動手改）**：ssh_sync.run() 送出啟動指令逾時（60 秒）時會
+# 回傳 True、當作「可能已經啟動」建立 running 槽位（見 run() 的說明），
+# 但如果那次其實根本沒送達（不是「送達但回應沒收到」），poll() 會
+# 一直回傳 "missing"，這個槽位要等滿 MAX_WAIT_HOURS（20 小時）才會被
+# 判定逾時釋放——不是無限卡住，但 20 小時對一個從沒真的啟動過的工作
+# 來說太久。正確修法是幫「missing」單獨開一個比 20 小時短很多的專屬
+# 逾時，而不是共用給「工作真的在跑、只是算很久」用的 MAX_WAIT_HOURS，
+# 這牽動 probe_slot() 的狀態機，範圍比這輪其他修正大，留給下一輪處理。
 # 只用在 backend=="kaggle" 的槽位——理由見檔案開頭說明。
 KAGGLE_BACKOFFS = [60, 120, 240, 480]
 
