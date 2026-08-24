@@ -82,12 +82,16 @@ def main() -> None:
         })
 
     reference = manifests["r1"]
+    for tag in TAGS:
+        for key in FIXED_SETTINGS:
+            if key not in manifests[tag]:
+                raise ValueError(f"{tag}: manifest is missing fixed setting {key!r}")
     for tag in TAGS[1:]:
         for key in FIXED_SETTINGS:
-            if manifests[tag].get(key) != reference.get(key):
+            if manifests[tag][key] != reference[key]:
                 raise ValueError(
                     f"{tag}: fixed setting {key!r} differs from r1: "
-                    f"{manifests[tag].get(key)!r} != {reference.get(key)!r}")
+                    f"{manifests[tag][key]!r} != {reference[key]!r}")
 
     increments = []
     for index in range(1, len(TAGS)):
