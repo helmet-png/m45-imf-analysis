@@ -1,307 +1,193 @@
 # 工作認領表（誰現在在做什麼、還剩什麼沒做）
 
-`CONTRIBUTING.md` 管「怎麼合併」，這份管**「開始做之前先看這裡，避免兩個人／
-兩個 agent 同時做同一件事」**。**這份只放正在執行或還沒執行的工作**；
-已經達成、結案的事搬到 `WORK_BOARD_DONE.md`（2026-08-23 拆分，完整
-規則見 `CONTRIBUTING.md` 零之四）。跟 `results/RESULTS_LOG.md` 一樣
-設計成**只附加、不改舊行**的格式——多人同時寫幾乎不會撞行，不需要
-鎖檔案；例外是「一個項目做完了」這件事本身——做完就照零之四的規則
-把那一行**搬去** `WORK_BOARD_DONE.md`，不要留在這裡製造「早就做完卻
-看起來還沒做」的假象。
+`CONTRIBUTING.md` 管「怎麼合併」，這份管開始做之前先看這裡，避免兩個人／
+兩個 agent 同時做同一件事。這份只放正在執行或還沒執行的工作；已經
+達成、結案的事搬到 `WORK_BOARD_DONE.md`（完整規則見 `CONTRIBUTING.md`
+零之四）。
 
 ## 規則
 
-1. **開始任何預期要花超過一次對話（或會碰共用檔案：`pipeline/`、
+1. 開始任何預期要花超過一次對話（或會碰共用檔案：`pipeline/`、
    `injection_recovery.py`、`LIMITATIONS.md`、`PAPER_OUTLINE.md`、
-   `queue.txt`）的工作之前**，先讀完下面的表格，確認沒有人已經在做
+   `queue.txt`）的工作之前，先讀完下面的表格，確認沒有人已經在做
    同一件事或高度重疊的事。
-2. 開始工作時，在對應表格**尾端加一行**，狀態填「進行中」。做完、
-   暫停、或放棄時：**放棄／暫停**——再加一行新的（同任務名稱、狀態
-   改掉），不要回頭改舊行；**真的做完**——照 `CONTRIBUTING.md` 零之四
-   的規則把這行搬到 `WORK_BOARD_DONE.md` 的「紀錄（續）」表尾端，這裡
-   刪掉。要查某任務目前狀態，先看它還在不在這份文件裡；不在了就代表
-   已完成，去 `WORK_BOARD_DONE.md` 找完整記錄。
-3. **看不出算不算重複、範圍該怎麼分**——不要用猜的、也不要因為怕
-   衝突就不寫：直接在表格加一行「疑義」狀態並寫清楚困惑點，讓開這個
-   任務的人或使用者看到後決定怎麼分工。這比「先做了再說」風險小。
+2. 開始工作時，把對應行的狀態改成「進行中」，並補上開始日期。放棄
+   或暫停時改回「尚未進行」並在說明文字補一句原因。真的做完時，
+   照 `CONTRIBUTING.md` 零之四把整行連同說明文字搬到 `WORK_BOARD_DONE.md`，
+   這裡刪掉——不要用刪除線或「已完成」字樣蓋在原本的行上，那樣會讓
+   同一件事的新舊說明混在同一格裡，越堆越難讀。要查某任務目前狀態，
+   先看它還在不在這份文件裡；不在了就代表已完成，去 `WORK_BOARD_DONE.md`
+   找完整記錄。
+3. 看不出算不算重複、範圍該怎麼分——不要用猜的、也不要因為怕衝突
+   就不寫：在說明文字裡寫清楚困惑點，讓開這個任務的人或使用者看到
+   後決定怎麼分工。
 4. 誰都可以編輯這份文件（人類協作者、Claude、Codex、其他 agent）。
-5. **任務名稱後面要標對應的 `LIMITATIONS.md` 條目**（例如 `(A1)`），跟
+5. 任務名稱後面的括號標對應的 `LIMITATIONS.md` 條目（例如 A1），跟
    `LIMITATIONS.md` 互相參照，完整規則見 `CONTRIBUTING.md` 五之一。
    跟限制清單無關的工作（環境設定、文件整理）不用標。
 
-## 目前運作中的算力池（不是待辦事項，是現況說明）
+## 現況說明（不是工作項目，是基礎設施狀態）
 
-- **本機 8 核運算佇列**（`queue.txt` / `run_queue.py`，Windows x64 這台
-  機器；**2026-08-23 訂正**：2026-08-16 已交接到新機器 Acer AI 16
-  （x64），文件裡多處「ARM64」是沿用交接前的舊稱呼沒有更新，不是還在
-  用 ARM64 桌機）。只有這台機器能跑，其他人／agent 不會撞到，不需要
-  在此認領。若要在別的機器（Kaggle、同學的電腦、Codex 的環境）重跑
-  本機佇列裡同一個腳本、同一組參數，**先在下面加一行認領**，避免兩邊
-  各自跑一次浪費算力。
-- **Kaggle 多帳號派工**（`kaggle_queue.txt` / `kaggle_queue.py`）與
-  **GCP SSH worker `gcp1`**（`cloud_queue.txt` / `cloud_queue.py`，
-  2026-08-23 上線，見 `docs/reference/CLOUD_WORKERS.md`）：跟本機佇列
-  是三個獨立但要互相避開的算力池，要排新工作前先確認同一件事沒有
-  同時排在另外兩個佇列檔裡。
-- **開機/登入自動重啟**：`restart_queue_on_boot.ps1` 由 Windows 工作
-  排程器觸發，偵測到 `run_queue.py`／`cloud_queue.py` 沒在跑就自動
-  重啟。**2026-08-21 補上真正的自我復原**：原本的 `M45-QueueRunner-
-  AutoRestart` 只有「登入時」一個觸發器，已經登入著的狀態下永遠不會
-  再觸發，等於只防重開機、不防行程中途死掉；已另外註冊一個使用者
-  層級的 `M45-QueueWatchdog-15min`（每 15 分鐘一次），兩個併存。**若
-  某次巡檢發現這個排程任務不存在了（曾經發生過一次，原因不明），
-  重新註冊即可，指令見 `restart_queue_on_boot.ps1` 開頭註解**，不用
-  當成新問題重新診斷。踩過的坑：PowerShell 讀中文 `.ps1` 沒有 BOM
-  會解析錯誤；`New-ScheduledTaskTrigger` 的 `-RepetitionDuration
-  ([TimeSpan]::MaxValue)` 會產生非法 XML，要改用有限長度。
+本機、Kaggle 多帳號、GCP SSH worker gcp1 是三個獨立但要互相避開的
+算力池（`queue.txt`／`kaggle_queue.txt`／`cloud_queue.txt`），排新
+工作前先確認同一件事沒有同時排在另外兩個佇列檔裡。本機用
+`restart_queue_on_boot.ps1`（登入時觸發）加
+`M45-QueueWatchdog-15min`（每 15 分鐘一次）兩個排程任務互相補位，
+偵測到 `run_queue.py`／`cloud_queue.py` 沒在跑就自動重啟；若某次巡檢
+發現排程任務不存在了，重新註冊即可，指令見該腳本開頭註解。gcp1
+目前派工的 `d2_membership_threshold_p06_p07_retry` 是否已經算完，
+以 `logs/cloud_queue_done.txt`／`results/` 目錄實際內容為準，不要
+假設已經成功——之前兩次都是看起來已派工但實際沒跑起來，是新
+worker 缺本機專屬資料造成的，這個坑以後可能在別的資料檔上重演。
 
-## `gcp1` 目前派工進度（2026-08-23，會隨時更新，不是待辦表格）
+## 待辦事項
 
-`d2_membership_threshold_p06_p07_retry` 已修好兩個環境缺口（見
-`WORK_BOARD_DONE.md` 同日期那行：worktree 缺 isochrone 網格、缺
-`data/m45_r5_g18_plx4.csv`，兩者都已補上）並重新排隊。**這一項現在
-是否已經算完，以 `cloud_queue.txt` 對應的
-`logs/cloud_queue_done.txt`／`results/` 目錄實際內容為準**，不要假設
-已經成功——之前兩次都是「看起來已派工」但實際沒跑起來，同一個坑
-（新 worker 缺本機專屬資料）以後也可能在別的資料檔上重演，派工後
-第一次務必查 `logs/cloud_queue_runner.log` 尾端確認真的進入計算階段
-（不是又在幾秒內用 `error` 結束）。
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | profile_lowmass.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3（5 個低質量段冪次 x 3 次重複，共 15 次擬合） | results/profile_lowmass.npz |
+| p6b_inject_lowmass_v2（A1） | 尚未進行 | 指派時間：2026-08-12 | inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3 | results/inject_lowmass.npz |
+| limepy_radial_crosscheck（A5、B5） | 尚未進行 | 指派時間：2026-08-13 | results/limepy_multimass.npz（已擬合好的 King 模型）+ results/fit_real_radial_r1/r2/r3/rall_final.npz（觀測值，已到齊） | 模型預測 α(<r) 與觀測 α(<r) 在 r1/r2/r3/rall 四個半徑的逐項對照表 |
+| nbody_prior_from_radial（A5） | 尚未進行 | 指派時間：2026-08-12 | mcluster_sse 產生的初始條件，圍繞 pilot 參數（400 顆星、質量分層度 0.5、virial Q=0.5）小幅擾動，掃質量分層度 0.3/0.5/0.7 | 至少 3–5 組模擬跑完的 α(r) 曲線，跟觀測 α(<r) 的擬合優度比較 |
+| pdmf_step4_radius_expansion（A5） | 尚未進行 | 指派時間：2026-08-12 | 改大 config.toml 的 radius_deg（8–17°），重跑 fetch_gaia.py → run_pipeline.py 第 1–5 步 | 新的全樣本 α，含大半徑下的 pyUPMASK 六格驗證圖 |
+| bhac15_isochrone_test（C1、D1） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat（網格已建置好） | 跟 PARSEC-EDR3／PARSEC-DR2／MIST-DR2 同格式的濾光片/模型效應分解比較表 |
+| sensitivity_sweep_membership_threshold（D2） | 進行中 | 開始日期：2026-08-23（已派工到 gcp1） | scripts/diagnostics/sensitivity_sweep.py --target membership_threshold --n-syn 40000，先跑 0.6／0.7 兩個門檻 | LIMITATIONS.md D2 要記的「改動這個值，頭條數字變化多少」對照表 |
+| extinction_form_test（C5，現役缺陷．優先度高） | 尚未進行 | 指派時間：2026-08-13（已排入 queue.txt，尚未輪到） | injection_recovery.py，c5_davform_lognormal／c5_davform_truncexp 兩趟（只有 --dav-distribution 不同，dav 掃到 1.20） | 兩種消光分布形式下 alpha／A_V 偏差的量化比較 |
+| pyupmask_completeness_test（C8） | 尚未進行 | 指派時間：2026-08-13 | 原始 Gaia 座標範圍內注入已知數量、已知位置的合成成員星，混進真實場星資料重跑 pyUPMASK | 完整度隨半徑/星等變化的曲線（不是單一全域數字） |
+| extra_scatter_sensitivity（C19） | 尚未進行 | 指派時間：2026-08-13（已排入 queue.txt 為 c19_extra_scatter_sweep，尚未輪到） | injection_recovery.py，合成 CMD 疊加額外高斯散布項，掃過幾個散布量級 | 散布量級 vs alpha 偏移的敏感度曲線 |
+| configCD_real_data_compare（D10） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --configs C,D（其餘旗標與既有 --repeats 相同） | C、D 兩組 alpha 中心值與統計誤差的比較 |
+| empirical_ml_relation_test（D11，現役缺陷．優先度中高） | 尚未進行 | 指派時間：2026-08-19 | 先完成 docs/planning/PLAN_D11_經驗質光關係_可行性評估.md 第三節五項查證（波段轉換在紅端的適用範圍、食雙星彙編樣本量、消光處理一致性、金屬量覆蓋、dM/dM_V 誤差傳播），全過才動手蒐集食雙星資料、寫獨立質量估計路徑 | 低質量段（<0.5 M☉）alpha 用經驗關係重跑的結果，跟 PARSEC／MIST 對照表 |
+| mass_dependent_fbin（D14 衍生） | 尚未進行 | 指派時間：2026-08-19（腳本已寫好，已排入 queue.txt 為 massdep_fbin，尚未輪到） | inject_massdep_fbin.py，contrast=0.0/0.15/0.30 三組注入回收 | 雙星比例質量相依性強度 vs alpha 偏移的具體數字 |
+| praesepe_pr11_close_out（D8、A5） | 尚未進行 | 指派時間：2026-08-20 | 審查並重跑驗證 PR #11（codex/ngc3532-praesepe-generalization）分支對 D8 四項正確性問題的修法，確認有效後合併 | PR #11 合併、D8 在 LIMITATIONS.md 標記解決、Praesepe 的 Tier1／Tier2 數字與文獻口徑對照表 |
+| comaber_tier1（A5、D8） | 尚未進行 | 指派時間：2026-08-19 | cluster_imf_tier1.py 等同一套腳本，跑 Coma Berenices 的 Tier1（誤差核算框架＋動力學年齡＋徑向 α(r) 診斷）；PR #11 合併前需明確 checkout commit c631e733de40b7c9110e9c00eab1c8b39b53821a | 跟 PDMF_TO_IMF_PLAN.md 第八節同結構的誤差預算表，含跟 Kraus & Hillenbrand (2007)／Tang et al. (2019) 的口徑對照 |
+| bp15_bp20_paired_comparison（D12） | 尚未進行 | 指派時間：2026-08-23（派工前置檢查已完成，等 Kaggle 帳號分配） | 用已生成的 offsets 0–4、10 個 job tag，跑 BP20／BP15 兩套選擇函數的正式成對比較（40k、至少 5 個 paired seeds） | 逐 offset 配對後的 alpha 差異，判斷 BP15（找回的紅端候選星）納入後對頭條數字有沒有影響 |
 
-## `p6_lowmass_v2` 成本過高、擋住本機佇列（2026-08-21 10:26）——**使用者已決定：移到佇列最後，尚未真正執行**
+## 待辦事項說明
 
-**這一節原本記的兩個數字，2026-08-21 覆查時無法佐證，已訂正**（原文
-保留在下方引用區塊，不要當成既定事實引用）：
+以下逐項說明每個任務具體要解決什麼問題、用什麼方法、目前卡在哪裡；
+預計耗時只在有實測依據時才寫具體數字，查不到依據的一律寫「未查證」，
+不用感覺湊一個數字。
 
-> 原文：本機 `p6_lowmass_v2`（2026-08-20 15:16 啟動）的第 1 次擬合花了
-> 67,213 秒 = 18.7 小時（見 `logs/p6_lowmass_v2.log`），15 次合計約
-> 280 小時 ≈ 11.7 天。
+p6_lowmass_v3：量低質量段冪次 d(alpha)/d(p) 的斜率，這是目前最大
+的單一系統誤差來源（0.248，見 LIMITATIONS.md A3）。原本記錄的單次
+耗時 18.7 小時無法從本機 log 佐證（log 只有 7 行、沒有任何完成時間戳，
+且檔案時間早於宣稱的啟動時間），已訂正為不可信；唯一可查證的成本
+量級是規模本身（15 次擬合，全樣本 1,078 顆），對照同量級的
+radial_r1_final（5 次重複、355 顆核心切片、實測 72,814 秒即約 4 小時
+一次）推算，全樣本單次耗時只會更長，15 次總量級會長期擋住本機循序
+佇列，這是使用者已經決定移到佇列最後（選項 C）的原因。跑之前必須
+先手動把 results/profile_lowmass.npz（2026-08-15 的舊檔、無 manifest、
+未精修）移開，不要指望程式自動擋下來。
 
-覆查發現 `logs/p6_lowmass_v2.log` 在本機只有 7 行、**沒有任何一行擬合
-完成時間**，且檔案時間（08-20 10:34）早於上面所述的啟動時間（15:16），
-無法佐證 67,213 秒這個數字。它可能是對的（log 也可能被後續重啟覆寫），
-但在能重新量到之前不當既定事實用。
+p6b_inject_lowmass_v2：驗證低質量段冪次的可辨識性——這個數字
+決定要不要把它升格成自由參數。舊結果（p_recovered/p_true 比值 0.92）
+是修好 multi_stage_best() 精修 bug 之前跑的，完全沒精修，數字不可信。
+Kaggle 上同類工作曾多次重派，但沒有找到明確的完成結論，認領前務必
+先查 results/ 與 RESULTS_LOG.md 確認是否已經有可用結果，避免重工。
+耗時未查證。
 
-**可以查證的成本量級**：這項工作是 5 個低質量段冪次 × 3 次重複 =
-**15 次擬合**（這是設定本身，確定）。同類工作的單次成本可從
-`logs/queue_done.txt` 查到：`radial_r1_final` 5 次重複共 72,814 秒，
-平均約 4 小時／次，而那是 355 顆的核心切片；`p6_lowmass_v2` 是全樣本
-1,078 顆，單次成本只會更高。15 次的總量級足以讓後面的項目等很久。
+limepy_radial_crosscheck：LIMEPY 多質量平衡模型本身已經擬合完成
+（phi0=3.44、r0=2.50 pc），這是第 3 步唯一剩下的驗收動作——把模型
+預測的 α(<r) 拿去跟觀測值比對。觀測端的有誤差棒版本（radial_final_reruns）
+已於 2026-08-23 全部到齊，不用再等，現在就可以做。耗時未查證，是
+純比對計算，不涉及重新跑合成星團，預期是輕量級工作。
 
-**原先列出的三個問題，2026-08-21 覆查後的現況**（只有第 2 項確定成立）：
-1. ~~**幾乎不可能跑完**：沒有續傳機制~~ **這一點已不成立**（2026-08-21
-   訂正）：`profile_lowmass.py` 已於 PR #85 接上
-   `scripts/tools/checkpoint.py`，每次重複算完就存檔，重開機後讀回既有
-   進度、不會從頭重算。原文描述的是 2026-08-20 15:16 那個用舊程式碼啟動
-   的行程，不是現在 repo 裡的程式碼。**重開機不再等於全部白費**，這一點
-   對取捨影響很大，不要再用它當延後的理由。
-2. **擋住本機佇列後面的項目**（這一點成立）：`run_queue.py` 循序執行。
-3. **Kaggle 可行性待確認**（原本寫「Kaggle 也裝不下」）：這一點繫於單次
-   擬合時數，而上面說明該數字目前無法佐證，所以整條降級為待確認，**不要
-   當成已確認的限制拿去做決策**。方向上仍成立的部分只有：照 `p6b` 那樣
-   按軸拆片救不了「單次擬合」本身，只能拆重複次數。
+nbody_prior_from_radial：N-body 模擬（第 5 步）的初步校準方向，
+不是正式版本。前置的三個定義不一致（分箱方式、半徑維度、質量範圍
+與估計量）已經解決並寫進 analyze_alpha_r.py，下一步是真正跑一組
+圍繞 pilot 參數小幅擾動的模擬網格。pilot 本身（400 顆星、單次）
+耗時約需查 nbody_setup/ 下的紀錄，本表未附具體秒數；正式網格是
+3–5 組小規模模擬，還不是文獻建議的 550–942 次全網格。
 
-**已確認沒問題的部分**：精修有真的生效（第 1 次的 alpha=2.633 不落在
-0.20 的粗網格上），所以這條路線的**方法是對的**。
+pdmf_step4_radius_expansion：PDMF→IMF 第 4 步，觀測上唯一能給出
+「5 度搜尋半徑夠不夠」決定性答案的路線，但成本最高。原本要等
+radial_final_reruns 全部到齊才能判斷第二層門檻（梯度統計上是否為真）
+是否滿足——這個前提已於 2026-08-23 滿足（r1/r2/r3/rall 全部到齊，
+見 LIMITATIONS.md A5），但目前還沒有人依這個結果重新評估是否投入
+第 4 步，這一步的「要不要做」判斷本身也還沒有人做。耗時未查證，
+涉及整條 pipeline（fetch_gaia.py 到 run_pipeline.py 第 1–5 步）
+重跑，且需要重建大半徑下的 pyUPMASK 成員判定與選擇函數，預期是
+重量級工作。
 
-**使用者已於 2026-08-21 決定採用選項 C**（把這一項移到佇列最後），
-已在 PR #96 實作，`queue.txt` 內留有說明。以下四個選項與代價保留作為
-當時的決策依據：
+bhac15_isochrone_test：BHAC15 等時線的網格轉換與涵蓋範圍確認
+已經完成（bhac15_gaia_logt7.6-8.4.dat，170 列、6 個年齡格點），
+唯一剩下的是真正跑一次 fit_real.py 拿這個網格算模型效應分解，
+跟已有的三個等時線版本（PARSEC-EDR3／PARSEC-DR2／MIST-DR2）放進
+同一張比較表。BHAC15 只涵蓋到 0.015–1.4 M_sun，不蓋過 M45 擬合
+上限 2.50 M_sun，比較結果要誠實標注只驗證了低質量段。耗時未查證，
+量級應與同類 fit_real.py 全量跑（--configs A,C --repeats 5）相當。
 
-| 選項 | 做法 | 代價 |
-|---|---|---|
-| A. 維持現狀 | 讓它繼續跑 | 持續擋住後面的項目 |
-| B. 降重複次數 | 改成 `--repeats 1`（5 次擬合 ≈ 94 小時） | 沒有誤差棒，d(alpha)/d(p) 的斜率不確定度無法量化 |
-| **C（已採用）**. 先跑完後面的項目再回頭 | 把這一項移到佇列最後 | A1/A3 這個最大單一系統誤差（0.248）繼續懸著 |
-| D. 減少掃描點 | 5 個冪次減成 3 個（0.9/1.3/1.7） | 斜率擬合只剩 3 點，但仍可量方向與量級 |
+sensitivity_sweep_membership_threshold：量成員判定門檻
+（membership_threshold）對頭條數字的敏感度，這是 D2 待補齊的敏感度
+測試之一。示範規模（n_syn=5000）跑過一次，門檻=0.70 時 alpha=2.633、
+耗時 23,142 秒（約 6.4 小時）；用這個數字外推，正式規模
+（n_syn=40000）單一門檻約 50+ 小時，5 個門檻合計數百小時，不適合
+本機循序佇列，已改派到 gcp1（GCP e2-highcpu-8）跑 0.6／0.7 兩個
+門檻。另一個掃描目標 stars_per_cluster 需要真的重跑 pyUPMASK 聚類，
+這台機器沒有 pyUPMASK 環境，留給有環境的人。
 
-**不建議的做法**：把 `--refines 3,3` 降回 `--refines 3`——那正是 A1
-要修的精修 bug 本身，降回去等於白跑。
+extinction_form_test：測消光分布形式（對數常態 vs 截尾指數）對
+A_V 系統誤差有沒有影響，這是現役缺陷、優先度高（污染範圍已知，見
+LIMITATIONS.md C5）。兩趟注入回收（c5_davform_lognormal／
+c5_davform_truncexp，dav 掃到 1.20，比既有 item4_davsweep 的 0.60
+更寬）已經寫進本機 queue.txt，但循序佇列還沒輪到，認領前先查
+logs/queue_done.txt 確認進度。耗時未查證。
 
-**2026-08-23 現況（PR #87 review 時複查）**：`queue.txt` 裡曾經因為
-兩次獨立的「搬到佇列尾端」操作各自換了新 label，一度造成
-`p6_lowmass_v2` 與 `p6_lowmass_v3` 兩個不同 label 排隊做同一份工作
-（已停用重複的那一個，見 commit 紀錄）。**目前只有一個作用中的
-label（`p6_lowmass_v3`）排在佇列尾端，尚未真正開始跑**——這仍然是
-本節標題所述的「決定已做、還沒執行」狀態，不要誤讀成已經在跑或已經
-跑完。
+pyupmask_completeness_test：量 pyUPMASK 成員判定的完整度隨半徑
+/星等的變化——目前只有一個全域完整度數字，沒有分箱曲線。做法是
+在真實 Gaia 座標範圍內注入已知位置的合成成員星，混進真實場星資料
+重跑 pyUPMASK，量召回率。這支測試腳本還沒寫，耗時未查證。
 
-**之後真的要跑它之前**：**一定要先手動把 `results/profile_lowmass.npz`
-（2026-08-15 的舊檔、無 manifest、是未精修的粗網格結果）移開**——這是
-目前唯一可靠的做法，不要指望程式擋下來（`checkpoint.check_manifest()`
-與 `preflight.py --gate c` 現在都已經會擋，但養成手動先確認的習慣
-比較保險）。
+extra_scatter_sensitivity：量自轉調製／前主序光變／黑子等未
+建模物理造成的額外亮度散布，對 alpha 有多敏感。已排進 queue.txt
+（c19_extra_scatter_sweep），循序佇列還沒輪到，認領前先查
+logs/queue_done.txt。耗時未查證。
 
-## 待認領工作（2026-08-12，`multi_stage_best()` 精修 bug 修好後還沒排的重跑）
+configCD_real_data_compare：目前「alpha 不受 dav 貼牆位置污染」
+只在注入回收的合成資料上驗證過，真實資料從沒直接比較過 config C
+跟 D（兩者差別只有 dav 上界）。做法是用真實資料各跑一次，比較
+alpha 中心值與統計誤差的差距是否遠小於合併標準誤。耗時未查證，
+量級與同類 fit_real.py 全量跑相當。
 
-背景：`injection_recovery.py` 的 `multi_stage_best()` 曾有精修 bug（見
-`LIMITATIONS.md`「`multi_stage_best()` 精修 bug」一節），已修好。**表格
-原本列的 `p2_final2`／P9a-redo v2／P9c v2／`verify_bprperr_v2` 都已完成，
-見 `WORK_BOARD_DONE.md`「紀錄（續）」對應行**，只剩一項狀態未經確認：
+empirical_ml_relation_test：建一條完全獨立於任何等時線模型的
+經驗質量-光度關係，檢查低質量段 alpha 對「用不用等時線」本身敏不
+敏感——這是現役缺陷、優先度中高（見 LIMITATIONS.md D11）。可行性
+評估已經做完：質量精度以 Gaia G 為準時不是瓶頸，但正確的轉換導數
+是 dM/dM_V 不是 dM/dG，本機網格沒有 V 波段算不出來；初步判讀紅端
+顏色覆蓋可能是主要風險（要檢驗的樣本過半集中在 BP−RP ≥ 2.663）。
+下一步是完成評估文件第三節的五項查證，優先做成本最低、可能直接
+否決整條路線的前兩項，全過才能動手蒐集資料、寫實作。耗時未查證。
 
-| 優先度 | 任務（括號＝對應 `LIMITATIONS.md` 條目） | 指令 | 為什麼 |
-|---|---|---|---|
-| 中 | P6b v2（低質量段冪次可辨識性）（A1） | `python inject_lowmass.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3` | 舊結果（ratio 0.92）完全沒精修；這個數字決定要不要把低質量段冪次升格成自由參數。**狀態不確定**——`p6b_inject_lowmass_v2`（Kaggle 派工的同類工作）多次重派紀錄見 `WORK_BOARD_DONE.md`，但沒有找到明確的「完成」結論，認領前先查 `results/` 與 `RESULTS_LOG.md` 確認是否已有可用結果，避免重工 |
+mass_dependent_fbin：雙星比例是否隨主星質量變化，目前模型假設
+是常數，這是已知簡化但沒量化過代價。做法是用注入回收量化「質量
+相依雙星比例」對 alpha 的偏移量，不直接升格成自由參數（dav 的教訓
+是參數可以放進模型卻完全不被資料約束）。腳本 inject_massdep_fbin.py
+已寫好並排進 queue.txt（massdep_fbin），contrast=0.0/0.15/0.30 三組
+正式 sweep 目前都還沒跑，循序佇列還沒輪到。耗時未查證。
 
-**另外**：PR #11（多星團驗證）已經留言列出 4 個正確性問題（貼牆偵測
-被關掉、選擇函數驗證漏掉紅藍分色檢查等）（D8、C22），見
-<https://github.com/helmet-png/m45-imf-analysis/pull/11#issuecomment-5264701703>——
-這也是待認領工作，適合 PR 作者（Codex）或任何人接手修，跟下面
-「多星團校驗軸 A＋B」表的 `praesepe_pr11_close_out` 是同一件事。
+praesepe_pr11_close_out：整條多星團校驗軸（Praesepe、Coma Ber）
+的第一張骨牌——D8 記錄的 4 個正確性問題（貼牆偵測被關掉、選擇函數
+驗證漏掉紅藍分色檢查、SNR 迴歸沒有獨立場星樣本、--refresh 遇 NSS
+為 null 會崩潰）的修法目前只存在於 PR #11 分支，還沒合併進 main。
+需要實際重跑 Praesepe 的 Tier1＋Tier2 驗證確認修法有效（不能只看
+程式碼），然後合併；NGC 3532 可以標記為未驗證但不阻擋合併。合併後
+D8 才能在 LIMITATIONS.md 標記解決。耗時未查證。
 
-## 待認領工作：PDMF → IMF（2026-08-12，見 `PDMF_TO_IMF_PLAN.md` 完整背景）
+comaber_tier1：Coma Berenices（老年齡、金屬量近太陽的疏散星團）
+的 Tier1 起步，補齊多星團校驗軸。前置阻擋條件已收斂成一項：完成
+praesepe_pr11_close_out。起手式可以先開始，但在 PR #11 合併之前
+必須明確 checkout commit c631e733de40b7c9110e9c00eab1c8b39b53821a（或
+保留那四項修法的後代 commit），不能直接用 main，且要在產出裡記錄
+實際用的 commit。動手前要讀 Kraus & Hillenbrand (2007)、Tang et al.
+(2019) 兩篇原文當基準線——Tang et al. 已核對完成（α=0.79±0.16，
+0.25–2.51 M☉，不能直接跟本專案頭條 alpha 比較），Kraus & Hillenbrand
+還沒查證（先前收到的 PDF 抓錯論文，需要使用者重新提供正確那篇：
+The Astronomical Journal, 134, 2340）。耗時未查證。
 
-**2026-08-19 更新：第 2 步的四個初步值（r1/r2/r3/rall）都已到齊**，
-下面第 3、4、5 步原本各自標注「等第 2 步結果」的部分現在都有東西
-可以對照了——**但這四個值仍是 `_prelim`（單次重複、單階精修）版本，
-不是最終數字**，下面每一步用到這些數字時都要清楚標注這一點，不要
-當成已經統計上穩健的最終基準線。**2026-08-23 更新：正式統計版
-（`radial_final_reruns`）r1/r3/rall 已 5/5 完成，r2 仍 2/5**，見下方
-同名任務列，整條 α(<r) 曲線仍不完整。以下第 3–5 步都跟本機佇列不
-衝突（第 5 步甚至需要另一台 x64 機器，本機跑不了）。這三個不是
-「跑一行指令」等級的任務，起手式跟驗收標準寫在下面，實際做法留給
-認領的人判斷。
-
-| 步驟 | 任務（括號＝對應 `LIMITATIONS.md` 條目，全部是 A5） | 優先度 | 起手式 | 驗收標準 | 為什麼 |
-|---|---|---|---|---|---|
-| 第 3 步 | LIMEPY 多質量平衡模型，反推潮汐半徑外的質量函數（A5） | **模型本身已完成** | **剩下唯一開放的部分是跟第 2 步 α(<r) 對照的正式驗收**，見下表 `limepy_radial_crosscheck`；模型細節與擬合結果見 `WORK_BOARD_DONE.md`「個別已完成的待認領任務」 | 擬合出的多質量模型能重現第 2 步 `radial_r1/r2/r3/rall` 量到的 α(<r)，且對潮汐半徑外的質量函數給出具體數字（不是只有結構參數） | 這是唯一不需要重抓資料就能估計「潮汐半徑外還有多少低質量星」的路線 |
-| 第 4 步 | 放大搜尋半徑到 8–17°，重抓 Gaia、重跑成員判定與選擇函數（A5） | **兩層門檻，只有第一層滿足**——(1) 有資料可看：**已滿足**，`_prelim` 版 α(<r) 到齊（r1(0-1°)=2.10、r2(0-2°)=2.43、r3(0-3°)=2.50、rall(0-5.1°)=2.43）；(2) 梯度統計上證實是真的（不是雜訊）：**還沒滿足**，要等下方 `radial_final_reruns` 的 r2 補齊、完整曲線出來才能判斷 | 起點是 `config.toml` 的 `radius_deg`，改大後整條 pipeline（`fetch_gaia.py` → `run_pipeline.py` 第 1–5 步）要重跑，pyUPMASK 在大半徑下的成員判定沒驗證過，選擇函數也要重建 | 新的 6,956→N 顆全樣本跑出 α，且大樣本下 pyUPMASK 的品質檢查（六格驗證圖）跟現有 5° 版本一樣通過 | 觀測上唯一能給出決定性答案的路線，但成本最高，所以排最後投入 |
-| 第 5 步 | N-body 重建 M45 初始狀態（跟 Converse & Stahler 2010 同路線，方法本身建議改採 Hobart et al. 2026 的模擬器路線，見 `PLAN_文獻對照_Hobart2026.md` 第二節 2.5）（A5） | **探索性模擬不用等第 2 步**，第一個 pilot 已跑完（見 `WORK_BOARD_DONE.md`）。**正式、投入完整算力的校準版本仍要等 `radial_final_reruns` 全部到齊** | 編譯與工具鏈已裝好並驗證（見 `nbody_setup/`）。pilot 結果與定義訂正見 `WORK_BOARD_DONE.md` | 模擬出的 α(r) 跟雙星徑向分布，能跟第 2 步的觀測 α(<r) 與 [Liu+2025 的雙星徑向雙峰分布](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60) 做比較 | 論文原創性賣點，但需要先有觀測基準線才有東西可以比，排最後 |
-
-## 待認領工作：第 2 步四項到齊後新解鎖的工作（2026-08-19）
-
-**全部不在本機（x64 8 核桌機）跑**——本機佇列（`queue.txt`）留給
-既有排隊項目，這幾項規模較大或需要不同架構／機器，請認領的人在
-自己的機器（x64 協作機、Kaggle、或評估過的雲算力，見
-[雲算力評估](https://claude.ai/code/artifact/8f3b0148-708e-4ddc-a10d-1870dc39ec83)）上跑，不要排進本機的 `queue.txt`。
-
-| 任務 | 起手式 | 驗收標準 | 為什麼現在能做 |
-|---|---|---|---|
-| ~~`radial_final_reruns`（A5，最優先——下面兩項都依賴這個）~~ | **已完成，2026-08-23**：r1/r2/r3/rall 四組全部到齊有誤差棒（2.0644±0.1193／2.3889±0.0981／2.4244±0.0924／2.3844±0.0792），配對相減證實 alpha(<r) 在 0–2° 有顯著跳升（p=0.028）、2° 以外到 5° 邊緣無顯著變化（p=0.099、p=0.181），曲線約在 2° 收斂，完整推導見 `LIMITATIONS.md` A5。下方 `limepy_radial_crosscheck`、`nbody_prior_from_radial` 需要的「有誤差棒版本」現在都有了，不用再等 | — | — |
-| `limepy_radial_crosscheck`（A5、B5，對應第 3 步驗收標準） | 讀 `scripts/diagnostics/limepy_multimass.py` 目前的模型輸出（`results/limepy_multimass.npz`），從擬合出的 King 模型（phi0=3.44、r0=2.50 pc）算出模型預測的 α(<r) 在 r1/r2/r3/rall 對應半徑處的值，跟觀測值（prelim：2.10/2.43/2.50/2.43；建議等 `radial_final_reruns` 的 `_final` 版本出來再做，用有誤差棒的版本比較才有意義）並排比較 | 給出模型預測 α(<r) 與觀測 α(<r) 的逐項對照表，量化兩者差距是否在統計誤差內；若明顯不符，要指出可能原因（King 模型是單一質量分層假設，跟真實分層可能不符） | LIMEPY 模型本身已經擬合完成（2026-08-13），只差這一步比對，是第 3 步唯一剩下的動作 |
-| `nbody_prior_from_radial`（A5，第 5 步「初步校準」，不是正式版）**2026-08-20：前置的定義不一致已解決，見本列末段** | **開始前先解決一個真的定義不一致的問題**：`fit_real.py --radius-range LO,HI` 算出來的 `radial_r1/r2/r3/rall` 是**累積**α(<r)（0-1°、0-2°、0-3°、全樣本，一層包一層，不是互斥區間）；`nbody_setup/analyze_alpha_r.py` 卻是用 `np.percentile` 切三等分位算**互斥環帶**的 α（0-33%、33-66%、66-100%，各自獨立不重疊）。這兩種是不同的量，不能直接並排比較同一條「α(r)」曲線。**兩個修法選一個，校準目標各自對應，不要混用**：(1) 把 `analyze_alpha_r.py` 的模擬粒子改用累積半徑切法（比照 `radius-range` 的 0-1°/0-2°/0-3° 換算成 pc 後的累積邊界）重新分箱，這種做法的校準目標就是**現成的** `radial_r1/r2/r3/rall`（prelim 或 `_final`）α 值，不用另外算；(2) 把觀測資料也額外用互斥環帶（比照 `analyze_alpha_r.py` 的 percentile 切法）重新分箱一次算出**另一組獨立的**觀測 α，這種做法的校準目標是這組新算出來的環帶 α，**不是**現成的 `radial_r1/r2/r3/rall`（那是累積值，跟環帶模擬結果比會是選項 (1) 沒做完就混用了選項 (2) 的資料）。選定一種、備妥對應的目標值後，設計一組圍繞 pilot 參數（400 顆星、質量分層度 0.5、virial Q=0.5）小幅擾動的網格（例如質量分層度 0.3/0.5/0.7 各跑幾次） | 至少 3–5 組不同初始參數的模擬跑完，且**觀測與模擬用的是同一種半徑分箱定義（累積或互斥擇一，並在結果裡明確標注是哪一種）**，每組跟觀測 α 的擬合優度（例如簡單的殘差平方和）有量化比較，明確標注這是「用 prelim 值做的初步校準方向」不是正式最終校準 | 這是 Hobart et al. 2026 建議的「先用小規模模擬網格摸清方向」路線的起手式，不用等到有大量模擬（他們是 550–942 次）才能開始，先幾組摸清梯度方向即可。**2026-08-20 更新：前置的「定義不一致」已依修法 (1) 解決**（`nbody_setup/analyze_alpha_r.py` 已改成累積投影半徑切法，校準目標就是現成的 `radial_r1/r2/r3/rall`）。動手時發現不一致**不只分箱這一項，總共三項**，三項都已對齊：(1) 分箱：percentile 互斥環帶 -> 累積切法（邊界用觀測角度換算成 pc）；(2) **半徑維度**（本表原本沒寫到）：3D 團心距 -> 投影半徑，因為觀測只量得到投影距離，3D 半徑恆大於投影半徑、直接並排會系統性高估模擬的外圍距離，另加 `--n-projections` 可對多視線平均掉投影雜訊；(3) **質量範圍與估計量**（本表原本沒寫到，**這項最嚴重**）：舊版對 0.1–2.0 M☉ 做 MLE，但觀測端前向模型的 `alpha` **只控制 Kroupa 分段的 m>0.5 段**（m<0.5 固定 1.3），0.1–2.0 跨過 0.5 這個分段點等於把固定段跟要比較的段混在一起，**跟前向模型的 alpha 根本不是同一個量**，已改成 0.5–2.50（下界對齊分段點、上界對齊 `config.toml [step5_imf] mass_max`）。附了 `--self-test`（不需 PeTar 環境即可跑）驗證累積邏輯、投影半徑不大於 3D 半徑、alpha 回收真值，並內建貼牆檢查——第一版 self-test 的合成分層做得太極端，核心片直接撞到 `mle_powerlaw` 的 alpha 下界 0.1，方向斷言因為貼牆而假通過，已改成溫和的統計傾向並加上貼牆斷言攔截。**仍未對齊、改腳本解決不了的差異**：觀測端是前向模型擬合值（含聯星／選擇函數／測光誤差建模）、這裡是對模擬真實質量做直接 MLE，兩者不是同一個估計量，只能當趨勢方向對照；且觀測值仍是 `_prelim` 無誤差棒，`radial_final_reruns`（已排進 Kaggle 佇列 20 分片）跑完前無法判斷差異顯著性。**下一步**：實際跑那組質量分層度 0.3/0.5/0.7 的模擬網格 |
-| `radial_final_reruns`（A5，最優先——下面兩項都依賴這個） | **2026-08-23 進度：r1／r3／rall 已 5/5 完成，r2 仍 2/5**（見 `LIMITATIONS.md` A5、`results/RESULTS_LOG.md`）。用完整設定補齊 r2：`fit_real.py --procs 8 --n-syn 40000 --repeats 5 --refines 3,3 --configs C --radius-range 0,2 --tag _radial_r2_final`（`--repeat-offset` 依現有進度接續，不要從 0 重算已完成的重複） | 四個 `_final` 版本都有統計誤差棒（不是單次無誤差棒），且要明確回答「r3(2.50) > rall(2.43) 這個非單調現象是真實訊號還是統計雜訊」——**這個子問題已用配對比較解決（跟雜訊一致，未能得到統計支持），見 `LIMITATIONS.md` A5**，剩下的是等 r2 到齊後看完整 α(<r) 曲線是否符合核心到外圍遞增的分層預期 | 下面 `limepy_radial_crosscheck` 與「決定要不要投入第 4 步」都需要有統計誤差棒的完整版本才能下結論 |
-| `limepy_radial_crosscheck`（A5、B5，對應第 3 步驗收標準） | 讀 `scripts/diagnostics/limepy_multimass.py` 目前的模型輸出（`results/limepy_multimass.npz`），從擬合出的 King 模型（phi0=3.44、r0=2.50 pc）算出模型預測的 α(<r) 在 r1/r2/r3/rall 對應半徑處的值，跟觀測值並排比較——**建議等 `radial_final_reruns` 全部到齊後再做，用有誤差棒的版本比較才有意義** | 給出模型預測 α(<r) 與觀測 α(<r) 的逐項對照表，量化兩者差距是否在統計誤差內；若明顯不符，要指出可能原因（King 模型是單一質量分層假設，跟真實分層可能不符） | LIMEPY 模型本身已經擬合完成，只差這一步比對，是第 3 步唯一剩下的動作 |
-| `nbody_prior_from_radial`（A5，第 5 步「初步校準」，不是正式版） | 前置的三個定義不一致（分箱、半徑維度、質量範圍與估計量）已解決，見 `LIMITATIONS.md` A5 與 `WORK_BOARD_DONE.md`。**下一步：實際跑一組質量分層度 0.3/0.5/0.7 的模擬網格**，圍繞 pilot 參數（400 顆星、質量分層度 0.5、virial Q=0.5）小幅擾動 | 至少 3–5 組不同初始參數的模擬跑完，且觀測與模擬用的是同一種半徑分箱定義（累積），每組跟觀測 α 的擬合優度有量化比較，明確標注這是「用 prelim 值做的初步校準方向」不是正式最終校準 | 這是 Hobart et al. 2026 建議的「先用小規模模擬網格摸清方向」路線的起手式，不用等到有大量模擬才能開始 |
-
-**2026-08-24 附記（不改動上面既有的行，僅附加說明）**：上表 182–184
-三行（`radial_final_reruns` 2/5 進度版、`limepy_radial_crosscheck`、
-`nbody_prior_from_radial`）是合併衝突留下的**舊版重複內容**，寫於
-r2 尚未補齊時；179–181 三行是同一批任務的**現行版本**，寫於 r2 已於
-2026-08-23 補齊之後，內容以 179–181 為準。**另外，179 行「alpha(<r)
-...統計顯著的跳升（p=0.028）」這個用詞需要訂正**：2026-08-24
-CodeRabbit review 指出這是四個檢定共用同一個假說家族卻沒有做多重比較
-校正——Holm 校正後 r2−r1 的 p 約 0.084–0.088，不再小於 0.05，是提示性
-訊號，不是獨立確認的統計顯著結果。完整訂正見 `LIMITATIONS.md` A5
-2026-08-24 段落與 `results/RESULTS_LOG.md` 同日期的訂正行。
-
-**另外**：`WORK_BOARD.md` 前面「PDMF → IMF 第 5 步（N-body）」條目的做法設想（目前偏向「直接模擬＋等第 2 步結果再定初始條件」）建議加入 **Hobart et al. 2026 的模擬器路線**當優先評估的候選方案——用中等規模的 N-body 模擬網格（不需要到他們的 550–942 次，先抓幾十到百來次評估可行性）訓練一個機器學習模擬器（Python 生態可用 `scikit-learn` 的 `GaussianProcessRegressor`，或找 `AUTOEMULATE`（Stoffel et al. 2025）本身是否能裝），再用既有的 `emcee` 或改用 HMC 套件（如 `numpyro`）抽初始條件的後驗分布，取代暴力網格搜尋（他們自己算過暴力法對這個維度的參數空間要一個世紀）。這個做法概念上適合我們的算力限制（單台 x64 8 核桌機），但實際可行性（訓練資料要多少組模擬才夠、模擬器預測誤差多大）還沒驗證過，先當第 5 步「正式跑」設想中優先評估的候選方案，不是已確定要採用的定論，也不是另開新工作項，是補充第 5 步原本「正式模擬」規劃的一個選項。
-
-## 待認領工作：B/C/D 類補齊（2026-08-13，見 `WORK_BOARD_DONE.md` 對應紀錄）
-
-**已完成的項目**（`p6b4_boundary_retest`、`injection_bias_floor_recheck`、
-`stick_out_fraction_constraint`）已搬到 `WORK_BOARD_DONE.md`，以下是
-還開放的：
-
-| 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |
-|---|---|---|
-| `bhac15_isochrone_test`（C1、D1） | 官方資料來源是 <https://perso.ens-lyon.fr/isabelle.baraffe/BHAC15dir/>，網格建置已完成（見 `WORK_BOARD_DONE.md` 2026-08-18 那行：`build_bhac_grid.py`、`bhac15_gaia_logt7.6-8.4.dat`）。**剩下的是真正跑一次 `fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat`**，跟 P3（`build_dr2_grid.py`）同樣的濾光片/模型效應分解比較，這步需要 `fit_real.py` 等級的計算量，一直沒排進佇列 | 用 BHAC15 重跑跟 P3 同樣的濾光片/模型效應分解，跟已有的 PARSEC-EDR3/PARSEC-DR2/MIST-DR2 三個數字放在同一張表比較。**BHAC15 只涵蓋到 0.015–1.4 M_sun，不蓋過 M45 擬合上限 2.50 M_sun**，比較結果要誠實標注只驗證了低質量段 |
-| `sensitivity_sweep`（D2，**正在跑，見上方「`gcp1` 目前派工進度」**） | `--target membership_threshold` 正式規模（`n_syn=40000`）已改派到 `gcp1`，先跑 0.6／0.7 兩個門檻，觀察真實耗時後再決定要不要把剩下的 0.5/0.8/0.9 也排進去。`--target stars_per_cluster` 需要真的重跑 pyUPMASK 聚類，這台機器沒有 `pyUPMASK/` 環境，留給有環境的 session | 每個測過的設定都有一個「改動這個值，頭條數字變化多少」的具體數字，寫進 `LIMITATIONS.md` D2 |
-| `extinction_form_test`（C5，**現役缺陷．優先度 高**） | 兩趟注入回收已排進 `queue.txt`（`c5_davform_lognormal`／`c5_davform_truncexp`，兩者除 `--dav-distribution` 外設定完全相同），**尚未真正跑完**——認領前先查 `logs/queue_done.txt` 確認進度 | 兩種分布形式下，用同一組合成真值做注入回收，alpha／A_V 的偏差量化比較。dav 點涵蓋到 1.20（既有 `item4_davsweep` 只到 0.60，C5 明確要求到 1.20） |
-| `pyupmask_completeness_test`（C8） | 寫一個小規模的合成測試：在原始 Gaia 天測資料座標範圍內，注入已知數量、已知位置的合成「成員星」（自行/視差抽樣自星團分布），混進真實場星資料，重跑 pyUPMASK，量多少比例的注入星被正確判定為成員（召回率），依半徑/質量分箱看召回率有沒有系統性差異 | 給出完整度隨半徑/星等變化的具體曲線，不是只有一個全域數字 |
-| `extra_scatter_sensitivity`（C19） | 在合成 CMD 裡疊加一個額外的高斯散布項（代表自轉/前主序光變/黑子的合併效應），散布量級參考文獻對年輕疏散星團光度變異的實測，掃過幾個散布量級，看 alpha 對這項未建模的物理有多敏感。已排進 `queue.txt`（`c19_extra_scatter_sweep`），**尚未真正跑完**——認領前先查 `logs/queue_done.txt` | 給出「散布量級 vs alpha 偏移」的敏感度曲線，不是只回答「有沒有影響」 |
-| `configCD_real_data_compare`（D10，2026-08-16 教學對話中使用者追問發現） | 用真實資料跑 `fit_real.py --configs C,D`（其餘旗標完全相同、同一批 `--repeats`），比較兩者的 alpha 中心值與散布。目前「alpha 不受 dav 貼牆位置污染」只在注入回收的合成資料上驗證過，真實資料沒有直接比較過 C 跟 D | C、D 的 alpha 差距要跟兩者各自的統計誤差（散布）比較——差距遠小於合併標準誤，才能確認 headline 數字沒有被 dav 不可辨識這個已知問題間接污染；若差距顯著，要回頭檢視現有 headline 數字，見 `LIMITATIONS.md` D10 |
-
-## 待認領工作：對照 Hobart et al. 2026 的鞏固工作（2026-08-19，完整比較見 `docs/planning/PLAN_文獻對照_Hobart2026.md`）
-
-**這個表原本 15 行，13 行（全部 D12／BP15 相關診斷鏈）已完成，見
-`WORK_BOARD_DONE.md`「個別已完成的待認領任務」**。以下兩項仍開放：
-
-| 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |
-|---|---|---|
-| `empirical_ml_relation_test`（D11，**現役缺陷．優先度 中高**） | **起手式：先完成可行性評估文件第三節那五項查證**（波段轉換在紅端的適用範圍、食雙星彙編在 M ≲ 0.4 M☉ 的樣本量、消光處理一致性、經驗關係的金屬量覆蓋、dM/dM_V 誤差傳播），優先做前兩項（成本最低、且可能直接否決整條路線），通過後再做其餘三項——五項查證全部完成後才決定是否投入，順序不能反過來。**「不得蒐集食雙星資料」指下載／整理可拿來擬合的資料集、開始寫實作，不含第二項查證本身需要的文獻盤點**（數 Torres+2010／Benedict+2016／Iglesias-Marzoa+2017 裡 M ≲ 0.4 M☉ 有幾顆星）——那是完成第二項查證的必要步驟，不算「開始蒐集」。五項全過之後才動手：蒐集公開食雙星質量-光度資料，仿 `pipeline/step5_imf.py` 的 `assign_masses()` 架構寫一條獨立於任何等時線的經驗質量估計路徑。**這條關係是 M_V（Johnson V 波段）對質量，不是 Gaia G 波段對質量**——用顏色相依轉換（Riello et al. 2021 的 Gaia EDR3 光度轉換）把 Gaia 觀測轉成 M_V，這一步的轉換方法、消光處理、金屬量涵蓋範圍、未解析聯星處理、誤差傳播都要先定好並記錄下來 | 先固定 Gaia→M_V 波段轉換方法、消光處理、誤差傳播鏈；再用這條經驗關係重跑低質量段（<0.5 M☉）alpha，跟 PARSEC／MIST 兩條既有結果放在同一張表比較；alpha 差異要拆解成「質量-光度關係本身的差異」跟「波段轉換/金屬量/未解析聯星造成的額外差異」兩部分分別量化，不能混在一起報一個數字。**可行性評估已完成**（`docs/planning/PLAN_D11_經驗質光關係_可行性評估.md`）：質量精度以 Gaia G 為準時不是瓶頸，但口徑還不對（正確導數是 dM/dM_V，本機網格沒有 V 波段算不出來）；目前初步判讀紅端的顏色覆蓋可能是主要風險（要檢驗的樣本集中在 BP−RP ≈ 2.4–3.5，BP−RP ≥ 2.663 就佔 51.9%） |
-| `mass_dependent_fbin`（D14 衍生，2026-08-19 做 D14 時發現） | `synthesise()` 裡決定「誰帶伴星」的 Bernoulli(`f_bin`) 與主星質量 `m1` **完全獨立**，等於假設雙星比例不隨質量變化。這是已知簡化但從沒量化過代價。**Torres+2025 對 Pleiades 觀測到的是雙星比例隨半徑呈雙峰**——這支持「雙星比例不是常數」，但半徑相依不等於質量相依，兩者沒有直接證據連結，質量相依性本身仍是**待驗證假設**。起手式比照 `profile_lowmass.py`：讓 `f_bin` 變成質量的簡單函數（兩段常數或線性內插），注入一個有質量相依性的假資料、用現有的常數 `f_bin` 模型去擬合，量 alpha 被推歪多少。**先做注入回收，不要直接把它升格成自由參數** | 給出「雙星比例質量相依性的強度 vs alpha 偏移」的具體數字；若偏移遠小於統計誤差 0.144 就記為可忽略並結案，不必升格成自由參數。腳本已寫好並排進 `queue.txt`（標籤 `massdep_fbin`），生成端 `JointModel.set_mass_dependent_fbin(contrast, m_break=0.5)` 已完成並驗證（設計驗證用的 contrast=0.10/0.20/0.30 不是正式 sweep 的一部分）。**正式排入 `queue.txt` 的 sweep 是 contrast=0.0/0.15/0.30，目前整組都還沒跑**（查 `queue.txt`／`logs/queue_done.txt` 確認），contrast=0.15 不是已驗證過的數字。contrast=0 是必要的對照組——C13 記錄這套注入回收本身的 alpha 偏差地板約 -0.050，跟要測的量級接近，不扣掉地板就無法判讀 |
-
-## 待認領工作：多星團校驗軸 A＋B（2026-08-20 使用者定案，完整背景見 `PLAN_多星團擴展.md` 第十二節）
-
-**執行順序有硬相依**：`praesepe_pr11_close_out` 是整條線的第一張骨牌
-——D8 那 4 個正確性問題的修法目前只存在於 PR #11 分支、不在 `main`。
-在它合併之前，任何要真的呼叫共用 pipeline 的工作（Praesepe、Coma Ber
-的 Tier 執行）**都不能用 `main`**，必須照 Coma Ber 條目 2026-08-20
-那段的規定明確 pin 住 PR #11 的 commit 並在產出裡記錄用的是哪個
-commit。`crosscal_massrange_table` 與 `hyades_literature_check` 已完成
-（見 `WORK_BOARD_DONE.md`）。
-
-**算力歸屬**：本機 x64 8 核桌機的 `queue.txt` 留給既有排隊項目，下面
-需要跑 pipeline 的兩項請排到其他機器（x64 協作機、Kaggle、或雲算力）。
-這是延續前一輪的假設，使用者若要改回本機跑可以直接推翻這條。
-
-| 任務 | 對應 | 起手式 | 驗收標準 |
-|---|---|---|---|
-| `praesepe_pr11_close_out`（**其餘兩項星團工作的前置條件**） | D8、A5 | 審查 PR #11（`codex/ngc3532-praesepe-generalization`）目前分支內容，確認 D8 那 4 點的既有修法真的有效（不是只看程式碼，要實際重跑 Praesepe 的 Tier1＋Tier2 驗證），然後合併。注意 PR #11 同時含 NGC 3532，本輪只需要 Praesepe 的部分正確，NGC 3532 可以標記為未驗證但不阻擋合併 | PR #11 合併，且 D8 在 `LIMITATIONS.md` 標記解決（含重跑證據，不是只有程式碼查證）；Praesepe 交出一組可引用的 Tier1／Tier2 數字，並跟 Hobart+2026（α_high PDMF 2.53）、Pang+2024（1.92±0.10）、Khalaj & Baumgardt (2013) 做過口徑對照——**口徑對照是驗收標準的一部分，不是選配** |
-| `comaber_tier1` | A5、D8 | 見下方「待認領工作：Coma Berenices（Melotte 111）Tier 1 起步」條目的完整起手式，本表不重複。可在 PR #11 合併前起跑，但必須 pin 住 PR #11 的 commit（見該條目 2026-08-20 那段），不能用 `main` | 見該條目 |
-
-## 待認領工作：Coma Berenices（Melotte 111）Tier 1 起步（2026-08-19，見 `docs/planning/PLAN_多星團擴展.md` 第五、七節、`docs/planning/PDMF_TO_IMF_PLAN.md` 第八節分層協定）
-
-**背景**：`PLAN_多星團擴展.md` 已把 Coma Ber 列為候選星團（動機一：第三個老年齡星團對照；動機二：金屬量接近太陽），但尚未實際起跑。核對 Hobart et al. 2026 時發現這篇論文的引言直接點名 Coma Ber 是「老年齡疏散星團次太陽質量段變平」的代表案例（引用 Kraus & Hillenbrand 2007、Tang et al. 2019），這兩篇文獻值得當作 Coma Ber 的既有 PDMF 基準線（比照 `PDMF_TO_IMF_PLAN.md` 第一步「文獻基準線」的做法）。**這項工作本次核對只做到規劃，沒有實際查詢 HR23 目錄或跑任何 pipeline**，交給認領的 session 執行。
-
-**前置阻擋條件**：要做的事收斂成一項：完成 `praesepe_pr11_close_out`（見上一個表）——重跑驗證那些修法有效、合併 PR #11、D8 在 `LIMITATIONS.md` 標記解決。在 PR #11 合併之前，Coma Ber 若要先起跑，必須照下方那段的規定明確 pin 住 PR #11 的 commit，不能用 `main`。
-
-`LIMITATIONS.md` D8 記錄的 4 個 PR #11 已知正確性問題（`allow_wall` 貼牆
-偵測被關掉、選擇函數驗證漏掉紅藍分色檢查、SNR 迴歸沒有獨立場星樣本、
-`--refresh` 遇 NSS 為 null 會崩潰）**在 D8 標記解決之前，不要用 `main`
-跑 Coma Ber 的 Tier 1**——這四個問題都在共用
-的 pipeline 程式碼（`cluster_imf_tier1.py`／`prepare_cluster_tier2.py`／
-`cluster_forward_validation.py`）裡，若邊跑 Coma Ber 邊修，之後沒辦法
-可靠判斷 Coma Ber 的結果差異是星團本身的物理差異，還是同一輪意外
-夾帶的程式修正造成的，會污染可追溯性。
-
-**起手式可以開始，但前置條件不算「已解決」**——PR #11 分支
-（`codex/ngc3532-praesepe-generalization`）已針對 D8 四項各自寫了對應的
-程式碼修法（只是讀程式碼查證，沒有重新動手改，也沒有重跑資料驗證），
-詳見 `LIMITATIONS.md` D8——**D8 仍標記為現役缺陷，要等 PR #11 合併並
-實際重跑 Tier 1 確認數值結果後才能結案**。`main` 目前不含這四項修法，
-**任何要跑 Tier 1（含只是 HR23 目錄查證以外、真的呼叫
-`cluster_forward_validation.py`／`prepare_cluster_tier2.py`／
-`cluster_imf_tier1.py` 的步驟）都必須明確 checkout commit
-`c631e733de40b7c9110e9c00eab1c8b39b53821a` 或保留這四項修法的後代 commit**，
-不能直接用 `main`，且要在產出的結果檔／PR 說明裡記錄實際用的 commit。
-PR #11 合併後要回頭重新核對 D8、重跑一次驗證確認數值結果，才能把 D8
-標記改為已解決。
-
-**起手式**：
-0. 開始前先在 `WORK_BOARD.md` 加一行「進行中」認領，避免跟其他
-   session／協作者重工——這是第一步，不是最後一步。
-1. 確認要用的程式碼版本含 D8 四項修法，**兩條路擇一，不要用 `main`**：
-   (a) PR #11 已合併 → 直接用合併後的 `main`，並在產出裡記錄實際用的
-   commit；(b) PR #11 還沒合併（目前狀態）→ 明確 checkout
-   `c631e733de40b7c9110e9c00eab1c8b39b53821a` 或保留那四項修法的後代
-   commit，並在產出的結果檔／PR 說明裡記錄實際用的 commit。**D8 沒
-   結案本身不阻擋起跑**，只要走 (a) 或 (b) 之一並記錄清楚即可。
-2. 讀 `PDMF_TO_IMF_PLAN.md` 第八節的 Tier1/Tier2 分層協定，Coma Ber（~600–800 Myr）的動力學年齡大機率會觸發 Tier 2（需要動力學校正），起跑前先照第六節公式粗算一次 τ = age / t_rh 確認。
-3. 查證 Coma Ber 在 `Hunt & Reffert (2023)` 目錄裡的對應名稱與成員表品質（`PLAN_多星團擴展.md` 第六節的「應該可行但沒驗證過」假設，這是第一個要驗證的環節）。
-4. 讀 Kraus & Hillenbrand (2007)、Tang et al. (2019) 兩篇原文（不只摘要），把它們報告的 PDMF 斜率、質量範圍記下來當基準線對照。**Tang et al. (2019, ApJ 877, 12) 已於 2026-08-19 讀原文完成口徑核對，結果見 `PLAN_文獻對照_Hobart2026.md` 第五節與 `PLAN_多星團擴展.md` 對應段落，不用重讀**——結論是他們的 α=0.79±0.16（0.25–2.51 M☉）不能直接跟我們的 headline alpha 比較（樣本含潮汐尾、未做聯星修正），需要重算子樣本或用未修正版本對照。**Kraus & Hillenbrand (2007) 還沒查證**：2026-08-19 收到的 PDF 抓錯論文（使用者給的是同作者同年份的 *ApJ* 662, 413，跟 Coma Ber 無關），Hobart et al. 2026 實際引用的是 ***The Astronomical Journal*, 134, 2340**，需要使用者重新提供正確那篇才能完成這半邊查證，目前只有 Tang 原文轉述的二手數字（α=0.6±0.3，0.1–1.0 M☉）可用，不能當已核對口徑的基準線引用。
-5. 仿 `scripts/multicluster/cluster_imf_tier1.py`（NGC 3532／Praesepe 已用過的同一套腳本）跑 Tier 1（誤差核算框架 + 動力學年齡 + 徑向 α(r) 診斷）——用第 1 步選定的那個 commit，D8 四項修法已含在內，不需要再順手處理。
-
-**驗收標準**：Coma Ber 交出跟 `PDMF_TO_IMF_PLAN.md` 第八節表格同樣結構的誤差預算表（原始 PDMF±統計誤差、動力學校正項或上限估計、其餘系統誤差），且頭條 alpha 與 Kraus & Hillenbrand (2007)／Tang et al. (2019) 的既有測定值做過對照。**對照前必須先讀這兩篇原文，逐項列出下面這些欄位、雙方（我們 vs 各篇文獻）分別是什麼，口徑不同就要先在同一個質量範圍/樣本定義下重新對齊才能比較 alpha，不能直接拿不同口徑的數字並排**：
-  - MF／PDMF 的確切定義（system MF 還是 stellar MF，見 D14）——Hobart et al. 2026 分別報告兩種，只對齊質量範圍/樣本不足以保證是同一個量
-  - 擬合/報告用的質量範圍（M☉ 上下限）
-  - 成員樣本定義與空間涵蓋範圍（搜尋半徑、是否含潮汐尾／外圍結構）
-  - 完整度修正方式（有沒有做、怎麼做）
-  - 聯星處理方式（有沒有修正、修正法）
-  - MF 的數學定義（`dN/dm` 還是 `dN/dlog m`）與 alpha 的正負號慣例
-  - 分箱方式（分箱數／對數等寬度等）、擬合函數形式、估計器（MLE／貝氏／最小平方等）、不確定度的定義（1σ 信賴區間怎麼算出來的）
-
-一致或不一致都要交代量級與可能原因，不是只列數字不解讀。
-| 2026-08-17/18 | Claude session（新機器，Acer AI 16，x64） | 大量收尾工作：`radial_r2/r3/rall` 發現已被另一 session 搶先做完（PR #60），headline 剩 5 次重複、`p6b_inject_lowmass_v2`、`verify_bprperr_v2` 重新派 Kaggle 工，PR #54/#55 重新套用避免衝突 | **多項進行中，見下方分述** | 分支 `claude/repeat-offset-reapply`（PR #62）、`claude/pr54-reapply`（PR #63）、`kaggle_queue.txt`、`logs/queue_done.txt`（本機，不進版控） | 使用者提供 6 組 Kaggle 帳號憑證（寫入本機 `kaggle_accounts.json`，gitignored，已用輕量 API 呼叫驗證有效），要求「繼續跑 Kaggle 跟 work board 剩下工作」。**過程中發現本機 `run_queue.py` 背景行程在機器重開機（Windows 更新，非人為操作）後被砍掉、閒置近 16 小時沒人發現**，重啟後緊接著 `git pull` 才發現 `radial_r2/r3/rall` 已經被另一個 session（PR #60）做完並合併，本機那份重算的 `radial_r2`（285 分鐘跑出來的）確認作廢，`taskkill` 停掉還在跑的 `radial_r3` 避免繼續白算。**PR #55（`--repeat-offset`）核實後發現其實沒合併**（先前 WebFetch 查到的「已合併」是錯的），且分支基於舊版 main、直接合併會蓋掉 main 後來加的續傳/鎖檔/manifest 驗證功能——改成只把核心種子偏移邏輯重新套用到目前 main（`fit_real.py`），同時比照加了 `inject_lowmass.py` 的 `--trial-offset`（解決 `p6b_inject_lowmass_v2` 一直因為 3 個 trial 加起來超過 Kaggle 12 小時上限而失敗的根因），開 PR #62。**PR #54 同樣核實後是「dirty」無法直接合併**（基於更舊的 main），只把其中真正完成的部分（D5 `p6b4_boundary_retest` 補測結果、C5 `--dav-distribution` 截尾指數消光分布的能力＋煙霧測試）重新套用到目前 main，其餘（散落腳本搬移、`run_queue.py` 314 行改動等）main 上已經有更新版本不需要。更新 `kaggle_queue.txt`：移除已定案的 `p9a_redo_v2`／`p9c_redo_v2`，加 headline 剩餘 5 次重複（`--repeat-offset 5,6,7,8,9`）、`p6b_inject_lowmass_v2` 拆 3 個 `--trial-offset`、`verify_bprperr_off_v2`／`on_v2`，用 `kaggle_queue.py` 派工。本機 `run_queue.py` 也重啟，接手 `p6_lowmass_v2`→`p11_outlierfrac_v2`→`p2_final2_v3`（本機完整 10 次重複版本，跟 Kaggle 拆分版本並行，互不衝突）。**踩到一個坑值得記下來**：Kaggle 派工背景執行時切換 git 分支，`kaggle_sync.py` 會打包到當下工作目錄的檔案版本——`p6b` 的 `t0`／`t1` 因此打包到還沒有 `--trial-offset` 的舊版 `inject_lowmass.py`，Kaggle 端 argparse 直接報錯（3.9 分鐘就結束，不是真的算完），已加重試項目並修好，往後派工進行中不要切分支 |
-| 2026-08-18 | Claude session（新機器，Acer AI 16，x64） | `bhac15_isochrone_test`（C1、D1，接續上一行，**外部服務恢復、網格建置完成**） | **網格已備妥並驗證；`fit_real.py` 實際比較還沒跑** | 新增 `pipeline/bhac.py`、`scripts/data_prep/build_bhac_grid.py`；`pipeline/net.py` 通用化支援多組憑證鏈（原本寫死只給 PARSEC 用，加 `chain_name` 參數）；`LIMITATIONS.md`（C1／D1 更新） | 重試連線發現伺服器恢復（不再逾時），但卡在跟 PARSEC 當初一樣的憑證鏈缺失問題（`CERTIFICATE_VERIFY_FAILED`），比照 `setup/setup_ca.ps1` 抓 `perso.ens-lyon.fr` 的憑證鏈解決。下載到 `BHAC15_iso.GAIA`（178KB，Gaia 濾光片版本，30 個年齡格點 0.5 Myr–10 Gyr、單一太陽金屬量），寫轉檔程式時踩到一個一次性 bug：檔案裡的標頭行前面帶一個空格，`re.match()` 從位置 0 比對漏配，改成先 `lstrip()` 才解決。轉出 `bhac15_gaia_logt7.6-8.4.dat`（170 列、6 個年齡格點落在 M45 相關範圍），用 `pipeline.isochrones.load_grid()`／`isochrone_at()` 驗證讀取正常。**確認質量範圍只到 0.015–1.4 M_sun**，不蓋過 M45 擬合上限 2.50 M_sun，且只有太陽金屬量一組，MH 維度形同鎖死——這些限制已誠實記在 D1，不是驗證了全範圍。**還沒做的部分**：真正跑一次 `fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat` 跟 P3（`build_dr2_grid.py`）同樣的濾光片/模型效應分解比較，這步需要 `fit_real.py` 等級的計算量，本機當時兩條佇列（`run_queue.py`／`kaggle_queue.py`）都在跑，沒有排進去，留給下一個人接手 |
-| 2026-08-20 | Codex | PR #11 多星團控制場／選擇函數續跑（D8） | **完成本輪** | `prepare_cluster_tier2.py`、`cluster_forward_validation.py`、`data/cluster_*_control_field.csv`、分支 `codex/ngc3532-praesepe-generalization` | 使用 ARI Gaia DR3 鏡像補齊控制場；NGC 3532 在 G>=17 紅藍驗證失敗，未跑前向；Praesepe 三項選擇函數檢查通過，但 smoke test 的 2/2 個 B 擬合 f_bin=1 貼邊，安全標為 diagnostic_only、沒有報 IMF。 |
-| 2026-08-20 | Codex | stick_out_fraction_constraint（D13）：聯星比例第二制約的成本／效益評估 | 進行中 | 分支 codex/stickout-fbin-assessment；將新增 docs/planning 評估文件 | 接續 Praesepe 前向 smoke test 的 f_bin=1 貼邊現象。只評估凸出星比例如何成為獨立似然項、目前簡併的診斷方式與實作成本；不直接改 pipeline/joint_fit.py，也不重跑既有 IMF。 |
-| 2026-08-20 | Codex | stick_out_fraction_constraint（D13）：完成聯星比例第二制約的成本／效益診斷 | **完成：保留為模型檢查，不直接改似然** | `scripts/diagnostics/assess_stickout_fraction.py`、`results/stickout_fraction_assessment_p2final_v3.json`、`docs/planning/ASSESSMENT_CMD_STICKOUT_FBIN_2026-08-20.md`，分支 `codex/stickout-fbin-assessment` | 讀取 M45 headline 已完成的 10 次重複，不重跑 IMF。真實凸出比例 5.78% 落在模型 5.80%–7.04% 內，故目前模型沒有明顯矛盾；但此摘要與 Hess 似然來自同一張 CMD，不能當獨立 binomial likelihood 硬加，否則會重複計數。若要升格，先做注入回收，並改成排他區域或校正的聯合似然。 |
-| 2026-08-20 | Codex | crosscal_massrange_table（多星團校驗軸 A）：Pang+2024／本專案／Hobart+2026 的 M45 質量函數口徑對照 | 進行中 | 分支 `codex/stickout-fbin-assessment`；將新增可查證文獻對照表 | D13 完成後接續的低算力工作。優先從原始或正式出版來源核對 Pang+2024 的質量範圍、MF 定義、雙星處理、估計器與完整度；未知資料明確標未知，不把初步的「大幅收斂」當定論。 |
-| 2026-08-20 | Codex | crosscal_massrange_table（多星團校驗軸 A）：完成 Pang+2024／本專案／Hobart+2026 的 M45 質量函數口徑核對 | **完成：Pang 質量範圍由未知改為已查證** | `docs/planning/CROSSCAL_M45_PANG_HOBART_2026-08-20.md`、`scripts/diagnostics/check_massrange_crosscal.py`，分支 `codex/stickout-fbin-assessment` | 原始公開 PDF 的 Table 1／註解／Figure 3／方法節確認：Pang M45 是 PDMF、0.28–2.00 M☉、未分箱最大似然+MCMC、以三個 q 分布做聯星校正後採 uniform-q。Hobart PDMF 切到同範圍為 1.952，Pang 為 2.010±0.090；僅能說質量範圍已對齊、中心相近，不能忽略兩者聯星校正不同。 |
-| 2026-08-20 | Codex | hyades_literature_check（多星團校驗軸 B）：先查 Hyades 文獻再決定是否排進 pipeline | 進行中 | 分支 `codex/stickout-fbin-assessment`；將新增文獻篩選報告 | 接續已完成 Pang 口徑核對的低算力工作。只從原始／正式來源核對年齡定年、金屬量、既有 MF 口徑與近距離的大角尺度風險；不直接執行 pipeline，也不把文獻數字寫成本專案結果。 |
-| 2026-08-20 | Codex | hyades_literature_check（多星團校驗軸 B）：完成文獻篩選與執行決策 | **完成：保留候選，但暫不直接執行** | `docs/planning/HYADES_LITERATURE_SCREEN_2026-08-20.md`，分支 `codex/stickout-fbin-assessment` | 已用原始／正式來源核對 LDB 年齡、光譜金屬量、既有 mass function/聯星研究與 Gaia 空間尺度。Hyades 可增加老年齡、金屬富有的對照點，但現有 5°設定只涵蓋約 4.1 pc，遠小於約 10 pc潮汐尺度；先做 5°／12°／20° 成員與選擇函數 smoke test，通過後才排傳統法。 |
-| 2026-08-22 | Codex | M45 BP15 前向模型成對 smoke：建立隔離輸入並檢查 alpha 是否穩定 | **探索完成；正式比較待排程** | `docs/planning/M45_BP15_FORWARD_SMOKE_2026-08-22.md`、`results/bp15_forward_smoke_summary.json` | 三個 3k paired seeds 的 alpha 差仍不穩定，不能下 BP15 科學結論。下一任務應拆到獨立節點，以 40k、至少 5 paired seeds 跑 BP20/BP15；不可把兩邊非配對平均當效果。 |
-| 2026-08-23 | Codex | BP15/BP20 正式成對前向比較派工前置檢查 | **完成；等待 Kaggle 登入／帳號分配** | `scripts/diagnostics/prepare_bp15_paired_dispatch.py`、`scripts/diagnostics/summarize_bp15_formal_paired.py`、`results/bp15_formal_paired_dispatch.json`、`docs/planning/M45_BP15_FORMAL_PAIRED_DISPATCH_2026-08-23.md` | 已驗證 BP15 三個隔離輸入存在，生成 offsets 0–4 的 10 個唯一 job tag，明定逐 offset paired 分析與驗收規則；另實際建立 82.2 MB 暫存 Kaggle payload，確認自訂輸入可被 kernel 根目錄讀取。新彙整器 fail-closed：缺任何配對就拒算平均。本機缺 `kaggle_accounts.json`／access token，未送出雲端長跑，也未把派工表誤寫成結果。 |
-| 2026-08-21 | Claude session（本機） | `mass_dependent_fbin`（D14 衍生） | 進行中（腳本已寫好並排進本機佇列，等結果） | `inject_massdep_fbin.py`（新檔）、`queue.txt`，分支 `mass-dep-fbin`（PR #86） | 依本文件規則改成「保留原任務列、在尾端新增狀態列」，不再直接改寫既有列（2026-08-21 CodeRabbit review）。腳本已依 review 修正四處：分片檔名帶 `--trial-offset`（否則各分片互相覆寫）、保存 trial id 並只對兩邊都成功的試驗配對相減、不完整批次不下結論且以非零碼結束（避免被佇列記成 ok）、結論只在淨偏移真的小於統計誤差 0.144 時才印 |
-| 2026-08-23 | Claude session（本機） | 新增第三個算力來源：GCP SSH worker `gcp1`（e2-highcpu-8） | **完成，已正式派工** | `docs/reference/CLOUD_WORKERS.md`、`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`（分支 `claude/cloud-workers-ssh-2026-08-22`，PR #103）、`ssh_workers.json`／`cloud_queue.txt`（本機新增，不進版控） | 使用者建好 GCP VM 後協助完成連線設定：GCP 瀏覽器內建 SSH 建立的帳號跟我們自己金鑰登入的帳號是**兩個不同 Linux 帳號、各自獨立家目錄**（本機憑證、GitHub Deploy Key、裝的套件都要各自處理一次，不會互通，這是踩到才發現的坑，已記進 `CLOUD_WORKERS.md`），另外修好 SSH host-key 驗證、GitHub Deploy Key（需請 repo admin `helmet-png` 加，非 admin 協作者的帳號連 repo Settings 頁面都是 404）。全鏈路 push→run→status→pull 已用 `kaggle_smoketest.py` 驗證通過。**已派第一項真正工作**：`d2_membership_threshold_p06_p07_retry`（D2 敏感度掃描，正式規模 `n_syn=40000`，先跑 0.6／0.7 兩個門檻，見上方 D2 進度說明），本機 `queue.txt` 對應項目已停用避免重複算。**分工原則**：`ssh_workers.json`／`cloud_queue.txt` 都是本機私有設定（不進版控，跟 `kaggle_accounts.json` 同一類），要用 `gcp1` 派工的人自己的機器需要各自設定連線，不能直接沿用這台機器的檔案；要排新工作進 `cloud_queue.txt` 前，先確認同一件事沒有同時排在 `queue.txt`／`kaggle_queue.txt`，避免三邊重複算力（本機、Kaggle、GCP 現在是三個獨立但要互相避開的算力池） |
+bp15_bp20_paired_comparison：檢查放寬 BP 誤差門檻（BP15 vs 現行
+BP20）找回的紅端候選星，納入後對 alpha 頭條數字有沒有實質影響。
+派工前置檢查已完成（10 個唯一 job tag、82.2 MB 暫存 payload 已驗證
+可被 kernel 讀取），彙整器設計為缺任何配對就拒算平均（fail-closed）。
+本機目前缺 kaggle_accounts.json／access token，還沒送出雲端長跑。
+先前的探索性 smoke test（3 個 3k paired seeds）顯示 alpha 差仍不
+穩定，不能下科學結論，正式比較需要 40k、至少 5 個 paired seeds。
+耗時未查證。
