@@ -40,7 +40,7 @@ def read_isochrone(path: Path, logage: float) -> tuple[np.ndarray, np.ndarray]:
     if not np.any(np.isclose(available_ages, logage)):
         raise ValueError(
             f"requested solar-metallicity logAge={logage:.3f} is absent; "
-            f"available range is {available_ages.min():.3f}–{available_ages.max():.3f}")
+            f"available range is {available_ages.min():.3f}-{available_ages.max():.3f}")
     use = solar & np.isclose(data[:, index["logAge"]], logage)
     # label 0/1 is the unevolved/main-sequence locus; exclude later phases.
     use &= data[:, index["label"]] <= 1
