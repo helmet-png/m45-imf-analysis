@@ -63,7 +63,6 @@ worker 缺本機專屬資料造成的，這個坑以後可能在別的資料檔�
 | praesepe_pr11_close_out（D8、A5） | 尚未進行 | 指派時間：2026-08-20 | PR #11（分支 codex/ngc3532-praesepe-generalization） | PR #11 合併紀錄；Praesepe Tier1／Tier2 結果檔（沿用 cluster_imf_tier1.py／prepare_cluster_tier2.py 既有輸出命名） |
 | comaber_tier1（A5、D8） | 尚未進行 | 指派時間：2026-08-19 | cluster_imf_tier1.py（Coma Berenices，checkout commit c631e733de40b7c9110e9c00eab1c8b39b53821a 或其後代 commit） | Coma Berenices 的 Tier1 結果檔（沿用 cluster_imf_tier1.py 既有輸出命名，星團名稱換成 Coma Ber） |
 | bp15_bp20_paired_comparison（D12） | 尚未進行 | 指派時間：2026-08-23 | scripts/diagnostics/prepare_bp15_paired_dispatch.py 產生的 offsets 0–4、10 個 job tag（40k、至少 5 個 paired seeds） | scripts/diagnostics/summarize_bp15_formal_paired.py 的彙整輸出 |
-| ngc3532_selection_rootcause（D16） | 進行中 | 開始日期：2026-08-24 | 已保存的 NGC 3532 Gaia 成員、控制場、品質切割與 `_postmerge` selection 結果；不重跑前向模型 | 分星等／顏色／品質切割的根因診斷 JSON 與高中生可讀 Markdown |
 
 ## 待辦事項說明
 
@@ -204,9 +203,3 @@ BP20）找回的紅端候選星，納入後對 alpha 頭條數字有沒有實質
 先前的探索性 smoke test（3 個 3k paired seeds）顯示 alpha 差仍不
 穩定，不能下科學結論，正式比較需要 40k、至少 5 個 paired seeds。
 耗時未查證。
-
-ngc3532_selection_rootcause：由 Codex（分支
-`codex/d16-ngc3532-selection-rootcause`）認領。D8 已證明 NGC 3532 在
-G≥17 的紅藍 selection gate 失敗（誤差 −0.199），本任務只用現有資料把
-差異拆成星等、顏色、SNR 與各道測光品質切割，找出最可能的根因；不放寬
-0.10 門檻、不重新跑相同 selection／前向 IMF，也不把診斷寫成已修復。
