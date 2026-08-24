@@ -57,6 +57,7 @@ import os
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -438,9 +439,15 @@ def main() -> None:
             try:
                 ok, handle = start_slot(name, kind, item)
             except Exception as e:                            # noqa: BLE001
+                # 2026-08-24 CodeRabbit review 訂正：這裡接的是 Exception
+                # 這麼寬的範圍，不會只有網路逾時，也會接住 KeyError／
+                # TypeError 這類程式邏輯錯誤——那種錯誤每一輪都會重演，
+                # 只印型別跟訊息、沒有發生位置的話，得另外重現才查得出
+                # 是哪一行。印出完整 traceback 讓下次直接定位。
                 print(f"  [{name}] 啟動 {item['label']} 時發生未預期例外"
                      f"（{type(e).__name__}: {e}），不標記完成，下一輪"
                      f"重新嘗試派工", flush=True)
+                traceback.print_exc()
                 continue
             if ok:
                 slots[name] = {"phase": "running", "item": item, "kind": kind,
@@ -528,9 +535,11 @@ def main() -> None:
                      f"結束：{final}（{secs/60:.1f} 分）\n", flush=True)
                 slots[name] = None
             except Exception as e:                            # noqa: BLE001
+                # 理由同上面「啟動新工作」那段的 2026-08-24 訂正。
                 print(f"  [{name}] 檢查 {item['label']} 狀態時發生未預期例外"
                      f"（{type(e).__name__}: {e}），保留槽位，下一輪重試",
                      flush=True)
+                traceback.print_exc()
 
         if not pending and all(s is None for s in slots.values()):
             # **不像 kaggle_queue.py 那樣「清空就結束」**（2026-08-23 為

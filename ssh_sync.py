@@ -206,7 +206,7 @@ def ensure_repo(w: dict, branch: str = "main") -> bool:
         check = ssh_workers.remote_run(
             w, f"test -d {q_dir}/.git && echo YES || echo NO", timeout=30)
     except subprocess.TimeoutExpired:
-        print(f"  無法連線到 worker：連線逾時（30 秒）")
+        print("  無法連線到 worker：連線逾時（30 秒）")
         return False
     if check.returncode != 0:
         print(f"  無法連線到 worker：{(check.stderr or check.stdout).strip()[:300]}")
@@ -220,7 +220,7 @@ def ensure_repo(w: dict, branch: str = "main") -> bool:
     try:
         r = ssh_workers.remote_run(w, cmd, timeout=180)
     except subprocess.TimeoutExpired:
-        print(f"  git 同步逾時（180 秒），本機網路或 VM 可能異常")
+        print("  git 同步逾時（180 秒），本機網路或 VM 可能異常")
         return False
     print(r.stdout.strip())
     if r.returncode != 0:
@@ -267,7 +267,7 @@ def ensure_static_data(w: dict) -> bool:
     try:
         ssh_workers.remote_run(w, f"mkdir -p {q_dir}/isochrones", timeout=30)
     except subprocess.TimeoutExpired:
-        print(f"  建立 isochrones/ 目錄逾時（30 秒），本機網路或 VM 可能異常")
+        print("  建立 isochrones/ 目錄逾時（30 秒），本機網路或 VM 可能異常")
         return False
     ok = True
     for sub, names in (("isochrones", kaggle_sync.NEEDED_ISOCHRONE_GLOBS),):
