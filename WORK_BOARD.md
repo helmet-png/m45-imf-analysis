@@ -63,7 +63,6 @@ worker 缺本機專屬資料造成的，這個坑以後可能在別的資料檔�
 | praesepe_pr11_close_out（D8、A5） | 尚未進行 | 指派時間：2026-08-20 | PR #11（分支 codex/ngc3532-praesepe-generalization） | PR #11 合併紀錄；Praesepe Tier1／Tier2 結果檔（沿用 cluster_imf_tier1.py／prepare_cluster_tier2.py 既有輸出命名） |
 | comaber_tier1（A5、D8） | 尚未進行 | 指派時間：2026-08-19 | cluster_imf_tier1.py（Coma Berenices，checkout commit c631e733de40b7c9110e9c00eab1c8b39b53821a 或其後代 commit） | Coma Berenices 的 Tier1 結果檔（沿用 cluster_imf_tier1.py 既有輸出命名，星團名稱換成 Coma Ber） |
 | bp15_bp20_paired_comparison（D12） | 尚未進行 | 指派時間：2026-08-23 | scripts/diagnostics/prepare_bp15_paired_dispatch.py 產生的 offsets 0–4、10 個 job tag（40k、至少 5 個 paired seeds） | scripts/diagnostics/summarize_bp15_formal_paired.py 的彙整輸出 |
-| praesepe_fbin_wall_residual（D17） | 進行中 | 開始日期：2026-08-24 | 已保存的 Praesepe clean CMD、selection 與 `_postmerge_d8` 前向輸出；不增加 seed、不重跑模型 | 分星等／顏色 CMD 殘差診斷 JSON 與高中生可讀 Markdown |
 
 ## 待辦事項說明
 
@@ -204,9 +203,3 @@ BP20）找回的紅端候選星，納入後對 alpha 頭條數字有沒有實質
 先前的探索性 smoke test（3 個 3k paired seeds）顯示 alpha 差仍不
 穩定，不能下科學結論，正式比較需要 40k、至少 5 個 paired seeds。
 耗時未查證。
-
-praesepe_fbin_wall_residual：由 Codex（分支
-`codex/d17-praesepe-cmd-residual`）認領。Praesepe selection 已通過，但
-既有 B 設定 2/2 次都把 `f_bin` 推到 1.0。本任務只用已保存的真實 CMD、
-selection 與前向輸出，檢查殘差集中在哪些星等／顏色區域；不增加 paired
-seed、不重跑相同模型，也不把貼牆 alpha 寫成 IMF 結論。
