@@ -320,25 +320,43 @@ def _kaggle_handle(name: str, item: dict) -> dict:
            "work_dir": HERE / "kaggle_work" / name}
 
 
-def _probe_and_recover(name: str, kind: str, item: dict) -> dict | None:
+def _probe_and_recover(name: str, kind: str, item: dict
+                       ) -> tuple[dict | None, bool]:
     """查一次 `name` 這個 worker 上有沒有 `item['label']` 已經在跑／跑完
-    的痕跡，回傳可以直接放進 `slots[name]` 的槽位 dict，或 `None`（代表
-    這個 worker 上確實沒有這個 label 在跑、或已經處理完畢，呼叫端可以
-    放心當作「這個 worker 目前空著」）。
+    的痕跡。回傳 `(slot, missing)`：
 
-    抽成獨立函式（2026-08-24 CodeRabbit review 訂正）給兩個地方共用：
-    (1) `recover_running_slots()` 開機時整批查一次；(2) 一般派工迴圈裡
-    `start_slot()` 失敗或拋例外之後，重派前先查一次——啟動失敗的結果
-    其實不明：遠端可能已經收到指令、真的開始跑了，只是這裡沒收到確認
-    回應（SSH 連線在指令送達之後、回應送回之前斷掉是典型情況）。原本
-    只有復原路徑會做這個查證，一般派工失敗後直接讓下一輪重派，可能讓
-    兩個行程搶同一個 worker 的同一份 `remote_dir`（SSH）或重推同一個
-    kernel（Kaggle）——兩處分開各寫一份判斷邏輯，以後要改判斷準則
-    （例如新增一種終止狀態）得記得兩邊都改，容易漏一邊，所以抽成一份。
+    - `slot` 是可以直接放進 `slots[name]` 的槽位 dict，或 `None`
+      （代表這個 worker 目前空著，呼叫端可以放心當空槽處理）。
+    - `missing` 只有在遠端**確實沒有任何這個 label 的痕跡**（探測結果
+      是 "missing"）才是 `True`；其餘情況（不管是找到 slot、還是這支
+      函式自己已經呼叫過 `mark_done()` 收尾）一律是 `False`。
+
+    **為什麼要分開這兩個訊號（2026-08-24 CodeRabbit review 訂正）**：
+    `complete`（已下載）跟終態 `error`／`cancelled` 這幾種情況，這支
+    函式自己就已經呼叫 `mark_done()` 把正確的終態寫進 done-log 了，
+    回傳的 `slot` 是 `None` 只是代表「沒有槽位要接手」，不是代表「什麼
+    都沒查到」。如果呼叫端看到 `slot is None` 就一律再呼叫一次
+    `mark_done(..., "push_failed", ...)`，會讓同一個 label 在
+    `logs/cloud_queue_done.txt` 裡出現兩筆互相矛盾的紀錄（正確的終態
+    +「push_failed」）——`read_done()` 只排除 `push_failed`，所以功能上
+    不會真的重派，但稽核紀錄會誤導人。只有 `missing=True`（遠端真的什麼
+    都沒有）才是呼叫端可以合理判斷「這次啟動大概沒送達」、自己決定要不
+    要標記 `push_failed` 的時機。
+
+    抽成獨立函式給兩個地方共用：(1) `recover_running_slots()` 開機時
+    整批查一次；(2) 一般派工迴圈裡 `start_slot()` 失敗或拋例外之後，
+    重派前先查一次——啟動失敗的結果其實不明：遠端可能已經收到指令、
+    真的開始跑了，只是這裡沒收到確認回應（SSH 連線在指令送達之後、
+    回應送回之前斷掉是典型情況）。原本只有復原路徑會做這個查證，一般
+    派工失敗後直接讓下一輪重派，可能讓兩個行程搶同一個 worker 的同一份
+    `remote_dir`（SSH）或重推同一個 kernel（Kaggle）——兩處分開各寫
+    一份判斷邏輯，以後要改判斷準則（例如新增一種終止狀態）得記得兩邊
+    都改，容易漏一邊，所以抽成一份。
 
     查詢本身失敗（`probe_kernel_status()`／`poll()` 回傳 "unknown"，
     或這支函式自己拋出未預期例外，見呼叫端的 try/except）保守當成
-    「可能在跑」，回傳 `phase="probe"` 的槽位，不貿然當空。
+    「可能在跑」，回傳 `phase="probe"` 的槽位，不貿然當空、也不是
+    `missing`。
     """
     if kind == "kaggle":
         handle = _kaggle_handle(name, item)
@@ -349,23 +367,23 @@ def _probe_and_recover(name: str, kind: str, item: dict) -> dict | None:
         st = ssh_sync.poll(name, item["label"])
         handle = {}
     if st == "missing":
-        return None
+        return None, True
     if st == "running":
         print(f"復原：{name} 已經在跑 {item['label']}，接回追蹤", flush=True)
         return {"phase": "running", "item": item, "kind": kind,
-               **handle, "t0": time.time(), "retries": 0}
+               **handle, "t0": time.time(), "retries": 0}, False
     if st == "unknown":
         print(f"復原：{name} 查 {item['label']} 狀態失敗，這一輪不派新"
              f"工作，下一輪再查（避免遠端其實正在跑卻被重派洗掉）",
              flush=True)
         return {"phase": "probe", "item": item, "kind": kind,
-               **handle, "t0": time.time(), "retries": 0}
+               **handle, "t0": time.time(), "retries": 0}, False
     if st == "complete":
         print(f"復原：{name} 的 {item['label']} 已經完成，補拉結果並"
              f"標記完成，不重算", flush=True)
         if fetch_slot(name, kind, item, handle):
             mark_done(item["label"], "ok", 0, name)
-            return None
+            return None, False
         # 2026-08-23 CodeRabbit review 訂正：結果下載失敗時原本直接
         # 放空槽位——遠端其實已經算完，放空槽位會讓主迴圈把這個 label
         # 當成新工作重派，等於把已經算完的計算結果丟掉重算一次。改成
@@ -376,7 +394,7 @@ def _probe_and_recover(name: str, kind: str, item: dict) -> dict | None:
         print("  結果下載失敗，保留槽位讓主迴圈下一輪重試下載"
              "（不重跑計算）", flush=True)
         return {"phase": "running", "item": item, "kind": kind,
-               **handle, "t0": time.time(), "retries": 0}
+               **handle, "t0": time.time(), "retries": 0}, False
     if (kind == "kaggle" and st == "error"
            and kaggle_queue.is_mount_race_failure(item["label"])):
         # 2026-08-23 CodeRabbit review 訂正：這裡原本跟下面的
@@ -395,13 +413,13 @@ def _probe_and_recover(name: str, kind: str, item: dict) -> dict | None:
              f"（第 1 次重試），不記成終態失敗", flush=True)
         return {"phase": "cooldown", "item": item, "kind": kind,
                **handle, "t0": time.time(), "retries": 1,
-               "resume_at": time.time() + wait_s}
+               "resume_at": time.time() + wait_s}, False
     # error／cancelled（SSH 的錯誤，或非 mount race 的 kaggle 錯誤）：
     # 記成終態失敗，不自動重派。
     print(f"復原：{name} 的 {item['label']} 遠端狀態為 {st}，記成終態"
          f"失敗，不自動重派", flush=True)
     mark_done(item["label"], st, 0, name)
-    return None
+    return None, False
 
 
 def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
@@ -429,7 +447,7 @@ def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
             if item["worker"] not in (None, name):
                 continue
             try:
-                slot = _probe_and_recover(name, kind, item)
+                slot, _missing = _probe_and_recover(name, kind, item)
             except Exception as e:                            # noqa: BLE001
                 print(f"復原：查 {name} 的 {item['label']} 狀態時發生未"
                      f"預期例外（{type(e).__name__}: {e}），保守當成"
@@ -529,7 +547,7 @@ def main() -> None:
             # 實際查一次遠端狀態，查到真的在跑就接回追蹤，不是假設
             # 沒事而重派。
             try:
-                recovered = _probe_and_recover(name, kind, item)
+                recovered, missing = _probe_and_recover(name, kind, item)
             except Exception as e2:                           # noqa: BLE001
                 print(f"  [{name}] 查詢 {item['label']} 是否已啟動時也"
                      f"發生未預期例外（{type(e2).__name__}: {e2}），保守"
@@ -546,11 +564,22 @@ def main() -> None:
                 recovered = {"phase": "probe", "item": item, "kind": kind,
                             **fallback_handle, "t0": time.time(),
                             "retries": 0}
+                # 查證本身都失敗了，不確定遠端到底有沒有，保守起見不當
+                # 「確定沒有」處理——見下面 missing 的用法。
+                missing = False
             if recovered is not None:
                 slots[name] = recovered
                 print(f"  [{name}] {item['label']} 啟動回報失敗，但查到"
                      f"遠端其實已經在跑，接回追蹤而不是重派", flush=True)
-            else:
+            elif missing:
+                # 2026-08-24 CodeRabbit review 訂正：只有 _probe_and_recover()
+                # 明確回報「遠端真的什麼都沒有」（missing=True）才在這裡標記
+                # push_failed。`recovered is None` 也可能是因為那支函式自己
+                # 已經呼叫過 mark_done()（complete 已下載、或 error／cancelled
+                # 終態）——那種情況下如果這裡又標一次 push_failed，會讓同一個
+                # label 在 done-log 裡出現兩筆互相矛盾的紀錄（正確終態 +
+                # push_failed），誤導事後查證，即使功能上不影響重派判斷
+                # （read_done() 只排除 push_failed）。
                 mark_done(item["label"], "push_failed", 0, name)
 
         for name, slot in list(slots.items()):
