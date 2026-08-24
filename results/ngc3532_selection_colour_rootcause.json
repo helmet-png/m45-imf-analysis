@@ -1,0 +1,75 @@
+{
+  "input": "data\\cluster_NGC_3532_gaia.csv",
+  "faint_limit_g": 17.0,
+  "faint_max_g": 18.0,
+  "colour_split_bp_rp": 2.2766639999999967,
+  "thresholds": {
+    "g_snr": 50.0,
+    "bp_snr": 20.0,
+    "rp_snr": 20.0,
+    "bp_rp_excess_sigma": 3.0
+  },
+  "red": {
+    "n": 31,
+    "cuts": {
+      "g_snr": {
+        "fail_alone": 0,
+        "fail_sequential": 0
+      },
+      "bp_snr": {
+        "fail_alone": 0,
+        "fail_sequential": 0
+      },
+      "rp_snr": {
+        "fail_alone": 0,
+        "fail_sequential": 0
+      },
+      "bp_rp_excess": {
+        "fail_alone": 3,
+        "fail_sequential": 3
+      }
+    },
+    "kept": 28,
+    "survival": 0.9032258064516129,
+    "medians": {
+      "g": 17.712433,
+      "bp_rp": 2.42173,
+      "g_snr": 839.42584,
+      "bp_snr": 42.830826,
+      "rp_snr": 209.3756,
+      "excess_residual_sigma": 0.5622208936341285
+    }
+  },
+  "blue": {
+    "n": 32,
+    "cuts": {
+      "g_snr": {
+        "fail_alone": 0,
+        "fail_sequential": 0
+      },
+      "bp_snr": {
+        "fail_alone": 1,
+        "fail_sequential": 1
+      },
+      "rp_snr": {
+        "fail_alone": 0,
+        "fail_sequential": 0
+      },
+      "bp_rp_excess": {
+        "fail_alone": 7,
+        "fail_sequential": 7
+      }
+    },
+    "kept": 24,
+    "survival": 0.75,
+    "medians": {
+      "g": 17.252415999999997,
+      "bp_rp": 2.2076385000000016,
+      "g_snr": 1003.57105,
+      "bp_snr": 82.679525,
+      "rp_snr": 247.10959000000003,
+      "excess_residual_sigma": 0.5571140230242776
+    }
+  },
+  "observed_red_minus_blue": 0.15322580645161288
+}
