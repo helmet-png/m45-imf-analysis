@@ -211,6 +211,15 @@ CodeRabbit review 指出這是四個檢定共用同一個假說家族卻沒有�
 | `extra_scatter_sensitivity`（C19） | 在合成 CMD 裡疊加一個額外的高斯散布項（代表自轉/前主序光變/黑子的合併效應），散布量級參考文獻對年輕疏散星團光度變異的實測，掃過幾個散布量級，看 alpha 對這項未建模的物理有多敏感。已排進 `queue.txt`（`c19_extra_scatter_sweep`），**尚未真正跑完**——認領前先查 `logs/queue_done.txt` | 給出「散布量級 vs alpha 偏移」的敏感度曲線，不是只回答「有沒有影響」 |
 | `configCD_real_data_compare`（D10，2026-08-16 教學對話中使用者追問發現） | 用真實資料跑 `fit_real.py --configs C,D`（其餘旗標完全相同、同一批 `--repeats`），比較兩者的 alpha 中心值與散布。目前「alpha 不受 dav 貼牆位置污染」只在注入回收的合成資料上驗證過，真實資料沒有直接比較過 C 跟 D | C、D 的 alpha 差距要跟兩者各自的統計誤差（散布）比較——差距遠小於合併標準誤，才能確認 headline 數字沒有被 dav 不可辨識這個已知問題間接污染；若差距顯著，要回頭檢視現有 headline 數字，見 `LIMITATIONS.md` D10 |
 
+**2026-08-24 附記**：`d10_config_cd_real`（`--configs C,D --repeats 5`，共 10
+次擬合）目前正在跑，config C 第 1 次重複已完成（29,217s），第 2 次
+重複進行中。**跟 PR #116（`cloud-only-compute`，本機不再自動重啟計算
+佇列）的關係**：使用者已確認「先讓 d10 跑完這次再停」——PR #116 暫緩
+合併，等 d10 這 10 次擬合全部跑完（`results/fit_real_d10_cd_compare.npz`
+出現 `C`、`D` 兩個 key、各 shape (5,7)）才處理本機停用計算的遷移，中途
+不要手動中止（`fit_real.py` 的 checkpoint 是每完成一次重複才存檔，
+中止當下正在跑的那次重複會直接損失那次的算力，不會保留部分進度）。
+
 ## 待認領工作：對照 Hobart et al. 2026 的鞏固工作（2026-08-19，完整比較見 `docs/planning/PLAN_文獻對照_Hobart2026.md`）
 
 **這個表原本 15 行，13 行（全部 D12／BP15 相關診斷鏈）已完成，見
