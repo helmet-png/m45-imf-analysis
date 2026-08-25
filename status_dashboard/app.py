@@ -420,6 +420,13 @@ def gather_worker_status() -> dict:
                                 "label": assigned[name]["label"], **r})
         elif name in ping_results:
             p = ping_results[name]
+            # _run_concurrent() 逾時/例外時的補值只有 status/error，沒有
+            # reachable；不補的話 _worker_badge() 會落到「Kaggle 閒置」
+            # 那個分支，把連不上或探測逾時的機器顯示成正常閒置，剛好
+            # 蓋掉這個頁面本來要抓的問題（2026-08-25 CodeRabbit review）。
+            if "reachable" not in p:
+                p = {"reachable": False,
+                    "error": p.get("error", "連線探測未完成")}
             workers_out.append({"name": name, "kind": kind, "assigned": False,
                                 **p})
         else:
