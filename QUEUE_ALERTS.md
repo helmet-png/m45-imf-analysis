@@ -30,3 +30,4 @@
 
 | 時間 | 標籤 | 腳本+參數 | 關卡 | 原因 | 狀態 |
 |---|---|---|---|---|---|
+| 2026-08-25 21:15:17 | d10_config_cd_real | `fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C,D --refines 3,3 --tag _d10_cd_compare` | B | 錯誤：`fit_real_d10_cd_compare.npz` 已有部分結果，但執行設定跟這次不同（`{'tag': (None, '_d10_cd_compare'), 'seed_scheme': (None, 'fit-real-offset-v1:2000+13*(rep+repeat_offset)')}`）。沿用會把兩種不可比的設定混進同一個檔案——換一個 `--tag`，或確認要不要刪掉舊檔重跑。 | **已處理，2026-08-25**：這則警報是 `run_queue.py` 被手動停止後、排程 watchdog 嘗試自動重啟 d10 時觸發的（本機決定改用 gcp1 執行同一件事，見 `WORK_BOARD.md`）。不重跑——本機這批 d10 已放棄，`results/fit_real_d10_cd_compare.npz` 只留 config C 2/5 次部分結果供參考，不能引用；正式結果等 `cloud_queue.txt` 的 `configcd_real_data_compare` 排到 gcp1 |
