@@ -75,15 +75,47 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="user:OPERATOR_EMAIL" \
   --role="roles/compute.osLogin"
+```
 
-# 讓中控機操作者能開/關這台 VM（自動省額度用）——建議用 --condition
-# 限縮到單一 VM，不要整專案的 instanceAdmin。下面這行沒加條件，先求
-# 能動；要限縮就照 gcloud 互動提示或
-# https://cloud.google.com/iam/docs/conditions-overview 加一個
-# resource.name 條件。
+**中控機操作者的 Google 帳號如果跟這個 VM 專案不同組織**（例如你們
+三人各自用自己的個人 Gmail 申請試用，不是同一個 Google Workspace
+組織——這是這個專案目前的實際情況）：一般情況下**不需要**額外設定，
+個人（非組織）專案本來就沒有「組織層級」這道關卡。只有當 VM 所在專案
+被歸在某個限制外部身分的 Google Workspace／Cloud Identity 組織底下
+時，才需要**那個組織的管理員**額外在組織層級授予中控機操作者
+`roles/compute.osLoginExternalUser`（2026-08-26 CodeRabbit review
+補上）——不確定自己的專案算不算這種情況，直接照上面兩行 IAM 指令做，
+如果之後連線卡在身分驗證這一步，回頭查這一條。
+
+**開/關這台 VM 的權限，建議用自訂角色（custom role）縮到最小，不要
+整包 `compute.instanceAdmin.v1`**（2026-08-26 CodeRabbit review
+指出：`instanceAdmin.v1` 就算加了 `--condition` 限制到單一 VM，還是
+能改機型、換磁碟、刪 VM 這些遠超過「開/關機」需要的操作）：
+
+```bash
+# 建一個只有「查狀態、開機、關機」三個權限的自訂角色（一次性，建好
+# 之後每個 worker 都能重複用同一個角色定義）。
+gcloud iam roles create gcpIapWorkerLifecycle --project=YOUR_PROJECT_ID \
+  --title="GCP IAP Worker VM 生命週期" \
+  --permissions=compute.instances.get,compute.instances.start,compute.instances.stop \
+  --stage=GA
+
+# 用這個自訂角色 + IAM 條件把授權範圍限縮到單一 VM。
 gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="user:OPERATOR_EMAIL" \
-  --role="roles/compute.instanceAdmin.v1"
+  --role="projects/YOUR_PROJECT_ID/roles/gcpIapWorkerLifecycle" \
+  --condition="expression=resource.name=='projects/YOUR_PROJECT_ID/zones/YOUR_ZONE/instances/YOUR_INSTANCE',title=limit-to-worker-vm"
+```
+
+嫌自訂角色麻煩、先求能動的話，退回原本的簡化版也可以，**但務必加
+`--condition` 限縮到單一 VM**，不要在專案層級開放整包
+`instanceAdmin.v1`：
+
+```bash
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="user:OPERATOR_EMAIL" \
+  --role="roles/compute.instanceAdmin.v1" \
+  --condition="expression=resource.name=='projects/YOUR_PROJECT_ID/zones/YOUR_ZONE/instances/YOUR_INSTANCE',title=limit-to-worker-vm"
 ```
 
 **VM 如果掛了 attached service account 要多加一條**（2026-08-26
@@ -130,29 +162,36 @@ gcloud auth login
 用**中控機操作者自己的** Google 帳號登入（每個 VM 擁有者第 3 步加的
 就是這個帳號）。
 
-### 2. 對每個要加入資源池的 worker 查 OS Login 使用者名稱
-
-```bash
-gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'
-```
-
-第一次跑可能要先對目標專案跑 `gcloud config set project YOUR_PROJECT_ID`
-才查得到那個專案底下的帳號，不同專案可能查到不同格式的使用者名稱
-（例如 `你的帳號_gmail_com`），屬正常現象。
-
-### 3. 建立並註冊一把 SSH 金鑰（2026-08-26 CodeRabbit review 補上，
-先前這裡漏了這一步）
+### 2. 建立並註冊一把 SSH 金鑰（2026-08-26 CodeRabbit review 補上，
+先前這裡漏了這一步；**要先做這步再查使用者名稱**，見下一步的說明）
 
 **這裡走的是一般 `ssh`／`scp` 指令連到 tunnel 開的 `localhost:<port>`，
 不是 `gcloud compute ssh`**——後者會自動幫你產生、註冊、管理金鑰，
 前者不會，OS Login 開了、IAM 也授權了，沒有這一步照樣會在
 `ssh_sync.py push` 卡 `Permission denied (publickey)`。中控機操作者
-自己建一把專用金鑰（可以所有 worker 共用同一把，不用每台 VM 各自
-一把）：
+自己建一把專用金鑰：
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/gcp_iap_operator -C "gcp-iap-operator" -N ""
 ```
+
+**這把金鑰預設沒有 passphrase、且下面會註冊到每個 worker 專案共用**
+（2026-08-26 CodeRabbit review 指出的風險，誠實列出，不是忽略）：
+`ssh_workers.py` 的 `_SSH_OPTS` 開了 `BatchMode=yes`（不彈互動式
+prompt），這是為了讓 `cloud_queue.py` 常駐無人值守運作，代價是沒辦法
+直接換成有 passphrase 的金鑰（除非另外接 SSH agent，這裡先不做，
+增加的複雜度不小）。這把私鑰檔案外洩，等於同時失去**所有已註冊
+worker** 的 SSH 存取（仍然需要搭配 IAP tunnel／中控機操作者的
+Google 身分才能實際連線，不是外洩就直接能連，但風險面確實比分開
+各自一把金鑰大）。想要更高安全性、範圍願意分開管理，可以改成
+**每個 worker 各自一把金鑰**（重複這一步、檔名各自取不同名字，下面
+註冊步驟各自對應各自的 `.pub`）；覺得目前共用一把可以接受，至少把
+私鑰檔案的存取權限鎖到只有中控機操作者自己的作業系統帳號能讀
+（Windows 用檔案總管對私鑰檔右鍵「內容→安全性」拿掉其他使用者的
+讀取權限），
+且知道要撤銷時去每個 worker 專案的 OS Login profile（`gcloud compute
+os-login ssh-keys list`／`remove`，或主控台「IAM 與管理→OS Login」）
+個別移除這把公鑰，不是刪掉本機檔案就結束。
 
 對**每一個**要加入資源池的 VM 擁有者專案，把公鑰註冊進中控機操作者
 自己的 OS Login profile（要先 `gcloud config set project
@@ -163,6 +202,23 @@ gcloud compute os-login ssh-keys add \
   --key-file=~/.ssh/gcp_iap_operator.pub \
   --project=YOUR_PROJECT_ID
 ```
+
+### 3. 對每個要加入資源池的 worker 查 OS Login 使用者名稱
+
+**要在上一步註冊金鑰之後才做這步**（2026-08-26 CodeRabbit review
+指出：OS Login profile 在還沒註冊過任何金鑰時，POSIX 帳號資訊可能是
+空的，這時查使用者名稱會拿到空字串，填進 `ssh_workers.json` 會直接
+連不上，且不會有明顯的錯誤訊息指出「先後順序錯了」這個根本原因）：
+
+```bash
+gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'
+```
+
+第一次跑可能要先對目標專案跑 `gcloud config set project YOUR_PROJECT_ID`
+才查得到那個專案底下的帳號，不同專案可能查到不同格式的使用者名稱
+（例如 `你的帳號_gmail_com`），屬正常現象。查到空字串的話，先確認
+上一步的金鑰真的註冊成功（`gcloud compute os-login ssh-keys list`
+應該看得到），再重查一次。
 
 ### 4. 填 `ssh_workers.json`
 
@@ -225,4 +281,8 @@ python ssh_workers.py
   VM。本文件沒有處理「額度到期後怎麼辦」，也沒有做額度監控，VM
   擁有者要自己不定期到 GCP 主控台「帳單」頁面看剩餘額度，快用完或
   90 天將到時提前規劃（續約、換成 Always Free 規格、或整個移掉那個
-  worker）。
+  worker）。**試用結束後不是立刻整個消失**（2026-08-26 CodeRabbit
+  review 補充）：GCP 會先把試用帳單帳戶關閉、VM 這類資源停止運作，
+  接下來有 **30 天寬限期**可以升級成付費帳單帳戶救回來；30 天內沒
+  升級，資源與資料就會進入永久刪除流程——所以「VM 突然連不上」不代表
+  資料已經沒了，還有窗口期補救，但不要拖到超過 30 天才處理。
