@@ -267,6 +267,22 @@ CodeRabbit review 指出這是四個檢定共用同一個假說家族卻沒有�
 交給 `cloud_queue.py`（gcp1／Kaggle），本機恢復成只保留 `cloud_queue.py`
 常駐。
 
+**2026-08-25 最終更新（狀態改變，PR #116 已合併）**：上面兩則附記的
+前提已經過期——PR #116 已於 2026-08-25 04:30 合併，且本機的 d10 本身
+也已經停止（在 config C 2/5 次重複完成時手動中止；本機效能不穩定，
+單次重複耗時從 8.1 小時一路拉長到 10+ 小時，且 `cloud_queue.txt` 已經
+排了同一件事給 gcp1——`configcd_real_data_compare`，本機重複算力已無
+必要）。**目前狀態**：`results/fit_real_d10_cd_compare.npz` 留有 config
+C 的 2 次部分結果（非正式數字，不能引用），本機不會再繼續跑；正式的
+D10 結果要等 `cloud_queue.txt` 裡的 `configcd_real_data_compare` 排到
+gcp1 執行（截至本次更新，排在佇列第 7 項，前面還有數個重活，預計要
+數天才會輪到）。**待辦**：`configcd_real_data_compare` 目前用的是舊式
+無 `--tag` 參數（見 `cloud_queue.txt`），跟本機留下的部分結果檔輸出
+路徑相同（`results/fit_real_d10_cd_compare.npz`），可能撞上跟
+`sensitivity_sweep.py` 同名輸出檔覆寫過的同一類問題（PR #126 修的那個
+案例）——排到之前建議先確認會不會覆寫本機殘留的部分結果，或者乾脆先
+把本機那份殘檔搬開。
+
 ## 待認領工作：對照 Hobart et al. 2026 的鞏固工作（2026-08-19，完整比較見 `docs/planning/PLAN_文獻對照_Hobart2026.md`）
 
 **這個表原本 15 行，13 行（全部 D12／BP15 相關診斷鏈）已完成，見
