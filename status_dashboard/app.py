@@ -158,9 +158,17 @@ def dispatcher_alive() -> tuple[bool, int | None]:
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
+    """呼叫 git.exe。**一定要帶 `creationflags=CREATE_NO_WINDOW`**：這台
+    機器上這個坑已經在 `ssh_workers.py` 的 `remote_run()` 踩過一次
+    （2026-08-26，見那支檔案的說明）——`sync_repo_from_github()` 每次
+    整理頁面都連續呼叫這支好幾次（fetch／rev-list／status／有時候還有
+    pull），伺服器又是用 `pyw`（沒有主控台）跑的，沒有這個旗標的話
+    Windows 會幫每一次呼叫各跳一個 git.exe 主控台視窗再消失，變成
+    使用者桌面上一串連續閃爍的黑視窗。"""
     return subprocess.run(["git", "-C", str(REPO_ROOT), *args],
                           capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", timeout=GIT_SYNC_TIMEOUT_S)
+                          errors="replace", timeout=GIT_SYNC_TIMEOUT_S,
+                          creationflags=subprocess.CREATE_NO_WINDOW)
 
 
 def sync_repo_from_github() -> dict:
@@ -231,7 +239,8 @@ def _self_restart() -> None:
     def _do_restart() -> None:
         time.sleep(0.5)
         print("偵測到主控板程式碼更新，重新啟動…", flush=True)
-        subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE))
+        subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
+                         creationflags=subprocess.CREATE_NO_WINDOW)
         os._exit(0)
     threading.Thread(target=_do_restart, daemon=True).start()
 
@@ -731,7 +740,7 @@ def render_html(status: dict, sync: dict | None = None) -> str:
                     '<div class="script-block">'
                     f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
                     f'<code>{html.escape(script)}</code> ↗</a>'
-                    '<details class="doc-details" open><summary>說明</summary>'
+                    '<details class="doc-details"><summary>說明</summary>'
                     f'<pre class="doc">{html.escape(doc)}</pre></details></div>')
             content_parts.append("</article>")
 
