@@ -79,7 +79,7 @@ Kaggle 多帳號（`kaggle_queue.txt`）與 GCP SSH worker `gcp1`
 | pyupmask_completeness_test（C8） | 尚未進行 | 指派時間：2026-08-13 | 尚無腳本；輸入是原始 Gaia 座標範圍內的合成注入星＋真實場星資料 | 尚無腳本；規劃輸出是完整度隨半徑/星等分箱的曲線檔 |
 | extra_scatter_sensitivity（C19） | 尚未進行 | 指派時間：2026-08-13 | injection_recovery.py（queue.txt 標籤 c19_extra_scatter_sweep，散布量級參數見 queue.txt 該行） | results/injection_recovery_extra_scatter.npz（規劃中的檔名） |
 | configCD_real_data_compare（D10） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --configs C,D --repeats 5（--repeats 比照既有頭條設定） | results/fit_real_configCD_compare.npz（規劃中的檔名） |
-| empirical_ml_relation_test（D11，現役缺陷．優先度中高） | 尚未進行 | 指派時間：2026-08-19 | docs/planning/PLAN_D11_經驗質光關係_可行性評估.md 第三節五項查證（尚未開始） | 五項查證的查證結果（文件更新，尚無獨立輸出檔） |
+| empirical_ml_relation_test（D11，現役缺陷．優先度中高） | 進行中 | 開始日期：2026-08-26 | 先查第三節前兩項 gate：Gaia→V 紅端覆蓋、低質量食雙星校準星數 | 逐欄有原始來源與已查證／未知標籤的可行性報告；不先寫實作 |
 | mass_dependent_fbin（D14 衍生） | 尚未進行 | 指派時間：2026-08-19 | inject_massdep_fbin.py --contrast 0.0,0.15,0.30（queue.txt 標籤 massdep_fbin） | results/inject_massdep_fbin.npz（規劃中的檔名） |
 | praesepe_pr11_close_out（D8、A5） | 尚未進行 | 指派時間：2026-08-20 | PR #11（分支 codex/ngc3532-praesepe-generalization） | PR #11 合併紀錄；Praesepe Tier1／Tier2 結果檔（沿用 cluster_imf_tier1.py／prepare_cluster_tier2.py 既有輸出命名） |
 | comaber_tier1（A5、D8） | 尚未進行 | 指派時間：2026-08-19 | cluster_imf_tier1.py（Coma Berenices，checkout commit c631e733de40b7c9110e9c00eab1c8b39b53821a 或其後代 commit） | Coma Berenices 的 Tier1 結果檔（沿用 cluster_imf_tier1.py 既有輸出命名，星團名稱換成 Coma Ber） |
@@ -174,7 +174,8 @@ configCD_real_data_compare：目前「alpha 不受 dav 貼牆位置污染」
 alpha 中心值與統計誤差的差距是否遠小於合併標準誤。耗時未查證，
 量級與同類 fit_real.py 全量跑相當。
 
-empirical_ml_relation_test：建一條完全獨立於任何等時線模型的
+empirical_ml_relation_test：認領人：Codex 本機 session（分支
+`codex/d11-empirical-ml-coverage`）。建一條完全獨立於任何等時線模型的
 經驗質量-光度關係，檢查低質量段 alpha 對「用不用等時線」本身敏不
 敏感——這是現役缺陷、優先度中高（見 LIMITATIONS.md D11）。可行性
 評估已經做完：質量精度以 Gaia G 為準時不是瓶頸，但正確的轉換導數
