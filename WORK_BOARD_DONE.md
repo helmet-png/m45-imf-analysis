@@ -624,3 +624,9 @@ PR #11 合併後要回頭重新核對 D8、重跑一次驗證確認數值結果�
 | 2026-08-23 | Claude session（本機） | 新增第三個算力來源：GCP SSH worker `gcp1`（e2-highcpu-8） | **完成，已正式派工** | `docs/reference/CLOUD_WORKERS.md`、`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`（分支 `claude/cloud-workers-ssh-2026-08-22`，PR #103）、`ssh_workers.json`／`cloud_queue.txt`（本機新增，不進版控） | 使用者建好 GCP VM 後協助完成連線設定：GCP 瀏覽器內建 SSH 建立的帳號跟我們自己金鑰登入的帳號是**兩個不同 Linux 帳號、各自獨立家目錄**（本機憑證、GitHub Deploy Key、裝的套件都要各自處理一次，不會互通，這是踩到才發現的坑，已記進 `CLOUD_WORKERS.md`），另外修好 SSH host-key 驗證、GitHub Deploy Key（需請 repo admin `helmet-png` 加，非 admin 協作者的帳號連 repo Settings 頁面都是 404）。全鏈路 push→run→status→pull 已用 `kaggle_smoketest.py` 驗證通過。**已派第一項真正工作**：`d2_membership_threshold_p06_p07_retry`（D2 敏感度掃描，正式規模 `n_syn=40000`，先跑 0.6／0.7 兩個門檻，見上方 D2 進度說明），本機 `queue.txt` 對應項目已停用避免重複算。**分工原則**：`ssh_workers.json`／`cloud_queue.txt` 都是本機私有設定（不進版控，跟 `kaggle_accounts.json` 同一類），要用 `gcp1` 派工的人自己的機器需要各自設定連線，不能直接沿用這台機器的檔案；要排新工作進 `cloud_queue.txt` 前，先確認同一件事沒有同時排在 `queue.txt`／`kaggle_queue.txt`，避免三邊重複算力（本機、Kaggle、GCP 現在是三個獨立但要互相避開的算力池） |
 
 </details>
+
+## 2026-08-25 D2 可行性完成紀錄
+
+| 日期 | 執行者 | 任務 | 狀態 | 產出 | 結果與限制 |
+|---|---|---|---|---|---|
+| 2026-08-25 | Codex 本機 session | `stars_per_cluster_sensitivity`（D2）本機可行性查證 | **可行性查證完成；數值掃描受阻** | `scripts/diagnostics/sensitivity_sweep.py`、`docs/planning/D2_STARS_PER_CLUSTER_FEASIBILITY_2026-08-25.md`，分支 `codex/d2-stars-per-cluster-feasibility` | 實際執行檢查後確認 repo 缺 `pyUPMASK/`、`prepared/` 與參數旗標，未產生或宣稱敏感度數字；同時修正無 SciPy 時可行性模式會在檢查前崩潰的問題。開始前已讀 `QUEUE_ALERTS.md`，無待處理列。 |

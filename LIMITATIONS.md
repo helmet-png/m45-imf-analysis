@@ -834,6 +834,15 @@ config C）先驗證流程能不能跑通：亮端截斷保留 1,017/1,078 顆�
 
 **後果**：這些設定的敏感度未知。
 
+**2026-08-25 stars_per_cluster 可行性查證**：本機已實際執行
+`sensitivity_sweep.py --target stars_per_cluster`。repo 內沒有
+`pyUPMASK/`，也沒有 `prepared/` 輸入，`run_variant.py` 亦尚未暴露
+`--stars-per-cluster`。所以本次沒有、也不能產生 alpha 敏感度數字；正確
+狀態是「執行受阻、阻塞原因已驗證」，不是「沒有影響」。另修正可行性
+模式會在檢查前先載入 SciPy 而崩潰的問題：科學計算依賴現在只在
+membership_threshold 模式延遲載入，不改既有擬合路徑。完整 gate 與
+重現方式見 `docs/planning/D2_STARS_PER_CLUSTER_FEASIBILITY_2026-08-25.md`。
+
 **2026-08-19 進度**：新增 `scripts/diagnostics/sensitivity_sweep.py`，示範
 `membership_threshold`（重新套用 `baseline.dat` 門檻 -> 重跑第 2/3 步 ->
 config C 前向模型量 alpha）與 `stars_per_cluster`（需重跑 pyUPMASK 聚類，
