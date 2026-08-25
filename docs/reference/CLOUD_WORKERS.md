@@ -6,6 +6,13 @@
 本機這一側的程式（`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`）
 已經寫好，填好 `ssh_workers.json` 就能用，不用再改程式。
 
+**多帳號資源池（隊友各自的 GCP 帳號互相共用）走 IAP tunnel，不是**
+**下面第 1 節這種對某個來源 IP 開防火牆的傳統直連**——來源 IP 白名單
+在中控機換網路時會整個失效，2026-08-25 因此斷線卡了好幾個小時。
+IAP 版本的完整設定步驟見
+[CLOUD_WORKERS_IAP_SETUP.md](CLOUD_WORKERS_IAP_SETUP.md)。下面的
+內容對單一固定 VM（例如沒有 IAP 的 Oracle Cloud）仍然適用。
+
 ## 1. 建 VM（GCP／Oracle 主控台上手動做，帳號申請與信用卡驗證見前面對話）
 
 - GCP：`asia-east1`，**e2-highcpu-8**（8 vCPU/4 實體核心/8GB，比

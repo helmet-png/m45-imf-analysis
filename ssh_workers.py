@@ -67,6 +67,15 @@ def load_workers() -> dict[str, dict]:
             # 2026-08-23 review 建議 venv 為預設做法，這裡用可設定欄位
             # 讓兩種都支援，不強迫已經裝好、正常在跑的既有 worker 重裝。
             "python_bin": info.get("python_bin") or "python3",
+            # 下面三個欄位全部留空（預設）代表這個 worker 不歸
+            # gcp_vm_lifecycle.py 管——直接固定開著、或不是 GCP VM，
+            # 兩種情況都不需要自動開關機。三個都填了才會啟用自動
+            # 開關（省免費額度）跟 IAP tunnel 連線（host="localhost"
+            # 時，由 iap_tunnel_manager.py 常駐維護，見
+            # docs/reference/CLOUD_WORKERS_IAP_SETUP.md）。
+            "gcp_project": info.get("gcp_project") or "",
+            "gcp_zone": info.get("gcp_zone") or "",
+            "gcp_instance": info.get("gcp_instance") or "",
         }
     return out
 

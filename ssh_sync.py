@@ -46,6 +46,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import gcp_vm_lifecycle       # GCP worker 派工前自動開機，見該模組說明
 import kaggle_sync           # 重用既有的靜態資料白名單，不重複列一份
 import ssh_workers
 
@@ -342,6 +343,13 @@ def push(worker_name: str, branch: str = "main") -> bool:
         print(f"找不到 worker {worker_name!r}，登記檔裡有：{list(workers)}")
         return False
     w = _get_worker(worker_name)
+    # 填了 GCP 生命週期欄位的 worker，派工前先確保 VM 是開著的（見
+    # gcp_vm_lifecycle.py）——沒填的 worker 這裡永遠回傳 True，不影響
+    # 既有行為。回傳 False 時語意跟其他連線失敗一樣：這一輪 push()
+    # 失敗，cloud_queue.py 既有的重試機制下一輪會再試一次，不用在這裡
+    # 額外處理。
+    if not gcp_vm_lifecycle.ensure_running(w):
+        return False
     print(f"[{worker_name}] 同步程式碼...")
     if not ensure_repo(w, branch):
         return False
