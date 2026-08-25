@@ -34,13 +34,17 @@ from __future__ import annotations
 
 import ast
 import html
+import os
 import shlex
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 
 HERE = Path(__file__).resolve().parent
 
@@ -55,7 +59,21 @@ if sys.stdout is None:
     sys.stderr = _log_f
 
 REPO_ROOT = HERE.parent
-CLOUD_QUEUE_ROOT = Path(r"C:\Users\Alber\Claude\m45_cloud_workers_wt")
+# 已知的路徑落差（見檔頭說明）：cloud_queue.py 已經 merge 進這個 repo，
+# 但目前活著在跑的派工器工作目錄還是另一個 worktree。**不能硬編死路徑**
+# （2026-08-25 CodeRabbit review：原本寫死作者本機的絕對路徑，換一台機器
+# checkout 就會 import 失敗，伺服器起不來，桌面捷徑也只會開一個連不上的
+# 網址）——改成環境變數，預設值是這個 repo 自己（多數情況下 worktree
+# 收斂回 main 之後就是這樣），沒設環境變數、且這個 repo 自己也沒有
+# cloud_queue.py 時才需要手動指定。啟動當下就驗證路徑對不對，錯了直接
+# 印清楚的錯誤訊息，不要等 import 失敗才留一串看不懂的 traceback。
+CLOUD_QUEUE_ROOT = Path(os.environ.get("CLOUD_QUEUE_ROOT", str(REPO_ROOT)))
+if not (CLOUD_QUEUE_ROOT / "cloud_queue.py").is_file():
+    raise RuntimeError(
+        f"找不到 cloud_queue.py：{CLOUD_QUEUE_ROOT}\n"
+        "這台機器上 cloud_queue.py 的實際位置可能跟這個 repo 不同（例如"
+        "還沒把 worktree 收斂回 main），設定環境變數 CLOUD_QUEUE_ROOT "
+        "指到正確的目錄再重新啟動。")
 
 sys.path.insert(0, str(CLOUD_QUEUE_ROOT))
 import cloud_queue  # noqa: E402  重用它的 read_queue/read_done/probe_slot/鎖檔邏輯，不重寫
@@ -67,6 +85,11 @@ from stage_map import STAGES  # noqa: E402
 
 PORT = 8866
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
+PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
+PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
+                         # 小於 ssh_sync.poll() 自己單次的 30 秒逾時，
+                         # 確保一個連不上的 worker 不會拖累整頁的回應
+                         # 時間（2026-08-25 CodeRabbit review）
 _probe_cache: dict[str, tuple[float, dict]] = {}
 
 
@@ -169,6 +192,24 @@ def _ssh_elapsed(worker: str, label: str) -> str | None:
     return _format_timedelta(datetime.now() - started)
 
 
+def _ssh_ping(worker: str) -> dict:
+    """單純確認一台 SSH worker（VM）本身連不連得上，不管有沒有工作在
+    跑——雲端服務視角關心的是「這台機器是不是真的醒著」，跟步驟視角
+    關心的「這個工作跑到哪」是兩個不同的問題（見『雲端服務』頁）。"""
+    try:
+        w = ssh_sync._get_worker(worker)
+    except Exception as e:  # noqa: BLE001 — worker 沒登記之類
+        return {"reachable": False, "error": str(e)}
+    try:
+        r = ssh_workers.remote_run(w, "echo ok", timeout=10)
+    except subprocess.TimeoutExpired:
+        return {"reachable": False, "error": "連線逾時"}
+    if r.returncode == 0 and r.stdout.strip() == "ok":
+        return {"reachable": True}
+    return {"reachable": False,
+           "error": (r.stderr.strip() or f"returncode={r.returncode}")[:200]}
+
+
 def probe_live(worker: str, kind: str, item: dict) -> dict:
     """即時探測一個「宣稱正在跑」的工作。15 秒快取，防手滑連點洗爆
     worker，不是要打折「每次整理都探測」這個決策。"""
@@ -194,11 +235,32 @@ def probe_live(worker: str, kind: str, item: dict) -> dict:
     return result
 
 
-def resolve_label_status(label: str, cloud_items: dict, cloud_done: dict,
-                         local_done: dict, cloud_workers: dict) -> dict:
-    """把一個 queue_label 解析成畫面要顯示的狀態字典。優先順序：
-    雲端終態 → 本機終態（已停用但保留歷史）→ 雲端佇列中（含即時探測）→
-    完全找不到。"""
+def _map_probe_state(probe_status: str) -> tuple[str, str | None]:
+    """即時探測回傳的字彙（running／complete／error／cancelled／missing／
+    unknown）對應到畫面顯示的狀態分類。**只有 `running` 算真正「進行
+    中」**（2026-08-25 CodeRabbit review 訂正：原本不管探測回什麼一律顯示
+    「進行中」，一個工作明明已經 `missing`／`error` 也會被算進「進行中」
+    的統計數字裡）。`complete`／`error`／`cancelled` 代表遠端這輪其實已經
+    跑完了，但派工器還沒處理完 `mark_done()`（下載結果、寫 done log 需要
+    時間）——這裡不硬湊一筆「已完成」的假紀錄（沒有 secs／worker／when
+    這些欄位可用），跟 `missing`／`unknown` 一起歸類成「不確定」，原始
+    探測字串放進 note 讓人自己判斷。"""
+    if probe_status == "running":
+        return "live", None
+    if probe_status == "missing":
+        return "pending", "遠端目前沒有這個工作的痕跡（可能還沒真的啟動）"
+    return "unknown", f"即時探測回傳「{probe_status}」，派工器可能還沒處理完"
+
+
+def classify_label(label: str, cloud_items: dict, cloud_done: dict,
+                   local_done: dict, cloud_workers: dict) -> dict:
+    """把一個 queue_label 解析成畫面要顯示的狀態字典，或者（需要即時
+    探測時）回傳一個帶 `_probe: True` 的標記字典。優先順序：雲端終態 →
+    本機終態（已停用但保留歷史）→ 雲端佇列中（可能需要即時探測）→
+    完全找不到。**不牽涉網路**——即時探測的部分特意留給呼叫端
+    （`_run_probes()`）集中處理，才能做有上限的併發＋整體時間預算，
+    不要每個 label 各自序列化等 SSH 逾時（2026-08-25 CodeRabbit review）。
+    """
     rec = cloud_done.get(label)
     if rec and rec["status"] != "push_failed":
         return {"state": "done", "source": "雲端", **rec}
@@ -208,17 +270,76 @@ def resolve_label_status(label: str, cloud_items: dict, cloud_done: dict,
         return {"state": "done", "source": "本機（已停用）", **rec}
 
     item = cloud_items.get(label)
-    if item:
-        worker = item["worker"]
-        if not worker:
-            return {"state": "pending", "note": "已排進佇列，尚未指定 worker"}
-        kind = cloud_workers.get(worker)
-        if not kind:
-            return {"state": "pending", "note": f"worker「{worker}」未登記"}
-        live = probe_live(worker, kind, item)
-        return {"state": "live", "worker": worker, "kind": kind, **live}
+    if not item:
+        return {"state": "unknown", "note": "沒有排進目前的佇列，也沒有執行紀錄"}
 
-    return {"state": "unknown", "note": "沒有排進目前的佇列，也沒有執行紀錄"}
+    worker = item["worker"]
+    if not worker:
+        return {"state": "pending", "note": "已排進佇列，尚未指定 worker"}
+    kind = cloud_workers.get(worker)
+    if not kind:
+        return {"state": "pending", "note": f"worker「{worker}」未登記"}
+    return {"_probe": True, "worker": worker, "kind": kind, "item": item}
+
+
+def _run_concurrent(fns: dict[str, Callable[[], dict]],
+                    deadline_s: float = PROBE_DEADLINE_S) -> dict[str, dict]:
+    """通用的「有上限併發＋整體時間預算」執行器：`fns` 是
+    {key: 零參數 callable}，每個都回傳一個 dict。時間到了還沒回來的 key
+    補一筆 `{"status": "unknown", "error": "逾時"}`，不讓任何一次外部
+    呼叫（SSH／Kaggle API）卡住整頁的回應時間（2026-08-25 CodeRabbit
+    review：原本是逐一同步呼叫，同一個不可達 worker 上排了好幾個標籤的
+    話，每個都要各自等 `ssh_sync.poll()` 自己的 30 秒逾時，疊起來要等
+    好幾分鐘）。工作狀態的即時探測（`probe_live()`）、閒置 worker 的
+    連線探測（`_ssh_ping()`）共用這支，不各自重寫一份併發邏輯。"""
+    results: dict[str, dict] = {}
+    if not fns:
+        return results
+
+    pool = ThreadPoolExecutor(max_workers=PROBE_MAX_WORKERS)
+    futures = {pool.submit(fn): key for key, fn in fns.items()}
+    deadline = time.monotonic() + deadline_s
+    try:
+        for fut in as_completed(futures, timeout=max(0.0, deadline - time.monotonic())):
+            key = futures[fut]
+            try:
+                results[key] = fut.result()
+            except Exception as e:  # noqa: BLE001 — 單一呼叫炸掉不能拖垮其他的
+                results[key] = {"status": "unknown", "error": str(e)}
+    except FutureTimeoutError:
+        pass  # 整體時間預算到了，剩下沒回來的在下面補「逾時」
+    finally:
+        # 不等還沒做完的執行緒——它們多半卡在 SSH 自己的逾時裡，讓它們
+        # 自然結束即可，不影響這次頁面已經要回應了；cancel_futures 只能
+        # 取消「還沒真的開始跑」的，正在跑的 SSH 呼叫沒辦法從外面強制
+        # 中斷。
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    for key in fns:
+        if key not in results:
+            results[key] = {"status": "unknown",
+                            "error": f"整理逾時（超過 {deadline_s:.0f} 秒）"}
+    return results
+
+
+def _run_probes(to_probe: dict[str, dict]) -> dict[str, dict]:
+    """對 `to_probe`（label -> {worker, kind, item}）裡的每個標籤做即時
+    探測，套用 `_run_concurrent()` 的併發＋整體時間預算。"""
+    if not to_probe:
+        return {}
+    fns = {label: (lambda info=info: probe_live(info["worker"], info["kind"], info["item"]))
+          for label, info in to_probe.items()}
+    raw = _run_concurrent(fns)
+    results = {}
+    for label, info in to_probe.items():
+        live = raw[label]
+        live.setdefault("elapsed", None)
+        state, note = _map_probe_state(live.get("status", "unknown"))
+        out = {"state": state, "worker": info["worker"], "kind": info["kind"], **live}
+        if note:
+            out["note"] = note
+        results[label] = out
+    return results
 
 
 def gather_status() -> dict:
@@ -233,17 +354,80 @@ def gather_status() -> dict:
         for step in stage["steps"]:
             all_labels.update(step.get("queue_labels", []))
 
-    label_status = {
-        label: resolve_label_status(label, cloud_items, cloud_done,
-                                    local_done, cloud_workers)
-        for label in all_labels
-    }
+    label_status: dict[str, dict] = {}
+    to_probe: dict[str, dict] = {}
+    for label in all_labels:
+        result = classify_label(label, cloud_items, cloud_done, local_done,
+                                cloud_workers)
+        if result.get("_probe"):
+            to_probe[label] = result
+        else:
+            label_status[label] = result
+    label_status.update(_run_probes(to_probe))
 
     return {
         "alive": alive, "pid": pid,
-        "cloud_items": cloud_items, "cloud_done": cloud_done,
-        "label_status": label_status,
+        "cloud_workers": cloud_workers, "cloud_items": cloud_items,
+        "cloud_done": cloud_done, "label_status": label_status,
     }
+
+
+def gather_worker_status() -> dict:
+    """以雲端服務（worker）為單位，不是以步驟為單位——單純回答「這個
+    worker 現在是不是真的在跑」（2026-08-25 使用者要求新增的第二種
+    介面）。跟 `gather_status()` 是同一批來源資料的另一種切法，不重複
+    定義佇列格式，但因為關心的問題不同，即時探測的對象也不同：這裡
+    探測的是「這個 worker 上排定的第一個未完成 label」，`gather_status()`
+    探測的是「stage_map.py 裡列出的每個 label」——兩邊在同一個 worker
+    同時只有一個槽位在跑的前提下通常會對到同一個工作，但這支函式就算
+    stage_map.py 完全沒收錄某個 label，也照樣看得到。"""
+    cloud_workers = cloud_queue.load_all_workers()
+    cloud_items = {it["label"]: it for it in cloud_queue.read_queue()}
+    cloud_done = parse_cloud_done()
+    local_done = parse_local_done()
+
+    def _unfinished(label: str) -> bool:
+        rec = cloud_done.get(label)
+        if rec and rec["status"] != "push_failed":
+            return False
+        rec = local_done.get(label)
+        if rec and rec["status"] not in ("stalled_giveup", "preflight_fail"):
+            return False
+        return True
+
+    # 一個 worker 同時只會真的跑一個槽位（cloud_queue.py 的槽位式併發
+    # 設計），這裡只取排在佇列檔裡第一個還沒完成的 label 當代表。
+    assigned: dict[str, dict] = {}
+    for label, item in cloud_items.items():
+        worker = item["worker"]
+        if worker and worker not in assigned and _unfinished(label):
+            assigned[worker] = item
+
+    to_probe = {name: {"worker": name, "kind": kind, "item": assigned[name]}
+               for name, kind in cloud_workers.items() if name in assigned}
+    idle_ssh = [name for name, kind in cloud_workers.items()
+               if kind == "ssh" and name not in assigned]
+
+    probe_results = _run_probes(to_probe)
+    ping_fns = {name: (lambda n=name: _ssh_ping(n)) for name in idle_ssh}
+    ping_results = _run_concurrent(ping_fns) if ping_fns else {}
+
+    workers_out = []
+    for name, kind in sorted(cloud_workers.items()):
+        if name in probe_results:
+            r = probe_results[name]
+            workers_out.append({"name": name, "kind": kind, "assigned": True,
+                                "label": assigned[name]["label"], **r})
+        elif name in ping_results:
+            p = ping_results[name]
+            workers_out.append({"name": name, "kind": kind, "assigned": False,
+                                **p})
+        else:
+            # Kaggle 帳號閒置時沒有常駐機器可以探測連線——Kaggle 是無伺服器
+            # 的 kernel 執行環境，沒有工作在跑就沒有東西可以 ping。
+            workers_out.append({"name": name, "kind": kind, "assigned": False,
+                                "reachable": None})
+    return {"workers": workers_out}
 
 
 # ==================================================================
@@ -301,7 +485,8 @@ def render_html(status: dict) -> str:
 {_CSS}
 </style></head><body>
 <h1>M45 IMF 專案主控板</h1>
-<p class="sub">整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
+{_NAV}
+<p class="sub">依步驟看——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
 （重新整理頁面 = 重新讀取所有來源檔案 + 對進行中工作即時探測）</p>
 
 <div class="summary">
@@ -346,7 +531,81 @@ def render_html(status: dict) -> str:
     return "".join(parts)
 
 
+_NAV = ('<nav class="nav"><a href="/">依步驟看</a>'
+       '<a href="/workers">依雲端服務看</a></nav>')
+
+
+def _worker_badge(w: dict) -> str:
+    if w["assigned"]:
+        state = w["state"]
+        if state == "live":
+            cls, text = "live", f"執行中：{w['label']}"
+            bits = []
+            if w.get("elapsed"):
+                bits.append(f"已耗時 {w['elapsed']}")
+            if w.get("error"):
+                bits.append(w["error"])
+            detail = "　".join(bits)
+        else:
+            cls, text = "unknown", f"排定了 {w['label']}，但探測結果是「{w.get('status', '?')}」"
+            detail = w.get("note", w.get("error", ""))
+    elif w.get("reachable") is True:
+        cls, text, detail = "ok", "閒置中（機器連得上）", ""
+    elif w.get("reachable") is False:
+        cls, text, detail = "fail", "連不上", w.get("error", "")
+    else:
+        cls, text, detail = "pending", "閒置中", "Kaggle 沒有常駐機器，沒有工作時無法探測連線"
+    return (f'<span class="badge {cls}">{html.escape(text)}</span>'
+           f'<span class="detail">{html.escape(detail)}</span>')
+
+
+def render_workers_html(status: dict) -> str:
+    """以雲端服務（worker）為單位的第二種介面——單純回答「這個 worker
+    現在是不是真的在跑」，不是「哪個研究步驟做到哪」（見
+    `gather_worker_status()` 說明）。"""
+    workers = status["workers"]
+    running_n = sum(1 for w in workers if w["assigned"] and w.get("state") == "live")
+    reachable_n = sum(1 for w in workers if not w["assigned"] and w.get("reachable"))
+
+    parts = [f"""<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<title>M45 IMF 專案主控板 — 雲端服務</title>
+<style>
+{_CSS}
+</style></head><body>
+<h1>M45 IMF 專案主控板</h1>
+{_NAV}
+<p class="sub">依雲端服務看——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
+（每個 worker 即時探測：有排工作的查工作狀態，SSH 閒置機器單純
+ping 一下確認連得上；Kaggle 帳號閒置時沒有常駐機器可以探測）</p>
+
+<div class="summary">
+  <div class="pill {'live' if running_n else ''}">正在跑 {running_n}</div>
+  <div class="pill">閒置且連得上 {reachable_n}</div>
+  <div class="pill">worker 總數 {len(workers)}</div>
+</div>
+"""]
+
+    if not workers:
+        parts.append('<p class="note">沒有登記任何 worker'
+                     '（kaggle_accounts.json／ssh_workers.json 都是空的）。</p>')
+
+    for w in workers:
+        parts.append(
+            f'<div class="worker-row"><strong>{html.escape(w["name"])}</strong>'
+            f'<span class="kind">（{html.escape(w["kind"])}）</span>'
+            f'{_worker_badge(w)}</div>')
+
+    parts.append("</body></html>")
+    return "".join(parts)
+
+
 _CSS = """
+.nav { margin: 0.3em 0 1em; font-size: 0.9em; }
+.nav a { margin-right: 1em; }
+.worker-row { border: 1px solid #999; border-radius: 4px; padding: 0.6em 0.9em;
+             margin-bottom: 0.6em; }
+.worker-row .kind { color: #777; font-size: 0.85em; margin-right: 0.6em; }
 :root { color-scheme: light dark; }
 body { font-family: -apple-system, "Microsoft JhengHei", sans-serif;
       max-width: 900px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }
@@ -389,19 +648,26 @@ code { font-family: Consolas, monospace; }
 # 伺服器
 # ==================================================================
 
+_ROUTES = {
+    "/": lambda: render_html(gather_status()),
+    "/workers": lambda: render_workers_html(gather_worker_status()),
+}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 — 覆寫標準函式庫的命名慣例
-        if self.path not in ("/", ""):
+        route = _ROUTES.get(self.path)
+        if route is None:
             self.send_response(404)
             self.end_headers()
             return
         try:
-            body = render_html(gather_status()).encode("utf-8")
+            body = route().encode("utf-8")
         except Exception as e:  # noqa: BLE001 — 任何未預期例外都不該讓伺服器整個掛掉
             import traceback
             traceback.print_exc()
             body = (f"<pre>整理狀態時發生錯誤：\n{html.escape(str(e))}\n\n"
-                    "看主控台的完整 traceback。</pre>").encode("utf-8")
+                    "看主控台的完整 traceback。</pre>").encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
