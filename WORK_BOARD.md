@@ -35,17 +35,38 @@
 
 ## 現況說明（不是工作項目，是基礎設施狀態）
 
-本機、Kaggle 多帳號、GCP SSH worker gcp1 是三個獨立但要互相避開的
-算力池（`queue.txt`／`kaggle_queue.txt`／`cloud_queue.txt`），排新
-工作前先確認同一件事沒有同時排在另外兩個佇列檔裡。本機用
-`restart_queue_on_boot.ps1`（登入時觸發）加
-`M45-QueueWatchdog-15min`（每 15 分鐘一次）兩個排程任務互相補位，
-偵測到 `run_queue.py`／`cloud_queue.py` 沒在跑就自動重啟；若某次巡檢
-發現排程任務不存在了，重新註冊即可，指令見該腳本開頭註解。gcp1
-目前派工的 `d2_membership_threshold_p06_p07_retry` 是否已經算完，
-以 `logs/cloud_queue_done.txt`／`results/` 目錄實際內容為準，不要
-假設已經成功——之前兩次都是看起來已派工但實際沒跑起來，是新
-worker 缺本機專屬資料造成的，這個坑以後可能在別的資料檔上重演。
+**2026-08-23 起使用者決定：本機不再跑計算，全部排到雲端**——
+`restart_queue_on_boot.ps1` 已經改成不再自動重啟 `run_queue.py`
+（見 PR #116），`queue.txt` 裡剩的待辦項目要排新工作一律改進
+`cloud_queue.txt`，不要再假設本機佇列會撿去跑。目前算力池只剩兩個：
+Kaggle 多帳號（`kaggle_queue.txt`）與 GCP SSH worker `gcp1`
+（`cloud_queue.txt`／`cloud_queue.py`），排新工作前先確認同一件事
+沒有同時排在另一個佇列檔裡。
+
+**gcp1 的排隊/監控機制**：`cloud_queue.py` 每輪（預設 60 秒）自動從
+`origin/main` 同步 `cloud_queue.txt`，隊員／agent 只要開 PR 加一行
+工作、合併，不用碰真實憑證也不用重啟這支程式，見該檔案開頭說明。
+`restart_queue_on_boot.ps1`（登入時觸發）＋`M45-QueueWatchdog-15min`
+（每 15 分鐘一次）負責偵測到它沒在跑就自動重啟；若某次巡檢發現排程
+任務不存在了，重新註冊即可，指令見該腳本開頭註解。
+
+**已知的閒置風險，2026-08-25 實際發生過一次**：D2 敏感度掃描兩批
+（`d2_membership_threshold_p06_p07_retry`、`d2_membership_threshold_p05_p08_p09`）
+都已經在 gcp1 跑完，但沒有自動合併進 `results/`／提交，也沒有人主動
+巡檢，gcp1 因此空等了約 3 小時才被發現、沒有下一項工作可接。**使用者
+因此要求：cloud_queue.txt 隨時要有足夠的排隊工作，避免 gcp1 空等；
+且要有主動巡檢機制，不能只靠人偶然想起來查**——目前排隊工作見下方
+表格，主動巡檢由負責的 Claude session 用排程喚醒定期查
+`logs/cloud_queue_done.txt`／`results/` 目錄實際內容（不要假設派工
+就等於成功，之前兩次都是看起來已派工但實際沒跑起來，是新 worker
+缺本機專屬資料造成的，這個坑以後可能在別的資料檔或依賴上重演）。
+
+**2026-08-25 順帶修好一個一直沒被跑過所以沒人發現的 bug**：
+`inject_massdep_fbin.py` 對 `inject_lowmass.py` 匯入一個已經不存在
+的 `atomic_savez`（2026-08-20 已收斂進 `scripts/tools/checkpoint.py`
+共用版本，這支腳本沒有跟著改），import 階段就會直接炸掉——排進
+`cloud_queue.txt` 前 dry-run 才踩到，已修好並驗證過真的能跑到擬合
+階段。
 
 ## 待辦事項
 
@@ -132,27 +153,17 @@ MIST-DR2）放進同一張比較表。BHAC15 只涵蓋到 0.015–1.4 M_sun，�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| sensitivity_sweep_membership_threshold（D2） | 進行中 | 開始日期：2026-08-24 | 成員機率門檻 P_member = 0.5、0.8、0.9（三點）；合成星數 N = 40,000 顆；精修階數 = 2 階 | α、成員數對 P_member 門檻的敏感度表 |
+| stars_per_cluster_sensitivity（D2） | 尚未進行 | 指派時間：2026-08-25 | pyUPMASK 每群星數（`stars_per_cluster`）掃描；需要 pyUPMASK/ 環境（這台機器沒有） | 可行性查證結果（無環境時誠實回報做不到，不編造數字）；有環境的機器才能真的量出敏感度數字 |
 
-sensitivity_sweep_membership_threshold：認領人：本機 Claude
-session，透過 gcp1（GCP e2-highcpu-8）派工。量成員判定門檻
-（membership_threshold）對頭條數字的敏感度，這是 D2 待補齊的敏感度
-測試之一。指令：scripts/diagnostics/sensitivity_sweep.py --target
-membership_threshold --values 0.5,0.8,0.9 --procs 4 --n-syn 40000
---refines 3,3。第一批（0.6／0.7）已於 2026-08-24 在 gcp1 實測完成，
-耗時 600.4 分鐘（約 10 小時），結果見 results/RESULTS_LOG.md 同日期
-那行：門檻從現行預設 0.7 放寬到 0.6，成員數 1,297→1,308（測光篩選
-後 n_obs 1,078→1,087），alpha 完全不變（2.367→2.367，跨度 0.000，
-對照注入回收統計誤差 0.144 為 0 倍）。但有重要但書（2026-08-24
-CodeRabbit review 指出）：兩個門檻都沿用同一份用 0.7 樣本迴歸出的
-selection.npz，沒有隨門檻重新迴歸選擇函數係數，這個簡化可能讓量出
-的敏感度系統性偏低，只能說「固定 selection 係數的條件下，0.6–0.7
-沒有偵測到 alpha 變化」，不能下「membership_threshold 不是重要誤差
-來源」這種無條件結論，完整訂正見 LIMITATIONS.md D2 同日期段落。剩下
-三個門檻（0.5／0.8／0.9）已排入 cloud_queue.txt 等 gcp1 執行，同樣
-沿用這份 selection.npz，不會單獨解決上述但書。另一個掃描目標
-stars_per_cluster 需要真的重跑 pyUPMASK 聚類，這台機器沒有
-pyUPMASK 環境，留給有環境的人。
+stars_per_cluster_sensitivity：D2 剩下的另一個掃描目標——
+`stars_per_cluster` 需要真的重跑 pyUPMASK 聚類，不是像
+membership_threshold 那樣重套門檻就好（membership_threshold 已測完
+五點，見 WORK_BOARD_DONE.md）。這台機器沒有 pyUPMASK/ 環境，腳本
+（sensitivity_sweep.py --target stars_per_cluster）會誠實回報做不到、
+不編造數字，留給有 pyUPMASK 環境的人或機器認領。D2 問題陳述裡列的
+其餘設定（pca_dims、clustering_method、inner_loop_runs、
+hess_color_range／hess_mag_range、min_flux_snr_bp）也都還沒做過敏感度
+測試，同樣待認領，見 LIMITATIONS.md D2。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
