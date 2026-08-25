@@ -101,10 +101,19 @@ def remote_run(w: dict, remote_cmd: str, timeout: int = 60
                ) -> subprocess.CompletedProcess:
     """在 worker 上跑一段 shell 指令並等它結束（同步、有逾時）。
     用來做狀態查詢、小型檔案操作——長時間運算不走這裡，見 ssh_sync.py
-    的 run() 用 nohup + disown 讓遠端行程在 SSH 連線斷開後繼續跑。"""
+    的 run() 用 nohup + disown 讓遠端行程在 SSH 連線斷開後繼續跑。
+
+    **`creationflags=CREATE_NO_WINDOW`（2026-08-26 補上，使用者實際
+    看到才發現）**：`cloud_queue.py` 常駐主迴圈每輪對每個在跑的槽位
+    各呼叫一次這裡做狀態查詢——沒有這個旗標，Windows 上每次呼叫都會
+    瞬間跳出一個 ssh.exe 的主控台視窗再消失，在使用者桌面上變成一串
+    連續閃爍的黑視窗，一輪好幾個 worker 就是好幾個。`run_queue.py`
+    對它自己起的本機運算行程本來就有加這個旗標（見那支檔案），這裡
+    漏加是因為 SSH 呼叫走的是另一支檔案，不是同一次修的。"""
     return subprocess.run(ssh_base(w) + [remote_cmd], capture_output=True,
                           text=True, encoding="utf-8", errors="replace",
-                          timeout=timeout)
+                          timeout=timeout,
+                          creationflags=subprocess.CREATE_NO_WINDOW)
 
 
 if __name__ == "__main__":
