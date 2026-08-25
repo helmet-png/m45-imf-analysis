@@ -1,9 +1,9 @@
 {
-  "_說明": "複製這個檔案改名成 ssh_workers.json（不進版控），每個 worker 填一組真實連線資訊。key 名稱（如 gcp1）只是給人看的識別名，可以隨便取。**兩種連線方式擇一**：(1) 傳統直連——host 填 VM 的公開 IP、開防火牆放行某個來源 IP，key_path 填本機私鑰路徑；來源 IP 換了（換網路、電腦睡眠喚醒）防火牆規則就失效，2026-08-25 真的因此斷線卡了好幾個小時。(2) IAP tunnel（推薦，多帳號共用資源池就是走這個）——host 固定填 'localhost'、port 填本機 tunnel 監聽的埠（建議 gcp1=2201、gcp2=2202 這樣依序排避免撞號），key_path 留空（OS Login 由 gcloud 自動管理金鑰），user 填 gcloud 解析出的 OS Login 帳號（跑一次 `gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'` 取得），額外要填 gcp_project／gcp_zone／gcp_instance 三個欄位——這三個欄位同時也決定要不要自動開關機省免費額度（見 gcp_vm_lifecycle.py）。完整設定步驟（IAP、OS Login、防火牆、跨帳號 IAM 授權）見 docs/reference/CLOUD_WORKERS_IAP_SETUP.md，傳統直連的既有步驟見 docs/reference/CLOUD_WORKERS.md。remote_dir 是 VM 上這個 repo 的路徑，第一次 push 會自動 git clone 到這裡（VM 需要先在 GitHub 該 repo 設定一把唯讀 Deploy Key）；procs 是這台機器要傳給腳本 --procs 的核心數，照 VM 實際 vCPU 數填；python_bin 是要用哪個 Python 執行檔跑腳本，留空或省略就是 'python3'（系統 Python），建議照 CLOUD_WORKERS.md 用 venv 就改成 venv 裡的絕對路徑，例如 '~/m45_venv/bin/python3'。",
+  "_說明": "複製這個檔案改名成 ssh_workers.json（不進版控），每個 worker 填一組真實連線資訊。key 名稱（如 gcp1）只是給人看的識別名，可以隨便取。**兩種連線方式擇一**：(1) 傳統直連——host 填 VM 的公開 IP、開防火牆放行某個來源 IP，key_path 填本機私鑰路徑；來源 IP 換了（換網路、電腦睡眠喚醒）防火牆規則就失效，2026-08-25 真的因此斷線卡了好幾個小時。(2) IAP tunnel（推薦，多帳號共用資源池就是走這個）——host 固定填 'localhost'、port 填本機 tunnel 監聽的埠（建議 gcp1=2201、gcp2=2202 這樣依序排避免撞號），key_path 填中控機操作者自己建立、且已經用 `gcloud compute os-login ssh-keys add` 註冊過的私鑰路徑（不是留空自動管理——這裡的連線走一般 ssh 指令，不是 `gcloud compute ssh`，OS Login 不會自動幫你產生或註冊金鑰，步驟見 CLOUD_WORKERS_IAP_SETUP.md），user 填 gcloud 解析出的 OS Login 帳號（跑一次 `gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'` 取得），額外要填 gcp_project／gcp_zone／gcp_instance 三個欄位——這三個欄位同時也決定要不要自動開關機省免費額度（見 gcp_vm_lifecycle.py）。完整設定步驟（IAP、OS Login、防火牆、跨帳號 IAM 授權）見 docs/reference/CLOUD_WORKERS_IAP_SETUP.md，傳統直連的既有步驟見 docs/reference/CLOUD_WORKERS.md。remote_dir 是 VM 上這個 repo 的路徑，第一次 push 會自動 git clone 到這裡（VM 需要先在 GitHub 該 repo 設定一把唯讀 Deploy Key）；procs 是這台機器要傳給腳本 --procs 的核心數，照 VM 實際 vCPU 數填；python_bin 是要用哪個 Python 執行檔跑腳本，留空或省略就是 'python3'（系統 Python），建議照 CLOUD_WORKERS.md 用 venv 就改成 venv 裡的絕對路徑，例如 '~/m45_venv/bin/python3'。",
   "gcp1": {
     "host": "localhost",
     "user": "填 gcloud compute os-login describe-profile 查到的帳號",
-    "key_path": "",
+    "key_path": "~/.ssh/gcp_iap_operator（自己建立、已用 gcloud compute os-login ssh-keys add 註冊過的私鑰路徑，見 CLOUD_WORKERS_IAP_SETUP.md）",
     "port": 2201,
     "remote_dir": "~/m45_membership",
     "procs": 4,
@@ -15,7 +15,7 @@
   "gcp2": {
     "host": "localhost",
     "user": "填 gcloud compute os-login describe-profile 查到的帳號",
-    "key_path": "",
+    "key_path": "~/.ssh/gcp_iap_operator（跟 gcp1 共用同一把操作者金鑰即可，不用每個 worker 各自一把）",
     "port": 2202,
     "remote_dir": "~/m45_membership",
     "procs": 4,

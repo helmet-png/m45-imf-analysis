@@ -36,6 +36,14 @@ EXAMPLE_FILE = HERE / "ssh_workers.json.example"
 _SSH_OPTS = ["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
              "-o", "ConnectTimeout=15"]
 
+# subprocess.CREATE_NO_WINDOW 只存在於 Windows 版的 subprocess 模組
+# （2026-08-26 CodeRabbit review 訂正：這個專案目前只在 Windows 上跑，
+# 但直接參照這個屬性在非 Windows 平台會於 subprocess.run() 執行前就先
+# 拋出 AttributeError——用 getattr 給預設值 0，非 Windows 平台安全地
+# 變成無操作，跟沒傳這個參數效果相同）。ssh_sync.py 也重用這個常數，
+# 不要各自定義一份。
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def load_workers() -> dict[str, dict]:
     """回傳 {識別名: {"host":..., "user":..., "key_path":..., "port":...,
@@ -113,7 +121,7 @@ def remote_run(w: dict, remote_cmd: str, timeout: int = 60
     return subprocess.run(ssh_base(w) + [remote_cmd], capture_output=True,
                           text=True, encoding="utf-8", errors="replace",
                           timeout=timeout,
-                          creationflags=subprocess.CREATE_NO_WINDOW)
+                          creationflags=CREATE_NO_WINDOW)
 
 
 if __name__ == "__main__":

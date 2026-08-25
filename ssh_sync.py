@@ -170,7 +170,7 @@ def _get_worker(worker_name: str) -> dict:
 def _repo_ssh_url() -> str:
     r = subprocess.run(["git", "remote", "get-url", "origin"],
                        cwd=str(HERE), capture_output=True, text=True,
-                       creationflags=subprocess.CREATE_NO_WINDOW)
+                       creationflags=ssh_workers.CREATE_NO_WINDOW)
     url = r.stdout.strip()
     if url.startswith(_GITHUB_HTTPS_PREFIX):
         path = url[len(_GITHUB_HTTPS_PREFIX):]
@@ -326,7 +326,7 @@ def ensure_static_data(w: dict) -> bool:
                     [str(local),
                      f"{w['user']}@{w['host']}:{remote_dir}/{sub}/{name}"],
                     capture_output=True, text=True, timeout=1800,
-                    creationflags=subprocess.CREATE_NO_WINDOW)
+                    creationflags=ssh_workers.CREATE_NO_WINDOW)
             except subprocess.TimeoutExpired:
                 print(f"  上傳 {sub}/{name} 逾時（30 分鐘），判斷連線本身"
                      f"有問題，放棄這個 worker 剩下的檔案，下一輪重試")
@@ -555,7 +555,7 @@ def pull(worker_name: str, label: str) -> bool:
                 ssh_workers.scp_base(w) +
                 [f"{w['user']}@{w['host']}:{remote_dir}/{f}", str(out_dir / f)],
                 capture_output=True, text=True, timeout=60,
-                creationflags=subprocess.CREATE_NO_WINDOW)
+                creationflags=ssh_workers.CREATE_NO_WINDOW)
         except subprocess.TimeoutExpired:
             print(f"  抓 {f} 逾時，略過（不影響下面 results/ 的抓取）")
             continue
@@ -609,7 +609,7 @@ def pull(worker_name: str, label: str) -> bool:
                 ssh_workers.scp_base(w) +
                 [f"{w['user']}@{w['host']}:{remote_dir}/{rel}", str(dest)],
                 capture_output=True, text=True, timeout=1800,
-                creationflags=subprocess.CREATE_NO_WINDOW)
+                creationflags=ssh_workers.CREATE_NO_WINDOW)
         except subprocess.TimeoutExpired:
             print(f"  抓 {rel} 逾時（30 分鐘），判斷連線本身有問題，"
                  f"放棄剩下的檔案，下一輪重試")

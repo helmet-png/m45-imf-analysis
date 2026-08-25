@@ -86,6 +86,24 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --role="roles/compute.instanceAdmin.v1"
 ```
 
+**VM 如果掛了 attached service account 要多加一條**（2026-08-26
+CodeRabbit review 指出，先前這裡漏了）：OS Login 對「VM 掛了 service
+account」的情況另外要求登入者在那個 service account 上有
+`roles/iam.serviceAccountUser`，理由是 SSH 進去等於能以那個 service
+account 的身分行動，GCP 每次連線都會檢查這個權限。先用主控台「VM 執行
+個體詳細資料」或 `gcloud compute instances describe VM_NAME
+--format='value(serviceAccounts[0].email)'` 查有沒有掛 service
+account，有的話：
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding SERVICE_ACCOUNT_EMAIL \
+  --member="user:OPERATOR_EMAIL" \
+  --role="roles/iam.serviceAccountUser"
+```
+
+新建的 VM 預設會掛「Compute Engine default service account」，多半
+會踩到這一條，不要跳過。
+
 ### 4. 把連線資訊交給中控機操作者
 
 告訴操作中控機的人這四項：`gcp_project`（你的專案 ID）、`gcp_zone`
@@ -122,15 +140,40 @@ gcloud compute os-login describe-profile --format='value(posixAccounts[0].userna
 才查得到那個專案底下的帳號，不同專案可能查到不同格式的使用者名稱
 （例如 `你的帳號_gmail_com`），屬正常現象。
 
-### 3. 填 `ssh_workers.json`
+### 3. 建立並註冊一把 SSH 金鑰（2026-08-26 CodeRabbit review 補上，
+先前這裡漏了這一步）
+
+**這裡走的是一般 `ssh`／`scp` 指令連到 tunnel 開的 `localhost:<port>`，
+不是 `gcloud compute ssh`**——後者會自動幫你產生、註冊、管理金鑰，
+前者不會，OS Login 開了、IAM 也授權了，沒有這一步照樣會在
+`ssh_sync.py push` 卡 `Permission denied (publickey)`。中控機操作者
+自己建一把專用金鑰（可以所有 worker 共用同一把，不用每台 VM 各自
+一把）：
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/gcp_iap_operator -C "gcp-iap-operator" -N ""
+```
+
+對**每一個**要加入資源池的 VM 擁有者專案，把公鑰註冊進中控機操作者
+自己的 OS Login profile（要先 `gcloud config set project
+YOUR_PROJECT_ID` 切到那個專案）：
+
+```bash
+gcloud compute os-login ssh-keys add \
+  --key-file=~/.ssh/gcp_iap_operator.pub \
+  --project=YOUR_PROJECT_ID
+```
+
+### 4. 填 `ssh_workers.json`
 
 照 [ssh_workers.json.example](../../ssh_workers.json.example) 裡
 `gcp1`／`gcp2` 的範例格式，`host` 固定填 `"localhost"`、`key_path`
-留空、`user` 填上一步查到的 OS Login 帳號、`port` 用 VM 擁有者分配
-的埠、`gcp_project`／`gcp_zone`／`gcp_instance` 填 VM 擁有者給的
-三項。
+填上一步建立的私鑰路徑（例如 `~/.ssh/gcp_iap_operator`，**不要留空**
+——留空會退回 ssh 預設身分，通常沒有註冊過 OS Login，會連不上）、
+`user` 填上一步查到的 OS Login 帳號、`port` 用 VM 擁有者分配的埠、
+`gcp_project`／`gcp_zone`／`gcp_instance` 填 VM 擁有者給的三項。
 
-### 4. 啟動 IAP tunnel 常駐管理器
+### 5. 啟動 IAP tunnel 常駐管理器
 
 ```bash
 python iap_tunnel_manager.py
@@ -141,7 +184,7 @@ python iap_tunnel_manager.py
 在掛掉時自動重啟（見 `restart_queue_on_boot.ps1`），跟 `cloud_queue.py`
 共用同一套機制。
 
-### 5. 確認能連上
+### 6. 確認能連上
 
 ```bash
 python ssh_workers.py

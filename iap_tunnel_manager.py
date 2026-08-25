@@ -49,6 +49,12 @@ RESTART_BACKOFF_S = 15
 # gcloud.cmd，用 shutil.which() 才能正確解析出完整路徑。
 _GCLOUD = shutil.which("gcloud")
 
+# 見 gcp_vm_lifecycle.py 同一行的說明：CREATE_NO_WINDOW 只存在於
+# Windows，getattr 給預設值 0 讓非 Windows 平台安全地變成無操作，
+# 不會在 subprocess.Popen() 執行前就先拋出 AttributeError
+# （2026-08-26 CodeRabbit review 訂正）。
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 # ---------------------------------------------------------------- 鎖
 # 跟 cloud_queue.py 的 acquire_lock()/release_lock() 是同一套
@@ -131,7 +137,7 @@ def _spawn(name: str, w: dict) -> subprocess.Popen:
          f"--local-host-port=localhost:{w['port']}",
          f"--zone={w['gcp_zone']}", f"--project={w['gcp_project']}"],
         stdout=log_f, stderr=subprocess.STDOUT,
-        creationflags=subprocess.CREATE_NO_WINDOW)
+        creationflags=_CREATE_NO_WINDOW)
 
 
 def main() -> None:
@@ -147,29 +153,55 @@ def main() -> None:
     procs: dict[str, subprocess.Popen] = {}
     print(f"IAP tunnel 管理器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}",
          flush=True)
-    while True:
-        targets = _tunnel_workers()
-        if not targets:
-            print("沒有任何 worker 設定 IAP tunnel（host=localhost 且填了 "
-                 "GCP 三個欄位），閒置等待——見 ssh_workers.json.example",
-                 flush=True)
-        for name, w in targets.items():
-            proc = procs.get(name)
-            if proc is not None and proc.poll() is None:
-                continue    # 還活著，不用管
-            if proc is not None:
-                print(f"[{datetime.now():%H:%M:%S}] {name} 的 tunnel 斷了"
-                     f"（exit code {proc.returncode}），"
-                     f"{RESTART_BACKOFF_S} 秒後重開", flush=True)
-                time.sleep(RESTART_BACKOFF_S)
-            procs[name] = _spawn(name, w)
-        # 設定檔裡拿掉的 worker，順便關掉對應的 tunnel 行程，不留孤兒。
-        for name in list(procs):
-            if name not in targets:
-                p = procs.pop(name)
-                if p.poll() is None:
-                    p.terminate()
-        time.sleep(CHECK_SECS)
+    # 2026-08-26 CodeRabbit review 訂正：原本只註冊 release_lock()，
+    # 這支程式收到 Ctrl+C 或遇到未預期例外結束時，procs 裡還活著的
+    # gcloud tunnel 子行程完全沒人管，會變成孤兒行程繼續佔用本機埠，
+    # 下次啟動這支程式時那個埠已經被占用、新 tunnel 開不起來，得手動
+    # 用工作管理員找出殘留的 gcloud.exe 才能清乾淨。用 try/finally 確保
+    # 這兩種結束路徑都會嘗試優雅關閉（terminate + 等 10 秒）再強制 kill
+    # 仍不退的——atexit 註冊的 release_lock() 保持不變，這裡另外處理
+    # procs，兩者互不影響。**這裡沒有解決的殘留風險**：Windows 的
+    # `taskkill /F`／工作管理員「結束工作」等於直接砍掉行程，Python
+    # 不會執行 finally（等同 SIGKILL），這種情況下子行程一樣會變孤兒
+    # ——要完全杜絕需要 Windows Job Object（把子行程綁進一個「母行程死
+    # 了就跟著死」的作業系統群組），這裡先解決常見的兩種結束路徑，
+    # Job Object 是後續要做才做的加強，不是這次的範圍。
+    try:
+        while True:
+            targets = _tunnel_workers()
+            if not targets:
+                print("沒有任何 worker 設定 IAP tunnel（host=localhost 且填了 "
+                     "GCP 三個欄位），閒置等待——見 ssh_workers.json.example",
+                     flush=True)
+            for name, w in targets.items():
+                proc = procs.get(name)
+                if proc is not None and proc.poll() is None:
+                    continue    # 還活著，不用管
+                if proc is not None:
+                    print(f"[{datetime.now():%H:%M:%S}] {name} 的 tunnel 斷了"
+                         f"（exit code {proc.returncode}），"
+                         f"{RESTART_BACKOFF_S} 秒後重開", flush=True)
+                    time.sleep(RESTART_BACKOFF_S)
+                procs[name] = _spawn(name, w)
+            # 設定檔裡拿掉的 worker，順便關掉對應的 tunnel 行程，不留孤兒。
+            for name in list(procs):
+                if name not in targets:
+                    p = procs.pop(name)
+                    if p.poll() is None:
+                        p.terminate()
+            time.sleep(CHECK_SECS)
+    finally:
+        for name, p in procs.items():
+            if p.poll() is not None:
+                continue    # 已經自己結束了
+            print(f"結束前關閉 {name} 的 tunnel（PID {p.pid}）...", flush=True)
+            p.terminate()
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                print(f"  {name} 的 tunnel 10 秒內沒回應 terminate，強制"
+                     f"kill", flush=True)
+                p.kill()
 
 
 if __name__ == "__main__":

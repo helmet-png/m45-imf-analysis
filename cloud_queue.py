@@ -751,7 +751,18 @@ def main() -> None:
             # 用 Ctrl+C。
             print("佇列目前空了，繼續常駐等待新工作（Ctrl+C 結束）。",
                  flush=True)
-        maybe_stop_idle_ssh_workers(workers, slots, idle_since)
+        # 2026-08-26 CodeRabbit review 訂正：這支函式底下的 gcloud 呼叫
+        # 在主迴圈其餘部分的 try/except 保護範圍之外，任何未預期例外
+        # （例如環境設定問題、gcloud 輸出格式意外改變）會直接讓整支
+        # while True 主迴圈死掉，波及所有 worker（不只是自動開關機
+        # 這個功能本身）——理由跟主迴圈其他段落的同類兜底完全一樣。
+        try:
+            maybe_stop_idle_ssh_workers(workers, slots, idle_since)
+        except Exception as e:                            # noqa: BLE001
+            print(f"  檢查閒置 VM 是否該關機時發生未預期例外"
+                 f"（{type(e).__name__}: {e}），這一輪跳過，下一輪重試",
+                 flush=True)
+            traceback.print_exc()
         time.sleep(POLL_SECS)
 
 

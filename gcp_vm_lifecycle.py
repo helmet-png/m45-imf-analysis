@@ -31,6 +31,14 @@ import subprocess
 # 共用，不必每次呼叫都重新搜尋 PATH。
 _GCLOUD = shutil.which("gcloud")
 
+# subprocess.CREATE_NO_WINDOW 只存在於 Windows 版的 subprocess 模組
+# （2026-08-26 CodeRabbit review 訂正：原本直接寫 subprocess.CREATE_NO_WINDOW，
+# 這個專案目前只在 Windows 上跑沒問題，但屬性本身在非 Windows 平台
+# 不存在，直接參照會在 subprocess.run() 執行前就先拋出 AttributeError，
+# 比「忘記防閃視窗」更嚴重——用 getattr 給預設值 0（等於不加任何旗標，
+# 跟沒傳這個參數效果相同），非 Windows 平台安全地變成無操作）。
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # 這裡的逾時只包一次 gcloud 呼叫本身（等 GCP API 操作完成回應），不是
 # 等到整台機器完全能連線——開機後 VM 內部開機＋IAP tunnel 重新連線
 # 還要另外一段時間，那段等待交給呼叫端（ssh_sync.push()）用既有的
@@ -46,7 +54,7 @@ def _run(args: list[str], timeout: int = _GCLOUD_TIMEOUT
     return subprocess.run(
         [_GCLOUD, *args], capture_output=True, text=True,
         encoding="utf-8", errors="replace", timeout=timeout,
-        creationflags=subprocess.CREATE_NO_WINDOW)
+        creationflags=_CREATE_NO_WINDOW)
 
 
 def is_gcp_managed(w: dict) -> bool:
