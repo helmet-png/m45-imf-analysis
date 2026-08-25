@@ -74,7 +74,7 @@ Kaggle 多帳號（`kaggle_queue.txt`）與 GCP SSH worker `gcp1`
 | nbody_prior_from_radial（A5） | 尚未進行 | 指派時間：2026-08-12 | mcluster_sse -N 400 -S 0.3/0.5/0.7（各跑數組，圍繞 pilot 參數 -P 0 -R 2.3 -Q 0.5 擾動） | nbody_setup/ 下的模擬網格輸出（檔名依 nbody_setup/README.md 命名慣例，尚未產生） |
 | pdmf_step4_radius_expansion（A5） | 尚未進行 | 指派時間：2026-08-12 | config.toml [target] radius_deg 改為 8–17°；scripts/data_prep/fetch_gaia.py → scripts/drivers/run_pipeline.py 第 1–5 步 | 新的 data/cmd_members.csv 與 results/ 下對應的第 1–5 步輸出（含 pyUPMASK 六格驗證圖） |
 | bhac15_isochrone_test（C1、D1） | 尚未進行 | 指派時間：2026-08-16 | fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat --procs 8 --n-syn 40000 --repeats 5 --configs A,C | results/fit_real_bhac.npz（規劃中的檔名，比照 fit_real_dr2.npz 命名慣例） |
-| stars_per_cluster_sensitivity（D2） | 尚未進行 | 指派時間：2026-08-25 | scripts/diagnostics/sensitivity_sweep.py --target stars_per_cluster（需要 pyUPMASK/ 環境，這台機器沒有） | 可行性查證結果（若這台機器沒環境，誠實回報做不到，不編造數字）；有環境的機器才能真的量出敏感度數字 |
+| stars_per_cluster_sensitivity（D2） | 進行中 | 開始日期：2026-08-25 | scripts/diagnostics/sensitivity_sweep.py --target stars_per_cluster（需要 pyUPMASK/ 環境） | 本機環境、輸入與驅動介面的可行性查證；缺環境時不產生敏感度數字 |
 | extinction_form_test（C5，現役缺陷．優先度高） | 尚未進行 | 指派時間：2026-08-13 | injection_recovery.py --dav-distribution lognormal／truncexp（queue.txt 標籤 c5_davform_lognormal、c5_davform_truncexp） | results/injection_recovery_davform_lognormal.npz、results/injection_recovery_davform_truncexp.npz（規劃中的檔名） |
 | pyupmask_completeness_test（C8） | 尚未進行 | 指派時間：2026-08-13 | 尚無腳本；輸入是原始 Gaia 座標範圍內的合成注入星＋真實場星資料 | 尚無腳本；規劃輸出是完整度隨半徑/星等分箱的曲線檔 |
 | extra_scatter_sensitivity（C19） | 尚未進行 | 指派時間：2026-08-13 | injection_recovery.py（queue.txt 標籤 c19_extra_scatter_sweep，散布量級參數見 queue.txt 該行） | results/injection_recovery_extra_scatter.npz（規劃中的檔名） |
@@ -140,7 +140,8 @@ bhac15_isochrone_test：BHAC15 等時線的網格轉換與涵蓋範圍確認
 上限 2.50 M_sun，比較結果要誠實標注只驗證了低質量段。耗時未查證，
 量級應與同類 fit_real.py 全量跑（--configs A,C --repeats 5）相當。
 
-stars_per_cluster_sensitivity（D2）：認領人：無。D2 剩下的另一個掃描
+stars_per_cluster_sensitivity（D2）：認領人：Codex 本機 session（分支
+`codex/d2-stars-per-cluster-feasibility`）。D2 剩下的另一個掃描
 目標——stars_per_cluster 需要真的重跑 pyUPMASK 聚類，不是像
 membership_threshold 那樣重套門檻就好（membership_threshold 已於
 2026-08-25 測完五點，見 WORK_BOARD_DONE.md）。這台機器沒有
