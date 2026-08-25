@@ -1,55 +1,47 @@
 # 雲端 SSH 運算節點（GCP／Oracle／任何 Linux VM）
 
-2026-08-22 新增。跟 `kaggle_sync.py`／`kaggle_queue.py`（Kaggle 帳號當
-運算節點）是同一個「worker」抽象的另一種實作，兩者可以同時派工，見
-`cloud_queue.py` 開頭的說明。這份文件只講 **VM 那一端要手動做的事**——
-本機這一側的程式（`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`）
-已經寫好，填好 `ssh_workers.json` 就能用，不用再改程式。
+跟 `kaggle_sync.py`／`kaggle_queue.py`（Kaggle 帳號當運算節點）是同一個
+「worker」抽象的另一種實作，兩者可以同時派工，見 `cloud_queue.py` 開頭的
+說明。這份文件只講 **VM 那一端要手動做的事**——本機這一側的程式
+（`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`）已經寫好，填好
+`ssh_workers.json` 就能用，不用再改程式。沿革見 [CHANGELOG.md](../../CHANGELOG.md)。
 
-## 1. 建 VM（GCP／Oracle 主控台上手動做，帳號申請與信用卡驗證見前面對話）
+## 1. 建 VM（GCP／Oracle 主控台上手動做）
 
 - GCP：`asia-east1`，**e2-highcpu-8**（8 vCPU/4 實體核心/8GB，比
-  c2-standard-8 便宜、$300 額度能撐更久，見對話中的定價核算；記憶體
-  夠但有瞬間解析尖峰，第一次派工先用 `--procs 4` 觀察），**Ubuntu
-  26.04 LTS Minimal**（2026-08-23 訂正——原本寫 24.04 是舊資訊，
-  26.04 LTS「Resolute Raccoon」已於 2026-04-23 發布，支援期限更長，
-  沒有理由選舊的；Minimal 變體開機更快、預裝套件少，這台機器是純
-  自動化運算節點不需要互動使用的便利工具，`apt install` 照常能用，
-  差異只在初次手動設定那幾行指令要自己裝，換來更小的攻擊面跟更少
-  要追蹤的安全更新），開防火牆允許 SSH（22 埠，預設通常已經有）。
-  **Debian 也完全可以**（這個 repo 目前實際在用的 VM 是 Debian 13）——
-  兩者都是 apt 套件管理，下面的安裝指令原封不動適用，不用為了這份
-  文件的建議特地重建已經好好在跑的 VM。
+  c2-standard-8 便宜、記憶體夠但有瞬間解析尖峰，第一次派工先用
+  `--procs 4` 觀察），**Ubuntu 26.04 LTS Minimal**（Minimal 變體開機
+  更快、預裝套件少，這台機器是純自動化運算節點不需要互動使用；
+  `apt install` 照常能用）。開防火牆允許 SSH（22 埠，預設通常已經有）。
+  Debian 也完全可以（本 repo 目前實際在用的 VM 是 Debian 13）——兩者都
+  是 apt 套件管理，下面的安裝指令原封不動適用。
 - Oracle：Shape 選 `VM.Standard.A1.Flex`（Ampere ARM），2 OCPU / 12GB
-  （目前 Always Free 的上限規格；生效日期沒有查到可靠且能長期維護的
-  來源，這裡不寫死日期，實際額度以 Oracle 主控台當下顯示為準）。
-  Ubuntu ARM64 image。
-  **已知的坑**：Always Free 的 A1 常在特定 region/Availability Domain
-  訂不到（"Out of Capacity"），換一個 AD 或 region 重試即可，這是
-  Oracle 社群普遍反映的已知現象，不是設定錯誤。
+  （Always Free 上限規格，實際額度以 Oracle 主控台當下顯示為準）。
+  Ubuntu ARM64 image。Always Free 的 A1 常在特定 region/Availability
+  Domain 訂不到（"Out of Capacity"），換一個 AD 或 region 重試即可，
+  這是 Oracle 社群普遍反映的已知現象，不是設定錯誤。
 
 建好後記下**公開 IP**與**登入帳號**（GCP 通常是你 Google 帳號本地化
 的名稱；Oracle image 常是 `ubuntu`）。
 
-**已知陷阱（2026-08-23 實測踩到，不是理論風險）：GCP 用公鑰結尾的名字
-建帳號，帳號之間完全隔離**——瀏覽器主控台的「SSH」按鈕預設用你 Google
-帳號本地化的名稱登入（例如 `albertren888`），但 `ssh_workers.json`
-裡填的 `user`（例如 `helmet`）如果是不同名字，GCP 會**另外建一個獨立
-帳號**，兩個帳號各自有自己的 home 目錄——瀏覽器帳號底下裝的 pip 套件、
-產生的 deploy key，`ssh_workers.json` 那個帳號完全看不到，會在
-`ssh_sync.py push`（`git clone` 卡在 Deploy Key 沒登記）跟第一次
-`run`（`ModuleNotFoundError: No module named 'numpy'`）分別各踩一次坑。
+**GCP 帳號隔離陷阱**：GCP 用公鑰結尾的名字建帳號，帳號之間完全隔離。
+瀏覽器主控台的「SSH」按鈕預設用你 Google 帳號本地化的名稱登入（例如
+`albertren888`），但 `ssh_workers.json` 裡填的 `user`（例如 `helmet`）
+如果是不同名字，GCP 會**另外建一個獨立帳號**，兩個帳號各自有自己的
+home 目錄——瀏覽器帳號底下裝的 pip 套件、產生的 deploy key，
+`ssh_workers.json` 那個帳號完全看不到，會在 `ssh_sync.py push`
+（`git clone` 卡在 Deploy Key 沒登記）跟第一次 `run`
+（`ModuleNotFoundError: No module named 'numpy'`）分別各踩一次坑。
 **避免的辦法**：從一開始就決定好 `ssh_workers.json` 要填的 `user`，
 瀏覽器 SSH 按鈕旁邊的下拉選單選「以自訂使用者名稱開啟」，直接用那個
-名字登入，後面第 2、3 步全部在同一個帳號底下做，不會有兩份互相看不到
-的環境。已經像上面這樣兩個帳號分岔了也沒關係，兩邊各補一次（`pip3
-install`、產生 deploy key＋登記到 GitHub）就好，不用重建 VM。
+名字登入，後面第 2、3 步全部在同一個帳號底下做。已經像上面這樣兩個
+帳號分岔了也沒關係，兩邊各補一次（`pip3 install`、產生 deploy key＋
+登記到 GitHub）就好，不用重建 VM。
 
 ## 2. VM 上裝環境（SSH 進去手動跑一次）
 
-**推薦：建一個 venv**（2026-08-23 CodeRabbit review 建議，取代原本的
-`--break-system-packages`）——`ssh_workers.json` 的 `python_bin` 欄位
-就是為了指到這裡而加的：
+**推薦：建一個 venv**——`ssh_workers.json` 的 `python_bin` 欄位就是為了
+指到這裡而加的：
 
 ```bash
 sudo apt update && sudo apt install -y python3 python3-venv python3-pip git
@@ -58,8 +50,7 @@ python3 -m venv ~/m45_venv
 ```
 
 裝完把 `ssh_workers.json` 裡這個 worker 的 `python_bin` 填成
-`"~/m45_venv/bin/python3"`（`~` 會自動展開成遠端 home 目錄，不用自己
-先查絕對路徑）。
+`"~/m45_venv/bin/python3"`（`~` 會自動展開成遠端 home 目錄）。
 
 **替代做法**（已經用這個方式裝過、正常在跑的 worker 不用重裝）：直接裝
 進系統 Python，`python_bin` 留空或設成 `"python3"`：
@@ -70,8 +61,7 @@ pip3 install --break-system-packages numpy scipy astropy emcee
 
 Ubuntu 24.04+／Debian 12+ 都預設鎖住系統 Python（PEP 668），
 `pip3 install --user` 不夠、會被拒絕，要加 `--break-system-packages`
-才裝得進去。這台是專用運算節點、不跟別的專案共用環境，PEP 668 想防的
-「系統套件被 pip 裝的東西弄壞」風險在這裡實際發生的機率很低，但終究
+才裝得進去。這台是專用運算節點、不跟別的專案共用環境，風險低，但終究
 是繞過官方建議的隔離機制，**不是首選**——只是不強迫已經這樣裝好、
 正常在跑的既有 worker 為了改做法而重來一次。
 
@@ -81,10 +71,7 @@ Ubuntu 24.04+／Debian 12+ 都預設鎖住系統 Python（PEP 668），
 ## 3. 設定唯讀 Deploy Key（讓 VM 能 `git pull`，但不能 `git push`）
 
 VM 上只需要**讀取**這個 repo，不需要寫入權限——刻意不把任何能推送的
-GitHub 憑證放到 VM 上（VM 是相對不受本機掌控的第三方主機，把可寫入的
-權杖散布出去是不必要的風險面擴大；結果檔一律由本機用 `scp` 拉回來，
-`ssh_sync.py`／`cloud_queue.py` 也是這樣設計的，見 `ssh_workers.py`
-開頭說明）。
+GitHub 憑證放到 VM 上，結果檔一律由本機用 `scp` 拉回來。
 
 ```bash
 # 在 VM 上：
@@ -98,31 +85,24 @@ deploy key`，**不要勾選 "Allow write access"**。
 ## 3.1 驗證 GitHub 的 host key（第一次 `git clone` 前一定要做）
 
 VM 是全新機器，`~/.ssh/known_hosts` 裡不會有 `github.com` 的紀錄。
-`ssh_sync.py push` 第一次會透過**非互動式** SSH 連線在 VM 上跑
+`ssh_sync.py push` 第一次會透過非互動式 SSH 連線在 VM 上跑
 `git clone`——非互動連線遇到未知主機不會有地方可以按 yes，只會直接
-卡住等輸入或連線失敗，而且如果略過驗證直接關掉 host key 檢查
+卡住等輸入或連線失敗；如果略過驗證直接關掉 host key 檢查
 （`StrictHostKeyChecking=no`），VM 對外那次 git 連線就完全不驗證
-GitHub 的身分，等於把「防中間人」這層保護關掉。**兩個做法擇一，跑完
-才能開始用 `ssh_sync.py push`**：
+GitHub 的身分。兩個做法擇一，跑完才能開始用 `ssh_sync.py push`：
 
 - **推薦**：在 VM 上手動跑一次互動式連線，出現 fingerprint 提示時人工
   核對後輸入 `yes`：
   ```bash
   ssh -T git@github.com
   ```
-  （這一步一定要真人在場核對，不能改成 accept-new 之類自動接受——
+  這一步一定要真人在場核對，不能改成 accept-new 之類自動接受——
   這裡驗證的是 GitHub 本身的身分，跟 `ssh_workers.py` 對 VM 用
-  `accept-new` 是不同的信任情境：VM 是我們自己剛建的，「第一次連線
-  照單全收」風險可接受；GitHub 是外部服務，第一次連線就有可能被
-  冒充，值得花這一步人工核對。）
+  `accept-new` 是不同的信任情境：VM 是自己剛建的，第一次連線照單全收
+  風險可接受；GitHub 是外部服務，第一次連線就有可能被冒充。
 - 或：手動把 GitHub 官方公告的 host key fingerprint（見
   https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints）
-  核對後**才**寫進 `~/.ssh/known_hosts`——**先驗證、再寫入，不要反過來**：
-  如果先 `>> ~/.ssh/known_hosts` 再核對，一把還沒驗證過的金鑰（萬一是
-  中間人攻擊植入的）已經被信任了，之後才做的核對形同虛設，等於沒做這
-  一步的防護；而且直接對 `~/.ssh/known_hosts` 跑 `ssh-keygen -lf` 會把
-  檔案裡**其他主機**的 fingerprint 也一起列出來，混在一起很難看出哪一行
-  才是 GitHub 的。改成先寫到暫存檔、核對過通過才附加進 `known_hosts`：
+  核對後**才**寫進 `~/.ssh/known_hosts`——先驗證、再寫入，不要反過來：
   ```bash
   ssh-keyscan github.com > /tmp/gh_hostkeys
   ssh-keygen -lf /tmp/gh_hostkeys   # 核對輸出的 fingerprint 跟官方公告一致，通過才繼續下一步
@@ -137,8 +117,7 @@ cp ssh_workers.json.example ssh_workers.json
 
 編輯填入 VM 的 host／user／procs（VM 的 vCPU 數）。`key_path` 是**本機**
 連線用的私鑰路徑（登入 VM 帳號的那把，不是上一步 VM 上產生的那把
-Deploy Key——兩把鑰匙用途不同：Deploy Key 是 VM 讀 GitHub 用的，
-`key_path` 是本機讀 VM 用的），留空就用 ssh 預設身分。
+Deploy Key），留空就用 ssh 預設身分。
 
 ## 5. 驗證連線
 
@@ -150,9 +129,7 @@ python ssh_sync.py push --worker gcp1
 `push` 會自動 `git clone`（第一次）或 `git pull`，並補齊缺少的靜態
 資料（`data/`、`isochrones/` 底下的白名單檔案，見 `kaggle_sync.py` 的
 `NEEDED_DATA_FILES`／`NEEDED_ISOCHRONE_GLOBS`）——`push` 這一步本身就
-已經把程式碼跟靜態資料都同步完成才會回傳，不是「先跑起來、靜態資料
-在背景慢慢傳」，所以底下的 smoke test **是在靜態資料已經同步完之後才
-跑**，不是「不用等」。跑成功之後可以用一支輕量腳本先跑一輪 smoke
+已經把程式碼跟靜態資料都同步完成才會回傳。跑成功之後先跑一輪 smoke
 test，確認整條 push→run→status→pull 的路徑通不通，再把工作排進正式
 佇列：
 
@@ -162,22 +139,18 @@ python ssh_sync.py status --worker gcp1 --label smoketest
 python ssh_sync.py pull --worker gcp1 --label smoketest
 ```
 
-（2026-08-23 訂正：`ssh_sync.py run` 只吃 `--worker`／`--script`／
-`--args`／`--label` 四個參數，**沒有 `--minimal` 這個頂層旗標**，
-`kaggle_smoketest.py` 本身也不解析任何命令列參數——照舊版文件字面加
-`--minimal` 會直接得到 argparse 的錯誤。跟 Kaggle 那邊 `kaggle_sync.py`
-的 `--minimal`（控制要不要把 `pipeline/`／`data/`／`isochrones/` 一起
+`ssh_sync.py run` 只吃 `--worker`／`--script`／`--args`／`--label`
+四個參數，**沒有 `--minimal` 這個頂層旗標**，`kaggle_smoketest.py`
+本身也不解析任何命令列參數。跟 Kaggle 那邊 `kaggle_sync.py` 的
+`--minimal`（控制要不要把 `pipeline/`／`data/`／`isochrones/` 一起
 打包上傳到 kernel）是不同機制：SSH worker 是持久機器，`push` 已經把
 整個 repo 跟靜態資料同步過一次，不需要另外的「精簡打包」選項。如果
 之後要指定的腳本本身支援類似 `--minimal` 的自訂旗標，**要用
 `--args=值` 的等號寫法**，例如
 `python ssh_sync.py run --worker gcp1 --script some_script.py --args=--minimal --label smoketest`
-——`--minimal` 是要傳給 `--script` 指定的那支腳本的參數，不是
-`ssh_sync.py run` 自己的參數。（2026-08-23 訂正：原本寫
-`--args "--minimal"`（空白分隔）看起來合理，但實測會被 argparse
-誤判成獨立的 `--minimal` 選項而報錯「expected one argument」——
-因為值本身也是 `--` 開頭，argparse 分不清它是 `--args` 的值還是
-下一個選項，只有 `--args=值` 這種等號寫法才能明確綁定。）
+——帶 `--` 開頭的值用空白分隔（`--args "--minimal"`）會被 argparse
+誤判成獨立選項而報錯「expected one argument」，只有 `--args=值`
+這種等號寫法才能明確綁定。
 
 確認整輪跑得通之後，才把工作排進 `cloud_queue.txt`、跑
 `python cloud_queue.py` 正式派工。
@@ -195,16 +168,16 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 |---|---|---|
 | 容器生命週期 | 一次性，跑完即消失 | 持久機器 |
 | 每次同步 | 整包重新打包上傳 | 只傳缺少/更新的部分（git pull＋差異檔案） |
-| 已知失敗模式 | dataset 掛載時序競態（`kaggle_queue.py` 的 `BACKOFFS`） | 目前未知——是新路徑，第一次真的派重運算前建議先觀察一輪 |
+| 已知失敗模式 | dataset 掛載時序競態（`kaggle_queue.py` 的 `BACKOFFS`） | 目前未知——是較新路徑，第一次真的派重運算前建議先觀察一輪 |
 | 核數 | 免費 CPU notebook 約 4 vCPU | 依 VM 規格（GCP 8 vCPU／Oracle 2 vCPU） |
 | 結果回傳 | `kaggle kernels output` 下載 | `scp` 拉 `results/` 回本機 |
 
-## 集中式團隊派工（2026-08-23 新增）
+## 集中式團隊派工
 
 科展隊員不用拿到任何真實憑證（Kaggle token、VM 的 SSH 私鑰）就能自己
 排工作、讓它自動被派到某個帳號或 worker 上執行——真實憑證只放在
-`cloud_queue.py` 常駐執行的那台機器（目前是這台）。運作方式跟這個 repo
-既有的協作流程一致，不是另外發明一套：
+`cloud_queue.py` 常駐執行的那台機器。運作方式跟這個 repo既有的協作
+流程一致：
 
 **隊員這邊要做的事**（跟平常提 PR 一樣）：
 1. `git checkout -b <你的名字>/queue-<簡短描述>`
@@ -220,19 +193,18 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
    單純加一行資料，不用等審查）。
 
 **接下來自動發生的事**：跑 `cloud_queue.py` 的那台機器每一輪
-（預設 60 秒）都會自動把 `cloud_queue.txt` 從 `origin/main` 同步下來
-（`sync_queue_file()`），PR 一合併，下一輪就會偵測到新工作、找一個
-閒置的帳號或 worker 開始跑，不需要另外通知操作那台機器的人。
+（預設 60 秒）都會自動把 `cloud_queue.txt` 從 `origin/main` 同步下來，
+PR 一合併，下一輪就會偵測到新工作、找一個閒置的帳號或 worker 開始跑，
+不需要另外通知操作那台機器的人。
 
 **還沒自動化的部分**：工作跑完的結果目前還是要靠操作那台機器的人
 手動確認、commit 進 `results/`、寫 `results/RESULTS_LOG.md`，才會
 讓其他隊員在 `git pull` 之後看到——這步刻意保留人工確認，不自動
-commit 未經檢查的結果（跟這個專案「先確認方法沒有邏輯問題再產出
-最終數據」的原則一致）。想知道自己的工作跑得怎麼樣，目前只能問
-操作那台機器的人，還沒有隊員自己能查的狀態頁面。
+commit 未經檢查的結果。想知道自己的工作跑得怎麼樣，目前只能問操作
+那台機器的人，還沒有隊員自己能查的狀態頁面。
 
 **這個模式的信任邊界**：能開 PR 改 `cloud_queue.txt` 的人（也就是這個
 GitHub repo 的協作者）事實上就能讓運算機器跑任意腳本＋任意參數——
-跟這個專案既有的「GitHub repo 存取權限＝信任邊界」模型一致（多 agent／
-多人協作本來就建立在這個假設上），不是額外新增的風險，但值得知道：
-這不是對公開網路開放的系統，是對「已經是這個 repo 協作者」的人開放。
+跟這個專案既有的「GitHub repo 存取權限＝信任邊界」模型一致，不是
+額外新增的風險，但值得知道：這不是對公開網路開放的系統，是對「已經
+是這個 repo 協作者」的人開放。
