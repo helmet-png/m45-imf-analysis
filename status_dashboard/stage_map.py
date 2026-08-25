@@ -127,8 +127,13 @@ STAGES = [
             {
                 "name": "D2 membership_threshold 敏感度掃描",
                 "scripts": ["scripts/diagnostics/sensitivity_sweep.py"],
+                # 注意：WORK_BOARD.md 裡這個任務叫
+                # sensitivity_sweep_membership_threshold，但實際派工到
+                # cloud_queue.txt 時用的是下面這兩個帶批次後綴的標籤——
+                # 前者從沒被當成真正的佇列標籤用過，留著只會讓這個步驟的
+                # 狀態徽章被一筆「查無紀錄」的假陰性拖成「不確定」，
+                # 即使兩批真正的工作其實都已完成（2026-08-25 發現並修正）。
                 "queue_labels": [
-                    "sensitivity_sweep_membership_threshold",
                     "d2_membership_threshold_p06_p07_retry",
                     "d2_membership_threshold_p05_p08_p09",
                 ],
@@ -142,7 +147,11 @@ STAGES = [
                 "name": "extinction_form_test（C5，現役缺陷）消光分布形式",
                 "scripts": ["fit_real.py"],
                 "note": "透過 fit_real.py 換消光分布設定跑，沒有獨立診斷腳本。",
-                "queue_labels": ["extinction_form_test"],
+                # 實際派工用的標籤是 c5_davform_truncexp（截尾指數分布這個
+                # 變體），不是 WORK_BOARD.md 的任務名稱本身——跟 D2 同一種
+                # 「任務名稱≠真正佇列標籤」的坑，2026-08-25 對照
+                # cloud_queue.txt 實際內容訂正。
+                "queue_labels": ["c5_davform_truncexp"],
             },
             {
                 "name": "pyupmask_completeness_test（C8）完整度召回率",
@@ -159,7 +168,10 @@ STAGES = [
                 "name": "configCD_real_data_compare（D10）dav 上界比較",
                 "scripts": ["fit_real.py"],
                 "note": "config C／D 只差 dav 上界，透過 fit_real.py 換設定跑。",
-                "queue_labels": ["configCD_real_data_compare"],
+                # 實際派工用的是全小寫 configcd_real_data_compare，跟
+                # WORK_BOARD.md 任務名稱的大小寫不一樣，2026-08-25 對照
+                # cloud_queue.txt 實際內容訂正。
+                "queue_labels": ["configcd_real_data_compare"],
             },
             {
                 "name": "empirical_ml_relation_test（D11）經驗質光關係可行性查證",

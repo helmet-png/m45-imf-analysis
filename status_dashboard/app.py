@@ -497,6 +497,49 @@ def _status_badge(st: dict) -> str:
            f'<span class="detail">{html.escape(detail)}</span>')
 
 
+def _vscode_uri(rel_path: str) -> str:
+    """組出 `vscode://file/` URI，點了直接在 VS Code 開啟這支腳本
+    （2026-08-25 使用者要求：不要在頁面內顯示原始碼，直接跳去編輯器，
+    比較貼近「順手可以改」的體感）。前提是這台機器裝了 VS Code 桌面版
+    ——標準安裝都會自動註冊這個協定，不需要額外設定；沒裝的話瀏覽器
+    會顯示「找不到處理這個連結的應用程式」，不是這支程式的錯誤。"""
+    abs_path = (REPO_ROOT / rel_path).resolve()
+    return "vscode://file/" + str(abs_path).replace("\\", "/")
+
+
+_BUCKET_ORDER = [
+    ("live", "live", "進行中"),
+    ("pending", "pending", "待派工"),
+    ("done_fail", "fail", "失敗"),
+    ("unknown", "unknown", "不確定"),
+    ("done_ok", "ok", "已完成"),
+]
+
+
+def _label_bucket(st: dict) -> str:
+    state = st["state"]
+    if state == "done":
+        return "done_ok" if st.get("status") == "ok" else "done_fail"
+    return state  # "live" / "pending" / "unknown"
+
+
+def _step_summary_badge(step: dict, label_status: dict) -> tuple[str, str] | None:
+    """把一個步驟底下所有 queue_labels 的狀態濃縮成一個徽章，給左側
+    導覽列用——優先順序：進行中 > 待派工 > 失敗 > 不確定 > 已完成，
+    只要有一個 label 在跑，這個步驟在導覽列就該亮起來，不用點進去才
+    看得到。沒有 queue_labels 的步驟（傳統法、PDMF→IMF 前幾步這種手動
+    或還沒排進佇列的）回傳 None，導覽上不掛徽章。"""
+    labels = step.get("queue_labels", [])
+    buckets = {_label_bucket(label_status[label]) for label in labels
+              if label in label_status}
+    if not buckets:
+        return None
+    for key, cls, text in _BUCKET_ORDER:
+        if key in buckets:
+            return cls, text
+    return None
+
+
 def render_html(status: dict) -> str:
     cloud_items = status["cloud_items"]
     cloud_done = status["cloud_done"]
@@ -521,7 +564,9 @@ def render_html(status: dict) -> str:
 <h1>M45 IMF 專案主控板</h1>
 {_NAV}
 <p class="sub">依步驟看——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
-（重新整理頁面 = 重新讀取所有來源檔案 + 對進行中工作即時探測）</p>
+（重新整理頁面 = 重新讀取所有來源檔案 + 對進行中工作即時探測；點程式
+名稱在 VS Code 開啟；左側導覽只是跳到對應段落，右邊全部內容一次
+展開，不用逐層點開）</p>
 
 <div class="summary">
   <div class="pill {'alive' if status['alive'] else 'dead'}">
@@ -541,25 +586,57 @@ def render_html(status: dict) -> str:
                        '補進索引的新工作）：<code>'
                      + html.escape(", ".join(unmatched_cloud)) + '</code></p>')
 
-    for stage in STAGES:
-        parts.append(f'<details class="stage"><summary>{html.escape(stage["name"])}</summary>')
-        for step in stage["steps"]:
-            parts.append(f'<details class="step"><summary>{html.escape(step["name"])}</summary>')
+    # 左側導覽（純錨點跳轉，不重新整理頁面）跟右側內容分開組，最後
+    # 再拼成 .layout 的兩欄——導覽列只負責「跳去哪」，實際內容全部
+    # 已經展開在右邊，符合「不用手動展開、盡量看到全部」的要求。
+    nav_parts = ['<nav class="tree">']
+    content_parts = ['<div class="content">']
+
+    for si, stage in enumerate(STAGES):
+        stage_id = f"stage-{si}"
+        nav_parts.append(f'<a class="tree-stage" href="#{stage_id}">'
+                         f'{html.escape(stage["name"])}</a><ul>')
+        content_parts.append(f'<section class="stage-block" id="{stage_id}">'
+                             f'<h2>{html.escape(stage["name"])}</h2>')
+
+        for ti, step in enumerate(stage["steps"]):
+            step_id = f"step-{si}-{ti}"
+            badge = _step_summary_badge(step, label_status)
+            badge_html = (f'<span class="badge {badge[0]} tree-badge">{badge[1]}</span>'
+                         if badge else "")
+            nav_parts.append(f'<li><a href="#{step_id}">'
+                             f'{html.escape(step["name"])}{badge_html}</a></li>')
+
+            content_parts.append(f'<article class="step-block" id="{step_id}">'
+                                 f'<h3>{html.escape(step["name"])}</h3>')
             if step.get("note"):
-                parts.append(f'<p class="note">{html.escape(step["note"])}</p>')
+                content_parts.append(f'<p class="note">{html.escape(step["note"])}</p>')
             for label in step.get("queue_labels", []):
                 st = label_status.get(label)
                 if st is None:
                     continue
-                parts.append(f'<div class="status-row"><code>{html.escape(label)}</code>'
-                             f'{_status_badge(st)}</div>')
+                content_parts.append(
+                    f'<div class="status-row"><code>{html.escape(label)}</code>'
+                    f'{_status_badge(st)}</div>')
             for script in step.get("scripts", []):
                 doc = read_docstring(script)
-                parts.append(
-                    f'<details class="script"><summary><code>{html.escape(script)}</code></summary>'
-                    f'<pre class="doc">{html.escape(doc)}</pre></details>')
-            parts.append("</details>")
-        parts.append("</details>")
+                content_parts.append(
+                    '<div class="script-block">'
+                    f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
+                    f'<code>{html.escape(script)}</code> ↗</a>'
+                    f'<pre class="doc">{html.escape(doc)}</pre></div>')
+            content_parts.append("</article>")
+
+        nav_parts.append("</ul>")
+        content_parts.append("</section>")
+
+    nav_parts.append("</nav>")
+    content_parts.append("</div>")
+
+    parts.append('<div class="layout">')
+    parts.extend(nav_parts)
+    parts.extend(content_parts)
+    parts.append("</div>")
 
     parts.append("</body></html>")
     return "".join(parts)
@@ -642,7 +719,7 @@ _CSS = """
 .worker-row .kind { color: #777; font-size: 0.85em; margin-right: 0.6em; }
 :root { color-scheme: light dark; }
 body { font-family: -apple-system, "Microsoft JhengHei", sans-serif;
-      max-width: 900px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }
+      max-width: 1400px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }
 h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .sub { color: #777; font-size: 0.85em; margin-top: 0; }
 .summary { display: flex; gap: 0.6em; flex-wrap: wrap; margin: 1em 0 1.5em; }
@@ -653,19 +730,37 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .pill.warn { border-color: #c33; }
 .pill.live { border-color: #a70; }
 .warn-text { border: 1px solid #c33; padding: 0.5em 0.8em; font-size: 0.85em; }
-details.stage { border: 1px solid #999; border-radius: 4px; margin-bottom: 0.8em;
-               padding: 0.4em 0.8em; }
-details.stage > summary { font-size: 1.15em; font-weight: 600; cursor: pointer; }
-details.step { border-left: 2px solid #ccc; margin: 0.5em 0 0.5em 0.5em;
-              padding: 0.3em 0 0.3em 0.8em; }
-details.step > summary { font-weight: 600; cursor: pointer; }
-details.script { margin: 0.3em 0 0.3em 1em; }
-details.script > summary { cursor: pointer; font-size: 0.9em; }
+
+/* 左側導覽（純錨點跳轉）＋右側全展開內容，兩欄式版面
+   （2026-08-25 依使用者要求重做：原本巢狀 <details> 每層都要點開才
+   看得到下一層，改成右邊一次全部展開，左邊只是跳轉捷徑）。*/
+.layout { display: flex; align-items: flex-start; gap: 2em; }
+.tree { flex: 0 0 260px; position: sticky; top: 1em;
+       max-height: calc(100vh - 2em); overflow-y: auto; font-size: 0.85em; }
+.tree-stage { display: block; font-weight: 600; margin-top: 1em;
+             text-decoration: none; }
+.tree-stage:first-child { margin-top: 0; }
+.tree ul { list-style: none; margin: 0.2em 0 0; padding-left: 0.8em; }
+.tree li { margin: 0.2em 0; }
+.tree li a { text-decoration: none; display: flex; align-items: baseline;
+            gap: 0.4em; }
+.tree-badge { font-size: 0.75em; padding: 0 0.4em; }
+.content { flex: 1 1 auto; min-width: 0; }
+
+.stage-block { border-top: 2px solid #999; padding-top: 0.6em; margin-top: 1.5em; }
+.stage-block:first-child { margin-top: 0; }
+.stage-block h2 { font-size: 1.15em; margin-bottom: 0.2em; }
+.step-block { border-left: 2px solid #ccc; margin: 1em 0 1em 0.3em;
+             padding: 0.2em 0 0.2em 0.9em; scroll-margin-top: 1em; }
+.step-block h3 { font-size: 1em; margin: 0 0 0.3em; }
 .note { font-size: 0.85em; color: #777; margin: 0.3em 0; }
-.status-row { font-size: 0.85em; margin: 0.2em 0 0.2em 1em; }
+.status-row { font-size: 0.85em; margin: 0.2em 0; }
 .status-row code { margin-right: 0.5em; }
-.doc { white-space: pre-wrap; font-size: 0.82em; background: rgba(128,128,128,0.08);
-      padding: 0.6em; border-radius: 3px; }
+.script-block { margin: 0.5em 0 0.5em 0.6em; }
+.script-link { font-size: 0.9em; text-decoration: none; }
+.script-link:hover { text-decoration: underline; }
+.doc { white-space: pre-wrap; font-size: 0.8em; background: rgba(128,128,128,0.08);
+      padding: 0.6em; border-radius: 3px; margin: 0.3em 0 0; }
 .badge { border-radius: 3px; padding: 0.05em 0.5em; font-size: 0.85em;
         margin-right: 0.5em; }
 .badge.ok { background: rgba(34,170,102,0.2); }
@@ -675,6 +770,11 @@ details.script > summary { cursor: pointer; font-size: 0.9em; }
 .badge.unknown { background: rgba(128,128,128,0.1); }
 .detail { color: #777; font-size: 0.85em; }
 code { font-family: Consolas, monospace; }
+
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .tree { position: static; max-height: none; width: 100%; }
+}
 """
 
 
