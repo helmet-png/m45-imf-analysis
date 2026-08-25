@@ -322,17 +322,22 @@ def _run_concurrent(fns: dict[str, Callable[[], dict]],
     return results
 
 
-def _run_probes(to_probe: dict[str, dict]) -> dict[str, dict]:
-    """對 `to_probe`（label -> {worker, kind, item}）裡的每個標籤做即時
-    探測，套用 `_run_concurrent()` 的併發＋整體時間預算。"""
-    if not to_probe:
-        return {}
-    fns = {label: (lambda info=info: probe_live(info["worker"], info["kind"], info["item"]))
-          for label, info in to_probe.items()}
-    raw = _run_concurrent(fns)
+def _probe_fns(to_probe: dict[str, dict]) -> dict[str, Callable[[], dict]]:
+    """把 `to_probe`（label -> {worker, kind, item}）轉成 `_run_concurrent()`
+    要的 {key: 零參數 callable}，不在這裡實際執行——拆出來是為了讓呼叫端
+    可以把這批 callable 跟其他批次（例如 `_ssh_ping()`）合併進同一次
+    `_run_concurrent()`，共用同一份時間預算（見 `gather_worker_status()`
+    的說明）。"""
+    return {label: (lambda info=info: probe_live(info["worker"], info["kind"], info["item"]))
+           for label, info in to_probe.items()}
+
+
+def _post_process_probes(to_probe: dict[str, dict], raw: dict[str, dict]) -> dict[str, dict]:
+    """把 `_probe_fns()` 執行完的原始結果，補上 `_map_probe_state()` 分類
+    後的顯示用欄位。"""
     results = {}
     for label, info in to_probe.items():
-        live = raw[label]
+        live = raw.get(label, {"status": "unknown", "error": "沒有探測結果"})
         live.setdefault("elapsed", None)
         state, note = _map_probe_state(live.get("status", "unknown"))
         out = {"state": state, "worker": info["worker"], "kind": info["kind"], **live}
@@ -340,6 +345,15 @@ def _run_probes(to_probe: dict[str, dict]) -> dict[str, dict]:
             out["note"] = note
         results[label] = out
     return results
+
+
+def _run_probes(to_probe: dict[str, dict]) -> dict[str, dict]:
+    """對 `to_probe`（label -> {worker, kind, item}）裡的每個標籤做即時
+    探測，套用 `_run_concurrent()` 的併發＋整體時間預算。"""
+    if not to_probe:
+        return {}
+    raw = _run_concurrent(_probe_fns(to_probe))
+    return _post_process_probes(to_probe, raw)
 
 
 def gather_status() -> dict:
@@ -408,9 +422,22 @@ def gather_worker_status() -> dict:
     idle_ssh = [name for name, kind in cloud_workers.items()
                if kind == "ssh" and name not in assigned]
 
-    probe_results = _run_probes(to_probe)
-    ping_fns = {name: (lambda n=name: _ssh_ping(n)) for name in idle_ssh}
-    ping_results = _run_concurrent(ping_fns) if ping_fns else {}
+    # 已派工的 worker（要探測工作狀態）跟閒置的 SSH worker（只要 ping）
+    # 併成同一次 _run_concurrent() 呼叫，共用同一份 PROBE_DEADLINE_S——
+    # 原本分兩次呼叫，各自都用完整預算，最壞情況（兩邊都連不上）整頁
+    # 要等兩倍時間才會回應（2026-08-25 CodeRabbit review）。用字首區分
+    # 兩批 key，執行完再拆開各自後處理。
+    combined_fns: dict[str, Callable[[], dict]] = {}
+    combined_fns.update({f"probe:{k}": fn for k, fn in _probe_fns(to_probe).items()})
+    combined_fns.update({f"ping:{name}": (lambda n=name: _ssh_ping(n))
+                         for name in idle_ssh})
+    raw = _run_concurrent(combined_fns) if combined_fns else {}
+
+    raw_probe = {name: raw[f"probe:{name}"] for name in to_probe
+                if f"probe:{name}" in raw}
+    ping_results = {name: raw[f"ping:{name}"] for name in idle_ssh
+                    if f"ping:{name}" in raw}
+    probe_results = _post_process_probes(to_probe, raw_probe)
 
     workers_out = []
     for name, kind in sorted(cloud_workers.items()):
