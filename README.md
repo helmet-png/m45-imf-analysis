@@ -95,7 +95,7 @@ python fit_real.py --n-syn 40000 --repeats 10 --refines 3,3,3 --configs C
 ## 目前的結果（M45）
 
 headline 數字來自聯合前向模型的網格搜尋＋精修（`fit_real.py`，config C，
-10 次重複、雙階精修），不是第 3–5 步的循序擬合，也不是 MCMC（MCMC 家族
+10 次重複、三階精修），不是第 3–5 步的循序擬合，也不是 MCMC（MCMC 家族
 從未收斂過，誤差棒不可引用，見「已知限制」C11）：
 
 | 量 | 本 pipeline（headline） |
@@ -106,7 +106,7 @@ headline 數字來自聯合前向模型的網格搜尋＋精修（`fit_real.py`�
 
 完整參數（logage、A_V、MH 等）與逐次重複值見 `results/RESULTS_LOG.md`
 2026-08-20 那行；分級限制清單見 `LIMITATIONS.md`（A1–A5 是目前優先度
-最高的四項，直接影響這個數字能不能被引用）。
+最高的五項，直接影響這個數字能不能被引用）。
 
 ### 第 4 步：雙星
 
