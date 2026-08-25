@@ -38,6 +38,7 @@ import os
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -90,7 +91,10 @@ PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這�
                          # 小於 ssh_sync.poll() 自己單次的 30 秒逾時，
                          # 確保一個連不上的 worker 不會拖累整頁的回應
                          # 時間（2026-08-25 CodeRabbit review）
+GIT_SYNC_TIMEOUT_S = 8   # git fetch/pull 單次逾時；離線時最多讓頁面
+                         # 多等這麼久，不要無限卡住
 _probe_cache: dict[str, tuple[float, dict]] = {}
+_restart_pending = False  # 見 sync_repo_from_github()／_self_restart()
 
 
 # ==================================================================
@@ -151,6 +155,85 @@ def dispatcher_alive() -> tuple[bool, int | None]:
         return False, None
     alive = cloud_queue._pid_alive(pid)
     return bool(alive), pid
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(REPO_ROOT), *args],
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=GIT_SYNC_TIMEOUT_S)
+
+
+def sync_repo_from_github() -> dict:
+    """每次整理頁面都嘗試把這個 repo 從 `origin/main` 同步到最新——別人
+    （或別的 session）push 新程式碼、改 docstring、加新腳本之後，不用
+    手動 `git pull`，重新整理主控板就看得到（2026-08-25 使用者要求）。
+
+    跟 `cloud_queue.py` 的 `sync_queue_file()` 同一個精神：安全第一，
+    失敗就跳過用本機現有內容，不讓網路問題擋住整頁。
+
+    **只有「目前在 main 分支、且沒有任何未提交的修改」才真的執行
+    `git pull --ff-only`**：這個 repo 是多個 agent／多個 session共用的
+    工作目錄（見 CONTRIBUTING.md），常常有人正在某個 feature 分支上做
+    一半的事——貿然自動 pull 可能把別人的未提交修改弄丟，或在錯的分支
+    上硬套 main 的內容。條件不滿足時只回報「落後幾個 commit」，不動手，
+    讓使用者自己判斷要不要手動同步。
+
+    `self_updated` 這個欄位特別標記「這次同步有沒有動到
+    `status_dashboard/` 自己的程式碼」——`app.py`／`stage_map.py` 是
+    Python 模組，一旦匯入就固定在記憶體裡，改了檔案不會自動重新匯入，
+    要真的重啟這個行程才會套用新版（見 `_self_restart()`）。"""
+    global _restart_pending
+    result = {"synced": False, "ahead": 0, "behind": 0, "branch": None,
+             "dirty": None, "error": None, "self_updated": False}
+    try:
+        result["branch"] = _git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+
+        fetch = _git("fetch", "origin", "main")
+        if fetch.returncode != 0:
+            result["error"] = f"git fetch 失敗：{fetch.stderr.strip()[:200]}"
+            return result
+
+        counts = _git("rev-list", "--left-right", "--count", "HEAD...origin/main")
+        if counts.returncode == 0 and counts.stdout.split():
+            ahead, behind = counts.stdout.split()
+            result["ahead"], result["behind"] = int(ahead), int(behind)
+
+        result["dirty"] = bool(_git("status", "--porcelain").stdout.strip())
+
+        if (result["branch"] == "main" and not result["dirty"]
+                and result["behind"] > 0):
+            old_head = _git("rev-parse", "HEAD").stdout.strip()
+            pull = _git("pull", "--ff-only", "origin", "main")
+            if pull.returncode == 0:
+                result["synced"] = True
+                result["behind"] = 0
+                changed = _git("diff", "--name-only", old_head, "HEAD",
+                               "--", "status_dashboard")
+                result["self_updated"] = bool(changed.stdout.strip())
+                if result["self_updated"]:
+                    _restart_pending = True
+            else:
+                result["error"] = f"git pull 失敗：{pull.stderr.strip()[:200]}"
+    except subprocess.TimeoutExpired:
+        result["error"] = "git 操作逾時（可能沒有網路）"
+    except Exception as e:  # noqa: BLE001 — 同步失敗不能讓整頁掛掉
+        result["error"] = str(e)
+    return result
+
+
+def _self_restart() -> None:
+    """用新的行程重啟整支程式，讓 `git pull` 剛拉下來的
+    `status_dashboard/` 新程式碼真的生效，然後結束目前這份（同一個
+    Python 行程沒辦法重新匯入已經匯入過的模組）。用背景執行緒延遲一下
+    才動手，確保目前這次 HTTP 回應已經送出去給瀏覽器。新行程啟動時
+    `main()` 的 `_bind_server()` 有重試，容忍舊行程還沒真正放掉連接埠
+    的短暫空窗。"""
+    def _do_restart() -> None:
+        time.sleep(0.5)
+        print("偵測到主控板程式碼更新，重新啟動…", flush=True)
+        subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE))
+        os._exit(0)
+    threading.Thread(target=_do_restart, daemon=True).start()
 
 
 def _format_timedelta(td: timedelta) -> str:
@@ -540,7 +623,29 @@ def _step_summary_badge(step: dict, label_status: dict) -> tuple[str, str] | Non
     return None
 
 
-def render_html(status: dict) -> str:
+def _sync_banner(sync: dict) -> str:
+    """把 `sync_repo_from_github()` 的結果轉成頁面頂端的一行狀態說明——
+    （2026-08-25 使用者要求「以後新程式碼刷到 GitHub 要怎麼自動更新」）
+    誠實區分四種情況，不要讓「同步失敗」「沒同步（保護未提交的修改）」
+    「已經是最新」看起來像同一回事。"""
+    if sync.get("error"):
+        return (f'<p class="warn-text">跟 GitHub 同步失敗：'
+                f'{html.escape(sync["error"])}（沿用本機現有內容）</p>')
+    if sync.get("self_updated"):
+        return ('<p class="warn-text">已從 origin/main 拉到最新，其中'
+               '主控板自己的程式碼也有更新，即將自動重啟套用——這一輪'
+               '畫面可能還是舊版，幾秒後重新整理一次即可。</p>')
+    if sync.get("synced"):
+        return '<p class="note">剛從 origin/main 同步到最新。</p>'
+    if sync.get("behind"):
+        reason = "有未提交的修改" if sync.get("dirty") else f'不在 main（目前在 {sync.get("branch")}）'
+        return (f'<p class="note">本機落後 origin/main {sync["behind"]} 個'
+                f' commit，沒有自動同步（{reason}，怕弄丟正在做的東西）'
+                '——要看最新內容請自己手動 git pull。</p>')
+    return ""
+
+
+def render_html(status: dict, sync: dict | None = None) -> str:
     cloud_items = status["cloud_items"]
     cloud_done = status["cloud_done"]
     label_status = status["label_status"]
@@ -564,9 +669,11 @@ def render_html(status: dict) -> str:
 <h1>M45 IMF 專案主控板</h1>
 {_NAV}
 <p class="sub">依步驟看——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
-（重新整理頁面 = 重新讀取所有來源檔案 + 對進行中工作即時探測；點程式
-名稱在 VS Code 開啟；左側導覽只是跳到對應段落，右邊全部內容一次
-展開，不用逐層點開）</p>
+（重新整理頁面 = 重新讀取所有來源檔案 + 跟 GitHub 同步 + 對進行中工作
+即時探測；點程式名稱在 VS Code 開啟；左側導覽只是跳到對應段落，
+右邊全部內容一次展開，不用逐層點開；左右欄寬度可以拖曳中間的分隔線
+調整）</p>
+{_sync_banner(sync or {})}
 
 <div class="summary">
   <div class="pill {'alive' if status['alive'] else 'dead'}">
@@ -589,7 +696,7 @@ def render_html(status: dict) -> str:
     # 左側導覽（純錨點跳轉，不重新整理頁面）跟右側內容分開組，最後
     # 再拼成 .layout 的兩欄——導覽列只負責「跳去哪」，實際內容全部
     # 已經展開在右邊，符合「不用手動展開、盡量看到全部」的要求。
-    nav_parts = ['<nav class="tree">']
+    nav_parts = ['<nav class="tree" id="tree-pane">']
     content_parts = ['<div class="content">']
 
     for si, stage in enumerate(STAGES):
@@ -624,7 +731,8 @@ def render_html(status: dict) -> str:
                     '<div class="script-block">'
                     f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
                     f'<code>{html.escape(script)}</code> ↗</a>'
-                    f'<pre class="doc">{html.escape(doc)}</pre></div>')
+                    '<details class="doc-details" open><summary>說明</summary>'
+                    f'<pre class="doc">{html.escape(doc)}</pre></details></div>')
             content_parts.append("</article>")
 
         nav_parts.append("</ul>")
@@ -633,13 +741,55 @@ def render_html(status: dict) -> str:
     nav_parts.append("</nav>")
     content_parts.append("</div>")
 
-    parts.append('<div class="layout">')
+    parts.append('<div class="layout" id="layout">')
     parts.extend(nav_parts)
+    parts.append('<div class="resizer" id="resizer"></div>')
     parts.extend(content_parts)
     parts.append("</div>")
 
+    parts.append(_RESIZE_SCRIPT)
     parts.append("</body></html>")
     return "".join(parts)
+
+
+# 左右欄寬度可拖曳（2026-08-25 使用者要求，像 IDE 的側欄一樣）。純
+# vanilla JS，沒有外部依賴；寬度存 localStorage，下次整理頁面／換頁
+# 還記得（不然每次都要重拖一次，形同沒有這個功能）。這是整個主控板
+# 唯一用到 JS 的地方——拖曳互動沒辦法用純 HTML/CSS 做到，其餘所有
+# 「不用手動展開」的需求都還是靠伺服器端 render + <details>，能不用
+# JS 就不用。
+_RESIZE_SCRIPT = """
+<script>
+(function () {
+  var tree = document.getElementById("tree-pane");
+  var resizer = document.getElementById("resizer");
+  var layout = document.getElementById("layout");
+  if (!tree || !resizer || !layout) return;
+  var saved = localStorage.getItem("m45DashTreeWidth");
+  if (saved) tree.style.width = saved + "px";
+  var dragging = false;
+  resizer.addEventListener("mousedown", function () {
+    dragging = true;
+    document.body.style.userSelect = "none";
+  });
+  document.addEventListener("mousemove", function (e) {
+    if (!dragging) return;
+    var rect = layout.getBoundingClientRect();
+    var w = e.clientX - rect.left;
+    var min = 160, max = rect.width - 300;
+    if (w < min) w = min;
+    if (w > max) w = max;
+    tree.style.width = w + "px";
+  });
+  document.addEventListener("mouseup", function () {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.userSelect = "";
+    localStorage.setItem("m45DashTreeWidth", parseInt(tree.style.width, 10));
+  });
+})();
+</script>
+"""
 
 
 _NAV = ('<nav class="nav"><a href="/">依步驟看</a>'
@@ -734,8 +884,8 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 /* 左側導覽（純錨點跳轉）＋右側全展開內容，兩欄式版面
    （2026-08-25 依使用者要求重做：原本巢狀 <details> 每層都要點開才
    看得到下一層，改成右邊一次全部展開，左邊只是跳轉捷徑）。*/
-.layout { display: flex; align-items: flex-start; gap: 2em; }
-.tree { flex: 0 0 260px; position: sticky; top: 1em;
+.layout { display: flex; align-items: flex-start; }
+.tree { flex: 0 0 auto; width: 260px; position: sticky; top: 1em;
        max-height: calc(100vh - 2em); overflow-y: auto; font-size: 0.85em; }
 .tree-stage { display: block; font-weight: 600; margin-top: 1em;
              text-decoration: none; }
@@ -745,6 +895,12 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .tree li a { text-decoration: none; display: flex; align-items: baseline;
             gap: 0.4em; }
 .tree-badge { font-size: 0.75em; padding: 0 0.4em; }
+/* 拖曳分隔線，寬度可調（2026-08-25 使用者要求，像 IDE 側欄一樣）——
+   純 CSS 只能做外觀，實際拖曳邏輯在 _RESIZE_SCRIPT 那段 JS。 */
+.resizer { flex: 0 0 auto; width: 6px; margin: 0 0.8em; cursor: col-resize;
+          background: rgba(128,128,128,0.15); border-radius: 3px;
+          align-self: stretch; }
+.resizer:hover { background: rgba(128,128,128,0.35); }
 .content { flex: 1 1 auto; min-width: 0; }
 
 .stage-block { border-top: 2px solid #999; padding-top: 0.6em; margin-top: 1.5em; }
@@ -759,6 +915,11 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .script-block { margin: 0.5em 0 0.5em 0.6em; }
 .script-link { font-size: 0.9em; text-decoration: none; }
 .script-link:hover { text-decoration: underline; }
+/* 說明（docstring）可收合，預設展開（2026-08-25 使用者要求）——
+   跟 stage/step 層不一樣：那兩層拿掉了折疊，這裡是特意留著，因為
+   docstring 常常很長，看不看得由使用者自己決定，不是一定要展開。 */
+.doc-details summary { cursor: pointer; font-size: 0.8em; color: #777;
+                       margin-top: 0.3em; }
 .doc { white-space: pre-wrap; font-size: 0.8em; background: rgba(128,128,128,0.08);
       padding: 0.6em; border-radius: 3px; margin: 0.3em 0 0; }
 .badge { border-radius: 3px; padding: 0.05em 0.5em; font-size: 0.85em;
@@ -773,7 +934,8 @@ code { font-family: Consolas, monospace; }
 
 @media (max-width: 900px) {
   .layout { flex-direction: column; }
-  .tree { position: static; max-height: none; width: 100%; }
+  .tree { position: static; max-height: none; width: 100% !important; }
+  .resizer { display: none; }
 }
 """
 
@@ -782,9 +944,11 @@ code { font-family: Consolas, monospace; }
 # 伺服器
 # ==================================================================
 
+# sync 只做一次、兩個路由共用——workers 頁不特別顯示同步狀態，但一樣
+# 從這次同步受益（資料層讀的是同一份 REPO_ROOT）。
 _ROUTES = {
-    "/": lambda: render_html(gather_status()),
-    "/workers": lambda: render_workers_html(gather_worker_status()),
+    "/": lambda sync: render_html(gather_status(), sync),
+    "/workers": lambda sync: render_workers_html(gather_worker_status()),
 }
 
 
@@ -796,7 +960,8 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         try:
-            body = route().encode("utf-8")
+            sync = sync_repo_from_github()
+            body = route(sync).encode("utf-8")
         except Exception as e:  # noqa: BLE001 — 任何未預期例外都不該讓伺服器整個掛掉
             import traceback
             traceback.print_exc()
@@ -807,13 +972,28 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+        if _restart_pending:
+            _self_restart()
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"[{datetime.now():%H:%M:%S}] " + fmt % args, flush=True)
 
 
+def _bind_server(retries: int = 10, delay: float = 0.5) -> ThreadingHTTPServer:
+    """自動重啟（見 `_self_restart()`）時，新行程可能在舊行程真正放掉
+    連接埠前就先啟動，短暫重試等它讓出來，而不是直接炸掉。"""
+    for attempt in range(retries):
+        try:
+            return ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        except OSError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+    raise RuntimeError("unreachable")  # pragma: no cover
+
+
 def main() -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    server = _bind_server()
     url = f"http://127.0.0.1:{PORT}/"
     print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
     # 開瀏覽器交給桌面捷徑用的 launch_dashboard.vbs 負責（sh.Run 那行），
