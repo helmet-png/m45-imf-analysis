@@ -19,3 +19,38 @@ d2_membership_threshold_p06_p07_retry|scripts/diagnostics/sensitivity_sweep.py|-
 # 門檻，比示範規模外推的「單一門檻 50+ 小時」快非常多，值得把剩下三個
 # 門檻也排進來，湊齊 D2 的完整敏感度掃描（0.5/0.6/0.7/0.8/0.9 五點）。
 d2_membership_threshold_p05_p08_p09|scripts/diagnostics/sensitivity_sweep.py|--target membership_threshold --values 0.5,0.8,0.9 --procs 4 --n-syn 40000 --refines 3,3||false|gcp1
+
+# 2026-08-25：D2 五點都排完了，gcp1 兩批加起來閒置了約 3 小時才被發現
+# （見 WORK_BOARD.md 現況說明）。使用者要求排一批 backlog，不要再讓它
+# 空等——從 WORK_BOARD.md「待辦事項」表挑幾項參數已經明確、腳本已存在、
+# 不需要額外網格檔的項目（bhac15_isochrone_test 需要的 BHAC15 網格不在
+# NEEDED_ISOCHRONE_GLOBS 白名單裡，會重演 D2 第一次那個「host 上沒有
+# 網格檔」的坑，這裡先不排，等白名單補上再排）。--procs 全部從
+# WORK_BOARD.md 記的 8（本機核數）改成 4（gcp1 是 e2-highcpu-8，只有
+# 4 個實體核心，見 CLOUD_WORKERS.md）。
+
+# extinction_form_test（C5，現役缺陷．優先度高，見 LIMITATIONS.md）：
+# 兩種消光分布各跑一次注入回收，唯一差異是 --dav-distribution，其餘
+# 設定完全相同，才能把差異單純歸因於分布形式選擇本身。
+c5_davform_lognormal|injection_recovery.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution lognormal --tag _c5_lognormal||false|gcp1
+c5_davform_truncexp|injection_recovery.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --scenarios S1 --dav-sweep 0.10,0.20,0.30,0.45,0.60,0.90,1.20 --dav-distribution trunc_exp --tag _c5_truncexp||false|gcp1
+
+# p6_lowmass_v3（A1、A3）：低質量段冪次 d(alpha)/d(p) 的斜率，目前最大
+# 的單一系統誤差來源（0.248）。15 次擬合、全樣本 1,078 顆，量級推算
+# 會長期佔用機器（見 WORK_BOARD.md 說明），本機因此排到最後、後來
+# 因為改成只用雲端算力被停掉——GCP 是持久機器、不擋其他本機工作，
+# 排一支長工正好填閒置時間。
+p6_lowmass_v3|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3||false|gcp1
+
+# p6b_inject_lowmass_v2（A1）：p6 低質量段冪次的注入回收驗證，跟
+# p6_lowmass_v3 互補（一個是真實資料擬合，一個是合成資料驗證方法）。
+p6b_inject_lowmass_v2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3||false|gcp1
+
+# mass_dependent_fbin（D14 衍生）：雙星比例是否隨質量變化，contrast
+# 掃 0.0/0.15/0.30（腳本內建，不用額外旗標指定），contrast=0 是必要
+# 對照組，扣掉 C13 記錄的 -0.050 注入回收本身的偏差地板才能判讀。
+mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3||false|gcp1
+
+# configCD_real_data_compare（D10）：真實資料上比較 config C／D 的
+# alpha 一致性，目前只在合成資料上驗證過。
+configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 4 --n-syn 40000 --refines 3,3||false|gcp1

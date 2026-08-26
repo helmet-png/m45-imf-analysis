@@ -838,13 +838,22 @@ config C）先驗證流程能不能跑通：亮端截斷保留 1,017/1,078 顆�
 照原計畫跟 PARSEC 同設定（同一個 `--g-bright`）比較 alpha 與 logage。
 正式規模的重跑已排進 `queue.txt`（見下方，標記為診斷用途、非 headline）。
 
-### D2 未做過敏感度測試的設定（**部分進行中，2026-08-19**，見下方）
+### D2 未做過敏感度測試的設定（**部分進行中**；`membership_threshold` 0.5–0.9 五點已測完但帶兩個但書，見 2026-08-25；其餘設定與 `stars_per_cluster` 仍未做，見下方）
 
 **問題**：`pca_dims` 本身（非開關）、`stars_per_cluster`、`clustering_method`、
 `inner_loop_runs`、`hess_color_range`／`hess_mag_range`、BP 訊噪比門檻 20
 這個值本身、成員機率門檻對 IMF 的影響。
 
 **後果**：這些設定的敏感度未知。
+
+**2026-08-25 stars_per_cluster 可行性查證**：本機已實際執行
+`sensitivity_sweep.py --target stars_per_cluster`。repo 內沒有
+`pyUPMASK/`，也沒有 `prepared/` 輸入，`run_variant.py` 亦尚未暴露
+`--stars-per-cluster`。所以本次沒有、也不能產生 alpha 敏感度數字；正確
+狀態是「執行受阻、阻塞原因已驗證」，不是「沒有影響」。另修正可行性
+模式會在檢查前先載入 SciPy 而崩潰的問題：科學計算依賴現在只在
+membership_threshold 模式延遲載入，不改既有擬合路徑。完整 gate 與
+重現方式見 `docs/planning/D2_STARS_PER_CLUSTER_FEASIBILITY_2026-08-25.md`。
 
 **2026-08-19 進度**：新增 `scripts/diagnostics/sensitivity_sweep.py`，示範
 `membership_threshold`（重新套用 `baseline.dat` 門檻 -> 重跑第 2/3 步 ->
@@ -888,6 +897,34 @@ membership_threshold 本身不是重要誤差來源這種無條件結論**。
 解決的問題。剩下三個門檻（0.5、0.8、0.9）已排入 `cloud_queue.txt`
 （`d2_membership_threshold_p05_p08_p09`），但這批仍是沿用同一個
 `selection.npz` 的設定，同樣的但書適用，不會單獨解決這個問題。
+
+**2026-08-25 更新：五點全部到齊，結論不變、多一個但書**（剩下三個門檻
+0.5／0.8／0.9 跑完，見 `results/RESULTS_LOG.md` 同日期行）：
+
+| threshold | 成員數（門檻篩選後） | 測光品質篩選後 n_obs | alpha |
+|---|---|---|---|
+| 0.5 | 1,318 | 1,095 | 2.367 |
+| 0.6 | 1,308 | 1,087 | 2.367 |
+| 0.7（現行預設） | 1,297 | 1,078 | 2.367 |
+| 0.8 | 1,286 | 1,069 | 2.367 |
+| 0.9 | 1,264 | 1,055 | 2.367 |
+
+n_obs 隨門檻單調遞減（1,095→1,055，跨度 3.7%）、lnP 也單調變化
+（1356.9→1281.1），確認五次是真的在五份不同樣本上各自重新擬合，
+不是快取或誤植同一份結果。但 **logage／A_V／f_bin／alpha／MH／
+q_gamma／dav 七個量在五個門檻下逐位元完全相同**——不只 alpha 三位
+小數一致，是整個最佳解落在同一個精修格點上。
+
+**新增的但書（2026-08-25）**：這支腳本用 `COARSE` 起始網格＋只做
+`--refines 3,3`（兩階精修）就收斂，解析度上限有限。五點逐位元相同，
+可能反映的是「membership_threshold 在 0.5–0.9 這個範圍內真的不影響
+最佳解」，但**也可能只是「差異小於這個精修深度能分辨的最小格距」**，
+兩種解讀目前無法區分——要排除後者，需要用更深的 `--refines` 或更細的
+初始網格，至少重跑兩個端點（0.5、0.9）確認精修更深之後結果是否仍然
+相同。在拿到那個交叉確認之前，「0.5–0.9 這個範圍內沒有偵測到 alpha
+對 membership_threshold 的敏感度」這句話要連同**兩個但書**一起引用：
+(1) 固定沿用 0.7 樣本迴歸出的 `selection.npz`，未隨門檻重新迴歸；
+(2) 精修深度是否足以分辨這個量級的差異，尚未交叉確認。
 
 ### D3 主序轉折點截斷對老星團會變成真限制（尚無認領工作）
 
