@@ -160,6 +160,12 @@
 | ~~`crosscal_massrange_table`（選項 A）~~ | D11 相關、`PLAN_文獻對照_Hobart2026.md` 第五節 | 讀 Pang et al. (2024) 原文，查出他們 M45 那筆 α=2.01±0.09 的擬合質量範圍、MF 定義、雙星處理、估計器、完整度修正 | **完成：Pang 質量範圍由未知改為已查證**（2026-08-20 Codex，`docs/planning/CROSSCAL_M45_PANG_HOBART_2026-08-20.md`）：Pang M45 是 PDMF、0.28–2.00 M☉、未分箱最大似然+MCMC；換算到同範圍後 Hobart PDMF=1.952、Pang=2.010±0.090，質量範圍已對齊、中心相近，但聯星校正不同不能忽略 |
 | ~~`hyades_literature_check`（選項 B 的候選評估）~~ | A5 | 使用者明確指示 Hyades「先查文獻確認」再決定要不要排執行 | **完成：保留候選，但暫不直接執行**（2026-08-20 Codex，`docs/planning/HYADES_LITERATURE_SCREEN_2026-08-20.md`）：Hyades 可增加老年齡、金屬富有的對照點，但現有 5° 設定只涵蓋約 4.1 pc，遠小於約 10 pc 潮汐尺度；建議先做 5°／12°／20° 成員與選擇函數 smoke test，通過後才排傳統法 |
 
+### D2 敏感度掃描：membership_threshold（2026-08-24／25，gcp1 SSH worker）
+
+| 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |
+|---|---|---|
+| ~~`sensitivity_sweep_membership_threshold`（D2）~~ | `scripts/diagnostics/sensitivity_sweep.py --target membership_threshold`，量成員判定門檻對頭條 alpha 的敏感度，透過 `cloud_queue.py` 派工到 gcp1（GCP e2-highcpu-8） | **完成：五點（0.5/0.6/0.7/0.8/0.9）全部測完**，見 `results/RESULTS_LOG.md` 2026-08-24／25 兩行、`LIMITATIONS.md` D2 同日期段落。五個門檻下 alpha 全部是 2.367（logage/A_V/f_bin/MH/q_gamma/dav 六個參數也逐位元相同），已用 stdout log 確認 n_obs（1,055–1,095）與 lnP 都隨門檻真的在變，不是快取假象。**帶兩個但書**：(1) 全程沿用同一份用 0.7 樣本迴歸出的 `selection.npz`，未隨門檻重新迴歸選擇函數係數；(2) 只做 `--refines 3,3` 兩階精修，逐位元相同也可能只是精修深度不足以分辨這個量級的差異，未交叉確認。`stars_per_cluster`（D2 另一個掃描目標）未完成，需要 pyUPMASK 環境，已拆成獨立待辦項目留在 `WORK_BOARD.md` |
+
 ### PDMF → IMF 第 3 步（LIMEPY 多質量平衡模型）
 
 **完整過程見上面「紀錄」表 2026-08-13 那三行（環境問題解決 → CodeRabbit 抓到單位 bug 並修好）。模型本身與初次擬合都已完成**（King 模型 reduced chi²=0.75），潮汐半徑外質量估計 14.4 M_sun（3.2%）。**跟第 2 步 α(<r) 觀測值的正式交叉比對**（`limepy_radial_crosscheck`）仍是開放工作，見 `WORK_BOARD.md`。

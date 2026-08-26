@@ -26,6 +26,14 @@
 用法：
     python scripts/diagnostics/sensitivity_sweep.py --target membership_threshold
     python scripts/diagnostics/sensitivity_sweep.py --target stars_per_cluster
+
+**`--tag`**（2026-08-24，使用者要求，同一類問題見 `LIMITATIONS.md` D6）：
+輸出檔原本寫死 `results/sensitivity_membership_threshold.npz`，沒有辦法
+區分不同批次的掃描點。分批派工到同一台持久 worker（例如 GCP SSH worker）
+時，第二批的 `git pull` 同步程式碼會撞到第一批留下的同名未進版控輸出檔
+（"untracked working tree files would be overwritten by merge"），連續
+失敗到剛好沒有新 commit 要合併才會意外繞過去——不是真的修好，下一次
+還是會重演。加 `--tag` 讓不同批次寫到不同檔名，徹底避開這個碰撞。
 """
 from __future__ import annotations
 
@@ -121,7 +129,7 @@ def sweep_membership_threshold(args, n_proc, refines):
     print("      判定帶或做敏感度加權；倍數接近或小於 1，代表現行 0.7 這個")
     print("      選擇在這個範圍內不是主要誤差來源，記入 LIMITATIONS.md D2。")
 
-    out = HERE / "results" / "sensitivity_membership_threshold.npz"
+    out = HERE / "results" / f"sensitivity_membership_threshold{args.tag}.npz"
     np.savez(out, thresholds=np.array(thresholds),
              **{f"t{t:g}": results[t] for t in thresholds})
     print(f"\n寫入 {out}")
@@ -166,7 +174,14 @@ def main():
     ap.add_argument("--n-syn", type=int, default=40000)
     ap.add_argument("--refines", default="3")
     ap.add_argument("--dav-max", type=float, default=0.6)
+    ap.add_argument("--tag", default="",
+                    help="輸出檔名後綴（僅 membership_threshold；避免不同"
+                         "批次的掃描互相覆寫，見上方檔頭說明）")
     args = ap.parse_args()
+    # --tag 只能是檔名後綴，不能是路徑（比照 fit_real.py／inject_lowmass.py：
+    # 不擋的話 --tag "/../../tmp/x" 能把輸出導到任意路徑）。
+    if "/" in args.tag or "\\" in args.tag:
+        ap.error("--tag 只能包含檔名後綴字元，不能包含路徑分隔符")
     n_proc = args.procs or (os.cpu_count() or 1)
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
 

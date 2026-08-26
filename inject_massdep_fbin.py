@@ -46,7 +46,6 @@ from pipeline.table_compat import Table                       # noqa: E402
 from measure_overconfidence import GRID                       # noqa: E402
 from injection_recovery import (COARSE, THETA_TRUE, CornerError,  # noqa: E402
                                 WallError, make_fake, multi_stage_best)
-from inject_lowmass import atomic_savez                       # noqa: E402
 
 # 注入的質量相依強度（重星段 f_bin - 輕星段 f_bin）。
 # 0.0 是對照組（沒有質量相依性）——**一定要留著**，它是判斷「偏移是
@@ -93,6 +92,17 @@ def main():
     out_path = (HERE / "results"
                 / f"inject_massdep_fbin{args.tag}{_off_sfx}.npz")
     n_proc = args.procs or (os.cpu_count() or 1)
+
+    # atomic_savez() 已於 2026-08-20 收斂成 scripts/tools/checkpoint.py
+    # 的共用版本（原本 fit_real.py／inject_lowmass.py 各自有一份幾乎
+    # 逐字相同的實作）——這支腳本沒有跟著改，還在對 inject_lowmass 匯入
+    # 一個已經不存在的名字，import 階段就會直接炸掉。從沒有人真的執行
+    # 過這支腳本到這一步才沒發現（2026-08-25 排進 cloud_queue.txt 前
+    # dry-run 才踩到）。改成跟 inject_lowmass.py 同一套延後匯入模式
+    # （sys.path 插入 scripts/tools 才 import checkpoint），不放模組
+    # 層級。
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import checkpoint                                          # noqa: E402
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
 
     cfg = cfgmod.load()
@@ -188,12 +198,13 @@ def main():
             results[key] = np.array([b for _, b in outs])
             trial_ids[key] = np.array([tid for tid, _ in outs], dtype=int)
             # 邊跑邊存：長跑到一半被中斷時，已算完的不該陪葬
-            atomic_savez(out_path, contrast_list=np.array(contrasts),
-                         m_break=args.m_break, theta_true=THETA_TRUE,
-                         dav_true=dav_true, n_syn=args.n_syn,
-                         trial_offset=args.trial_offset,
-                         **results,
-                         **{f"{k}__trials": v for k, v in trial_ids.items()})
+            checkpoint.atomic_savez(
+                out_path, contrast_list=np.array(contrasts),
+                m_break=args.m_break, theta_true=THETA_TRUE,
+                dav_true=dav_true, n_syn=args.n_syn,
+                trial_offset=args.trial_offset,
+                **results,
+                **{f"{k}__trials": v for k, v in trial_ids.items()})
 
     print(f"\n{'contrast':>10} {'n':>3} {'alpha 平均':>10} {'偏差':>8} "
           f"{'散布':>8} {'f_bin 平均':>10}")
