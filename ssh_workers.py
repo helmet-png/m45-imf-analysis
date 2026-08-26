@@ -36,6 +36,14 @@ EXAMPLE_FILE = HERE / "ssh_workers.json.example"
 _SSH_OPTS = ["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
              "-o", "ConnectTimeout=15"]
 
+# subprocess.CREATE_NO_WINDOW 只存在於 Windows 版的 subprocess 模組
+# （2026-08-26 CodeRabbit review 訂正：這個專案目前只在 Windows 上跑，
+# 但直接參照這個屬性在非 Windows 平台會於 subprocess.run() 執行前就先
+# 拋出 AttributeError——用 getattr 給預設值 0，非 Windows 平台安全地
+# 變成無操作，跟沒傳這個參數效果相同）。ssh_sync.py 也重用這個常數，
+# 不要各自定義一份。
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def load_workers() -> dict[str, dict]:
     """回傳 {識別名: {"host":..., "user":..., "key_path":..., "port":...,
@@ -67,6 +75,15 @@ def load_workers() -> dict[str, dict]:
             # 2026-08-23 review 建議 venv 為預設做法，這裡用可設定欄位
             # 讓兩種都支援，不強迫已經裝好、正常在跑的既有 worker 重裝。
             "python_bin": info.get("python_bin") or "python3",
+            # 下面三個欄位全部留空（預設）代表這個 worker 不歸
+            # gcp_vm_lifecycle.py 管——直接固定開著、或不是 GCP VM，
+            # 兩種情況都不需要自動開關機。三個都填了才會啟用自動
+            # 開關（省免費額度）跟 IAP tunnel 連線（host="localhost"
+            # 時，由 iap_tunnel_manager.py 常駐維護，見
+            # docs/reference/CLOUD_WORKERS_IAP_SETUP.md）。
+            "gcp_project": info.get("gcp_project") or "",
+            "gcp_zone": info.get("gcp_zone") or "",
+            "gcp_instance": info.get("gcp_instance") or "",
         }
     return out
 
@@ -92,10 +109,19 @@ def remote_run(w: dict, remote_cmd: str, timeout: int = 60
                ) -> subprocess.CompletedProcess:
     """在 worker 上跑一段 shell 指令並等它結束（同步、有逾時）。
     用來做狀態查詢、小型檔案操作——長時間運算不走這裡，見 ssh_sync.py
-    的 run() 用 nohup + disown 讓遠端行程在 SSH 連線斷開後繼續跑。"""
+    的 run() 用 nohup + disown 讓遠端行程在 SSH 連線斷開後繼續跑。
+
+    **`creationflags=CREATE_NO_WINDOW`（2026-08-26 補上，使用者實際
+    看到才發現）**：`cloud_queue.py` 常駐主迴圈每輪對每個在跑的槽位
+    各呼叫一次這裡做狀態查詢——沒有這個旗標，Windows 上每次呼叫都會
+    瞬間跳出一個 ssh.exe 的主控台視窗再消失，在使用者桌面上變成一串
+    連續閃爍的黑視窗，一輪好幾個 worker 就是好幾個。`run_queue.py`
+    對它自己起的本機運算行程本來就有加這個旗標（見那支檔案），這裡
+    漏加是因為 SSH 呼叫走的是另一支檔案，不是同一次修的。"""
     return subprocess.run(ssh_base(w) + [remote_cmd], capture_output=True,
                           text=True, encoding="utf-8", errors="replace",
-                          timeout=timeout)
+                          timeout=timeout,
+                          creationflags=CREATE_NO_WINDOW)
 
 
 if __name__ == "__main__":
