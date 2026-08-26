@@ -253,22 +253,19 @@ empirical_ml_relation_test：認領人：Codex 本機 session（分支
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| empirical_ml_relation_test（D11，現役缺陷．優先度中高） | 進行中 | 開始時間：2026-08-26 00:22（Asia/Taipei） | Gate 1（Gaia→V 紅端適用性）／Gate 2（低質量食雙星校準星數）兩道前置查證 | `docs/reports/D11_經驗質光關係_覆蓋範圍查證.md`：Gate 1「形式範圍 PASS，科學精度 NOT YET PASS」、Gate 2「數量／M_V 深度通過」；尚無獨立輸出檔，沒有建質量表也沒有重算 IMF |
+| empirical_ml_relation_test（D11） | 進行中 | 開始日期：2026-08-26 | Gate 1（Gaia→V 紅端適用性）、Gate 2（低質量食雙星校準星數） | Gate 1：形式範圍通過，科學精度未通過。Gate 2：通過 |
 
-empirical_ml_relation_test：建一條完全獨立於任何等時線模型的經驗
-質量-光度關係，檢查低質量段 alpha 對「用不用等時線」本身敏不敏感
-——這是現役缺陷、優先度中高（見 LIMITATIONS.md D11）。可行性評估
-已經做完：質量精度以 Gaia G 為準時不是瓶頸，但正確的轉換導數是
-dM/dM_V 不是 dM/dG，本機網格沒有 V 波段算不出來；初步判讀紅端顏色
-覆蓋可能是主要風險（要檢驗的樣本過半集中在 BP−RP ≥ 2.663）。**2026-
-08-26 查證進度**：Gate 1（Gaia→Johnson V 紅端適用性）——公式形式
-涵蓋範圍通過（M45 顏色全在 Gaia EDR3 官方公布區間內），但紅矮星
-專屬的科學精度證據不夠（官方文件沒有 BP−RP=2.4–3.5 的 dwarf-only
-殘差），**判定形式範圍 PASS、科學精度 NOT YET PASS，不能當已驗證**；
-Pancino et al. (2022) 的 V−G 轉換式列為待驗證候選，不是首選。Gate 2
+empirical_ml_relation_test：建一條獨立於等時線模型的經驗質量-光度
+關係，檢查低質量段 alpha 對「用不用等時線」的敏感度（見
+LIMITATIONS.md D11）。查證前兩道 gate：Gate 1（Gaia→Johnson V 紅端
+適用性）——Gaia EDR3 官方 G−V 公式的形式涵蓋範圍包含 M45 全部顏色，
+但官方文件沒有 BP−RP=2.4–3.5 的 dwarf-only 殘差，紅矮星科學精度尚未
+驗證；Pancino et al. (2022) 的 V−G 轉換式列為待驗證候選。Gate 2
 （Torres 2010／Benedict 2016／Iglesias-Marzoa 2017 低質量校準星數）
-——Benedict 2016 單篇即有 39 顆 M<0.4 M☉ 且附 M_V 的分量，不是個位數
-資料，判定通過，但三篇文獻還不能不分來源地直接合併成一個已驗證樣本。
+——Benedict 2016 單篇有 39 顆 M<0.4 M☉ 且附 M_V 的分量，三篇文獻尚未
+合併成單一已驗證樣本。詳見 `docs/reports/D11_經驗質光關係_覆蓋範圍
+查證.md`。尚未建質量表，也未重算 IMF。下一步是補齊逐星資料與紅矮星
+轉換殘差。
 兩道 gate 都只是文獻前置查證，**還沒有蒐集資料、寫實作或重算 IMF**，
 下一步是補齊逐星資料與紅矮星轉換殘差。耗時未查證。
 
