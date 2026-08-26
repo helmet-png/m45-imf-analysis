@@ -45,6 +45,26 @@ from pathlib import Path
 import kaggle_accounts
 from run_queue import _pid_alive  # 單例鎖用，見 acquire_lock() 的說明
 
+def _safe_print(text: str) -> None:
+    """print()，但不會因為主控台編碼印不出某個字元就整個爆掉。
+
+    **2026-08-26 實際發生的事故**：Kaggle CLI 的輸出裡混了一個這台中文
+    Windows 主控台（cp950／Big5）編碼不出來的字元（U+0135 ĵ，帶抑揚符
+    的拉丁字母，猜測來自某個套件版本字串或使用者名稱），`print()` 直接
+    拋 `UnicodeEncodeError`，被 `cloud_queue.py` 的外層 except 接住當成
+    「這個工作啟動失敗」——但實際上 `kaggle_sync.py push` 那個子行程早就
+    跑完了，kernel 可能已經成功建立，只是**印結果訊息**這一步在失敗。
+    誤判成失敗會導致重試，可能對同一個帳號重複推送。
+
+    跟 `run_queue.py`（讀 `tasklist` 輸出）、`kaggle_sync.py`（子行程要用
+    UTF-8 輸出）的既有做法同一個精神：這台機器的主控台編碼不可信任，
+    印任何可能含任意 Unicode 的外部輸出前都要先擋一次，不能假設能印。
+    印不出的字元換成 `?`（`errors="replace"`），保留其餘內容可讀。
+    """
+    enc = sys.stdout.encoding or "utf-8"
+    print(text.encode(enc, errors="replace").decode(enc), flush=True)
+
+
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "kaggle_queue.txt"
 DONE = HERE / "logs" / "kaggle_queue_done.txt"
@@ -286,10 +306,10 @@ def push(item: dict, account_name: str) -> tuple[bool, str, Path]:
     if item["minimal"]:
         cmd += ["--minimal"]
     r = run(cmd)
-    print(r.stdout[-3000:], flush=True)
+    _safe_print(r.stdout[-3000:])
     if r.returncode != 0:
-        print("--- push 失敗 stderr ---", flush=True)
-        print(r.stderr[-3000:], flush=True)
+        _safe_print("--- push 失敗 stderr ---")
+        _safe_print(r.stderr[-3000:])
     accounts = kaggle_accounts.load_accounts()
     username = accounts[account_name]["username"]
     kid = f"{username}/m45-imf-run-{slug}"
@@ -318,7 +338,7 @@ def probe_kernel_status(kid: str, env: dict) -> str:
 
     回傳 "running"／"complete"／"error"／"cancelled"／"missing"／"unknown"。
     """
-    r = run(["kaggle", "kernels", "status", kid], env=env)
+    r = run([*kaggle_accounts.KAGGLE_CMD, "kernels", "status", kid], env=env)
     text = (r.stdout + r.stderr).strip()
     if r.returncode == 0 and "has status" in text:
         if "COMPLETE" in text:
@@ -442,10 +462,10 @@ def recover_running_slots(accounts: dict, envs: dict) -> dict[str, dict | None]:
 
 def push_kernel_only(work_dir: Path, env: dict) -> bool:
     """只重推 kernel，沿用該帳號 work_dir 裡已經上傳過的 dataset。"""
-    r = run(["kaggle", "kernels", "push", "-p", str(work_dir)], env=env)
-    print(r.stdout[-1500:], flush=True)
+    r = run([*kaggle_accounts.KAGGLE_CMD, "kernels", "push", "-p", str(work_dir)], env=env)
+    _safe_print(r.stdout[-1500:])
     if r.returncode != 0:
-        print(r.stderr[-1500:], flush=True)
+        _safe_print(r.stderr[-1500:])
     return r.returncode == 0
 
 
@@ -460,7 +480,7 @@ def pull(kid: str, label: str, env: dict) -> bool:
     """
     out = HERE / "kaggle_results" / label
     out.mkdir(parents=True, exist_ok=True)
-    r = run(["kaggle", "kernels", "output", kid, "-p", str(out)], env=env)
+    r = run([*kaggle_accounts.KAGGLE_CMD, "kernels", "output", kid, "-p", str(out)], env=env)
     if r.returncode != 0:
         print(f"  下載 {kid} 輸出失敗（rc={r.returncode}）："
               f"{(r.stderr or r.stdout)[-500:]}", flush=True)
