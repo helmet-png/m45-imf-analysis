@@ -159,6 +159,12 @@ try {
     # 若之後要恢復本機運算，把下面這行的註解拿掉即可，不用改別的地方。
     # Restart-QueueIfNotRunning -ScriptName "run_queue.py" -LogFile "queue_runner8.log"
     Restart-QueueIfNotRunning -ScriptName "cloud_queue.py" -LogFile "cloud_queue_runner.log"
+    # 2026-08-26 新增：多帳號 GCP 資源池走 IAP tunnel 連線（見
+    # docs/reference/CLOUD_WORKERS_IAP_SETUP.md），iap_tunnel_manager.py
+    # 常駐維護那幾條 tunnel，跟 cloud_queue.py 一樣需要開機/登入後自動
+    # 重啟——沒設定任何 IAP worker 時這支腳本自己會閒置等待，不影響
+    # 只用傳統直連的既有 worker。
+    Restart-QueueIfNotRunning -ScriptName "iap_tunnel_manager.py" -LogFile "iap_tunnel_manager_runner.log"
 }
 catch {
     Write-SelfLog "例外，重啟失敗：$($_.Exception.Message)"

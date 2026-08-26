@@ -43,17 +43,8 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
-
 HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
-
-from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
-from pipeline import joint_fit, selection as selmod, step2_cmd  # noqa: E402
-from pipeline.table_compat import Table                       # noqa: E402
-from measure_overconfidence import GRID                       # noqa: E402
-from injection_recovery import COARSE, multi_stage_best       # noqa: E402
-from scripts.drivers.run_pipeline import load_members          # noqa: E402
 
 ALPHA_STAT_SIGMA = 0.144   # 注入回收量到的統計誤差（S3F），當比較尺度
 
@@ -63,6 +54,15 @@ MEMBERSHIP_THRESHOLDS = [0.5, 0.6, 0.7, 0.8, 0.9]
 
 
 def sweep_membership_threshold(args, n_proc, refines):
+    # Keep scientific dependencies lazy: the stars_per_cluster feasibility
+    # check only inspects files and must still run on a machine without scipy.
+    import numpy as np
+    from pipeline import config as cfgmod, isochrones as isomod
+    from pipeline import joint_fit, selection as selmod, step2_cmd
+    from measure_overconfidence import GRID
+    from injection_recovery import COARSE, multi_stage_best
+    from scripts.drivers.run_pipeline import load_members
+
     cfg = cfgmod.load()
     baseline_path = HERE / "results" / "baseline.dat"
     if not baseline_path.exists():
