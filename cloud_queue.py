@@ -57,6 +57,7 @@ import os
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -72,6 +73,18 @@ DONE = HERE / "logs" / "cloud_queue_done.txt"
 LOCK = HERE / "logs" / "cloud_queue.lock"
 POLL_SECS = 60
 MAX_WAIT_HOURS = 20
+# 2026-08-24：ssh_sync.run() 送出啟動指令逾時（60 秒）時會回傳 True、
+# 當作「可能已經啟動」建立 running 槽位（見 run() 的說明），但如果那次
+# 其實根本沒送達（不是「送達但回應沒收到」），poll() 會一直回傳
+# "missing"。原本這種槽位沿用 MAX_WAIT_HOURS（20 小時）才判定逾時釋放
+# ——不是無限卡住，但 20 小時對一個從沒真的啟動過的工作太久，這段
+# 期間這個 worker 完全派不了別的工作（CodeRabbit review 兩輪都指出
+# 這一點，第一輪先記錄下來，這裡實際修掉）。獨立給「missing」一個短
+# 很多的專屬逾時，跟「工作真的在跑、只是算很久」用的 MAX_WAIT_HOURS
+# 分開——見主迴圈裡 `first_missing_at` 那段的用法。
+MISSING_TIMEOUT_S = 900     # 15 分鐘，遠大於單次 poll 間隔（60 秒），
+                            # 排除單次查詢時序差的誤判，同時遠短於
+                            # MAX_WAIT_HOURS
 # 只用在 backend=="kaggle" 的槽位——理由見檔案開頭說明。
 KAGGLE_BACKOFFS = [60, 120, 240, 480]
 
@@ -289,26 +302,142 @@ def fetch_slot(name: str, kind: str, item: dict, slot: dict) -> bool:
 TERMINAL = {"complete", "error", "cancelled"}
 
 
+def _kaggle_handle(name: str, item: dict) -> dict:
+    """組出 Kaggle 槽位需要的 `kid`／`work_dir`，給正常路徑（
+    `_probe_and_recover()`）跟例外 fallback 共用（2026-08-24 CodeRabbit
+    review 訂正）——原本例外 fallback 手動組的槽位只有
+    `{"phase":..., "item":..., "kind":...}`，沒有 `**handle`，
+    `kind == "kaggle"` 時下一輪 `probe_slot()` 讀 `slot["kid"]`
+    會直接 `KeyError`，而這個 `KeyError` 又被主迴圈自己新加的寬鬆
+    `except Exception` 接住、槽位被保留——變成每一輪都重演同一個
+    `KeyError`，直到 `MAX_WAIT_HOURS` 到期才被錯記成 `timeout`，這段
+    期間這個 worker 完全派不了任何工作。不重複組裝邏輯，兩處呼叫這
+    一份。"""
+    accounts = kaggle_accounts.load_accounts()
+    username = accounts[name]["username"]
+    slug = item["label"].replace("_", "-")
+    return {"kid": f"{username}/m45-imf-run-{slug}",
+           "work_dir": HERE / "kaggle_work" / name}
+
+
+def _probe_and_recover(name: str, kind: str, item: dict
+                       ) -> tuple[dict | None, bool]:
+    """查一次 `name` 這個 worker 上有沒有 `item['label']` 已經在跑／跑完
+    的痕跡。回傳 `(slot, missing)`：
+
+    - `slot` 是可以直接放進 `slots[name]` 的槽位 dict，或 `None`
+      （代表這個 worker 目前空著，呼叫端可以放心當空槽處理）。
+    - `missing` 只有在遠端**確實沒有任何這個 label 的痕跡**（探測結果
+      是 "missing"）才是 `True`；其餘情況（不管是找到 slot、還是這支
+      函式自己已經呼叫過 `mark_done()` 收尾）一律是 `False`。
+
+    **為什麼要分開這兩個訊號（2026-08-24 CodeRabbit review 訂正）**：
+    `complete`（已下載）跟終態 `error`／`cancelled` 這幾種情況，這支
+    函式自己就已經呼叫 `mark_done()` 把正確的終態寫進 done-log 了，
+    回傳的 `slot` 是 `None` 只是代表「沒有槽位要接手」，不是代表「什麼
+    都沒查到」。如果呼叫端看到 `slot is None` 就一律再呼叫一次
+    `mark_done(..., "push_failed", ...)`，會讓同一個 label 在
+    `logs/cloud_queue_done.txt` 裡出現兩筆互相矛盾的紀錄（正確的終態
+    +「push_failed」）——`read_done()` 只排除 `push_failed`，所以功能上
+    不會真的重派，但稽核紀錄會誤導人。只有 `missing=True`（遠端真的什麼
+    都沒有）才是呼叫端可以合理判斷「這次啟動大概沒送達」、自己決定要不
+    要標記 `push_failed` 的時機。
+
+    抽成獨立函式給兩個地方共用：(1) `recover_running_slots()` 開機時
+    整批查一次；(2) 一般派工迴圈裡 `start_slot()` 失敗或拋例外之後，
+    重派前先查一次——啟動失敗的結果其實不明：遠端可能已經收到指令、
+    真的開始跑了，只是這裡沒收到確認回應（SSH 連線在指令送達之後、
+    回應送回之前斷掉是典型情況）。原本只有復原路徑會做這個查證，一般
+    派工失敗後直接讓下一輪重派，可能讓兩個行程搶同一個 worker 的同一份
+    `remote_dir`（SSH）或重推同一個 kernel（Kaggle）——兩處分開各寫
+    一份判斷邏輯，以後要改判斷準則（例如新增一種終止狀態）得記得兩邊
+    都改，容易漏一邊，所以抽成一份。
+
+    查詢本身失敗（`probe_kernel_status()`／`poll()` 回傳 "unknown"，
+    或這支函式自己拋出未預期例外，見呼叫端的 try/except）保守當成
+    「可能在跑」，回傳 `phase="probe"` 的槽位，不貿然當空、也不是
+    `missing`。
+    """
+    if kind == "kaggle":
+        handle = _kaggle_handle(name, item)
+        accounts = kaggle_accounts.load_accounts()
+        env = kaggle_accounts.env_for(accounts[name])
+        st = kaggle_queue.probe_kernel_status(handle["kid"], env)
+    else:
+        st = ssh_sync.poll(name, item["label"])
+        handle = {}
+    if st == "missing":
+        return None, True
+    if st == "running":
+        print(f"復原：{name} 已經在跑 {item['label']}，接回追蹤", flush=True)
+        return {"phase": "running", "item": item, "kind": kind,
+               **handle, "t0": time.time(), "retries": 0}, False
+    if st == "unknown":
+        print(f"復原：{name} 查 {item['label']} 狀態失敗，這一輪不派新"
+             f"工作，下一輪再查（避免遠端其實正在跑卻被重派洗掉）",
+             flush=True)
+        return {"phase": "probe", "item": item, "kind": kind,
+               **handle, "t0": time.time(), "retries": 0}, False
+    if st == "complete":
+        print(f"復原：{name} 的 {item['label']} 已經完成，補拉結果並"
+             f"標記完成，不重算", flush=True)
+        if fetch_slot(name, kind, item, handle):
+            mark_done(item["label"], "ok", 0, name)
+            return None, False
+        # 2026-08-23 CodeRabbit review 訂正：結果下載失敗時原本直接
+        # 放空槽位——遠端其實已經算完，放空槽位會讓主迴圈把這個 label
+        # 當成新工作重派，等於把已經算完的計算結果丟掉重算一次。改成
+        # 保留槽位（照抄主迴圈本來就有的同一套處置，見主迴圈裡
+        # `status == "complete" and not pulled` 那段），下一輪
+        # probe_slot 會再查到 complete，再重試 fetch_slot，只重試
+        # 下載，不重跑計算。
+        print("  結果下載失敗，保留槽位讓主迴圈下一輪重試下載"
+             "（不重跑計算）", flush=True)
+        return {"phase": "running", "item": item, "kind": kind,
+               **handle, "t0": time.time(), "retries": 0}, False
+    if (kind == "kaggle" and st == "error"
+           and kaggle_queue.is_mount_race_failure(item["label"])):
+        # 2026-08-23 CodeRabbit review 訂正：這裡原本跟下面的
+        # error／cancelled 分支合在一起，一律記成終態失敗——但
+        # Kaggle 的 dataset 掛載時序競態是已知的暫時性失敗（見
+        # is_mount_race_failure() 的說明跟主迴圈裡 status=="error"
+        # 那段一樣的處置），本機重啟後接回一個剛好卡在 mount race
+        # 的槽位不該直接判死刑，要走跟主迴圈相同的 cooldown 重試
+        # 流程，不能因為「這次是在復原路徑上發現的」就少了重試
+        # 機會。SSH 沒有這種已知可重試的暫時性失敗模式，所以這段
+        # 只在 kind=="kaggle" 時才會進來，SSH 的 error 繼續走下面
+        # 的終態失敗處置。
+        wait_s = KAGGLE_BACKOFFS[0]
+        print(f"復原：{name} 的 {item['label']} 遠端狀態為 error，但偵測到"
+             f"dataset 掛載時序問題（非程式錯誤），{wait_s}s 後重推"
+             f"（第 1 次重試），不記成終態失敗", flush=True)
+        return {"phase": "cooldown", "item": item, "kind": kind,
+               **handle, "t0": time.time(), "retries": 1,
+               "resume_at": time.time() + wait_s}, False
+    # error／cancelled（SSH 的錯誤，或非 mount race 的 kaggle 錯誤）：
+    # 記成終態失敗，不自動重派。
+    print(f"復原：{name} 的 {item['label']} 遠端狀態為 {st}，記成終態"
+         f"失敗，不自動重派", flush=True)
+    mark_done(item["label"], st, 0, name)
+    return None, False
+
+
 def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
     """開機／重啟時接回還在跑的槽位，理由跟 kaggle_queue.py 的同名函式
     完全一樣（本機失聯不代表遠端沒在跑，見那邊 2026-08-18 的說明）。
+    判斷邏輯本體在 `_probe_and_recover()`，這裡只負責挑出「哪些 worker
+    該查哪個 pending 項目」。
 
-    2026-08-22 CodeRabbit review 訂正：原本只認 RUNNING 就接回，其餘
-    （complete／error／cancelled／unknown）一律當空槽位讓主迴圈自然
-    重派。這對 **complete** 等於把已經算完的結果丟掉重算——跟這個專案
-    在 Kaggle 那邊已經踩過、也已經在 `kaggle_queue.py` 的同名函式修過
-    的同一種「重複算力」bug，這裡當初沒有照著做，是遺漏不是刻意簡化。
-    對 **unknown**（查不到狀態，可能只是網路斷或連線逾時，不代表遠端
-    真的沒在跑）一律當空槽位重派，則可能讓兩個行程同時在同一個 worker
-    的同一個 remote_dir 裡搶同一個 label 的 logs／results 檔案——這是
-    SSH worker（持久機器、無容器隔離）特有的風險，比 Kaggle 只是「白算
-    一次」更嚴重。
-
-    改成比照 kaggle_queue.py 的處置：complete 就 pull＋mark_done（不
-    重算）；error／cancelled 記成終態失敗（不自動重派——SSH 沒有 Kaggle
-    那種已知可重試的 mount race 暫時性失敗模式，保守起見交給人工判斷要
-    不要重新排進佇列）；unknown 保留槽位（phase="probe"）讓主迴圈下一輪
-    繼續查，這一輪不派新工作。
+    2026-08-24 CodeRabbit review 訂正：整個函式原本沒有例外保護——
+    `kaggle_queue.probe_kernel_status()`／`ssh_sync.poll()`／
+    `fetch_slot()` 底下都有 subprocess 呼叫，不是每一個都接住所有可能
+    的例外（`ssh_sync.poll()` 只接 `subprocess.TimeoutExpired`），這支
+    函式又是在 `main()` 的 `while True:` 主迴圈**開始之前**呼叫一次，
+    未捕捉例外會讓 cloud_queue.py 連主迴圈都還沒進去就整支程式當場
+    結束——比主迴圈裡的問題更嚴重，因為主迴圈自己那層 try/except 兜底
+    完全幫不上忙（還沒執行到那裡）。查詢單一 (name, item) 時發生未預期
+    例外，保守當成「查不到、可能在跑」（`phase="probe"`），不讓一個
+    worker 的復原查詢失敗拖垮其他 worker 的復原、或讓整支程式起不來。
     """
     done = read_done()
     pending = [it for it in read_queue() if it["label"] not in done]
@@ -317,75 +446,31 @@ def recover_running_slots(workers: dict[str, str]) -> dict[str, dict | None]:
         for item in pending:
             if item["worker"] not in (None, name):
                 continue
-            if kind == "kaggle":
-                accounts = kaggle_accounts.load_accounts()
-                username = accounts[name]["username"]
-                slug = item["label"].replace("_", "-")
-                kid = f"{username}/m45-imf-run-{slug}"
-                env = kaggle_accounts.env_for(accounts[name])
-                st = kaggle_queue.probe_kernel_status(kid, env)
-                handle = {"kid": kid, "work_dir": HERE / "kaggle_work" / name}
-            else:
-                st = ssh_sync.poll(name, item["label"])
+            try:
+                slot, _missing = _probe_and_recover(name, kind, item)
+            except Exception as e:                            # noqa: BLE001
+                print(f"復原：查 {name} 的 {item['label']} 狀態時發生未"
+                     f"預期例外（{type(e).__name__}: {e}），保守當成"
+                     f"可能在跑，下一輪重試", flush=True)
+                traceback.print_exc()
+                # 2026-08-24 CodeRabbit review 訂正：fallback 槽位一定要
+                # 帶齊 kind=="kaggle" 需要的 kid／work_dir，理由見
+                # _kaggle_handle() 的說明——這裡再包一層 try 是因為連
+                # _kaggle_handle() 本身（讀 kaggle_accounts.json）都有
+                # 可能失敗，不能讓「補 handle」這個動作本身變成第二個
+                # 沒接住的例外，寧可 handle 缺失也不要讓這層 except 自己
+                # 再炸一次。
                 handle = {}
-            if st == "missing":
-                continue    # 這個 worker 沒推過這項，看下一個候選
-            if st == "running":
-                slots[name] = {"phase": "running", "item": item, "kind": kind,
-                               **handle, "t0": time.time(), "retries": 0}
-                print(f"復原：{name} 已經在跑 {item['label']}，接回追蹤",
-                     flush=True)
+                if kind == "kaggle":
+                    try:
+                        handle = _kaggle_handle(name, item)
+                    except Exception:                          # noqa: BLE001
+                        pass
+                slot = {"phase": "probe", "item": item, "kind": kind,
+                       **handle, "t0": time.time(), "retries": 0}
+            if slot is not None:
+                slots[name] = slot
                 break
-            if st == "unknown":
-                slots[name] = {"phase": "probe", "item": item, "kind": kind,
-                               **handle, "t0": time.time(), "retries": 0}
-                print(f"復原：{name} 查 {item['label']} 狀態失敗，這一輪不"
-                     f"派新工作，下一輪再查（避免遠端其實正在跑卻被重派"
-                     f"洗掉）", flush=True)
-                break
-            if st == "complete":
-                print(f"復原：{name} 的 {item['label']} 在本機失聯期間已經"
-                     f"完成，補拉結果並標記完成，不重算", flush=True)
-                if fetch_slot(name, kind, item, handle):
-                    mark_done(item["label"], "ok", 0, name)
-                    continue    # 槽位保持空著，可以接新工作
-                # 2026-08-23 CodeRabbit review 訂正：結果下載失敗時原本
-                # 直接 continue 放空槽位——遠端其實已經算完，放空槽位會讓
-                # 主迴圈把這個 label 當成新工作重派，等於把已經算完的
-                # 計算結果丟掉重算一次。改成保留槽位（照抄主迴圈本來就有
-                # 的同一套處置，見下面 while 迴圈裡 `status == "complete"
-                # and not pulled` 那段），下一輪 probe_slot 會再查到
-                # complete，再重試 fetch_slot，只重試下載，不重跑計算。
-                print(f"  結果下載失敗，保留槽位讓主迴圈下一輪重試下載"
-                     f"（不重跑計算）", flush=True)
-                slots[name] = {"phase": "running", "item": item, "kind": kind,
-                               **handle, "t0": time.time(), "retries": 0}
-                break
-            if (kind == "kaggle" and st == "error"
-                   and kaggle_queue.is_mount_race_failure(item["label"])):
-                # 2026-08-23 CodeRabbit review 訂正：這裡原本跟下面的
-                # error／cancelled 分支合在一起，一律記成終態失敗——但
-                # Kaggle 的 dataset 掛載時序競態是已知的暫時性失敗（見
-                # is_mount_race_failure() 的說明跟主迴圈裡 status=="error"
-                # 那段一樣的處置），本機重啟後接回一個剛好卡在 mount race
-                # 的槽位不該直接判死刑，要走跟主迴圈相同的 cooldown 重試
-                # 流程，不能因為「這次是在復原路徑上發現的」就少了重試
-                # 機會。SSH 沒有這種已知可重試的暫時性失敗模式，所以這段
-                # 只在 kind=="kaggle" 時才會進來，SSH 的 error 繼續走下面
-                # 的終態失敗處置。
-                wait_s = KAGGLE_BACKOFFS[0]
-                slots[name] = {"phase": "cooldown", "item": item, "kind": kind,
-                               **handle, "t0": time.time(), "retries": 1,
-                               "resume_at": time.time() + wait_s}
-                print(f"復原：{name} 的 {item['label']} 遠端狀態為 error，"
-                     f"但偵測到 dataset 掛載時序問題（非程式錯誤），{wait_s}s "
-                     f"後重推（第 1 次重試），不記成終態失敗", flush=True)
-                break
-            # error／cancelled（SSH 的錯誤，或非 mount race 的 kaggle 錯誤）：
-            # 記成終態失敗，不自動重派。
-            print(f"復原：{name} 的 {item['label']} 遠端狀態為 {st}，記成"
-                 f"終態失敗，不自動重派", flush=True)
-            mark_done(item["label"], st, 0, name)
     return slots
 
 
@@ -427,11 +512,74 @@ def main() -> None:
             print(f"\n{'='*70}\n[{datetime.now():%H:%M:%S}] "
                  f"{name}（{kind}）開始 {item['label']}"
                  f"\n  {item['script']} {item['args']}\n{'='*70}", flush=True)
-            ok, handle = start_slot(name, kind, item)
+            # 2026-08-24：start_slot() 底下（ssh_sync.py／kaggle_sync.py）有
+            # 好幾個 subprocess 呼叫沒有全部接住 subprocess.TimeoutExpired，
+            # 網路短暫變慢／中斷時可能整個未捕捉例外往上炸——原本這裡沒接，
+            # 一炸就是整支 cloud_queue.py 的 while True 主迴圈死掉，所有
+            # worker（不只是剛好network有狀況的那個）全部停擺，需要人工
+            # 發現才重啟。改成這裡兜底：任何未預期例外都當成「這個 worker
+            # 這一輪失敗，下一輪的 pending 重新算過會再排進去」處理，不讓
+            # 一個 worker 的暫時性問題波及其他 worker 或整個派工器。
+            try:
+                ok, handle = start_slot(name, kind, item)
+            except Exception as e:                            # noqa: BLE001
+                # 2026-08-24 CodeRabbit review 訂正：這裡接的是 Exception
+                # 這麼寬的範圍，不會只有網路逾時，也會接住 KeyError／
+                # TypeError 這類程式邏輯錯誤——那種錯誤每一輪都會重演，
+                # 只印型別跟訊息、沒有發生位置的話，得另外重現才查得出
+                # 是哪一行。印出完整 traceback 讓下次直接定位。
+                print(f"  [{name}] 啟動 {item['label']} 時發生未預期例外"
+                     f"（{type(e).__name__}: {e}）", flush=True)
+                traceback.print_exc()
+                ok, handle = False, {}
             if ok:
                 slots[name] = {"phase": "running", "item": item, "kind": kind,
                               **handle, "t0": time.time(), "retries": 0}
-            else:
+                continue
+            # 2026-08-24 CodeRabbit review 訂正：啟動失敗（不論是乾淨
+            # 回傳 False，還是丟例外）的結果其實不明——遠端可能已經收到
+            # 指令、真的開始跑了，只是這裡沒收到確認回應（SSH 連線在
+            # 指令送達之後、回應送回之前斷掉是典型情況）。原本這裡不管
+            # 三七二十一直接標記 push_failed，下一輪就會重派同一個
+            # label，可能讓兩個行程搶同一個 worker 的同一份 remote_dir
+            # （SSH）或重推同一個 kernel（Kaggle）。重派前先用
+            # `_probe_and_recover()`（跟開機復原共用同一套判斷邏輯）
+            # 實際查一次遠端狀態，查到真的在跑就接回追蹤，不是假設
+            # 沒事而重派。
+            try:
+                recovered, missing = _probe_and_recover(name, kind, item)
+            except Exception as e2:                           # noqa: BLE001
+                print(f"  [{name}] 查詢 {item['label']} 是否已啟動時也"
+                     f"發生未預期例外（{type(e2).__name__}: {e2}），保守"
+                     f"當成可能在跑，下一輪重試", flush=True)
+                traceback.print_exc()
+                # 理由同 recover_running_slots() 的同類 fallback：帶齊
+                # kind=="kaggle" 需要的 kid／work_dir，見 _kaggle_handle()。
+                fallback_handle = {}
+                if kind == "kaggle":
+                    try:
+                        fallback_handle = _kaggle_handle(name, item)
+                    except Exception:                          # noqa: BLE001
+                        pass
+                recovered = {"phase": "probe", "item": item, "kind": kind,
+                            **fallback_handle, "t0": time.time(),
+                            "retries": 0}
+                # 查證本身都失敗了，不確定遠端到底有沒有，保守起見不當
+                # 「確定沒有」處理——見下面 missing 的用法。
+                missing = False
+            if recovered is not None:
+                slots[name] = recovered
+                print(f"  [{name}] {item['label']} 啟動回報失敗，但查到"
+                     f"遠端其實已經在跑，接回追蹤而不是重派", flush=True)
+            elif missing:
+                # 2026-08-24 CodeRabbit review 訂正：只有 _probe_and_recover()
+                # 明確回報「遠端真的什麼都沒有」（missing=True）才在這裡標記
+                # push_failed。`recovered is None` 也可能是因為那支函式自己
+                # 已經呼叫過 mark_done()（complete 已下載、或 error／cancelled
+                # 終態）——那種情況下如果這裡又標一次 push_failed，會讓同一個
+                # label 在 done-log 裡出現兩筆互相矛盾的紀錄（正確終態 +
+                # push_failed），誤導事後查證，即使功能上不影響重派判斷
+                # （read_done() 只排除 push_failed）。
                 mark_done(item["label"], "push_failed", 0, name)
 
         for name, slot in list(slots.items()):
@@ -439,67 +587,109 @@ def main() -> None:
                 continue
             kind = slot["kind"]
             item = slot["item"]
+            # 2026-08-24：這整段（cooldown／逾時判斷／probe_slot()／
+            # mount race 重試／fetch_slot()）底下的 subprocess 呼叫不是
+            # 每一個都接住 subprocess.TimeoutExpired，網路短暫異常時
+            # 未捕捉例外會讓整支程式的 while True 主迴圈死掉，所有槽位
+            # （包含其他正常的 worker）一起停擺，需要人工發現才重啟——
+            # 跟上面「啟動新工作」那段是同一個理由。整段包一層 try，
+            # 例外時保留槽位（不清空、不 mark_done）當這一輪「查不到
+            # 狀態」處理，跟 probe_slot() 正常回傳 "unknown" 時的既有
+            # 處置一致，下一輪自然會再檢查一次，不會遺失正在追蹤的工作。
+            # 段落內部原有的 continue 在 try 區塊裡語意不變（continue／
+            # break 不受 try/except 影響，仍然作用在最外層的 for 迴圈），
+            # 不需要另外抽成函式。
+            try:
+                if slot["phase"] == "cooldown":  # 只有 kaggle 槽位會進到這裡
+                    if time.time() >= slot["resume_at"]:
+                        ok = kaggle_queue.push_kernel_only(
+                            slot["work_dir"],
+                            kaggle_accounts.env_for(
+                                kaggle_accounts.load_accounts()[name]))
+                        if ok:
+                            slot["phase"] = "running"
+                        else:
+                            mark_done(item["label"], "error",
+                                     time.time() - slot["t0"], name)
+                            slots[name] = None
+                    continue
 
-            if slot["phase"] == "cooldown":     # 只有 kaggle 槽位會進到這裡
-                if time.time() >= slot["resume_at"]:
-                    ok = kaggle_queue.push_kernel_only(
-                        slot["work_dir"],
-                        kaggle_accounts.env_for(kaggle_accounts.load_accounts()[name]))
-                    if ok:
-                        slot["phase"] = "running"
-                    else:
-                        mark_done(item["label"], "error",
+                elapsed_h = (time.time() - slot["t0"]) / 3600
+                if elapsed_h > MAX_WAIT_HOURS:
+                    if kind == "ssh":
+                        # SSH worker 是持久機器，逾時不能直接放槽位——遠端的
+                        # 行程可能還真的在跑，放了槽位讓主迴圈重派，會在同一個
+                        # remote_dir 裡跟舊行程搶同一批 logs／results 檔案
+                        # （2026-08-22 CodeRabbit review 訂正）。先用 PID 確認
+                        # 終止，確認不了就保留槽位、不重派，等人工介入——這跟
+                        # Kaggle 不一樣：kernel 是平台自己管的容器，本機沒有
+                        # 能力也不需要去「殺」它，逾時單純是本機端放棄追蹤。
+                        if not ssh_sync.kill(name, item["label"]):
+                            print(f"  [{name}] {item['label']} 逾時但無法確認"
+                                 f"遠端行程已終止，保留槽位、不重派，需要人工"
+                                 f"介入檢查 worker 上 logs/{item['label']}.pid "
+                                 f"對應的行程", flush=True)
+                            continue    # 保留槽位，下一輪再試一次終止
+                    mark_done(item["label"], "timeout",
+                             time.time() - slot["t0"], name)
+                    slots[name] = None
+                    continue
+
+                status = probe_slot(name, kind, item, slot)
+                if status != "missing":
+                    # 曾經連續 missing 過、現在變別的狀態了（真的查到
+                    # running／terminal），代表那次 missing 只是時序上
+                    # 剛好沒同步到，不是真的沒啟動——清掉計時基準，不然
+                    # 下次萬一又短暫 missing 會沿用舊的起算時間，提早
+                    # 誤判。
+                    slot.pop("first_missing_at", None)
+                if status == "missing":
+                    # 用獨立、短很多的逾時判斷「這個工作是不是根本沒
+                    # 送達」，不要沿用給「工作真的在跑、只是算很久」用
+                    # 的 MAX_WAIT_HOURS（20 小時）——理由見
+                    # MISSING_TIMEOUT_S 旁邊的說明。
+                    first_missing = slot.setdefault("first_missing_at",
+                                                     time.time())
+                    if time.time() - first_missing > MISSING_TIMEOUT_S:
+                        print(f"  [{name}] {item['label']} 連續 "
+                             f"{MISSING_TIMEOUT_S // 60} 分鐘查不到遠端有"
+                             f"這個工作的痕跡，判定啟動指令其實沒送達，"
+                             f"釋放槽位讓下一輪重派", flush=True)
+                        mark_done(item["label"], "push_failed",
                                  time.time() - slot["t0"], name)
                         slots[name] = None
-                continue
+                    continue
+                if status not in TERMINAL:
+                    continue    # running／unknown：下一輪再看
 
-            elapsed_h = (time.time() - slot["t0"]) / 3600
-            if elapsed_h > MAX_WAIT_HOURS:
-                if kind == "ssh":
-                    # SSH worker 是持久機器，逾時不能直接放槽位——遠端的
-                    # 行程可能還真的在跑，放了槽位讓主迴圈重派，會在同一個
-                    # remote_dir 裡跟舊行程搶同一批 logs／results 檔案
-                    # （2026-08-22 CodeRabbit review 訂正）。先用 PID 確認
-                    # 終止，確認不了就保留槽位、不重派，等人工介入——這跟
-                    # Kaggle 不一樣：kernel 是平台自己管的容器，本機沒有
-                    # 能力也不需要去「殺」它，逾時單純是本機端放棄追蹤。
-                    if not ssh_sync.kill(name, item["label"]):
-                        print(f"  [{name}] {item['label']} 逾時但無法確認"
-                             f"遠端行程已終止，保留槽位、不重派，需要人工"
-                             f"介入檢查 worker 上 logs/{item['label']}.pid "
-                             f"對應的行程", flush=True)
-                        continue    # 保留槽位，下一輪再試一次終止
-                mark_done(item["label"], "timeout", time.time() - slot["t0"],
-                         name)
+                if (kind == "kaggle" and status == "error"
+                       and kaggle_queue.is_mount_race_failure(item["label"])
+                       and slot["retries"] < len(KAGGLE_BACKOFFS)):
+                    wait_s = KAGGLE_BACKOFFS[slot["retries"]]
+                    slot["retries"] += 1
+                    slot["phase"] = "cooldown"
+                    slot["resume_at"] = time.time() + wait_s
+                    print(f"  [{name}] 偵測到 dataset 掛載時序問題，{wait_s}s "
+                         f"後重推（第 {slot['retries']} 次重試）", flush=True)
+                    continue
+
+                pulled = fetch_slot(name, kind, item, slot)
+                if status == "complete" and not pulled:
+                    print(f"  [{name}] {item['label']} 已完成但結果下載失敗，"
+                         f"保留供下一輪重試", flush=True)
+                    continue
+                secs = time.time() - slot["t0"]
+                final = "ok" if status == "complete" else status
+                mark_done(item["label"], final, secs, name)
+                print(f"[{datetime.now():%H:%M:%S}] [{name}] {item['label']} "
+                     f"結束：{final}（{secs/60:.1f} 分）\n", flush=True)
                 slots[name] = None
-                continue
-
-            status = probe_slot(name, kind, item, slot)
-            if status not in TERMINAL:
-                continue    # running/missing/unknown：下一輪再看
-
-            if (kind == "kaggle" and status == "error"
-                   and kaggle_queue.is_mount_race_failure(item["label"])
-                   and slot["retries"] < len(KAGGLE_BACKOFFS)):
-                wait_s = KAGGLE_BACKOFFS[slot["retries"]]
-                slot["retries"] += 1
-                slot["phase"] = "cooldown"
-                slot["resume_at"] = time.time() + wait_s
-                print(f"  [{name}] 偵測到 dataset 掛載時序問題，{wait_s}s "
-                     f"後重推（第 {slot['retries']} 次重試）", flush=True)
-                continue
-
-            pulled = fetch_slot(name, kind, item, slot)
-            if status == "complete" and not pulled:
-                print(f"  [{name}] {item['label']} 已完成但結果下載失敗，"
-                     f"保留供下一輪重試", flush=True)
-                continue
-            secs = time.time() - slot["t0"]
-            final = "ok" if status == "complete" else status
-            mark_done(item["label"], final, secs, name)
-            print(f"[{datetime.now():%H:%M:%S}] [{name}] {item['label']} "
-                 f"結束：{final}（{secs/60:.1f} 分）\n", flush=True)
-            slots[name] = None
+            except Exception as e:                            # noqa: BLE001
+                # 理由同上面「啟動新工作」那段的 2026-08-24 訂正。
+                print(f"  [{name}] 檢查 {item['label']} 狀態時發生未預期例外"
+                     f"（{type(e).__name__}: {e}），保留槽位，下一輪重試",
+                     flush=True)
+                traceback.print_exc()
 
         if not pending and all(s is None for s in slots.values()):
             # **不像 kaggle_queue.py 那樣「清空就結束」**（2026-08-23 為
