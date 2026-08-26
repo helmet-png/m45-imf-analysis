@@ -304,7 +304,7 @@ def wait_dataset_ready(dataset_id: str, env: dict, timeout_s: int = 180,
     t0 = time.time()
     first_ready_at = None
     while time.time() - t0 < timeout_s:
-        r = subprocess.run(["kaggle", "datasets", "status", dataset_id],
+        r = subprocess.run([*kaggle_accounts.KAGGLE_CMD, "datasets", "status", dataset_id],
                            capture_output=True, text=True,
                            encoding="utf-8", errors="replace", env=env)
         status = (r.stdout + r.stderr).strip()
@@ -338,19 +338,19 @@ def cmd_push(a):
     dataset_id = make_dataset_metadata(slug, username, work_dir)
     # 先建/更新 dataset
     exists = subprocess.run(
-        ["kaggle", "datasets", "status", dataset_id],
+        [*kaggle_accounts.KAGGLE_CMD, "datasets", "status", dataset_id],
         capture_output=True, text=True, env=env)
     if exists.returncode == 0:
-        run(["kaggle", "datasets", "version", "-p", str(work_dir),
+        run([*kaggle_accounts.KAGGLE_CMD, "datasets", "version", "-p", str(work_dir),
              "-m", "update", "-r", "zip"], env=env)
     else:
-        run(["kaggle", "datasets", "create", "-p", str(work_dir),
+        run([*kaggle_accounts.KAGGLE_CMD, "datasets", "create", "-p", str(work_dir),
              "-r", "zip"], env=env)
     wait_dataset_ready(dataset_id, env)
 
     kernel_id = make_kernel(a.script, a.args, dataset_id, username, slug,
                             extra_files, work_dir, minimal=a.minimal)
-    run(["kaggle", "kernels", "push", "-p", str(work_dir)], env=env)
+    run([*kaggle_accounts.KAGGLE_CMD, "kernels", "push", "-p", str(work_dir)], env=env)
     print(f"\nKERNEL_ID={kernel_id}", flush=True)
     print(f"追蹤：https://www.kaggle.com/code/{kernel_id.split('/')[-1]}")
     print(f"查狀態：python kaggle_sync.py status --kernel {kernel_id} "
@@ -359,14 +359,14 @@ def cmd_push(a):
 
 def cmd_status(a):
     _, _, env = resolve_account(a.account)
-    run(["kaggle", "kernels", "status", a.kernel], env=env)
+    run([*kaggle_accounts.KAGGLE_CMD, "kernels", "status", a.kernel], env=env)
 
 
 def cmd_pull(a):
     _, _, env = resolve_account(a.account)
     out = HERE / "kaggle_results" / Path(a.kernel).name
     out.mkdir(parents=True, exist_ok=True)
-    run(["kaggle", "kernels", "output", a.kernel, "-p", str(out)], env=env)
+    run([*kaggle_accounts.KAGGLE_CMD, "kernels", "output", a.kernel, "-p", str(out)], env=env)
     print(f"結果存到 {out}")
 
 

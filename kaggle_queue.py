@@ -318,7 +318,7 @@ def probe_kernel_status(kid: str, env: dict) -> str:
 
     回傳 "running"／"complete"／"error"／"cancelled"／"missing"／"unknown"。
     """
-    r = run(["kaggle", "kernels", "status", kid], env=env)
+    r = run([*kaggle_accounts.KAGGLE_CMD, "kernels", "status", kid], env=env)
     text = (r.stdout + r.stderr).strip()
     if r.returncode == 0 and "has status" in text:
         if "COMPLETE" in text:
@@ -442,7 +442,7 @@ def recover_running_slots(accounts: dict, envs: dict) -> dict[str, dict | None]:
 
 def push_kernel_only(work_dir: Path, env: dict) -> bool:
     """只重推 kernel，沿用該帳號 work_dir 裡已經上傳過的 dataset。"""
-    r = run(["kaggle", "kernels", "push", "-p", str(work_dir)], env=env)
+    r = run([*kaggle_accounts.KAGGLE_CMD, "kernels", "push", "-p", str(work_dir)], env=env)
     print(r.stdout[-1500:], flush=True)
     if r.returncode != 0:
         print(r.stderr[-1500:], flush=True)
@@ -460,7 +460,7 @@ def pull(kid: str, label: str, env: dict) -> bool:
     """
     out = HERE / "kaggle_results" / label
     out.mkdir(parents=True, exist_ok=True)
-    r = run(["kaggle", "kernels", "output", kid, "-p", str(out)], env=env)
+    r = run([*kaggle_accounts.KAGGLE_CMD, "kernels", "output", kid, "-p", str(out)], env=env)
     if r.returncode != 0:
         print(f"  下載 {kid} 輸出失敗（rc={r.returncode}）："
               f"{(r.stderr or r.stdout)[-500:]}", flush=True)
