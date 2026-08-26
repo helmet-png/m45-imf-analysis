@@ -53,16 +53,28 @@ p6b_inject_lowmass_v2_t0|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --
 p6b_inject_lowmass_v2_t1|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1||false|teammate2
 p6b_inject_lowmass_v2_t2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2||false|helmetalbert
 
-# 2026-08-26：上面三行漏帶 inject_lowmass.py 實際需要的兩個依賴檔——
-# measure_overconfidence.py（`from measure_overconfidence import GRID`，
-# 第 39 行）與 injection_recovery.py（第 40 行，measure_overconfidence.py
-# 自己也需要它），Kaggle 端因此在匯入階段就 ModuleNotFoundError，
-# t0／t1 已確認以 error 收場（8.7 分鐘／0 秒，t2 待查）。原標籤已被
-# `logs/cloud_queue_done.txt` 記成終態（error 也算終態，不會自動重試），
-# 換新標籤＋補上額外依賴檔重派，舊三行保留不動（歷史紀錄）。
-p6b_inject_lowmass_v2_t0_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_kaggle_t0|measure_overconfidence.py,injection_recovery.py|false|justinlan11
-p6b_inject_lowmass_v2_t1_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1|measure_overconfidence.py,injection_recovery.py|false|teammate2
-p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2|measure_overconfidence.py,injection_recovery.py|false|helmetalbert
+# 2026-08-26：上面三行漏帶 inject_lowmass.py 實際需要的依賴檔——
+# measure_overconfidence.py（第 39 行）、injection_recovery.py（第 40
+# 行，measure_overconfidence.py 自己也需要它），Kaggle 端因此在匯入
+# 階段就 ModuleNotFoundError，t0／t1 已確認以 error 收場（8.7 分鐘／
+# 0 秒，t2 待查）。原標籤已被 `logs/cloud_queue_done.txt` 記成終態
+# （error 也算終態，不會自動重試），換新標籤＋補依賴檔重派。
+#
+# **這批 _retry 標籤本身也補過兩次**（尚未真正派工前就發現、直接原地
+# 改，不是又加一批 _retry2）：第一次漏了 scripts/tools/checkpoint.py
+# 與 scripts/tools/preflight.py——用完整 AST 匯入分析＋比對歷史上真正
+# 成功過的 Kaggle 派工目錄（例如 kaggle_results/radial_r2_final_rep0/、
+# p6b_v2_t0_p09_retry/）才抓全，這兩個是 inject_lowmass.py／fit_real.py
+# 第 100+ 行左右**縮排在函式內部**的 `import checkpoint`／`import
+# preflight`，`grep "^import"` 這種只看行首的檢查會漏看。**同一次分析
+# 也發現一個假警報**：preflight.py 裡的 `import run_queue as rq` 在
+# `gate_b()` 函式內，但 `mandatory_gate()`（fit_real.py／inject_lowmass.py
+# 實際呼叫的那個）不會走到 `gate_b()`——只有 `preflight.py` 自己的 CLI
+# 入口（`--gate b`／`--all`）才會，Kaggle 端用不到，**不需要**帶
+# run_queue.py，歷史成功案例的派工目錄也證實沒有帶過。
+p6b_inject_lowmass_v2_t0_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_kaggle_t0|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|justinlan11
+p6b_inject_lowmass_v2_t1_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|teammate2
+p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|helmetalbert
 
 # mass_dependent_fbin（D14 衍生）：雙星比例是否隨質量變化，contrast
 # 掃 0.0/0.15/0.30（腳本內建，不用額外旗標指定），contrast=0 是必要
@@ -81,21 +93,27 @@ configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 4 --n-s
 # 3／4 等這批帳號有空再排。BP15 那半邊需要額外的隔離輸入檔（--members-file
 # 等三個旗標指到的檔案），已經列進第 4 欄讓 cloud_queue.py 一併同步。
 
-# 2026-08-26：上面六行也漏帶 fit_real.py 需要的 checkpoint.py
-# （`import checkpoint`，實際檔案在 scripts/tools/checkpoint.py，
-# kaggle_sync.py 的 build_payload() 支援子路徑、會攤平成
-# checkpoint.py 放進上傳包），bp20_formal_40k_rep0／rep1 已確認
-# 以同一個 ModuleNotFoundError 收場。換新標籤＋補依賴檔重派，
+# 2026-08-26：上面六行也漏帶 fit_real.py 需要的依賴檔——
+# checkpoint.py，bp20_formal_40k_rep0／rep1 已確認以
+# ModuleNotFoundError: checkpoint 收場。換新標籤＋補依賴檔重派，
 # 舊六行保留不動（歷史紀錄）。
-bp20_formal_40k_rep0_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py|false|account5
+#
+# **這批 _retry 標籤原地又補了一次**（詳細分析過程見上面 p6b 那段
+# 註解）：漏了 scripts/tools/preflight.py——fit_real.py 第 146 行左右
+# 縮排在函式內部的 `import preflight`，`mandatory_gate()` 一定會呼叫
+# 到。跟 checkpoint.py 一樣用 `kaggle_sync.py` 的 `build_payload()`
+# 子路徑支援攤平進上傳包；**不需要**額外帶 run_queue.py（preflight.py
+# 內部確實有 `import run_queue`，但在 `gate_b()`，`mandatory_gate()`
+# 不會呼叫到那支函式，只有 preflight.py 自己的 CLI `--gate b` 才會）。
+bp20_formal_40k_rep0_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
 bp20_formal_40k_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py|false|account5
-bp15_formal_40k_rep0_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep0 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py|false|account5
+bp15_formal_40k_rep0_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep0 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
 bp15_formal_40k_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep0 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz|false|account5
-bp20_formal_40k_rep1_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py|false|account6
+bp20_formal_40k_rep1_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
 bp20_formal_40k_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py|false|account6
-bp15_formal_40k_rep1_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep1 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py|false|account6
+bp15_formal_40k_rep1_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep1 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
 bp15_formal_40k_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep1 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz|false|account6
-bp20_formal_40k_rep2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py|false|account7
+bp20_formal_40k_rep2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
 bp20_formal_40k_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py|false|account7
-bp15_formal_40k_rep2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep2 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py|false|account7
+bp15_formal_40k_rep2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep2 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
 bp15_formal_40k_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep2 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz|false|account7
