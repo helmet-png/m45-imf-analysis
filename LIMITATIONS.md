@@ -465,6 +465,12 @@ dav 七個量在五個門檻下逐位元完全相同**——不只 alpha 三位�
 (1) 固定沿用 0.7 樣本迴歸出的 `selection.npz`，未隨門檻重新迴歸；
 (2) 精修深度是否足以分辨這個量級的差異，尚未交叉確認。
 
+`stars_per_cluster`（D2 問題陳述裡另一個掃描目標）已實際執行過可
+行性查證：repo 內沒有 `pyUPMASK/`、沒有 `prepared/` 輸入，
+`run_variant.py` 也還沒暴露對應的參數旗標，因此目前是「執行受阻、
+阻塞原因已驗證」，不是「沒有影響」，真正的敏感度數字仍待有
+pyUPMASK 環境的機器補上（見 `WORK_BOARD.md`）。
+
 ### D3 主序轉折點截斷對老星團會變成真限制（尚無認領工作）
 
 **問題**：`pipeline/step5_imf.main_sequence_mass_luminosity()` 只保留 G 星等

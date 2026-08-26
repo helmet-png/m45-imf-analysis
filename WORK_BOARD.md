@@ -121,7 +121,13 @@ nbody_prior_from_radial：N-body 模擬（第 5 步）的初步校準方向，�
 質量範圍與估計量）已經解決並寫進 analyze_alpha_r.py，下一步是真正
 跑一組圍繞 pilot 參數小幅擾動的模擬網格。pilot 本身（400 顆星、
 單次）耗時約需查 nbody_setup/ 下的紀錄，本表未附具體秒數；正式網格
-是 3–5 組小規模模擬，還不是文獻建議的 550–942 次全網格。
+是 3–5 組小規模模擬，還不是文獻建議的 550–942 次全網格。第 5 步
+「正式跑」的候選方案之一：仿 Hobart et al. 2026 的作法，用中等規模
+模擬網格（幾十到百來次，不需要他們的 550–942 次）訓練一個機器學習
+模擬器（例如 scikit-learn 的 GaussianProcessRegressor），再用既有的
+emcee 或 HMC 套件抽初始條件的後驗分布，取代暴力網格搜尋——這個做法
+可行性（訓練資料要多少組模擬才夠、模擬器預測誤差多大）還沒驗證過，
+只是優先評估的候選方案，不是定案。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
@@ -153,17 +159,20 @@ MIST-DR2）放進同一張比較表。BHAC15 只涵蓋到 0.015–1.4 M_sun，�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| stars_per_cluster_sensitivity（D2） | 尚未進行 | 指派時間：2026-08-25 | pyUPMASK 每群星數（`stars_per_cluster`）掃描；需要 pyUPMASK/ 環境（這台機器沒有） | 可行性查證結果（無環境時誠實回報做不到，不編造數字）；有環境的機器才能真的量出敏感度數字 |
+| stars_per_cluster_sensitivity（D2） | 尚未進行 | 指派時間：2026-08-25 | pyUPMASK 每群星數（`stars_per_cluster`）掃描 | 可行性已查證受阻；有 pyUPMASK 環境的機器才能真的量出敏感度數字 |
 
 stars_per_cluster_sensitivity：D2 剩下的另一個掃描目標——
 `stars_per_cluster` 需要真的重跑 pyUPMASK 聚類，不是像
 membership_threshold 那樣重套門檻就好（membership_threshold 已測完
-五點，見 WORK_BOARD_DONE.md）。這台機器沒有 pyUPMASK/ 環境，腳本
-（sensitivity_sweep.py --target stars_per_cluster）會誠實回報做不到、
-不編造數字，留給有 pyUPMASK 環境的人或機器認領。D2 問題陳述裡列的
-其餘設定（pca_dims、clustering_method、inner_loop_runs、
-hess_color_range／hess_mag_range、min_flux_snr_bp）也都還沒做過敏感度
-測試，同樣待認領，見 LIMITATIONS.md D2。
+五點，見 WORK_BOARD_DONE.md）。可行性查證已經實際執行過並確認受阻：
+repo 內沒有 `pyUPMASK/`、沒有 `prepared/` 輸入，`run_variant.py` 也
+還沒暴露對應的參數旗標（可行性查證本身已完成，見
+WORK_BOARD_DONE.md，過程中順手修好一個無 SciPy 環境時可行性模式
+會在檢查前就崩潰的問題）。真正的敏感度數字仍待有 pyUPMASK 環境的人
+或機器補齊三項依賴後才能測。D2 問題陳述裡列的其餘設定（pca_dims、
+clustering_method、inner_loop_runs、hess_color_range／
+hess_mag_range、min_flux_snr_bp）也都還沒做過敏感度測試，同樣待
+認領，見 LIMITATIONS.md D2。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
@@ -204,8 +213,15 @@ configCD_real_data_compare：目前「alpha 不受 dav 貼牆位置污染」只�
 注入回收的合成資料上驗證過，真實資料從沒直接比較過 config C 跟 D。
 指令：fit_real.py --configs C,D --repeats 5（--repeats 比照既有
 頭條設定）。做法是用真實資料各跑一次，比較 alpha 中心值與統計誤差
-的差距是否遠小於合併標準誤。耗時未查證，量級與同類 fit_real.py
-全量跑相當。
+的差距是否遠小於合併標準誤。本機曾嘗試跑這組（config C 完成 2/5
+次重複後，因單次耗時從 8.1 小時拉長到 10+ 小時、且本機已停用計算
+佇列，手動中止——這 2 次部分結果留在
+results/fit_real_d10_cd_compare.npz，非正式數字，不能引用）。正式
+版本已排進 cloud_queue.txt 交給 gcp1 執行，但排在佇列較後面，預計
+要數天才輪到；認領前注意這組佇列項目目前沒有帶 --tag，輸出路徑
+跟本機殘留的部分結果檔同名，執行前建議先確認會不會互相覆寫、或
+先把本機殘檔搬開（同類問題 PR #126 修過一次）。耗時未查證，量級與
+同類 fit_real.py 全量跑相當。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
@@ -242,7 +258,11 @@ praesepe_pr11_close_out：整條多星團校驗軸（Praesepe、Coma Ber）的
 為 null 會崩潰）的修法目前只存在於 PR #11 分支，還沒合併進 main。
 需要實際重跑 Praesepe 的 Tier1＋Tier2 驗證確認修法有效（不能只看
 程式碼），然後合併；NGC 3532 可以標記為未驗證但不阻擋合併。合併後
-D8 才能在 LIMITATIONS.md 標記解決。耗時未查證。
+D8 才能在 LIMITATIONS.md 標記解決。交出的 Tier1／Tier2 數字要跟
+Hobart+2026（α_high PDMF 2.53）、Pang+2024（1.92±0.10）、
+Khalaj & Baumgardt (2013) 做過口徑對照，這是驗收標準的一部分。
+規模較大，建議排到 x64 協作機、Kaggle 或雲算力，不要排進本機
+queue.txt。耗時未查證。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
@@ -258,7 +278,13 @@ NGC 3532／Praesepe 用過的同一套腳本）。前置阻擋條件已收斂成
 et al. (2019) 兩篇原文當基準線——Tang et al. 已核對完成（α=0.79±0.16，
 0.25–2.51 M☉，不能直接跟本專案頭條 alpha 比較），Kraus & Hillenbrand
 還沒查證（先前收到的 PDF 抓錯論文，需要使用者重新提供正確那篇：
-The Astronomical Journal, 134, 2340）。耗時未查證。
+The Astronomical Journal, 134, 2340）。動力學年齡大機率會觸發
+PDMF_TO_IMF_PLAN.md 第八節的 Tier 2（需要動力學校正），起跑前先粗算
+一次 τ = age / t_rh 確認。交出的誤差預算表要跟這兩篇原文逐項對齊
+質量範圍、樣本定義、完整度修正、聯星處理、MF 定義（system 還是
+stellar，見 D14）後才能比較 alpha，不能直接並排不同口徑的數字。
+規模較大，建議排到 x64 協作機、Kaggle 或雲算力，不要排進本機
+queue.txt。耗時未查證。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|

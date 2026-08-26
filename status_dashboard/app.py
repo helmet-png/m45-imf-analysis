@@ -1,0 +1,1018 @@
+# -*- coding: utf-8 -*-
+"""M45 IMF 專案主控板：整合傳統法／前向模型／PDMF→IMF／穩健性診斷四大類
+的「哪個步驟底下有哪些程式、程式在幹嘛、現在跑到哪」，取代原本要翻十幾份
+`.md` 文件或一直口頭問 Claude 才能拼出全貌的做法。
+
+**設計原則（跟使用者一起定案，2026-08-24）**：
+1. 形式選輕量本地網頁，沿用這個使用者其他專案一貫的
+   `py app.py → http://localhost:PORT` 模式，不新增框架依賴——內建的
+   `http.server` 就夠用，沒有表單提交、沒有需要框架處理的東西。
+2. 每次瀏覽器整理頁面，都會對「正在跑」的工作做一次即時探測（重用
+   `cloud_queue.py` 的 `probe_slot()`），换取最準確的即時狀態；15 秒內
+   重複整理的話沿用快取，不是為了打折這個決策，只是防止手滑連點 F5
+   洗爆 worker。
+3. 「階段 → 步驟 → 腳本」的對照表（見 stage_map.py）是手動維護的——這個
+   專案沒有任何機器可讀的來源能自動生成傳統法／PDMF→IMF／診斷類的分類
+   結構（前向模型 5 步勉強可以從 config.toml 的區段名稱對照，但也沒有
+   全自動化，第一版先手動建好）。新增任務或腳本要記得回來
+   `stage_map.py` 加一筆，這是本設計已知、刻意接受的維護成本，不是
+   忘了做。
+
+**已知的路徑落差**：`cloud_queue.py`／`ssh_sync.py` 已經 merge 進這個
+repo（PR #121），但目前活著在跑的派工器行程工作目錄還是
+`m45_cloud_workers_wt` worktree，`cloud_queue.txt`／
+`logs/cloud_queue_done.txt`／`logs/cloud_queue.lock` 這些檔案只存在那裡。
+`CLOUD_QUEUE_ROOT` 這個常數就是為了這個落差而存在——等使用者把 worktree
+收斂回 main，把這一行改成指向 `REPO_ROOT` 即可，不用動其他程式碼
+（`cloud_queue.py` 自己的路徑常數是用它自己的 `__file__` 位置算出來的）。
+
+用法：
+    py app.py
+瀏覽器開 http://localhost:8866/
+"""
+from __future__ import annotations
+
+import ast
+import html
+import os
+import shlex
+import subprocess
+import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from datetime import datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Callable
+
+HERE = Path(__file__).resolve().parent
+
+# 桌面捷徑用 pyw（pythonw.exe）完全隱藏啟動（見這個使用者的
+# desktop-shortcut-preference 慣例）——pyw 底下 sys.stdout/stderr 是
+# None，任何 print()／traceback 都會直接炸掉整個伺服器。這裡統一轉存到
+# 一個 log 檔，不用在每個 print() 呼叫前面各自加 `if sys.stdout:` 判斷。
+if sys.stdout is None:
+    _log_f = open(HERE / "dashboard_console.log", "a",
+                 encoding="utf-8", buffering=1)
+    sys.stdout = _log_f
+    sys.stderr = _log_f
+
+REPO_ROOT = HERE.parent
+# 已知的路徑落差（見檔頭說明）：cloud_queue.py 已經 merge 進這個 repo，
+# 但目前活著在跑的派工器工作目錄還是另一個 worktree。**不能硬編死路徑**
+# （2026-08-25 CodeRabbit review：原本寫死作者本機的絕對路徑，換一台機器
+# checkout 就會 import 失敗，伺服器起不來，桌面捷徑也只會開一個連不上的
+# 網址）——改成環境變數，預設值是這個 repo 自己（多數情況下 worktree
+# 收斂回 main 之後就是這樣），沒設環境變數、且這個 repo 自己也沒有
+# cloud_queue.py 時才需要手動指定。啟動當下就驗證路徑對不對，錯了直接
+# 印清楚的錯誤訊息，不要等 import 失敗才留一串看不懂的 traceback。
+CLOUD_QUEUE_ROOT = Path(os.environ.get("CLOUD_QUEUE_ROOT", str(REPO_ROOT)))
+if not (CLOUD_QUEUE_ROOT / "cloud_queue.py").is_file():
+    raise RuntimeError(
+        f"找不到 cloud_queue.py：{CLOUD_QUEUE_ROOT}\n"
+        "這台機器上 cloud_queue.py 的實際位置可能跟這個 repo 不同（例如"
+        "還沒把 worktree 收斂回 main），設定環境變數 CLOUD_QUEUE_ROOT "
+        "指到正確的目錄再重新啟動。")
+
+sys.path.insert(0, str(CLOUD_QUEUE_ROOT))
+import cloud_queue  # noqa: E402  重用它的 read_queue/read_done/probe_slot/鎖檔邏輯，不重寫
+import ssh_sync  # noqa: E402  _get_worker() 會把 remote_dir 的 ~ 展開成絕對路徑
+import ssh_workers  # noqa: E402  remote_run()
+
+sys.path.insert(0, str(HERE))
+from stage_map import STAGES  # noqa: E402
+
+PORT = 8866
+PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
+PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
+PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
+                         # 小於 ssh_sync.poll() 自己單次的 30 秒逾時，
+                         # 確保一個連不上的 worker 不會拖累整頁的回應
+                         # 時間（2026-08-25 CodeRabbit review）
+GIT_SYNC_TIMEOUT_S = 8   # git fetch/pull 單次逾時；離線時最多讓頁面
+                         # 多等這麼久，不要無限卡住
+_probe_cache: dict[str, tuple[float, dict]] = {}
+_restart_pending = False  # 見 sync_repo_from_github()／_self_restart()
+
+
+# ==================================================================
+# 資料層
+# ==================================================================
+
+def read_docstring(rel_path: str) -> str:
+    """讀一支腳本檔頭的 module docstring，原文照搬，不重寫一份說明。"""
+    path = REPO_ROOT / rel_path
+    if not path.exists():
+        return f"（找不到檔案，路徑可能已經搬動：{rel_path}）"
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError as e:
+        return f"（讀取失敗，語法錯誤：{e}）"
+    doc = ast.get_docstring(tree)
+    return doc or "（這支腳本沒有檔頭說明）"
+
+
+def parse_cloud_done() -> dict[str, dict]:
+    """{label: {status, secs, worker, when}}，來自
+    cloud_queue.py 的 `logs/cloud_queue_done.txt`（5 欄，含 worker）。
+    同一 label 多筆時取最後一筆（append-only，最新的在最後）。"""
+    records: dict[str, dict] = {}
+    if cloud_queue.DONE.exists():
+        for line in cloud_queue.DONE.read_text(encoding="utf-8").splitlines():
+            parts = line.split("\t")
+            if len(parts) < 5:
+                continue
+            label, status, secs, worker, when = parts[:5]
+            records[label] = {"status": status, "secs": secs,
+                              "worker": worker, "when": when}
+    return records
+
+
+def parse_local_done() -> dict[str, dict]:
+    """{label: {status, secs, when}}，來自本機（已停用的）`run_queue.py`
+    留下的 `logs/queue_done.txt`（4 欄，沒有 worker 欄）。"""
+    records: dict[str, dict] = {}
+    path = REPO_ROOT / "logs" / "queue_done.txt"
+    if path.exists():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            parts = line.split("\t")
+            if len(parts) < 4:
+                continue
+            label, status, secs, when = parts[:4]
+            records[label] = {"status": status, "secs": secs, "when": when}
+    return records
+
+
+def dispatcher_alive() -> tuple[bool, int | None]:
+    """跟 restart_queue_on_boot.ps1 同一套判準：讀鎖檔 PID，查行程還活不活。"""
+    if not cloud_queue.LOCK.exists():
+        return False, None
+    try:
+        pid = int(cloud_queue.LOCK.read_text().strip())
+    except (ValueError, OSError):
+        return False, None
+    alive = cloud_queue._pid_alive(pid)
+    return bool(alive), pid
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    """呼叫 git.exe。**一定要帶 `creationflags=CREATE_NO_WINDOW`**：這台
+    機器上這個坑已經在 `ssh_workers.py` 的 `remote_run()` 踩過一次
+    （2026-08-26，見那支檔案的說明）——`sync_repo_from_github()` 每次
+    整理頁面都連續呼叫這支好幾次（fetch／rev-list／status／有時候還有
+    pull），伺服器又是用 `pyw`（沒有主控台）跑的，沒有這個旗標的話
+    Windows 會幫每一次呼叫各跳一個 git.exe 主控台視窗再消失，變成
+    使用者桌面上一串連續閃爍的黑視窗。"""
+    return subprocess.run(["git", "-C", str(REPO_ROOT), *args],
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=GIT_SYNC_TIMEOUT_S,
+                          creationflags=subprocess.CREATE_NO_WINDOW)
+
+
+def sync_repo_from_github() -> dict:
+    """每次整理頁面都嘗試把這個 repo 從 `origin/main` 同步到最新——別人
+    （或別的 session）push 新程式碼、改 docstring、加新腳本之後，不用
+    手動 `git pull`，重新整理主控板就看得到（2026-08-25 使用者要求）。
+
+    跟 `cloud_queue.py` 的 `sync_queue_file()` 同一個精神：安全第一，
+    失敗就跳過用本機現有內容，不讓網路問題擋住整頁。
+
+    **只有「目前在 main 分支、且沒有任何未提交的修改」才真的執行
+    `git pull --ff-only`**：這個 repo 是多個 agent／多個 session共用的
+    工作目錄（見 CONTRIBUTING.md），常常有人正在某個 feature 分支上做
+    一半的事——貿然自動 pull 可能把別人的未提交修改弄丟，或在錯的分支
+    上硬套 main 的內容。條件不滿足時只回報「落後幾個 commit」，不動手，
+    讓使用者自己判斷要不要手動同步。
+
+    `self_updated` 這個欄位特別標記「這次同步有沒有動到
+    `status_dashboard/` 自己的程式碼」——`app.py`／`stage_map.py` 是
+    Python 模組，一旦匯入就固定在記憶體裡，改了檔案不會自動重新匯入，
+    要真的重啟這個行程才會套用新版（見 `_self_restart()`）。"""
+    global _restart_pending
+    result = {"synced": False, "ahead": 0, "behind": 0, "branch": None,
+             "dirty": None, "error": None, "self_updated": False}
+    try:
+        result["branch"] = _git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+
+        fetch = _git("fetch", "origin", "main")
+        if fetch.returncode != 0:
+            result["error"] = f"git fetch 失敗：{fetch.stderr.strip()[:200]}"
+            return result
+
+        counts = _git("rev-list", "--left-right", "--count", "HEAD...origin/main")
+        if counts.returncode == 0 and counts.stdout.split():
+            ahead, behind = counts.stdout.split()
+            result["ahead"], result["behind"] = int(ahead), int(behind)
+
+        result["dirty"] = bool(_git("status", "--porcelain").stdout.strip())
+
+        if (result["branch"] == "main" and not result["dirty"]
+                and result["behind"] > 0):
+            old_head = _git("rev-parse", "HEAD").stdout.strip()
+            pull = _git("pull", "--ff-only", "origin", "main")
+            if pull.returncode == 0:
+                result["synced"] = True
+                result["behind"] = 0
+                changed = _git("diff", "--name-only", old_head, "HEAD",
+                               "--", "status_dashboard")
+                result["self_updated"] = bool(changed.stdout.strip())
+                if result["self_updated"]:
+                    _restart_pending = True
+            else:
+                result["error"] = f"git pull 失敗：{pull.stderr.strip()[:200]}"
+    except subprocess.TimeoutExpired:
+        result["error"] = "git 操作逾時（可能沒有網路）"
+    except Exception as e:  # noqa: BLE001 — 同步失敗不能讓整頁掛掉
+        result["error"] = str(e)
+    return result
+
+
+def _self_restart() -> None:
+    """用新的行程重啟整支程式，讓 `git pull` 剛拉下來的
+    `status_dashboard/` 新程式碼真的生效，然後結束目前這份（同一個
+    Python 行程沒辦法重新匯入已經匯入過的模組）。用背景執行緒延遲一下
+    才動手，確保目前這次 HTTP 回應已經送出去給瀏覽器。新行程啟動時
+    `main()` 的 `_bind_server()` 有重試，容忍舊行程還沒真正放掉連接埠
+    的短暫空窗。"""
+    def _do_restart() -> None:
+        time.sleep(0.5)
+        print("偵測到主控板程式碼更新，重新啟動…", flush=True)
+        subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
+                         creationflags=subprocess.CREATE_NO_WINDOW)
+        os._exit(0)
+    threading.Thread(target=_do_restart, daemon=True).start()
+
+
+def _format_timedelta(td: timedelta) -> str:
+    total = int(td.total_seconds())
+    if total < 0:
+        return "未知（時間戳異常）"
+    h, rem = divmod(total, 3600)
+    m, _ = divmod(rem, 60)
+    return f"{h} 小時 {m} 分"
+
+
+def _ssh_elapsed(worker: str, label: str) -> str | None:
+    """讀遠端 `results/.start_<label>` 標記檔的 mtime 算已耗時（這個標記檔
+    本來是 ssh_sync.py 的 pull() 用來分辨新結果的，見該檔案說明，這裡借用
+    同一個檔案取得帶日期的正確開始時間——本機 log 只印 HH:MM:SS 沒有日期，
+    沒辦法用來算耗時）。連不上、逾時、或標記檔還沒建立就回傳 None，畫面
+    上顯示「未知」，不硬湊數字。
+
+    **一定要用 `ssh_sync._get_worker()`，不能直接用
+    `ssh_workers.load_workers()`**：後者的 `remote_dir` 可能是 `~/...`
+    原樣沒展開，`shlex.quote()` 包成單引號後 `~` 不會被 shell 展開，
+    `cd '~/m45_membership'` 會直接找不到目錄失敗（這個坑 ssh_sync.py
+    自己的 `_expand_tilde()` 已經踩過、寫了很長的說明，這裡沿用同一個
+    解法，不是重新發明）。"""
+    try:
+        w = ssh_sync._get_worker(worker)
+    except Exception:  # noqa: BLE001 — worker 沒登記之類，優雅退回未知
+        return None
+    cmd = (f"cd {shlex.quote(w['remote_dir'])} 2>/dev/null && "
+          f"stat -c %Y {shlex.quote('results/.start_' + label)} 2>/dev/null")
+    try:
+        r = ssh_workers.remote_run(w, cmd, timeout=15)
+    except subprocess.TimeoutExpired:
+        return None
+    out = r.stdout.strip()
+    if not out.isdigit():
+        return None
+    started = datetime.fromtimestamp(int(out))
+    return _format_timedelta(datetime.now() - started)
+
+
+def _ssh_ping(worker: str) -> dict:
+    """單純確認一台 SSH worker（VM）本身連不連得上，不管有沒有工作在
+    跑——雲端服務視角關心的是「這台機器是不是真的醒著」，跟步驟視角
+    關心的「這個工作跑到哪」是兩個不同的問題（見『雲端服務』頁）。"""
+    try:
+        w = ssh_sync._get_worker(worker)
+    except Exception as e:  # noqa: BLE001 — worker 沒登記之類
+        return {"reachable": False, "error": str(e)}
+    try:
+        r = ssh_workers.remote_run(w, "echo ok", timeout=10)
+    except subprocess.TimeoutExpired:
+        return {"reachable": False, "error": "連線逾時"}
+    if r.returncode == 0 and r.stdout.strip() == "ok":
+        return {"reachable": True}
+    return {"reachable": False,
+           "error": (r.stderr.strip() or f"returncode={r.returncode}")[:200]}
+
+
+def probe_live(worker: str, kind: str, item: dict) -> dict:
+    """即時探測一個「宣稱正在跑」的工作。15 秒快取，防手滑連點洗爆
+    worker，不是要打折「每次整理都探測」這個決策。"""
+    label = item["label"]
+    now = time.time()
+    cached = _probe_cache.get(label)
+    if cached and now - cached[0] < PROBE_CACHE_TTL:
+        return cached[1]
+
+    result = {"status": "unknown", "elapsed": None, "error": None}
+    try:
+        slot = cloud_queue._kaggle_handle(worker, item) if kind == "kaggle" else {}
+        result["status"] = cloud_queue.probe_slot(worker, kind, item, slot)
+    except Exception as e:  # noqa: BLE001 — 探測失敗不能讓整頁掛掉，顯示錯誤就好
+        result["error"] = f"探測失敗：{e}"
+
+    if kind == "ssh" and result["status"] in ("running", "complete", "error"):
+        result["elapsed"] = _ssh_elapsed(worker, label)
+    # kind == "kaggle" 目前沒有對應的耗時來源（Kaggle 端沒有同一套標記檔
+    # 機制），已知限制，先留空不硬湊。
+
+    _probe_cache[label] = (now, result)
+    return result
+
+
+def _map_probe_state(probe_status: str) -> tuple[str, str | None]:
+    """即時探測回傳的字彙（running／complete／error／cancelled／missing／
+    unknown）對應到畫面顯示的狀態分類。**只有 `running` 算真正「進行
+    中」**（2026-08-25 CodeRabbit review 訂正：原本不管探測回什麼一律顯示
+    「進行中」，一個工作明明已經 `missing`／`error` 也會被算進「進行中」
+    的統計數字裡）。`complete`／`error`／`cancelled` 代表遠端這輪其實已經
+    跑完了，但派工器還沒處理完 `mark_done()`（下載結果、寫 done log 需要
+    時間）——這裡不硬湊一筆「已完成」的假紀錄（沒有 secs／worker／when
+    這些欄位可用），跟 `missing`／`unknown` 一起歸類成「不確定」，原始
+    探測字串放進 note 讓人自己判斷。"""
+    if probe_status == "running":
+        return "live", None
+    if probe_status == "missing":
+        return "pending", "遠端目前沒有這個工作的痕跡（可能還沒真的啟動）"
+    return "unknown", f"即時探測回傳「{probe_status}」，派工器可能還沒處理完"
+
+
+def classify_label(label: str, cloud_items: dict, cloud_done: dict,
+                   local_done: dict, cloud_workers: dict) -> dict:
+    """把一個 queue_label 解析成畫面要顯示的狀態字典，或者（需要即時
+    探測時）回傳一個帶 `_probe: True` 的標記字典。優先順序：雲端終態 →
+    本機終態（已停用但保留歷史）→ 雲端佇列中（可能需要即時探測）→
+    完全找不到。**不牽涉網路**——即時探測的部分特意留給呼叫端
+    （`_run_probes()`）集中處理，才能做有上限的併發＋整體時間預算，
+    不要每個 label 各自序列化等 SSH 逾時（2026-08-25 CodeRabbit review）。
+    """
+    rec = cloud_done.get(label)
+    if rec and rec["status"] != "push_failed":
+        return {"state": "done", "source": "雲端", **rec}
+
+    rec = local_done.get(label)
+    if rec and rec["status"] not in ("stalled_giveup", "preflight_fail"):
+        return {"state": "done", "source": "本機（已停用）", **rec}
+
+    item = cloud_items.get(label)
+    if not item:
+        return {"state": "unknown", "note": "沒有排進目前的佇列，也沒有執行紀錄"}
+
+    worker = item["worker"]
+    if not worker:
+        return {"state": "pending", "note": "已排進佇列，尚未指定 worker"}
+    kind = cloud_workers.get(worker)
+    if not kind:
+        return {"state": "pending", "note": f"worker「{worker}」未登記"}
+    return {"_probe": True, "worker": worker, "kind": kind, "item": item}
+
+
+def _run_concurrent(fns: dict[str, Callable[[], dict]],
+                    deadline_s: float = PROBE_DEADLINE_S) -> dict[str, dict]:
+    """通用的「有上限併發＋整體時間預算」執行器：`fns` 是
+    {key: 零參數 callable}，每個都回傳一個 dict。時間到了還沒回來的 key
+    補一筆 `{"status": "unknown", "error": "逾時"}`，不讓任何一次外部
+    呼叫（SSH／Kaggle API）卡住整頁的回應時間（2026-08-25 CodeRabbit
+    review：原本是逐一同步呼叫，同一個不可達 worker 上排了好幾個標籤的
+    話，每個都要各自等 `ssh_sync.poll()` 自己的 30 秒逾時，疊起來要等
+    好幾分鐘）。工作狀態的即時探測（`probe_live()`）、閒置 worker 的
+    連線探測（`_ssh_ping()`）共用這支，不各自重寫一份併發邏輯。"""
+    results: dict[str, dict] = {}
+    if not fns:
+        return results
+
+    pool = ThreadPoolExecutor(max_workers=PROBE_MAX_WORKERS)
+    futures = {pool.submit(fn): key for key, fn in fns.items()}
+    deadline = time.monotonic() + deadline_s
+    try:
+        for fut in as_completed(futures, timeout=max(0.0, deadline - time.monotonic())):
+            key = futures[fut]
+            try:
+                results[key] = fut.result()
+            except Exception as e:  # noqa: BLE001 — 單一呼叫炸掉不能拖垮其他的
+                results[key] = {"status": "unknown", "error": str(e)}
+    except FutureTimeoutError:
+        pass  # 整體時間預算到了，剩下沒回來的在下面補「逾時」
+    finally:
+        # 不等還沒做完的執行緒——它們多半卡在 SSH 自己的逾時裡，讓它們
+        # 自然結束即可，不影響這次頁面已經要回應了；cancel_futures 只能
+        # 取消「還沒真的開始跑」的，正在跑的 SSH 呼叫沒辦法從外面強制
+        # 中斷。
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    for key in fns:
+        if key not in results:
+            results[key] = {"status": "unknown",
+                            "error": f"整理逾時（超過 {deadline_s:.0f} 秒）"}
+    return results
+
+
+def _probe_fns(to_probe: dict[str, dict]) -> dict[str, Callable[[], dict]]:
+    """把 `to_probe`（label -> {worker, kind, item}）轉成 `_run_concurrent()`
+    要的 {key: 零參數 callable}，不在這裡實際執行——拆出來是為了讓呼叫端
+    可以把這批 callable 跟其他批次（例如 `_ssh_ping()`）合併進同一次
+    `_run_concurrent()`，共用同一份時間預算（見 `gather_worker_status()`
+    的說明）。"""
+    return {label: (lambda info=info: probe_live(info["worker"], info["kind"], info["item"]))
+           for label, info in to_probe.items()}
+
+
+def _post_process_probes(to_probe: dict[str, dict], raw: dict[str, dict]) -> dict[str, dict]:
+    """把 `_probe_fns()` 執行完的原始結果，補上 `_map_probe_state()` 分類
+    後的顯示用欄位。"""
+    results = {}
+    for label, info in to_probe.items():
+        live = raw.get(label, {"status": "unknown", "error": "沒有探測結果"})
+        live.setdefault("elapsed", None)
+        state, note = _map_probe_state(live.get("status", "unknown"))
+        out = {"state": state, "worker": info["worker"], "kind": info["kind"], **live}
+        if note:
+            out["note"] = note
+        results[label] = out
+    return results
+
+
+def _run_probes(to_probe: dict[str, dict]) -> dict[str, dict]:
+    """對 `to_probe`（label -> {worker, kind, item}）裡的每個標籤做即時
+    探測，套用 `_run_concurrent()` 的併發＋整體時間預算。"""
+    if not to_probe:
+        return {}
+    raw = _run_concurrent(_probe_fns(to_probe))
+    return _post_process_probes(to_probe, raw)
+
+
+def gather_status() -> dict:
+    cloud_workers = cloud_queue.load_all_workers()
+    cloud_items = {it["label"]: it for it in cloud_queue.read_queue()}
+    cloud_done = parse_cloud_done()
+    local_done = parse_local_done()
+    alive, pid = dispatcher_alive()
+
+    all_labels = set()
+    for stage in STAGES:
+        for step in stage["steps"]:
+            all_labels.update(step.get("queue_labels", []))
+
+    label_status: dict[str, dict] = {}
+    to_probe: dict[str, dict] = {}
+    for label in all_labels:
+        result = classify_label(label, cloud_items, cloud_done, local_done,
+                                cloud_workers)
+        if result.get("_probe"):
+            to_probe[label] = result
+        else:
+            label_status[label] = result
+    label_status.update(_run_probes(to_probe))
+
+    return {
+        "alive": alive, "pid": pid,
+        "cloud_workers": cloud_workers, "cloud_items": cloud_items,
+        "cloud_done": cloud_done, "label_status": label_status,
+    }
+
+
+def gather_worker_status() -> dict:
+    """以雲端服務（worker）為單位，不是以步驟為單位——單純回答「這個
+    worker 現在是不是真的在跑」（2026-08-25 使用者要求新增的第二種
+    介面）。跟 `gather_status()` 是同一批來源資料的另一種切法，不重複
+    定義佇列格式，但因為關心的問題不同，即時探測的對象也不同：這裡
+    探測的是「這個 worker 上排定的第一個未完成 label」，`gather_status()`
+    探測的是「stage_map.py 裡列出的每個 label」——兩邊在同一個 worker
+    同時只有一個槽位在跑的前提下通常會對到同一個工作，但這支函式就算
+    stage_map.py 完全沒收錄某個 label，也照樣看得到。"""
+    cloud_workers = cloud_queue.load_all_workers()
+    cloud_items = {it["label"]: it for it in cloud_queue.read_queue()}
+    cloud_done = parse_cloud_done()
+    local_done = parse_local_done()
+
+    def _unfinished(label: str) -> bool:
+        rec = cloud_done.get(label)
+        if rec and rec["status"] != "push_failed":
+            return False
+        rec = local_done.get(label)
+        if rec and rec["status"] not in ("stalled_giveup", "preflight_fail"):
+            return False
+        return True
+
+    # 一個 worker 同時只會真的跑一個槽位（cloud_queue.py 的槽位式併發
+    # 設計），這裡只取排在佇列檔裡第一個還沒完成的 label 當代表。
+    assigned: dict[str, dict] = {}
+    for label, item in cloud_items.items():
+        worker = item["worker"]
+        if worker and worker not in assigned and _unfinished(label):
+            assigned[worker] = item
+
+    to_probe = {name: {"worker": name, "kind": kind, "item": assigned[name]}
+               for name, kind in cloud_workers.items() if name in assigned}
+    idle_ssh = [name for name, kind in cloud_workers.items()
+               if kind == "ssh" and name not in assigned]
+
+    # 已派工的 worker（要探測工作狀態）跟閒置的 SSH worker（只要 ping）
+    # 併成同一次 _run_concurrent() 呼叫，共用同一份 PROBE_DEADLINE_S——
+    # 原本分兩次呼叫，各自都用完整預算，最壞情況（兩邊都連不上）整頁
+    # 要等兩倍時間才會回應（2026-08-25 CodeRabbit review）。用字首區分
+    # 兩批 key，執行完再拆開各自後處理。
+    combined_fns: dict[str, Callable[[], dict]] = {}
+    combined_fns.update({f"probe:{k}": fn for k, fn in _probe_fns(to_probe).items()})
+    combined_fns.update({f"ping:{name}": (lambda n=name: _ssh_ping(n))
+                         for name in idle_ssh})
+    raw = _run_concurrent(combined_fns) if combined_fns else {}
+
+    raw_probe = {name: raw[f"probe:{name}"] for name in to_probe
+                if f"probe:{name}" in raw}
+    ping_results = {name: raw[f"ping:{name}"] for name in idle_ssh
+                    if f"ping:{name}" in raw}
+    probe_results = _post_process_probes(to_probe, raw_probe)
+
+    workers_out = []
+    for name, kind in sorted(cloud_workers.items()):
+        if name in probe_results:
+            r = probe_results[name]
+            workers_out.append({"name": name, "kind": kind, "assigned": True,
+                                "label": assigned[name]["label"], **r})
+        elif name in ping_results:
+            p = ping_results[name]
+            # _run_concurrent() 逾時/例外時的補值只有 status/error，沒有
+            # reachable；不補的話 _worker_badge() 會落到「Kaggle 閒置」
+            # 那個分支，把連不上或探測逾時的機器顯示成正常閒置，剛好
+            # 蓋掉這個頁面本來要抓的問題（2026-08-25 CodeRabbit review）。
+            if "reachable" not in p:
+                p = {"reachable": False,
+                    "error": p.get("error", "連線探測未完成")}
+            workers_out.append({"name": name, "kind": kind, "assigned": False,
+                                **p})
+        else:
+            # Kaggle 帳號閒置時沒有常駐機器可以探測連線——Kaggle 是無伺服器
+            # 的 kernel 執行環境，沒有工作在跑就沒有東西可以 ping。
+            workers_out.append({"name": name, "kind": kind, "assigned": False,
+                                "reachable": None})
+    return {"workers": workers_out}
+
+
+# ==================================================================
+# HTML render（純 HTML + <details>/<summary> 折疊，不用 JS）
+# ==================================================================
+
+STATE_LABEL = {
+    "done_ok": "已完成", "done_fail": "失敗", "live": "進行中",
+    "pending": "待派工", "unknown": "沒有紀錄",
+}
+
+
+def _status_badge(st: dict) -> str:
+    state = st["state"]
+    if state == "done":
+        ok = st.get("status") == "ok"
+        cls, text = ("ok", "已完成") if ok else ("fail", f"失敗（{st.get('status')}）")
+        detail = f"{st.get('secs', '?')}　worker={st.get('worker', st.get('source', '?'))}　{st.get('when', '')}"
+    elif state == "live":
+        cls = "live"
+        text = f"進行中（{st.get('status', 'unknown')}）"
+        bits = [f"worker={st.get('worker')}"]
+        if st.get("elapsed"):
+            bits.append(f"已耗時 {st['elapsed']}")
+        if st.get("error"):
+            bits.append(st["error"])
+        detail = "　".join(bits)
+    elif state == "pending":
+        cls, text, detail = "pending", "待派工", st.get("note", "")
+    else:
+        cls, text, detail = "unknown", "沒有紀錄", st.get("note", "")
+    return (f'<span class="badge {cls}">{html.escape(text)}</span>'
+           f'<span class="detail">{html.escape(detail)}</span>')
+
+
+def _vscode_uri(rel_path: str) -> str:
+    """組出 `vscode://file/` URI，點了直接在 VS Code 開啟這支腳本
+    （2026-08-25 使用者要求：不要在頁面內顯示原始碼，直接跳去編輯器，
+    比較貼近「順手可以改」的體感）。前提是這台機器裝了 VS Code 桌面版
+    ——標準安裝都會自動註冊這個協定，不需要額外設定；沒裝的話瀏覽器
+    會顯示「找不到處理這個連結的應用程式」，不是這支程式的錯誤。"""
+    abs_path = (REPO_ROOT / rel_path).resolve()
+    return "vscode://file/" + str(abs_path).replace("\\", "/")
+
+
+_BUCKET_ORDER = [
+    ("live", "live", "進行中"),
+    ("pending", "pending", "待派工"),
+    ("done_fail", "fail", "失敗"),
+    ("unknown", "unknown", "不確定"),
+    ("done_ok", "ok", "已完成"),
+]
+
+
+def _label_bucket(st: dict) -> str:
+    state = st["state"]
+    if state == "done":
+        return "done_ok" if st.get("status") == "ok" else "done_fail"
+    return state  # "live" / "pending" / "unknown"
+
+
+def _step_summary_badge(step: dict, label_status: dict) -> tuple[str, str] | None:
+    """把一個步驟底下所有 queue_labels 的狀態濃縮成一個徽章，給左側
+    導覽列用——優先順序：進行中 > 待派工 > 失敗 > 不確定 > 已完成，
+    只要有一個 label 在跑，這個步驟在導覽列就該亮起來，不用點進去才
+    看得到。沒有 queue_labels 的步驟（傳統法、PDMF→IMF 前幾步這種手動
+    或還沒排進佇列的）回傳 None，導覽上不掛徽章。"""
+    labels = step.get("queue_labels", [])
+    buckets = {_label_bucket(label_status[label]) for label in labels
+              if label in label_status}
+    if not buckets:
+        return None
+    for key, cls, text in _BUCKET_ORDER:
+        if key in buckets:
+            return cls, text
+    return None
+
+
+def _sync_banner(sync: dict) -> str:
+    """把 `sync_repo_from_github()` 的結果轉成頁面頂端的一行狀態說明——
+    （2026-08-25 使用者要求「以後新程式碼刷到 GitHub 要怎麼自動更新」）
+    誠實區分四種情況，不要讓「同步失敗」「沒同步（保護未提交的修改）」
+    「已經是最新」看起來像同一回事。"""
+    if sync.get("error"):
+        return (f'<p class="warn-text">跟 GitHub 同步失敗：'
+                f'{html.escape(sync["error"])}（沿用本機現有內容）</p>')
+    if sync.get("self_updated"):
+        return ('<p class="warn-text">已從 origin/main 拉到最新，其中'
+               '主控板自己的程式碼也有更新，即將自動重啟套用——這一輪'
+               '畫面可能還是舊版，幾秒後重新整理一次即可。</p>')
+    if sync.get("synced"):
+        return '<p class="note">剛從 origin/main 同步到最新。</p>'
+    if sync.get("behind"):
+        reason = "有未提交的修改" if sync.get("dirty") else f'不在 main（目前在 {sync.get("branch")}）'
+        return (f'<p class="note">本機落後 origin/main {sync["behind"]} 個'
+                f' commit，沒有自動同步（{reason}，怕弄丟正在做的東西）'
+                '——要看最新內容請自己手動 git pull。</p>')
+    return ""
+
+
+def render_html(status: dict, sync: dict | None = None) -> str:
+    cloud_items = status["cloud_items"]
+    cloud_done = status["cloud_done"]
+    label_status = status["label_status"]
+
+    done_ok = sum(1 for s in label_status.values()
+                 if s["state"] == "done" and s.get("status") == "ok")
+    done_fail = sum(1 for s in label_status.values()
+                    if s["state"] == "done" and s.get("status") != "ok")
+    live_n = sum(1 for s in label_status.values() if s["state"] == "live")
+    pending_n = sum(1 for s in label_status.values() if s["state"] == "pending")
+    unmatched_cloud = [lb for lb in cloud_items if lb not in label_status
+                       and lb not in cloud_done]
+
+    parts = []
+    parts.append(f"""<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<title>M45 IMF 專案主控板</title>
+<style>
+{_CSS}
+</style></head><body>
+<h1>M45 IMF 專案主控板</h1>
+{_NAV}
+<p class="sub">依步驟看——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
+（重新整理頁面 = 重新讀取所有來源檔案 + 跟 GitHub 同步 + 對進行中工作
+即時探測；點程式名稱在 VS Code 開啟；左側導覽只是跳到對應段落，
+右邊全部內容一次展開，不用逐層點開；左右欄寬度可以拖曳中間的分隔線
+調整）</p>
+{_sync_banner(sync or {})}
+
+<div class="summary">
+  <div class="pill {'alive' if status['alive'] else 'dead'}">
+    派工器：{'存活（PID ' + str(status['pid']) + '）' if status['alive'] else '沒有在跑'}
+  </div>
+  <div class="pill">已完成 {done_ok}</div>
+  <div class="pill {'warn' if done_fail else ''}">失敗 {done_fail}</div>
+  <div class="pill {'live' if live_n else ''}">進行中 {live_n}</div>
+  <div class="pill">待派工 {pending_n}</div>
+</div>
+""")
+
+    if unmatched_cloud:
+        parts.append('<p class="warn-text">cloud_queue.txt 裡有 '
+                     + html.escape(str(len(unmatched_cloud)))
+                     + ' 筆標籤沒對到 stage_map.py 的任何步驟（可能是還沒'
+                       '補進索引的新工作）：<code>'
+                     + html.escape(", ".join(unmatched_cloud)) + '</code></p>')
+
+    # 左側導覽（純錨點跳轉，不重新整理頁面）跟右側內容分開組，最後
+    # 再拼成 .layout 的兩欄——導覽列只負責「跳去哪」，實際內容全部
+    # 已經展開在右邊，符合「不用手動展開、盡量看到全部」的要求。
+    nav_parts = ['<nav class="tree" id="tree-pane">']
+    content_parts = ['<div class="content">']
+
+    for si, stage in enumerate(STAGES):
+        stage_id = f"stage-{si}"
+        nav_parts.append(f'<a class="tree-stage" href="#{stage_id}">'
+                         f'{html.escape(stage["name"])}</a><ul>')
+        content_parts.append(f'<section class="stage-block" id="{stage_id}">'
+                             f'<h2>{html.escape(stage["name"])}</h2>')
+
+        for ti, step in enumerate(stage["steps"]):
+            step_id = f"step-{si}-{ti}"
+            badge = _step_summary_badge(step, label_status)
+            badge_html = (f'<span class="badge {badge[0]} tree-badge">{badge[1]}</span>'
+                         if badge else "")
+            nav_parts.append(f'<li><a href="#{step_id}">'
+                             f'{html.escape(step["name"])}{badge_html}</a></li>')
+
+            content_parts.append(f'<article class="step-block" id="{step_id}">'
+                                 f'<h3>{html.escape(step["name"])}</h3>')
+            if step.get("note"):
+                content_parts.append(f'<p class="note">{html.escape(step["note"])}</p>')
+            for label in step.get("queue_labels", []):
+                st = label_status.get(label)
+                if st is None:
+                    continue
+                content_parts.append(
+                    f'<div class="status-row"><code>{html.escape(label)}</code>'
+                    f'{_status_badge(st)}</div>')
+            for script in step.get("scripts", []):
+                doc = read_docstring(script)
+                content_parts.append(
+                    '<div class="script-block">'
+                    f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
+                    f'<code>{html.escape(script)}</code> ↗</a>'
+                    '<details class="doc-details"><summary>說明</summary>'
+                    f'<pre class="doc">{html.escape(doc)}</pre></details></div>')
+            content_parts.append("</article>")
+
+        nav_parts.append("</ul>")
+        content_parts.append("</section>")
+
+    nav_parts.append("</nav>")
+    content_parts.append("</div>")
+
+    parts.append('<div class="layout" id="layout">')
+    parts.extend(nav_parts)
+    parts.append('<div class="resizer" id="resizer"></div>')
+    parts.extend(content_parts)
+    parts.append("</div>")
+
+    parts.append(_RESIZE_SCRIPT)
+    parts.append("</body></html>")
+    return "".join(parts)
+
+
+# 左右欄寬度可拖曳（2026-08-25 使用者要求，像 IDE 的側欄一樣）。純
+# vanilla JS，沒有外部依賴；寬度存 localStorage，下次整理頁面／換頁
+# 還記得（不然每次都要重拖一次，形同沒有這個功能）。這是整個主控板
+# 唯一用到 JS 的地方——拖曳互動沒辦法用純 HTML/CSS 做到，其餘所有
+# 「不用手動展開」的需求都還是靠伺服器端 render + <details>，能不用
+# JS 就不用。
+_RESIZE_SCRIPT = """
+<script>
+(function () {
+  var tree = document.getElementById("tree-pane");
+  var resizer = document.getElementById("resizer");
+  var layout = document.getElementById("layout");
+  if (!tree || !resizer || !layout) return;
+  var saved = localStorage.getItem("m45DashTreeWidth");
+  if (saved) tree.style.width = saved + "px";
+  var dragging = false;
+  resizer.addEventListener("mousedown", function () {
+    dragging = true;
+    document.body.style.userSelect = "none";
+  });
+  document.addEventListener("mousemove", function (e) {
+    if (!dragging) return;
+    var rect = layout.getBoundingClientRect();
+    var w = e.clientX - rect.left;
+    var min = 160, max = rect.width - 300;
+    if (w < min) w = min;
+    if (w > max) w = max;
+    tree.style.width = w + "px";
+  });
+  document.addEventListener("mouseup", function () {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.userSelect = "";
+    localStorage.setItem("m45DashTreeWidth", parseInt(tree.style.width, 10));
+  });
+})();
+</script>
+"""
+
+
+_NAV = ('<nav class="nav"><a href="/">依步驟看</a>'
+       '<a href="/workers">依雲端服務看</a></nav>')
+
+
+def _worker_badge(w: dict) -> str:
+    if w["assigned"]:
+        state = w["state"]
+        if state == "live":
+            cls, text = "live", f"執行中：{w['label']}"
+            bits = []
+            if w.get("elapsed"):
+                bits.append(f"已耗時 {w['elapsed']}")
+            if w.get("error"):
+                bits.append(w["error"])
+            detail = "　".join(bits)
+        else:
+            cls, text = "unknown", f"排定了 {w['label']}，但探測結果是「{w.get('status', '?')}」"
+            detail = w.get("note", w.get("error", ""))
+    elif w.get("reachable") is True:
+        cls, text, detail = "ok", "閒置中（機器連得上）", ""
+    elif w.get("reachable") is False:
+        cls, text, detail = "fail", "連不上", w.get("error", "")
+    else:
+        cls, text, detail = "pending", "閒置中", "Kaggle 沒有常駐機器，沒有工作時無法探測連線"
+    return (f'<span class="badge {cls}">{html.escape(text)}</span>'
+           f'<span class="detail">{html.escape(detail)}</span>')
+
+
+def render_workers_html(status: dict) -> str:
+    """以雲端服務（worker）為單位的第二種介面——單純回答「這個 worker
+    現在是不是真的在跑」，不是「哪個研究步驟做到哪」（見
+    `gather_worker_status()` 說明）。"""
+    workers = status["workers"]
+    running_n = sum(1 for w in workers if w["assigned"] and w.get("state") == "live")
+    reachable_n = sum(1 for w in workers if not w["assigned"] and w.get("reachable"))
+
+    parts = [f"""<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<title>M45 IMF 專案主控板 — 雲端服務</title>
+<style>
+{_CSS}
+</style></head><body>
+<h1>M45 IMF 專案主控板</h1>
+{_NAV}
+<p class="sub">依雲端服務看——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
+（每個 worker 即時探測：有排工作的查工作狀態，SSH 閒置機器單純
+ping 一下確認連得上；Kaggle 帳號閒置時沒有常駐機器可以探測）</p>
+
+<div class="summary">
+  <div class="pill {'live' if running_n else ''}">正在跑 {running_n}</div>
+  <div class="pill">閒置且連得上 {reachable_n}</div>
+  <div class="pill">worker 總數 {len(workers)}</div>
+</div>
+"""]
+
+    if not workers:
+        parts.append('<p class="note">沒有登記任何 worker'
+                     '（kaggle_accounts.json／ssh_workers.json 都是空的）。</p>')
+
+    for w in workers:
+        parts.append(
+            f'<div class="worker-row"><strong>{html.escape(w["name"])}</strong>'
+            f'<span class="kind">（{html.escape(w["kind"])}）</span>'
+            f'{_worker_badge(w)}</div>')
+
+    parts.append("</body></html>")
+    return "".join(parts)
+
+
+_CSS = """
+.nav { margin: 0.3em 0 1em; font-size: 0.9em; }
+.nav a { margin-right: 1em; }
+.worker-row { border: 1px solid #999; border-radius: 4px; padding: 0.6em 0.9em;
+             margin-bottom: 0.6em; }
+.worker-row .kind { color: #777; font-size: 0.85em; margin-right: 0.6em; }
+:root { color-scheme: light dark; }
+body { font-family: -apple-system, "Microsoft JhengHei", sans-serif;
+      max-width: 1400px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }
+h1 { font-size: 1.4em; margin-bottom: 0.2em; }
+.sub { color: #777; font-size: 0.85em; margin-top: 0; }
+.summary { display: flex; gap: 0.6em; flex-wrap: wrap; margin: 1em 0 1.5em; }
+.pill { border: 1px solid #888; border-radius: 3px; padding: 0.3em 0.7em;
+       font-size: 0.9em; }
+.pill.alive { border-color: #2a7; }
+.pill.dead { border-color: #c33; }
+.pill.warn { border-color: #c33; }
+.pill.live { border-color: #a70; }
+.warn-text { border: 1px solid #c33; padding: 0.5em 0.8em; font-size: 0.85em; }
+
+/* 左側導覽（純錨點跳轉）＋右側全展開內容，兩欄式版面
+   （2026-08-25 依使用者要求重做：原本巢狀 <details> 每層都要點開才
+   看得到下一層，改成右邊一次全部展開，左邊只是跳轉捷徑）。*/
+.layout { display: flex; align-items: flex-start; }
+.tree { flex: 0 0 auto; width: 260px; position: sticky; top: 1em;
+       max-height: calc(100vh - 2em); overflow-y: auto; font-size: 0.85em; }
+.tree-stage { display: block; font-weight: 600; margin-top: 1em;
+             text-decoration: none; }
+.tree-stage:first-child { margin-top: 0; }
+.tree ul { list-style: none; margin: 0.2em 0 0; padding-left: 0.8em; }
+.tree li { margin: 0.2em 0; }
+.tree li a { text-decoration: none; display: flex; align-items: baseline;
+            gap: 0.4em; }
+.tree-badge { font-size: 0.75em; padding: 0 0.4em; }
+/* 拖曳分隔線，寬度可調（2026-08-25 使用者要求，像 IDE 側欄一樣）——
+   純 CSS 只能做外觀，實際拖曳邏輯在 _RESIZE_SCRIPT 那段 JS。 */
+.resizer { flex: 0 0 auto; width: 6px; margin: 0 0.8em; cursor: col-resize;
+          background: rgba(128,128,128,0.15); border-radius: 3px;
+          align-self: stretch; }
+.resizer:hover { background: rgba(128,128,128,0.35); }
+.content { flex: 1 1 auto; min-width: 0; }
+
+.stage-block { border-top: 2px solid #999; padding-top: 0.6em; margin-top: 1.5em; }
+.stage-block:first-child { margin-top: 0; }
+.stage-block h2 { font-size: 1.15em; margin-bottom: 0.2em; }
+.step-block { border-left: 2px solid #ccc; margin: 1em 0 1em 0.3em;
+             padding: 0.2em 0 0.2em 0.9em; scroll-margin-top: 1em; }
+.step-block h3 { font-size: 1em; margin: 0 0 0.3em; }
+.note { font-size: 0.85em; color: #777; margin: 0.3em 0; }
+.status-row { font-size: 0.85em; margin: 0.2em 0; }
+.status-row code { margin-right: 0.5em; }
+.script-block { margin: 0.5em 0 0.5em 0.6em; }
+.script-link { font-size: 0.9em; text-decoration: none; }
+.script-link:hover { text-decoration: underline; }
+/* 說明（docstring）可收合，預設展開（2026-08-25 使用者要求）——
+   跟 stage/step 層不一樣：那兩層拿掉了折疊，這裡是特意留著，因為
+   docstring 常常很長，看不看得由使用者自己決定，不是一定要展開。 */
+.doc-details summary { cursor: pointer; font-size: 0.8em; color: #777;
+                       margin-top: 0.3em; }
+.doc { white-space: pre-wrap; font-size: 0.8em; background: rgba(128,128,128,0.08);
+      padding: 0.6em; border-radius: 3px; margin: 0.3em 0 0; }
+.badge { border-radius: 3px; padding: 0.05em 0.5em; font-size: 0.85em;
+        margin-right: 0.5em; }
+.badge.ok { background: rgba(34,170,102,0.2); }
+.badge.fail { background: rgba(204,51,51,0.2); }
+.badge.live { background: rgba(200,140,0,0.2); }
+.badge.pending { background: rgba(128,128,128,0.15); }
+.badge.unknown { background: rgba(128,128,128,0.1); }
+.detail { color: #777; font-size: 0.85em; }
+code { font-family: Consolas, monospace; }
+
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .tree { position: static; max-height: none; width: 100% !important; }
+  .resizer { display: none; }
+}
+"""
+
+
+# ==================================================================
+# 伺服器
+# ==================================================================
+
+# sync 只做一次、兩個路由共用——workers 頁不特別顯示同步狀態，但一樣
+# 從這次同步受益（資料層讀的是同一份 REPO_ROOT）。
+_ROUTES = {
+    "/": lambda sync: render_html(gather_status(), sync),
+    "/workers": lambda sync: render_workers_html(gather_worker_status()),
+}
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802 — 覆寫標準函式庫的命名慣例
+        route = _ROUTES.get(self.path)
+        if route is None:
+            self.send_response(404)
+            self.end_headers()
+            return
+        try:
+            sync = sync_repo_from_github()
+            body = route(sync).encode("utf-8")
+        except Exception as e:  # noqa: BLE001 — 任何未預期例外都不該讓伺服器整個掛掉
+            import traceback
+            traceback.print_exc()
+            body = (f"<pre>整理狀態時發生錯誤：\n{html.escape(str(e))}\n\n"
+                    "看主控台的完整 traceback。</pre>").encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        if _restart_pending:
+            _self_restart()
+
+    def log_message(self, fmt: str, *args) -> None:
+        print(f"[{datetime.now():%H:%M:%S}] " + fmt % args, flush=True)
+
+
+def _bind_server(retries: int = 10, delay: float = 0.5) -> ThreadingHTTPServer:
+    """自動重啟（見 `_self_restart()`）時，新行程可能在舊行程真正放掉
+    連接埠前就先啟動，短暫重試等它讓出來，而不是直接炸掉。"""
+    for attempt in range(retries):
+        try:
+            return ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        except OSError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+    raise RuntimeError("unreachable")  # pragma: no cover
+
+
+def main() -> None:
+    server = _bind_server()
+    url = f"http://127.0.0.1:{PORT}/"
+    print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
+    # 開瀏覽器交給桌面捷徑用的 launch_dashboard.vbs 負責（sh.Run 那行），
+    # 這裡不重複開，避免透過捷徑啟動時跳出兩個分頁。直接用
+    # `py app.py` 手動跑的話，自己貼網址開就好。
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
