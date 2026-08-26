@@ -1,26 +1,17 @@
 name: Append-only file check
 
-# 這是這個 repo 的第一個 CI workflow（2026-08-21 CodeRabbit review 建議
-# 新增）。範圍刻意縮到最小：只驗證 .gitattributes 標成 merge=union 的
-# 附加型清單檔沒有既有行被改掉或刪掉，不做其他檢查——.gitattributes
-# 裡已經寫明 union 合併策略不驗證這個契約本身，這支 workflow 補上那道
-# 驗證。
-#
-# **`WORK_BOARD_DONE.md` 也要列在這裡**（2026-08-23 CodeRabbit
-# review）：`scripts/tools/check_append_only.py` 把 `WORK_BOARD.md`／
-# `WORK_BOARD_DONE.md` 當同一組驗證（見該檔案開頭說明），但如果 PR
-# 只改了 `WORK_BOARD_DONE.md`（例如只搬完成項目、沒動 `WORK_BOARD.md`
-# 本身），少了這個路徑這個 workflow 完全不會觸發，append-only 契約
-# 就被繞過了——這裡的路徑清單要跟 check_append_only.py 的
-# APPEND_ONLY_GROUPS 保持同步。
+# 只驗證 .gitattributes 標成 merge=union 的附加型清單檔沒有既有行被
+# 改掉或刪掉，不做其他檢查——.gitattributes 裡已經寫明 union 合併策略
+# 不驗證這個契約本身，這支 workflow 補上那道驗證。這裡的路徑清單要跟
+# check_append_only.py 的 APPEND_ONLY_GROUPS 保持同步——目前只有
+# `results/RESULTS_LOG.md`，`WORK_BOARD.md`／`WORK_BOARD_DONE.md` 已
+# 不再是純附加型格式，不在這個 workflow 的觸發範圍內。
 
 on:
   pull_request:
     branches: [main]
     paths:
       - "results/RESULTS_LOG.md"
-      - "WORK_BOARD.md"
-      - "WORK_BOARD_DONE.md"
 
 # 這個 workflow 只需要讀取內容，不需要寫回任何東西（2026-08-21 CodeRabbit
 # review）——限到最小權限，且不要讓 checkout 把 token 寫進本機 git 設定：
