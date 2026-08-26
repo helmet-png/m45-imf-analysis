@@ -53,6 +53,16 @@ p6b_inject_lowmass_v2_t0|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --
 p6b_inject_lowmass_v2_t1|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1||false|teammate2
 p6b_inject_lowmass_v2_t2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2||false|helmetalbert
 
+# 2026-08-26：上面三行漏帶 inject_lowmass.py 實際需要的依賴檔
+# measure_overconfidence.py（`from measure_overconfidence import GRID`，
+# 見該腳本第 39 行），Kaggle 端因此在匯入階段就 ModuleNotFoundError，
+# t0／t1 已確認以 error 收場（8.7 分鐘／0 秒，t2 待查）。原標籤已被
+# `logs/cloud_queue_done.txt` 記成終態（error 也算終態，不會自動重試），
+# 換新標籤＋補上額外依賴檔重派，舊三行保留不動（歷史紀錄）。
+p6b_inject_lowmass_v2_t0_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_kaggle_t0|measure_overconfidence.py|false|justinlan11
+p6b_inject_lowmass_v2_t1_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1|measure_overconfidence.py|false|teammate2
+p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2|measure_overconfidence.py|false|helmetalbert
+
 # mass_dependent_fbin（D14 衍生）：雙星比例是否隨質量變化，contrast
 # 掃 0.0/0.15/0.30（腳本內建，不用額外旗標指定），contrast=0 是必要
 # 對照組，扣掉 C13 記錄的 -0.050 注入回收本身的偏差地板才能判讀。
