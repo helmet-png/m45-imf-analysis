@@ -766,18 +766,49 @@ def _render_formula(formulas: list[dict]) -> str:
 def _ref_url(ref: dict) -> str:
     """一筆文獻的連結。
 
-    **只用兩種一定不會指錯論文的連結形式**（這份資料要拿去科展，連結
-    指到錯的論文比沒有連結更糟）：
-      - 有 arXiv 編號的，直接連 arxiv.org/abs/<編號>，精確且可驗證；
-      - 其餘一律連 ADS 的**搜尋**網址，帶上作者/年份/期刊字串。搜尋頁
-        落地後由讀者自己確認是不是那一篇，不會出現「連結看起來正常、
-        點進去卻是另一篇論文」這種最難發現的錯誤。
-    刻意不自己拼 ADS bibcode——bibcode 拼錯會靜默地連到別篇論文。
+    **這份資料要拿去科展，連結指到錯的論文比沒有連結更糟**，所以只用
+    三種一定不會指錯的形式，優先序由上而下：
+
+    1. `arxiv`：直接連 arxiv.org/abs/<編號>。精確、可驗證，點進去就是
+       全文，可以直接跳到需要的章節。
+    2. `bibstem`＋`volume`＋`page`（＋`year`）：組一個**精確的 ADS 查詢**
+       （例如 bibstem:"MNRAS" volume:"322" page:"231" year:2001）。
+       這種查詢在天文文獻裡幾乎必然只命中一篇，等於直接落到那篇論文。
+    3. 都沒有時：退回用引用字串本身去 ADS 搜尋。
+
+    **刻意不自己拼 ADS bibcode**（例如 2001MNRAS.322..231K）：bibcode 是
+    19 個字元、靠位置對齊的編碼，少一個點就會靜默地連到**另一篇**論文
+    ——而且看起來完全正常，是最難被發現的一種錯。用查詢式換來的代價
+    只是多一次點擊，但保證不會指錯。
     """
     if ref.get("arxiv"):
         return f"https://arxiv.org/abs/{ref['arxiv']}"
+    if ref.get("bibstem") and ref.get("volume") and ref.get("page"):
+        # 精確查詢：期刊代號＋卷＋頁（＋年）在天文文獻裡幾乎必然只命中
+        # 一篇，等於直接落到那篇論文，但沒有拼錯 bibcode 的風險。
+        q = (f'bibstem:"{ref["bibstem"]}" volume:"{ref["volume"]}" '
+             f'page:"{ref["page"]}"')
+        if ref.get("year"):
+            q += f' year:{ref["year"]}'
+        return "https://ui.adsabs.harvard.edu/search/q=" + quote_plus(q)
     return ("https://ui.adsabs.harvard.edu/search/q="
             + quote_plus(ref["cite"]))
+
+
+GITHUB_REPO = "https://github.com/helmet-png/m45-imf-analysis"
+
+
+def _doc_url(rel_path: str, line: int | None = None) -> str:
+    """本專案自己文件的 GitHub 連結（可帶行號錨點）。
+
+    用 GitHub 網址而不是 VS Code 的 file URI，是因為文獻對照這一欄的用途
+    是「科展現場給人看、或傳連結給隊友」——GitHub 連結在別人的手機、
+    別台電腦都打得開，`vscode://` 只有自己這台裝了 VS Code 的機器有用。
+    行號錨點（#L123）讓人==點下去直接落在講這件事的那一段==，不用自己
+    在幾百行的文件裡找。
+    """
+    anchor = f"#L{line}" if line else ""
+    return f"{GITHUB_REPO}/blob/main/{rel_path}{anchor}"
 
 
 def _render_refs(refs: list[dict]) -> str:
@@ -795,13 +826,22 @@ def _render_refs(refs: list[dict]) -> str:
         url = html.escape(_ref_url(r))
         cite = html.escape(r["cite"])
         role = _inline_markup(html.escape(r.get("role", "")))
+        # 第三欄：連到本專案自己文件裡討論這篇的那一段。使用者要的是
+        # 「點下去看到段落」——外部論文連結只能到論文首頁，真正解釋
+        # 「我們為什麼引這篇、用在哪」的是專案自己的教學文件。
+        local = ""
+        if r.get("doc"):
+            durl = html.escape(_doc_url(r["doc"], r.get("doc_line")))
+            local = (f'<a href="{durl}" target="_blank" rel="noopener">'
+                     f'本專案說明 ↗</a>')
         rows.append(
             f'<tr><td class="ref-cite">'
             f'<a href="{url}" target="_blank" rel="noopener">{cite}</a></td>'
-            f'<td class="ref-role">{role}</td></tr>')
+            f'<td class="ref-role">{role}</td>'
+            f'<td class="ref-local">{local}</td></tr>')
     return ('<div class="callout rf"><div class="callout-h">文獻出處</div>'
             '<table class="ref-table"><thead><tr><th>文獻</th>'
-            '<th>在這一步負責什麼</th></tr></thead><tbody>'
+            '<th>在這一步負責什麼</th><th></th></tr></thead><tbody>'
             + "".join(rows) + "</tbody></table></div>")
 
 
@@ -1239,6 +1279,7 @@ mark.hl { background: rgba(255,214,0,0.35); color: inherit;
                line-height: 1.6; }
 .ref-cite { white-space: normal; min-width: 12em; }
 .ref-role { color: #777; }
+.ref-local { white-space: nowrap; font-size: 0.95em; }
 .core-fn { margin: 0.2em 0 0.4em; font-size: 0.9em; }
 .core-where { color: #888; font-size: 0.85em; margin-left: 0.6em; }
 .inline-src { text-decoration: none; }

@@ -43,6 +43,13 @@ MathJax 之類的外部函式庫（零外部依賴，見 app.py 檔頭設計原�
 """
 from __future__ import annotations
 
+# 本專案自己的教學／參考文件路徑，給 refs 的 doc 欄位用（點進去會落在
+# GitHub 上對應的行）。抽成常數是因為同一份文件會被很多筆文獻引用，
+# 檔名之後若搬動只要改這裡一處。
+TRAD = "docs/teaching/教學_傳統法誤差核算.md"
+FWD = "docs/teaching/教學_前向模型.md"
+MET = "docs/reference/METHODS.md"
+
 STAGES = [
     {
         "name": "傳統法",
@@ -132,24 +139,38 @@ STAGES = [
                 ],
                 "refs": [
                     {"cite": "Salpeter (1955), ApJ 121, 161",
+                     "bibstem": "ApJ", "volume": "121", "page": "161", "year": "1955",
+                     "doc": TRAD, "doc_line": 727,
                      "role": "alpha = 2.35 的來源，注入回收的真值"},
                     {"cite": "Kroupa (2001), MNRAS 322, 231",
+                     "bibstem": "MNRAS", "volume": "322", "page": "231", "year": "2001",
+                     "doc": TRAD, "doc_line": 728,
                      "role": "分段冪律（0.3／1.3／2.3 三段），低質量段的定義"},
                     {"cite": "Rosen (2026), arXiv:2603.15779", "arxiv": "2603.15779",
+                     "doc": TRAD, "doc_line": 729,
                      "role": "忽略雙星造成的偏差量級（光度相加 −0.011～−0.021），"
                              "**文獻解析修正法**的修正量來源"},
                     {"cite": "Cordoni et al. (2023), A&A 672, A29",
+                     "bibstem": "A&A", "volume": "672", "page": "A29", "year": "2023",
+                     "doc": TRAD, "doc_line": 730,
                      "role": "78 個疏散星團的光度雙星與質量函數；"
                              "**CMD 偏移剔除法**的方法論依據"},
                     {"cite": "Mikhnevich et al. (2026), arXiv:2604.20722",
                      "arxiv": "2604.20722",
+                     "doc": TRAD, "doc_line": 731,
                      "role": "含 M45 本身的八個星團、光度雙星判定；"
                              "CMD 剔除法的另一個方法論依據"},
                     {"cite": "Lindegren et al. (2021), A&A 649, A2",
+                     "bibstem": "A&A", "volume": "649", "page": "A2", "year": "2021",
+                     "doc": TRAD, "doc_line": 732,
                      "role": "RUWE 的定義，**RUWE 剔除法**的依據"},
                     {"cite": "Gaia Collaboration, Arenou et al. (2023), A&A 674, A34",
+                     "bibstem": "A&A", "volume": "674", "page": "A34", "year": "2023",
+                     "doc": TRAD, "doc_line": 733,
                      "role": "Gaia NSS 目錄的處理鏈，**Gaia NSS 剔除法**的依據"},
                     {"cite": "Maíz Apellániz (2008), ApJ 677, 1278",
+                     "bibstem": "ApJ", "volume": "677", "page": "1278", "year": "2008",
+                     "doc": TRAD, "doc_line": 734,
                      "role": "族群層級解析修正法的經典先例"},
                 ],
                 "core": {
@@ -199,8 +220,12 @@ STAGES = [
                 ],
                 "refs": [
                     {"cite": "Pera et al. (2021), A&A 650, A109 (pyUPMASK)",
+                     "bibstem": "A&A", "volume": "650", "page": "A109", "year": "2021",
+                     "doc": MET, "doc_line": 4,
                      "role": "成員判定使用的分群工具本身"},
                     {"cite": "Hunt & Reffert (2023), A&A 673, A114",
+                     "bibstem": "A&A", "volume": "673", "page": "A114", "year": "2023",
+                     "doc": "docs/reference/COMPARISON.md", "doc_line": 10,
                      "role": "獨立的成員目錄，用來對照驗證本專案的判定結果"
                              "（recall 1.000）"},
                 ],
@@ -327,20 +352,31 @@ STAGES = [
                 ],
                 "refs": [
                     {"cite": "Kroupa (2001), MNRAS 322, 231",
+                     "bibstem": "MNRAS", "volume": "322", "page": "231", "year": "2001",
+                     "doc": FWD, "doc_line": 749,
                      "role": "分段冪律 IMF 的定義（0.3／1.3／2.3 三段）"},
                     {"cite": "Salpeter (1955), ApJ 121, 161",
+                     "bibstem": "ApJ", "volume": "121", "page": "161", "year": "1955",
+                     "doc": FWD, "doc_line": 750,
                      "role": "高質量端冪律形式的最早文獻"},
                     {"cite": "Li et al. (2020), ApJ 901, 49 (NGC 3532)",
+                     "bibstem": "ApJ", "volume": "901", "page": "49", "year": "2020",
+                     "doc": FWD, "doc_line": 753,
                      "role": "==統計混合模型處理雙星的直接先例，跟本專案前向模型"
                              "同哲學==。前向模型不是本專案發明的，這一點在"
                              "`PAPER_OUTLINE.md` 的新穎性聲明裡有明確界定"},
                     {"cite": "Bressan et al. (2012) PARSEC isochrones",
+                     "bibstem": "MNRAS", "volume": "427", "page": "127", "year": "2012",
+                     "doc": FWD, "doc_line": 751,
                      "role": "主要使用的等時線（恆星演化模型），"
                              "把質量換算成各波段星等的那張查表"},
                     {"cite": "Choi et al. (2016) MIST isochrones",
+                     "bibstem": "ApJ", "volume": "823", "page": "102", "year": "2016",
+                     "doc": FWD, "doc_line": 751,
                      "role": "第二套獨立的等時線，用來量「換一個恆星演化模型"
                              "會不會改變結論」這項系統誤差"},
                     {"cite": "Rosen (2026), arXiv:2603.15779", "arxiv": "2603.15779",
+                     "doc": FWD, "doc_line": 12,
                      "role": "忽略雙星的偏差不隨樣本數縮小——"
                              "統計誤差以 1/√N 遞減、偏差是常數，"
                              "==樣本越大只會「越精確地錯」=="},
