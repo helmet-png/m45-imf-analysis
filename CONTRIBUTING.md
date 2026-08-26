@@ -28,6 +28,20 @@ Claude，先讀 `CLAUDE.md`；這份是通用規則，兩者都要遵守。
 疑點，不要用猜的。開始時在 `WORK_BOARD.md` 認領一行。完整格式規則見
 零之四。
 
+**格式規則本身會變，讀過一次不等於現在還適用**：這份文件（跟
+`AGENTS.md`）記的是格式與流程規則，不是任務內容，所以不像
+`WORK_BOARD.md` 那樣「認領過就不會被別人動」——任何 session 都可能
+在你上次讀過之後修改這裡的規則（例如重新設計 `WORK_BOARD.md` 的欄位
+格式）。動手編輯 `WORK_BOARD.md`／`WORK_BOARD_DONE.md`／
+`LIMITATIONS.md`／`QUEUE_ALERTS.md` 這類受規則管控的檔案前，先確認
+你手上這份 `CONTRIBUTING.md` 是不是最新版：`git fetch origin main`
+後比對本機 `CONTRIBUTING.md` 的 commit（`git log -1 --format=%H --
+CONTRIBUTING.md`）跟 `origin/main` 的是否一致；不一致就用
+`git diff <你上次讀到的 commit>..origin/main -- CONTRIBUTING.md`
+只看差異部分（便宜，不用整份重讀），確認相關章節有沒有變。長對話
+中途也一樣——不要憑對話稍早讀過的規則操作，過程中可能已經有別的
+PR 合併改了格式。
+
 ---
 
 ## 零之一、自動 PR 審查——CodeRabbit（免費，公開 repo 自動適用）
