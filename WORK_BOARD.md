@@ -68,6 +68,24 @@ Kaggle 多帳號（`kaggle_queue.txt`）與 GCP SSH worker `gcp1`
 `cloud_queue.txt` 前 dry-run 才踩到，已修好並驗證過真的能跑到擬合
 階段。
 
+**2026-08-26 新增：多帳號 GCP 資源池（IAP tunnel + OS Login）**——
+起因是 2026-08-25 那次斷線（來源 IP 白名單擋掉，中控機換網路後
+就連不上，卡了好幾小時），加上三位隊員都各自申請了自己的 GCP 免費
+試用帳號，希望互相共用成一個資源池。維持既有的「集中派工」架構不變
+（見上面 gcp1 段落），只是中控機改用 IAP tunnel（不對外開 22 埠，
+靠 Google 帳號驗證、不受來源 IP 變動影響）連進隊友各自專案裡的 VM，
+且新增自動開關機（`gcp_vm_lifecycle.py`）避免常駐開機把 90 天 $300
+的免費額度燒光（e2-highcpu-8 常駐 90 天單台成本已經超過額度，實際
+數字見 `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`）。程式面：
+`gcp_vm_lifecycle.py`（新增，開關機邏輯）、`iap_tunnel_manager.py`
+（新增，常駐維護 tunnel 連線）、`ssh_workers.py`／`ssh_sync.py`／
+`cloud_queue.py`（各自小幅擴充，向下相容，沒填 GCP 三個新欄位的
+既有 worker 完全不受影響）。VM 擁有者（隊友）跟中控機操作者兩邊各自
+要做的手動設定步驟見 `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`，
+還沒有真的拿隊友的 GCP VM 實測過（本機沒裝 gcloud，只用假造的設定
+值驗證過程式邏輯本身不會 crash），第一次真正加入隊友的 VM 時要留意
+可能有沒設想到的坑。
+
 ## 待辦事項
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
