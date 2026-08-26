@@ -61,6 +61,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+import gcp_vm_lifecycle
 import kaggle_accounts
 import kaggle_queue
 import ssh_sync
@@ -85,6 +86,12 @@ MAX_WAIT_HOURS = 20
 MISSING_TIMEOUT_S = 900     # 15 分鐘，遠大於單次 poll 間隔（60 秒），
                             # 排除單次查詢時序差的誤判，同時遠短於
                             # MAX_WAIT_HOURS
+# 填了 gcp_project/gcp_zone/gcp_instance 的 SSH worker，閒置（沒有槽位
+# 在用）超過這個秒數就自動關機省免費額度，見
+# maybe_stop_idle_ssh_workers() 跟 gcp_vm_lifecycle.py 開頭的說明。
+# 15 分鐘：比單輪 POLL_SECS（60 秒）大很多倍，避免工作剛做完、下一個
+# 工作還沒排進來的正常空檔就被誤判成閒置關機。
+IDLE_STOP_SECS = 900
 # 只用在 backend=="kaggle" 的槽位——理由見檔案開頭說明。
 KAGGLE_BACKOFFS = [60, 120, 240, 480]
 
@@ -299,6 +306,44 @@ def fetch_slot(name: str, kind: str, item: dict, slot: dict) -> bool:
     return ssh_sync.pull(name, item["label"])
 
 
+def maybe_stop_idle_ssh_workers(workers: dict[str, str],
+                                slots: dict[str, dict | None],
+                                idle_since: dict[str, float]) -> None:
+    """每輪主迴圈尾端呼叫一次。SSH worker 若填了 GCP 生命週期欄位（見
+    gcp_vm_lifecycle.is_gcp_managed()），閒置（沒有槽位在用）超過
+    IDLE_STOP_SECS 就自動關機省免費額度——理由見 gcp_vm_lifecycle.py
+    開頭的說明。這裡只負責關機，開機由 ssh_sync.push() 派工前自動
+    觸發（見 gcp_vm_lifecycle.ensure_running()），兩邊不重複判斷
+    同一件事：這支函式完全不查「該不該開機」，只查「已經閒置多久」。
+
+    `idle_since` 由呼叫端（main()）在 while True 迴圈外建立、每輪傳
+    進來累積，不是這支函式自己的狀態——重啟 cloud_queue.py 會讓計時
+    重新歸零，頂多讓某台 VM 多開一段時間，不影響正確性。
+    """
+    all_workers = ssh_workers.load_workers()
+    for name, kind in workers.items():
+        if kind != "ssh":
+            continue
+        w = all_workers.get(name)
+        if not w or not gcp_vm_lifecycle.is_gcp_managed(w):
+            continue
+        if slots[name] is not None:
+            idle_since.pop(name, None)
+            continue
+        started = idle_since.setdefault(name, time.time())
+        if time.time() - started < IDLE_STOP_SECS:
+            continue
+        status = gcp_vm_lifecycle.describe_status(w)
+        if status != "RUNNING":
+            # 已經不是開著的狀態（自己關了、還在轉換中、查詢失敗）：
+            # 不用再關一次，重設計時起點避免每輪都重查一次浪費
+            # gcloud API 呼叫。
+            idle_since[name] = time.time()
+            continue
+        if gcp_vm_lifecycle.stop_vm(w):
+            idle_since[name] = time.time()
+
+
 TERMINAL = {"complete", "error", "cancelled"}
 
 
@@ -493,6 +538,11 @@ def main() -> None:
         running = [n for n, s in slots.items() if s]
         print(f"復原完成，接回 {len(running)} 個已在跑的槽位：{running}",
              flush=True)
+
+    # 見 maybe_stop_idle_ssh_workers() 的說明：只追蹤填了 GCP 生命週期
+    # 欄位的 worker 各自「連續閒置從什麼時候開始」，重啟這支程式會歸零，
+    # 不影響正確性。
+    idle_since: dict[str, float] = {}
 
     while True:
         sync_queue_file()
@@ -701,6 +751,18 @@ def main() -> None:
             # 用 Ctrl+C。
             print("佇列目前空了，繼續常駐等待新工作（Ctrl+C 結束）。",
                  flush=True)
+        # 2026-08-26 CodeRabbit review 訂正：這支函式底下的 gcloud 呼叫
+        # 在主迴圈其餘部分的 try/except 保護範圍之外，任何未預期例外
+        # （例如環境設定問題、gcloud 輸出格式意外改變）會直接讓整支
+        # while True 主迴圈死掉，波及所有 worker（不只是自動開關機
+        # 這個功能本身）——理由跟主迴圈其他段落的同類兜底完全一樣。
+        try:
+            maybe_stop_idle_ssh_workers(workers, slots, idle_since)
+        except Exception as e:                            # noqa: BLE001
+            print(f"  檢查閒置 VM 是否該關機時發生未預期例外"
+                 f"（{type(e).__name__}: {e}），這一輪跳過，下一輪重試",
+                 flush=True)
+            traceback.print_exc()
         time.sleep(POLL_SECS)
 
 
