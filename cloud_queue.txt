@@ -52,5 +52,8 @@ p6b_inject_lowmass_v2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 3 --ref
 mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3||false|gcp1
 
 # configCD_real_data_compare（D10）：真實資料上比較 config C／D 的
-# alpha 一致性，目前只在合成資料上驗證過。
-configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 4 --n-syn 40000 --refines 3,3||false|gcp1
+# alpha 一致性，目前只在合成資料上驗證過。加 --tag，否則 fit_real.py
+# 沒帶這個旗標會輸出 results/fit_real.npz，跟 WORK_BOARD.md 規劃的
+# results/fit_real_configCD_compare.npz 對不上（2026-08-25 CodeRabbit
+# review）。
+configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 4 --n-syn 40000 --refines 3,3 --tag _configCD_compare||false|gcp1
