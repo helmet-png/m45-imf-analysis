@@ -297,6 +297,17 @@ Commit 標題也統一加前綴，方便 `git log`／blame 直接搜尋：
 「王小明」），commit hash 填**跑這個結果當下** `git rev-parse HEAD`
 的值，讓任何人事後都能精確對回當時的程式碼版本，不必另外拉 git tag。
 
+**主控板（`status_dashboard/`，2026-08-24 新增）**：`py
+status_dashboard/app.py`（或雙擊桌面捷徑）開一個本機網頁，把「傳統法／
+前向模型／PDMF→IMF／穩健性診斷」四大類底下有哪些步驟、每個步驟對應
+哪些腳本、目前執行到哪，整理在同一頁——取代翻十幾份 `.md` 文件才能拼
+出全貌的做法。「階段 → 步驟 → 腳本」的對照表在
+`status_dashboard/stage_map.py`，是**手動維護**的索引（沒有機器可讀的
+來源能自動生成傳統法／PDMF→IMF／診斷類的分類結構）。**新增
+`WORK_BOARD.md` 任務或新腳本時，記得回來 `stage_map.py` 加一筆**，
+跟這裡「新結果要記進 `RESULTS_LOG.md`」是同一種「找不到自動生成辦法、
+只能手動維護索引」的協作規則。
+
 ---
 
 ## 三、Commit 與身分標示
