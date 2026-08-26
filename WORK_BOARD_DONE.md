@@ -160,6 +160,12 @@
 | ~~`crosscal_massrange_table`（選項 A）~~ | D11 相關、`PLAN_文獻對照_Hobart2026.md` 第五節 | 讀 Pang et al. (2024) 原文，查出他們 M45 那筆 α=2.01±0.09 的擬合質量範圍、MF 定義、雙星處理、估計器、完整度修正 | **完成：Pang 質量範圍由未知改為已查證**（2026-08-20 Codex，`docs/planning/CROSSCAL_M45_PANG_HOBART_2026-08-20.md`）：Pang M45 是 PDMF、0.28–2.00 M☉、未分箱最大似然+MCMC；換算到同範圍後 Hobart PDMF=1.952、Pang=2.010±0.090，質量範圍已對齊、中心相近，但聯星校正不同不能忽略 |
 | ~~`hyades_literature_check`（選項 B 的候選評估）~~ | A5 | 使用者明確指示 Hyades「先查文獻確認」再決定要不要排執行 | **完成：保留候選，但暫不直接執行**（2026-08-20 Codex，`docs/planning/HYADES_LITERATURE_SCREEN_2026-08-20.md`）：Hyades 可增加老年齡、金屬富有的對照點，但現有 5° 設定只涵蓋約 4.1 pc，遠小於約 10 pc 潮汐尺度；建議先做 5°／12°／20° 成員與選擇函數 smoke test，通過後才排傳統法 |
 
+### D2 敏感度掃描：membership_threshold（2026-08-24／25，gcp1 SSH worker）
+
+| 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |
+|---|---|---|
+| ~~`sensitivity_sweep_membership_threshold`（D2）~~ | `scripts/diagnostics/sensitivity_sweep.py --target membership_threshold`，量成員判定門檻對頭條 alpha 的敏感度，透過 `cloud_queue.py` 派工到 gcp1（GCP e2-highcpu-8） | **完成：五點（0.5/0.6/0.7/0.8/0.9）全部測完**，見 `results/RESULTS_LOG.md` 2026-08-24／25 兩行、`LIMITATIONS.md` D2 同日期段落。五個門檻下 alpha 全部是 2.367（logage/A_V/f_bin/MH/q_gamma/dav 六個參數也逐位元相同），已用 stdout log 確認 n_obs（1,055–1,095）與 lnP 都隨門檻真的在變，不是快取假象。**帶兩個但書**：(1) 全程沿用同一份用 0.7 樣本迴歸出的 `selection.npz`，未隨門檻重新迴歸選擇函數係數；(2) 只做 `--refines 3,3` 兩階精修，逐位元相同也可能只是精修深度不足以分辨這個量級的差異，未交叉確認。`stars_per_cluster`（D2 另一個掃描目標）未完成，需要 pyUPMASK 環境，已拆成獨立待辦項目留在 `WORK_BOARD.md` |
+
 ### PDMF → IMF 第 3 步（LIMEPY 多質量平衡模型）
 
 **完整過程見上面「紀錄」表 2026-08-13 那三行（環境問題解決 → CodeRabbit 抓到單位 bug 並修好）。模型本身與初次擬合都已完成**（King 模型 reduced chi²=0.75），潮汐半徑外質量估計 14.4 M_sun（3.2%）。**跟第 2 步 α(<r) 觀測值的正式交叉比對**（`limepy_radial_crosscheck`）仍是開放工作，見 `WORK_BOARD.md`。
@@ -624,3 +630,9 @@ PR #11 合併後要回頭重新核對 D8、重跑一次驗證確認數值結果�
 | 2026-08-23 | Claude session（本機） | 新增第三個算力來源：GCP SSH worker `gcp1`（e2-highcpu-8） | **完成，已正式派工** | `docs/reference/CLOUD_WORKERS.md`、`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`（分支 `claude/cloud-workers-ssh-2026-08-22`，PR #103）、`ssh_workers.json`／`cloud_queue.txt`（本機新增，不進版控） | 使用者建好 GCP VM 後協助完成連線設定：GCP 瀏覽器內建 SSH 建立的帳號跟我們自己金鑰登入的帳號是**兩個不同 Linux 帳號、各自獨立家目錄**（本機憑證、GitHub Deploy Key、裝的套件都要各自處理一次，不會互通，這是踩到才發現的坑，已記進 `CLOUD_WORKERS.md`），另外修好 SSH host-key 驗證、GitHub Deploy Key（需請 repo admin `helmet-png` 加，非 admin 協作者的帳號連 repo Settings 頁面都是 404）。全鏈路 push→run→status→pull 已用 `kaggle_smoketest.py` 驗證通過。**已派第一項真正工作**：`d2_membership_threshold_p06_p07_retry`（D2 敏感度掃描，正式規模 `n_syn=40000`，先跑 0.6／0.7 兩個門檻，見上方 D2 進度說明），本機 `queue.txt` 對應項目已停用避免重複算。**分工原則**：`ssh_workers.json`／`cloud_queue.txt` 都是本機私有設定（不進版控，跟 `kaggle_accounts.json` 同一類），要用 `gcp1` 派工的人自己的機器需要各自設定連線，不能直接沿用這台機器的檔案；要排新工作進 `cloud_queue.txt` 前，先確認同一件事沒有同時排在 `queue.txt`／`kaggle_queue.txt`，避免三邊重複算力（本機、Kaggle、GCP 現在是三個獨立但要互相避開的算力池） |
 
 </details>
+
+## 2026-08-25 D2 可行性完成紀錄
+
+| 日期 | 執行者 | 任務 | 狀態 | 產出 | 結果與限制 |
+|---|---|---|---|---|---|
+| 2026-08-25 | Codex 本機 session | `stars_per_cluster_sensitivity`（D2）本機可行性查證 | **可行性查證完成；數值掃描受阻** | `scripts/diagnostics/sensitivity_sweep.py`、`docs/planning/D2_STARS_PER_CLUSTER_FEASIBILITY_2026-08-25.md`，分支 `codex/d2-stars-per-cluster-feasibility` | 實際執行檢查後確認 repo 缺 `pyUPMASK/`、`prepared/` 與參數旗標，未產生或宣稱敏感度數字；同時修正無 SciPy 時可行性模式會在檢查前崩潰的問題。開始前已讀 `QUEUE_ALERTS.md`，無待處理列。 |
