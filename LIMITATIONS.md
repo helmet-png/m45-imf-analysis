@@ -826,7 +826,9 @@ config C）先驗證流程能不能跑通：亮端截斷保留 1,017/1,078 顆�
 照原計畫跟 PARSEC 同設定（同一個 `--g-bright`）比較 alpha 與 logage。
 正式規模的重跑已排進 `queue.txt`（見下方，標記為診斷用途、非 headline）。
 
-### D2 未做過敏感度測試的設定（**部分進行中**；`membership_threshold` 0.5–0.9 五點已測完但帶兩個但書，見 2026-08-25；其餘設定與 `stars_per_cluster` 仍未做，見下方）
+### D2 未做過敏感度測試的設定（**現役缺陷．優先度 中**；`membership_threshold` 0.5–0.9 五點已測完但帶兩個但書，見 2026-08-25；其餘設定與 `stars_per_cluster` 仍未做，見下方）
+
+**為什麼標成現役缺陷而不是待辦敏感度測試**（2026-08-25 CodeRabbit review）：`membership_threshold` 這一項已經有具體量化結果——五個門檻的 alpha 逐位元完全相同——但兩個但書（沿用固定 `selection.npz`、精修深度未交叉確認）都直接關係到「這個結果能不能拿去支持 membership_threshold 不影響頭條 alpha」這個論文會用到的主張，不是單純還沒排隊的例行敏感度測試。
 
 **問題**：`pca_dims` 本身（非開關）、`stars_per_cluster`、`clustering_method`、
 `inner_loop_runs`、`hess_color_range`／`hess_mag_range`、BP 訊噪比門檻 20
