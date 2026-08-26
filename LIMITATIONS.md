@@ -1324,50 +1324,31 @@ config 的先驗把 A_V>0.6 或 logage>8.30 的格點直接判 -inf，COARSE 名
 一致，兩者對「dav 貼牆是否連帶壓縮了 A_V 的可能性」這個問題的診斷力
 不同，需要人決定。
 
-### D18 SSH worker 結果下載的標記檔遺失時會被誤標成 timeout，而非重試失敗（2026-08-24 第四輪複查發現並已修好偵測邏輯本身，見下方；尚未在真實 SSH worker 上驗證過修好後的行為）
+### D18 SSH worker 結果下載的標記檔遺失時可能被誤判（現役缺陷．優先度中；偵測邏輯已修好，尚未在真實 SSH worker 上驗證）
 
 **問題**：`ssh_sync.py` 的 `pull()` 用 `results/.start_<label>` 這個時間戳記
-標記檔分辨「這次工作寫出的是哪些新檔案」（見該函式 docstring）。查詢指令是
-`cd <dir> && test -f <marker> && find results -type f -newer <marker> ...`——
-如果 marker 不存在（例如同一個 label 被呼叫過兩次 `pull()`，第一次已經成功
-下載並依設計刪掉了 marker），`test -f` 失敗會讓整條 `&&` 鏈以非零狀態結束，
-落入「查詢失敗」那個分支（`if r.returncode != 0: ... return False`），而不是
-程式碼下方那段原本設計要處理「標記檔遺失或工作還沒寫出東西」情境的
-`if not r.stdout.strip():` 分支——後者只有在 `test -f` 通過、`find` 本身回傳
-空字串時才會被觸發，marker 遺失的情況實際上永遠走不到那個分支，兩者在程式碼
-註解裡被當成同一種情況處理，但邏輯上並不是。
+標記檔分辨「這次工作寫出的是哪些新檔案」。原本的查詢指令
+`test -f <marker> && find results -type f -newer <marker> ...`，marker 不存在
+時 `test -f` 失敗會讓整條 `&&` 鏈以非零狀態結束，跟真正的連線／查詢失敗共用
+同一個分支，無法區分——這會讓 `cloud_queue.py` 把一個其實早就成功跑完的工作
+一路重試到 `MAX_WAIT_HOURS` 逾時，最後誤標成 `"timeout"`（終態失敗，
+`read_done()` 不會再重試），工作實際上已完成、結果檔還留在遠端。已改用 shell
+`if/else` 讓「marker 不存在」回傳可辨識的 `__NO_MARKER__`，不再跟連線失敗
+共用分支。
 
-`pull()` 回傳 `False` 之後，`cloud_queue.py` 主迴圈會把這個工作標成「已完成
-但下載失敗，保留下一輪重試」，每輪重複同一個查詢、重複得到同一個失敗，直到
-`MAX_WAIT_HOURS`（20 小時）到期。到期後會呼叫 `ssh_sync.kill()` 嘗試終止遠端
-行程；因為遠端行程其實早就跑完了（`.exit` 檔已存在），`kill()` 會回報
-「NO_PID」或「KILLED」（視為已確認終止），讓 `cloud_queue.py` 把這個 label
-標成 `"timeout"`（終態失敗）寫進 `logs/cloud_queue_done.txt`，之後不會再重試
-（`read_done()` 只排除 `push_failed`，不排除 `timeout`）。工作實際上已經成功
-完成、結果檔還留在遠端 `results/` 目錄裡，但佇列日誌會永久記成「逾時失敗」，
-沒有任何額外提示區分這是真逾時還是下載端的 marker 問題。
-
-**後果**：目前的自動化單一 label 生命週期裡，marker 只有在 `pull()` 成功
-完整下載後才會被刪除，正常流程不會自然觸發這個路徑——這個場景主要發生在
-有人繞過 `cloud_queue.py`、手動對同一個 label 重複呼叫 `ssh_sync.py pull`
-（`pull()` 的 docstring 已經記載了另一個相關但不同的已知限制：同一個 worker
-上同時有兩個 label 在跑時，時間戳記無法區分是哪個 label 寫出的檔案，跟這裡
-是同一類「時間戳當識別碼」的邊界情況）。**沒有證據顯示這已經在實際派工中
-發生過並污染了任何已引用的結果**（目前 `logs/cloud_queue_done.txt` 裡的紀錄
-都可個別核對來源），但這是一個真實存在、會被觸發的程式路徑，一旦發生會讓
-一次已經成功的長跑運算被永久誤記為逾時失敗且不會自動重試。
-
-**2026-08-24 已修好偵測邏輯本身**：`find_cmd` 改成 shell `if [ -f marker ];
-then find ...; else echo __NO_MARKER__; fi`，取代原本的 `test -f && find`——
-只要 SSH 能連上、`cd` 成功，這個查詢的 `returncode` 就固定是 0，「marker
-不存在」會回傳可辨識的 `__NO_MARKER__` 字串，不再跟真正的連線／查詢失敗
-共用同一個「非零 returncode」分支。`pull()` 收到 `__NO_MARKER__` 時視為
-「這次沒有新結果」（回傳 `ok`，預設 `True`），不再落入會被
-`cloud_queue.py` 一路重試到 `MAX_WAIT_HOURS` 逾時、最後誤標成 `"timeout"`
-的路徑。**這個修正只用程式碼推導＋語法檢查（`python -m py_compile`）驗證
-過，沒有實際連到一台 SSH worker 重現「marker 遺失」這個情境去確認修好後
-的行為**——這台機器上沒有可用的即時 SSH worker 憑證可以做端對端測試，
-留給下次真的在遠端 worker 上跑派工時順便觀察是否還會出現這個訊息。
+**後果**：改用 `__NO_MARKER__` 後又發現第二個問題：`pull()` 原本不管
+`__NO_MARKER__` 的成因為何（成功 pull 過一次後 marker 依設計被刪除、或
+marker 因其他原因遺失／從沒建立過），一律當成「先前已成功 pull」回傳
+成功，讓 `cloud_queue.py` 在沒有本機證據的情況下把工作標成 `"ok"`，結果
+可能根本沒被下載過。已改成只有本機確實存有這個 label 的結果檔（`out_dir/
+results/` 非空）才視為「先前已成功 pull」；沒有本機檔案就回傳失敗，保留
+這個工作供下一輪重試或人工檢查，不再無條件假設成功。標記檔遺失只會在
+`pull()` 被重複呼叫、或同一個 worker 上同時有兩個 label 在跑（`pull()`
+docstring 記載的另一個已知限制，時間戳無法分辨是哪個 label 寫出的檔案）
+這類邊界情況觸發，目前沒有證據顯示已經在實際派工中發生過並污染任何已
+引用的結果。這次修正只用 `py_compile` 語法檢查與程式碼推導驗證過，還沒
+有實際連到一台 SSH worker 重現「marker 遺失」情境確認行為，留給下次在
+遠端 worker 上派工時觀察。
 
 ---
 

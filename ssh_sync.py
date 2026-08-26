@@ -587,20 +587,28 @@ def pull(worker_name: str, label: str) -> bool:
         return False
     out = r.stdout.strip()
     if out == "__NO_MARKER__":
-        # 標記檔真的不存在（不是查詢失敗）。cloud_queue.py 只有在
-        # probe_slot() 已經確認狀態是 "complete" 時才會呼叫 pull()，
-        # 而 "complete" 代表 run() 那條指令鏈（建立 marker 的同一條）
-        # 已經真的執行過，所以會走到這裡，唯一合理的成因是這個 label
-        # 之前已經被成功 pull() 過一次、marker 已依設計刪除，這次是
-        # 重複呼叫（例如手動繞過佇列重跑 `ssh_sync.py pull`）。沒有
-        # 基準時間點可以判斷「新檔案」，但也不能落回舊行為的「查詢
-        # 失敗」，讓呼叫端誤以為是連線問題而反覆重試、最終被
-        # MAX_WAIT_HOURS 逾時邏輯誤標成 "timeout"——視為「這次沒有
-        # 新結果」，回傳 ok（預設 True）跟下面「沒有新檔案」分支一致。
-        print(f"  {label} 的標記檔（{marker}）不存在，視為已經 pull 過、"
-             f"這次沒有新結果，不是連線失敗（見 LIMITATIONS.md D18）",
-             flush=True)
-        return ok
+        # 標記檔真的不存在（不是查詢失敗）。原本這裡無條件當成「一定是
+        # 已經成功 pull 過一次」——但 __NO_MARKER__ 本身分辨不出「真的
+        # 已經成功 pull 過」跟「marker 因為其他原因遺失／從沒建立過」
+        # 這兩種情況，無條件回傳成功等於在沒有本機證據的情況下就讓
+        # cloud_queue.py 把這個工作標成 "ok"，結果可能根本沒被下載過
+        # （2026-08-25 CodeRabbit review 抓到）。改成先查本機是否真的
+        # 已經有這個 label 的結果檔——那才是「已經成功 pull 過」唯一
+        # 站得住腳的證據；沒有本機檔案就不能假設成功，回傳 False 讓
+        # 呼叫端保留這個工作、下一輪再查（可能只是 marker 意外遺失，
+        # 遠端結果其實還在，需要人工介入確認，而不是悄悄放棄）。
+        local_results = out_dir / "results"
+        has_local_copy = local_results.is_dir() and any(local_results.iterdir())
+        if has_local_copy:
+            print(f"  {label} 的標記檔（{marker}）不存在，但本機已有這個"
+                 f"label 的結果檔，視為先前已經成功 pull 過、這次沒有"
+                 f"新結果（見 LIMITATIONS.md D18）", flush=True)
+            return ok
+        print(f"  {label} 的標記檔（{marker}）不存在，且本機找不到這個"
+             f"label 先前 pull 過的結果檔——無法確認結果是否真的已下載，"
+             f"不當成功，保留這個工作供下一輪重試或人工檢查（見"
+             f"LIMITATIONS.md D18）", flush=True)
+        return False
     if not out:
         # 2026-08-23 修正：沒有新檔案可抓時，原本直接 return，漏了清掉
         # 標記檔——這裡沒有「這次抓失敗要保留基準點重試」的顧慮（根本
