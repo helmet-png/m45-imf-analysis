@@ -44,7 +44,14 @@ p6_lowmass_v3|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3
 
 # p6b_inject_lowmass_v2（A1）：p6 低質量段冪次的注入回收驗證，跟
 # p6_lowmass_v3 互補（一個是真實資料擬合，一個是合成資料驗證方法）。
-p6b_inject_lowmass_v2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3||false|gcp1
+# 2026-08-26：改派到 Kaggle（6 個帳號一直閒置，gcp1 一台機器扛全部 8
+# 項排隊工作太慢）。原本 --trials 3 拆成 inject_lowmass.py 自己文件
+# 建議的標準做法（見該腳本 --trial-offset 說明）：3 個帳號各跑
+# --trials 1 --trial-offset 0/1/2，每片配唯一 --tag 避免互相覆寫，全部
+# 跑完後沿 axis=0 依 offset 由小到大串接、等於一次跑完 --trials 3。
+p6b_inject_lowmass_v2_t0|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_kaggle_t0||false|justinlan11
+p6b_inject_lowmass_v2_t1|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1||false|teammate2
+p6b_inject_lowmass_v2_t2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2||false|helmetalbert
 
 # mass_dependent_fbin（D14 衍生）：雙星比例是否隨質量變化，contrast
 # 掃 0.0/0.15/0.30（腳本內建，不用額外旗標指定），contrast=0 是必要
