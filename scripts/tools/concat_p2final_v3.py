@@ -4,7 +4,7 @@
 import numpy as np
 from pathlib import Path
 
-RESULTS = Path(__file__).parent / "results"
+RESULTS = Path(__file__).parent.parent.parent / "results"  # 2026-08-26 檔案搬到 scripts/tools/，往上三層才是 repo 根目錄
 reps = []
 for i in range(10):
     d = np.load(RESULTS / f"fit_real_p2final_v3_rep{i}.npz")

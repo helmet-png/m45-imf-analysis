@@ -342,7 +342,7 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
 
 **不要寫進 `LIMITATIONS.md` 的東西**：追查過程、修正過程、方法論心得、
 基礎設施故障、已推翻的說法、作廢的數值。分別歸到本檔（心得，見下一節）、
-`docs/reference/REFUTED.md`（推翻與作廢）、`KAGGLE_DIAGNOSIS.md`（派工基礎設施）。
+`docs/reference/REFUTED.md`（推翻與作廢）、`docs/reference/KAGGLE_DIAGNOSIS.md`（派工基礎設施）。
 **問題修好、且對應工作全部跑完確認後，那一條要搬到 `RESOLVED.md`（見
 五之一），不要留在 `LIMITATIONS.md` 裡寫「已修正」，也不要直接刪掉不留
 紀錄**——刪掉會讓下一輪重新踩到同一個問題時查不到「這件事我們做過了」。
@@ -462,7 +462,7 @@ CodeRabbit 小修這類雜訊**，格式維持既有的「日期＋條列重點�
 
 6. **兩個現象同時出現，不要假設同一個成因。** 先個別驗證。
    （Kaggle 掛載失敗與網頁 Editor 卡死被錯誤關聯，拖慢查真正根因的速度，
-   見 `KAGGLE_DIAGNOSIS.md`。）
+   見 `docs/reference/KAGGLE_DIAGNOSIS.md`。）
 
 7. **懷疑外部服務之前，先確認自己組出來的路徑／參數字串。**
    100% 重現的失敗是確定性的程式碼 bug，不會是機率性的平台不穩。

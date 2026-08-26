@@ -194,7 +194,7 @@ N-body 需要 x64 機器（PeTar/mcluster 編譯環境），**新機器如果不
 - `docs/planning/PDMF_TO_IMF_PLAN.md` —— PDMF→IMF 主線完整規劃與第七節
   環境建置記錄（LIMEPY／N-body 在 Windows 上的坑都記在這裡）
 - `results/RESULTS_LOG.md` —— 每個結果檔案的索引與一句話結論
-- `KAGGLE_DIAGNOSIS.md` —— Kaggle 掛載路徑 bug／`results/` 目錄 bug／
+- `docs/reference/KAGGLE_DIAGNOSIS.md` —— Kaggle 掛載路徑 bug／`results/` 目錄 bug／
   headline 在 Kaggle 上跑不完等基礎設施問題的專門紀錄
 
 **背景（較舊，仍有效但已不是專案重心）**

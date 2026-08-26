@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/multicluster/，往上三層才是 repo 根目錄
 sys.path.insert(0, str(HERE))
 
 from pipeline.table_compat import Table as _CompatTable  # noqa: E402
