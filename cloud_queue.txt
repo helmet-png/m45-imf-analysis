@@ -54,3 +54,17 @@ mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --
 # configCD_real_data_compare（D10）：真實資料上比較 config C／D 的
 # alpha 一致性，目前只在合成資料上驗證過。
 configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 4 --n-syn 40000 --refines 3,3||false|gcp1
+
+# bp15_bp20_paired_comparison（D12）：account5／account6／account7 三個
+# Kaggle 帳號原本閒置，用來跑 results/bp15_formal_paired_dispatch.json
+# 已經生成好的 10 個 job tag 裡的前 3 組配對（offset 0/1/2）。每組必須
+# BP20／BP15 都跑完才算一組有效配對（彙整器 fail-closed，缺配對就拒算
+# 平均），所以同一個 offset 的兩項排給同一個帳號依序執行。剩下 offset
+# 3／4 等這批帳號有空再排。BP15 那半邊需要額外的隔離輸入檔（--members-file
+# 等三個旗標指到的檔案），已經列進第 4 欄讓 cloud_queue.py 一併同步。
+bp20_formal_40k_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py|false|account5
+bp15_formal_40k_rep0|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep0 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz|false|account5
+bp20_formal_40k_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py|false|account6
+bp15_formal_40k_rep1|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep1 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz|false|account6
+bp20_formal_40k_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py|false|account7
+bp15_formal_40k_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep2 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz|false|account7
