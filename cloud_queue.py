@@ -67,7 +67,7 @@ import kaggle_accounts
 import kaggle_queue
 import ssh_sync
 import ssh_workers
-from run_queue import _pid_alive
+from run_queue import _pid_alive, keep_system_awake, release_system_awake
 
 if sys.platform == "win32":
     # 2026-08-26 使用者實際遇到才發現：sync_queue_file() 每 60 秒對這個
@@ -541,6 +541,29 @@ def main() -> None:
     acquire_lock()
     import atexit
     atexit.register(release_lock)
+
+    # **要求系統別把這個行程當閒置節流**（2026-08-27 追查反覆掉線後補上）。
+    #
+    # `run_queue.py` 從一開始就有這個宣告（見它的 `keep_system_awake()`），
+    # 但 2026-08-23 改成「本機不再跑計算、全部排雲端」之後，常駐的是這支
+    # `cloud_queue.py`，而它**從來沒有做過同樣的宣告**——搬遷時漏掉了。
+    #
+    # 症狀是這支程式會在機器閒置一段時間後安靜消失，`logs/autorestart.log`
+    # 只留下「鎖檔殘留（PID 已不存在），視為沒在跑」然後由 15 分鐘一次的
+    # watchdog 重啟，一天下來反覆好幾次（2026-08-26 15:30、2026-08-27
+    # 15:30／17:29 都是同一個模式）。每次掉線期間：Kaggle 跑完的工作沒人
+    # 拉結果、gcp1 跑完沒人接著派下一項，等於算力空轉，而使用者明確要求
+    # 過「不要讓現有資源空轉」。
+    #
+    # 這支程式本身幾乎不吃 CPU（大部分時間在 sleep 等輪詢間隔），正是最
+    # 容易被系統判定成「閒置、可以睡」的那種行程——它要保護的不是自己的
+    # 運算速度，而是**它作為協調者不能中斷**這件事。
+    #
+    # 用 `ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED`，螢幕仍可正常關閉，
+    # 只是系統不進入睡眠。失敗只印警告不中斷（見該函式說明）——保持常駐
+    # 是可用性優化，不是這支程式能不能跑的前提。
+    keep_system_awake()
+    atexit.register(release_system_awake)
 
     workers = load_all_workers()
     if not workers:
