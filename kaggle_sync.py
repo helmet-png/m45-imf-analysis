@@ -126,17 +126,60 @@ def build_payload(script: str, extra_files: list[str], work_dir: Path,
         # （2026-08-09 實測踩到，浪費一次 push-run-pull 循環）。
         shutil.copy(HERE / "config.toml", work_dir / "config.toml")
         (work_dir / "data").mkdir()
+        n_data = 0
         for f in NEEDED_DATA_FILES:
             src = HERE / "data" / f
             if src.exists():
                 shutil.copy(src, work_dir / "data" / f)
+                n_data += 1
+            else:
+                print(f"  警告：找不到資料檔 data/{f}")
         (work_dir / "isochrones").mkdir()
+        n_iso = 0
         for pat in NEEDED_ISOCHRONE_GLOBS:
             src = HERE / "isochrones" / pat
             if src.exists():
                 shutil.copy(src, work_dir / "isochrones" / pat)
+                n_iso += 1
             else:
                 print(f"  警告：找不到 isochrone 網格 {pat}")
+
+        # **整個目錄一個檔案都沒有就直接中止，不要把殘缺的包送上去**
+        # （2026-08-29 實際踩到，六個 Kaggle 工作全滅才發現）：
+        #
+        # `data/`／`isochrones/` 都不進版控（見 .gitignore），換一台新機器
+        # 跑派工器時本來就會是空的。而**空目錄不會被 Kaggle 的 dataset
+        # 保留**，於是上傳的包裡根本沒有 isochrones/ 這個目錄，kernel 端的
+        # `shutil.copytree(.../isochrones, ...)`（見下面 build_kernel() 組出
+        # 的 notebook）直接 FileNotFoundError。
+        #
+        # 這個失敗模式特別浪費：警告只出現在派工器的 log 裡（沒人盯著），
+        # 而每個殘缺的包都要走完「上傳→排隊→執行→失敗→下載 log」一整輪
+        # 才看得到錯誤，六個帳號就是六輪。標籤還會被記成 error 這個終態、
+        # 不會自動重試，得換新標籤重派。
+        #
+        # **判準刻意是「一個都沒有」而不是「少任何一個」**：
+        # NEEDED_ISOCHRONE_GLOBS 目前列著 mist_..._logt7.8-8.5_...（舊版
+        # MIST 網格，2026-08-10 已被 logt7.3-8.5 版取代），那個檔案連正常
+        # 運作的主力機器上都不存在，只剩已停用的 queue.txt 還引用它。用
+        # 「少任何一個就擋」會把正常機器也一起擋死——這種誤擋比原本的漏擋
+        # 更糟。真正會讓 kernel 炸掉的只有「整個目錄是空的」，所以就擋這個。
+        #
+        # 改成 fail closed 之後：缺檔在**打包階段**（還沒上傳、還沒花任何
+        # 遠端資源）就拋例外。呼叫端 kaggle_queue.push() 會記成 push_failed
+        # ——而 push_failed 是 cloud_queue.read_done() 唯一排除在「終態」
+        # 之外的狀態，補上檔案後同一個標籤會自動重排，不用再手動想一個
+        # _retry3 出來。
+        empty = [name for name, n in (("data", n_data), ("isochrones", n_iso))
+                 if n == 0]
+        if empty:
+            raise FileNotFoundError(
+                "打包中止：" + "、".join(empty) + " 目錄在這台機器上一個必要"
+                "檔案都沒有。空目錄不會被 Kaggle 的 dataset 保留，送上去"
+                "kernel 一定會在 copytree 那步 FileNotFoundError。\n\n"
+                "這些目錄都不進版控（見 .gitignore），git clone 不會帶下來"
+                f"——請從已經設定好的機器複製到 {HERE} 底下對應位置後再重試"
+                "（同一個標籤會自動重排，不需要換新標籤）。")
 
     size_mb = sum(f.stat().st_size for f in work_dir.rglob("*") if f.is_file())
     size_mb /= 1024 * 1024
