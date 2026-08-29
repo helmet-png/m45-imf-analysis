@@ -38,10 +38,37 @@
 **2026-08-23 起使用者決定：本機不再跑計算，全部排到雲端**——
 `restart_queue_on_boot.ps1` 已經改成不再自動重啟 `run_queue.py`
 （見 PR #116），`queue.txt` 裡剩的待辦項目要排新工作一律改進
-`cloud_queue.txt`，不要再假設本機佇列會撿去跑。目前算力池只剩兩個：
-Kaggle 多帳號（`kaggle_queue.txt`）與 GCP SSH worker `gcp1`
-（`cloud_queue.txt`／`cloud_queue.py`），排新工作前先確認同一件事
+`cloud_queue.txt`，不要再假設本機佇列會撿去跑。排新工作前先確認同一件事
 沒有同時排在另一個佇列檔裡。
+
+**目前算力池（2026-08-29 更新，共 8 個 worker，全部由 `cloud_queue.txt`
+統一派工）**：
+
+| worker | 型態 | 核心 | 定位 |
+|---|---|---|---|
+| `senior24` | SSH | 16（實體 24） | **最強的節點**，跑佇列裡最重的單一工作 |
+| `gcp1` | SSH | 4 | GCP e2-highcpu-8，長期常駐 |
+| Kaggle × 6 帳號 | Kaggle | 4 × 6 | 適合能拆成獨立分片的工作 |
+
+`senior24` 是 2026-08-29 新接進來的——隊友（學長）自願提供的 Ubuntu
+22.04 機器，AMD 平台 24 個邏輯核心、6 GB RAM、183 GB 可用空間，透過
+Tailscale 連線（不需要固定對外 IP，也不用改路由器）。**`procs` 刻意
+設 16 而不是 24**：那是別人的機器、不是專屬運算節點，留幾個核心給機器
+本身，不要整台吃滿。
+
+**接這台時踩到、已經修掉的兩個坑**（都已進 main，換下一台 worker 時
+不會再遇到）：(1) 那台是 Python 3.10，而 `pipeline/config.py` 直接
+`import tomllib`——那是 3.11 才進標準庫的，整條 pipeline 在讀設定檔就
+死掉，已改成找不到就退回 `tomli`；(2) `cloud_queue.py`／`run_queue.py`
+用了 `subprocess.CREATE_NO_WINDOW`（Windows 專屬），害雲端協調 VM 一
+啟動就 `AttributeError` 崩潰、systemd 重試 5130 次，服務顯示
+`active (running)` 卻從未真正派過工，導致 gcp1 閒置逾 20 小時、算完的
+結果無人收取，已改成 `getattr(...)` 取值。
+
+**分工原則**：能拆成獨立分片、每片幾小時內跑完的工作（例如帶
+`--repeat-offset`／`--trial-offset` 的）優先派 Kaggle，六個帳號可以平行；
+不能拆、又特別重的單一工作派 `senior24`；其餘常態工作留給 `gcp1`。
+同一時間盡量讓三種算力都有事做，不要讓重工作排隊擋住輕工作。
 
 **gcp1 的排隊/監控機制**：`cloud_queue.py` 每輪（預設 60 秒）自動從
 `origin/main` 同步 `cloud_queue.txt`，隊員／agent 只要開 PR 加一行
@@ -225,7 +252,7 @@ logs/queue_done.txt。耗時未查證。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| configCD_real_data_compare（D10） | 尚未進行 | 指派時間：2026-08-16 | config C 與 D（差別僅 dav 上界：0.6 vs 1.2 mag）；重複次數 = 5 | C、D 兩組 α 中心值與統計誤差的比較 |
+| configCD_real_data_compare（D10） | 已排隊，等 `senior24` 撿（2026-08-29 從 gcp1 改派） | 指派時間：2026-08-16 | config C 與 D（差別僅 dav 上界：0.6 vs 1.2 mag）；重複次數 = 5；`--procs 16` | C、D 兩組 α 中心值與統計誤差的比較 |
 
 configCD_real_data_compare：目前「alpha 不受 dav 貼牆位置污染」只在
 注入回收的合成資料上驗證過，真實資料從沒直接比較過 config C 跟 D。
@@ -235,10 +262,15 @@ configCD_real_data_compare：目前「alpha 不受 dav 貼牆位置污染」只�
 次重複後，因單次耗時從 8.1 小時拉長到 10+ 小時、且本機已停用計算
 佇列，手動中止——這 2 次部分結果留在
 results/fit_real_d10_cd_compare.npz，非正式數字，不能引用）。正式
-版本已排進 cloud_queue.txt 交給 gcp1 執行，但排在佇列較後面，預計
-要數天才輪到；認領前注意這組佇列項目目前沒有帶 --tag，輸出路徑
-跟本機殘留的部分結果檔同名，執行前建議先確認會不會互相覆寫、或
-先把本機殘檔搬開（同類問題 PR #126 修過一次）。耗時未查證，量級與
+版本已排進 cloud_queue.txt。**2026-08-29 改派給 `senior24`（16 核）
+並把 --procs 從 4 提到 16**：這是佇列裡最重的單一工作（2 個 config
+× 5 次重複 = 10 次全樣本擬合），留在 4 核的 gcp1 上會擋住它後面所有
+東西；改派之後跟留在 gcp1 的 mass_dependent_fbin 平行跑，兩台同時
+有事做。改派前已用 `ssh_sync.py status` 確認這個標籤在 gcp1 上是
+missing（從沒啟動過），不會造成重複計算。認領前注意這組佇列項目
+目前沒有帶 --tag，輸出路徑跟本機殘留的部分結果檔同名，執行前建議
+先確認會不會互相覆寫、或先把本機殘檔搬開（同類問題 PR #126 修過
+一次）。耗時未查證，量級與
 同類 fit_real.py 全量跑相當。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |

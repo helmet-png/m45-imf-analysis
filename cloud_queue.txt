@@ -83,7 +83,19 @@ mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --
 
 # configCD_real_data_compare（D10）：真實資料上比較 config C／D 的
 # alpha 一致性，目前只在合成資料上驗證過。
-configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 4 --n-syn 40000 --refines 3,3||false|gcp1
+#
+# **2026-08-29 改派到 senior24，--procs 4 -> 16**：新接進來一台 24 核的
+# SSH worker（隊友提供的 Ubuntu 22.04 機器，見 CLOUD_WORKERS.md）。這一項
+# 是佇列裡最重的單一工作（2 個 config x 5 次重複 = 10 次全樣本擬合），
+# 放在 4 核的 gcp1 上會擋住它後面所有東西；改派到 16 核那台，跟留在 gcp1
+# 的 mass_dependent_fbin **平行跑**，不用互相排隊。改派時已用
+# `ssh_sync.py status` 確認這個標籤在 gcp1 上是 missing（從沒啟動過），
+# 不會造成重複計算。
+#
+# procs 用 16 不是 24：那台是別人自願提供的機器，不是專屬運算節點，
+# 留幾個核心給機器本身，不要整台吃滿（同樣的理由也寫在
+# ssh_workers.json 那筆登記的註解裡）。
+configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 16 --n-syn 40000 --refines 3,3||false|senior24
 
 # bp15_bp20_paired_comparison（D12）：account5／account6／account7 三個
 # Kaggle 帳號原本閒置，用來跑 results/bp15_formal_paired_dispatch.json
