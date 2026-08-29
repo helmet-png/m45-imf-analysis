@@ -29,6 +29,18 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# subprocess.CREATE_NO_WINDOW 只存在於 Windows 版的 subprocess 模組。
+# **2026-08-29 實際造成事故才補上**：cloud_queue.py 匯入這支模組，而
+# 協調角色已經搬到 Linux VM 上跑——直接參照 subprocess.CREATE_NO_WINDOW
+# 會在 subprocess.run() 執行前就先拋 AttributeError，讓 cloud_queue.py
+# 每次啟動幾秒內就崩潰，systemd 不斷重啟（實測重試計數器累積到 5130
+# 次），服務看起來 active 但實際上完全沒在派工，gcp1 因此閒置超過 20
+# 小時、算完的結果沒人收，兩台 VM 都在計費卻都沒產出。
+# 用 getattr 給預設值 0，非 Windows 平台安全地變成無操作，跟沒傳這個
+# 參數效果相同。ssh_workers.py／gcp_vm_lifecycle.py 早就是這個寫法，
+# 這支跟 cloud_queue.py 當初漏掉了。
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
@@ -184,7 +196,7 @@ def _pid_alive(pid: int) -> bool | None:
         out = subprocess.run(
             ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
             capture_output=True, timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+            creationflags=_CREATE_NO_WINDOW)
     except Exception:                                 # noqa: BLE001
         return None
     if out.returncode != 0 or out.stdout is None:
@@ -226,7 +238,7 @@ def _process_tree_cpu_ticks(root_pid: int) -> int | None:
              "Select-Object ProcessId,ParentProcessId,KernelModeTime,"
              "UserModeTime | ConvertTo-Csv -NoTypeInformation"],
             capture_output=True, timeout=30,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+            creationflags=_CREATE_NO_WINDOW)
     except Exception:                                     # noqa: BLE001
         return None
     # 同 _pid_alive() 的理由（見那邊 2026-08-20 的說明）：自己解碼，
@@ -333,7 +345,7 @@ def _kill_process_tree(pid: int):
     try:
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
                        capture_output=True, timeout=15,
-                       creationflags=subprocess.CREATE_NO_WINDOW)
+                       creationflags=_CREATE_NO_WINDOW)
     except Exception:                                     # noqa: BLE001
         pass
 

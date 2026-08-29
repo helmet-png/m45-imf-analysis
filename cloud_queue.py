@@ -195,7 +195,7 @@ def sync_queue_file(branch: str = "main") -> None:
     try:
         r = subprocess.run(["git", "fetch", "origin", branch],
                            cwd=str(HERE), capture_output=True, text=True,
-                           timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+                           timeout=30, creationflags=ssh_workers.CREATE_NO_WINDOW)
         if r.returncode != 0:
             print(f"  同步 {QUEUE.name} 失敗（git fetch：{r.stderr.strip()[:200]}），"
                  f"這輪沿用本機現有內容", flush=True)
@@ -203,7 +203,7 @@ def sync_queue_file(branch: str = "main") -> None:
         r = subprocess.run(
             ["git", "checkout", f"origin/{branch}", "--", QUEUE.name],
             cwd=str(HERE), capture_output=True, text=True, timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+            creationflags=ssh_workers.CREATE_NO_WINDOW)
         if r.returncode != 0:
             print(f"  同步 {QUEUE.name} 失敗（git checkout："
                  f"{r.stderr.strip()[:200]}），這輪沿用本機現有內容",
