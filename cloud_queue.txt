@@ -83,7 +83,31 @@ mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --
 
 # configCD_real_data_compare（D10）：真實資料上比較 config C／D 的
 # alpha 一致性，目前只在合成資料上驗證過。
-configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 4 --n-syn 40000 --refines 3,3||false|gcp1
+#
+# **2026-08-29 改派到 senior24，--procs 4 -> 24**：新接進來一台 24 核的
+# SSH worker（隊友提供的 Ubuntu 22.04 機器，見 CLOUD_WORKERS.md）。這一項
+# 是佇列裡最重的單一工作（2 個 config x 5 次重複 = 10 次全樣本擬合），
+# 放在 4 核的 gcp1 上會擋住它後面所有東西；改派到 24 核那台，跟留在 gcp1
+# 的 mass_dependent_fbin **平行跑**，不用互相排隊。改派時已用
+# `ssh_sync.py status` 確認這個標籤在 gcp1 上是 missing（從沒啟動過），
+# 不會造成重複計算。
+#
+# **procs 給滿 24 是實測過記憶體才決定的，不是照核數填**。那台只有
+# 7.3 GB RAM 而且**沒有 swap**（超用會直接被 OOM killer 砍掉，不是變慢），
+# 所以真正的上限是記憶體不是核數。實測數字：
+#   - 主行程載入等時線網格：+322 MB
+#   - 24 個工人**全部加起來**再用掉：+214 MB
+#   - 合計約 536 MB，對照可用的 7.3 GB，餘裕很大
+# 24 個工人幾乎不額外吃記憶體的原因是 Linux fork 的寫時複製：大的網格
+# 留在主行程、工人唯讀共享，真正送進 Pool 的模型只有 4 MB
+# （見 measure_overconfidence.py 的 initializer 說明）。
+#
+# **量測時踩到的陷阱值得記下來**：先用 `ru_maxrss` 量每個工人，得到
+# 343 MB/工人，照這個數字推算 24 個要 8.2 GB、會 OOM——**那是假象**，
+# RSS 把 fork 共享的頁面在每個子行程各算了一次。改看 `/proc/meminfo`
+# 的 MemAvailable 在開工前後的實際變化才是對的，兩者差了一個數量級。
+# 以後要估這類平行工作的記憶體，不要用 per-process RSS 加總。
+configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 24 --n-syn 40000 --refines 3,3||false|senior24
 
 # bp15_bp20_paired_comparison（D12）：account5／account6／account7 三個
 # Kaggle 帳號原本閒置，用來跑 results/bp15_formal_paired_dispatch.json
