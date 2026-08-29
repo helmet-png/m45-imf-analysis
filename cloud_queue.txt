@@ -117,3 +117,20 @@ bp20_formal_40k_rep2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --rep
 bp20_formal_40k_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py|false|account7
 bp15_formal_40k_rep2_retry|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep2 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
 bp15_formal_40k_rep2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep2 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz|false|account7
+
+# 2026-08-27：_retry 這批標籤內容其實已經修好（見上面兩段說明），但實測
+# 派工當下用的是修好前同步進來的 cloud_queue.txt 快照——p6b 三片跟 bp20
+# 三組派工時間（15:53-18:27）早於本機同步到含 checkpoint.py/preflight.py
+# 那次修正的時間點，是巡邏時比對 logs/cloud_queue_runner.log 實際印出的
+# push 指令（--extra 只有 measure_overconfidence.py,injection_recovery.py
+# 兩個檔）才抓到的純時間差問題，不是程式或佇列檔本身又壞了一次。bp15 那
+# 三組運氣好、派工時機晚一點，已經用對的版本成功（見 cloud_queue_done.txt
+# 的 _retry 那六行：p6b/bp20 全部 error，bp15 全部 ok）。_retry 標籤本身
+# 已經被記成終態，不會自動重派，換 _retry2 標籤重派，內容原封不動照抄
+# 現在確認已經正確的 _retry 那幾行。
+p6b_inject_lowmass_v2_t0_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_kaggle_t0|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|justinlan11
+p6b_inject_lowmass_v2_t1_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|teammate2
+p6b_inject_lowmass_v2_t2_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|helmetalbert
+bp20_formal_40k_rep0_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
+bp20_formal_40k_rep1_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
+bp20_formal_40k_rep2_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
