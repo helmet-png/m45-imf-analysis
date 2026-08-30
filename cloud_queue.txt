@@ -158,3 +158,27 @@ p6b_inject_lowmass_v2_t2_retry2|inject_lowmass.py|--procs 4 --n-syn 40000 --tria
 bp20_formal_40k_rep0_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
 bp20_formal_40k_rep1_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
 bp20_formal_40k_rep2_retry2|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
+
+# 2026-08-30：上面六個 _retry2 全部 error。抓 Kaggle kernel log 才看到
+# 真正的錯誤是 `FileNotFoundError: .../isochrones`——上傳的 dataset 裡
+# 根本沒有 isochrones/ 這個目錄。原因是打包上傳的機器換成了雲端協調 VM，
+# 而 `data/`／`isochrones/` 都不進版控（見 .gitignore），那台 git clone
+# 下來當然是空的；空目錄又不會被 Kaggle 的 dataset 保留，於是 kernel 端
+# 第一步 `shutil.copytree(...isochrones...)` 直接炸掉。跟先前幾次「新機器
+# 缺本機專屬資料」是同一類坑，只是這次換成打包端而不是執行端。
+#
+# 2026-08-30 已把 isochrones/（2 個實際會用到的網格）與 data/（22 個檔案）
+# 從 gcp1 複製到協調 VM，並確認 kaggle_sync.NEEDED_* 清單都對得上。同時
+# 補了 build_payload() 的 fail-closed 檢查（分支 failfast-missing-payload-
+# data）：以後整個目錄是空的會在**打包階段**就中止，不會再浪費一整輪
+# 「上傳→排隊→執行→失敗」才發現。
+#
+# _retry2 已被記成 error 這個終態、不會自動重試，換 _retry3 重派。內容
+# 原封不動照抄 _retry2，唯一差別只有標籤——這次失敗與參數無關，純粹是
+# 打包端缺檔。
+p6b_inject_lowmass_v2_t0_retry3|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 0 --refines 3,3 --tag _p6b_v2_kaggle_t0|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|justinlan11
+p6b_inject_lowmass_v2_t1_retry3|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 1 --refines 3,3 --tag _p6b_v2_kaggle_t1|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|teammate2
+p6b_inject_lowmass_v2_t2_retry3|inject_lowmass.py|--procs 4 --n-syn 40000 --trials 1 --trial-offset 2 --refines 3,3 --tag _p6b_v2_kaggle_t2|measure_overconfidence.py,injection_recovery.py,scripts/tools/preflight.py,scripts/tools/checkpoint.py|false|helmetalbert
+bp20_formal_40k_rep0_retry3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
+bp20_formal_40k_rep1_retry3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
+bp20_formal_40k_rep2_retry3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
