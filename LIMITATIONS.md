@@ -26,7 +26,7 @@
 
 ## A 類
 
-### A1 精修 bug 波及的結果尚未以完整精修（`--refines 3,3`）重跑（headline `p2_final2_v3`、p6b_inject_lowmass_v2 已解除；p6_lowmass_v3、p11_outlierfrac_v3 否）
+### A1 精修 bug 波及的結果尚未以完整精修（現役缺陷．優先度最高；`--refines 3,3`）重跑（headline `p2_final2_v3`、p6b_inject_lowmass_v2 已解除；p6_lowmass_v3、p11_outlierfrac_v3 否）
 
 **問題**：`injection_recovery.multi_stage_best()` 修好前，`--refines` 給單一值
 等於完全沒精修（回傳純粗網格 argmax），給 `3,3` 只精修一階。程式碼已修，
