@@ -16,11 +16,13 @@ ALPHA_TRUE = 2.35
 
 
 def _manifest(npz: np.lib.npyio.NpzFile) -> dict:
+    """Decode the JSON manifest stored in a result archive."""
     raw = npz["__manifest__"]
     return json.loads(str(raw.item() if raw.shape == () else raw))
 
 
 def validate(path: Path, bootstrap: int, seed: int) -> dict:
+    """Validate a P6b archive and return fail-closed recovery statistics."""
     with np.load(path, allow_pickle=False) as data:
         required = {"p_true", "__manifest__"}
         for value in EXPECTED_TRUTH:
@@ -122,6 +124,7 @@ def validate(path: Path, bootstrap: int, seed: int) -> dict:
 
 
 def main() -> None:
+    """Parse options, validate the archive, and write the JSON summary."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input", type=Path, default=Path("results/inject_lowmass_p6b_v2.npz")
