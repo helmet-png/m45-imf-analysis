@@ -349,4 +349,4 @@ BP20）找回的紅端候選星，納入後對 alpha 頭條數字有沒有實質
 設計為缺任何配對就拒算平均（fail-closed）。本機目前缺
 kaggle_accounts.json／access token，還沒送出雲端長跑。先前的探索性
 smoke test（3 個 3k paired seeds）顯示 alpha 差仍不穩定，不能下科學
-結論，正式比較需要 40k、至少 5 個 paired seeds。耗時未查證。
+結論；目前規劃使用 40k、至少 5 個 paired seeds，正式需求仍待完整驗證。耗時未查證。
