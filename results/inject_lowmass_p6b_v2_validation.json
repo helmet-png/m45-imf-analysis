@@ -1,6 +1,17 @@
 {
   "status": "validated",
   "source": "results/inject_lowmass_p6b_v2.npz",
+  "source_sha256": "1d16fa7ef466789b7302d7e828f4046dd61977e40c93dfe6ea688afbd1c57561",
+  "column_order": [
+    "logage",
+    "av_mean",
+    "f_bin",
+    "alpha",
+    "MH",
+    "q_gamma",
+    "dav",
+    "p_lowmass"
+  ],
   "manifest": {
     "dav_max": 0.6,
     "n_syn": 40000,
