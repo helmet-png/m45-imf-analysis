@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -13,6 +14,11 @@ import numpy as np
 EXPECTED_TRUTH = np.array([0.9, 1.3, 1.7], dtype=float)
 P_MIN, P_MAX = 0.3, 2.3
 ALPHA_TRUE = 2.35
+EXPECTED_COLUMNS = [
+    "logage", "av_mean", "f_bin", "alpha", "MH", "q_gamma",
+    "dav", "p_lowmass",
+]
+EXPECTED_SOURCE_SHA256 = "1d16fa7ef466789b7302d7e828f4046dd61977e40c93dfe6ea688afbd1c57561"
 
 
 def _manifest(npz: np.lib.npyio.NpzFile) -> dict:
@@ -23,6 +29,12 @@ def _manifest(npz: np.lib.npyio.NpzFile) -> dict:
 
 def validate(path: Path, bootstrap: int, seed: int) -> dict:
     """Validate a P6b archive and return fail-closed recovery statistics."""
+    source_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    if source_sha256 != EXPECTED_SOURCE_SHA256:
+        raise ValueError(
+            f"unexpected source artifact: {source_sha256} != {EXPECTED_SOURCE_SHA256}"
+        )
+
     with np.load(path, allow_pickle=False) as data:
         required = {"p_true", "__manifest__"}
         for value in EXPECTED_TRUTH:
@@ -38,6 +50,7 @@ def validate(path: Path, bootstrap: int, seed: int) -> dict:
         manifest = _manifest(data)
         expected_manifest = {
             "n_syn": 40000,
+            "dav_max": 0.6,
             "refines": "3,3",
             "manifest_type": "aggregate",
             "aggregated_trial_offsets": [0, 1, 2],
@@ -91,6 +104,8 @@ def validate(path: Path, bootstrap: int, seed: int) -> dict:
     return {
         "status": "validated" if all(criteria.values()) else "failed_gate",
         "source": str(path).replace("\\", "/"),
+        "source_sha256": source_sha256,
+        "column_order": EXPECTED_COLUMNS,
         "manifest": manifest,
         "n_trials_total": int(sum(len(group) for group in groups)),
         "p_true": truth.tolist(),
