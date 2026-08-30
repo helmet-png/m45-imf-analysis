@@ -43,7 +43,22 @@ LOCK = HERE / "logs" / "iap_tunnel_manager.lock"
 CHECK_SECS = 30
 # 斷線後不要馬上重連，給網路／VM 一點恢復時間，避免瘋狂重試灌爆
 # gcloud API 呼叫額度。
-RESTART_BACKOFF_S = 15
+#
+# **2026-08-30 從 15 秒固定間隔改成漸進式退避（見下面 RESTART_BACKOFF_*
+# 三個常數），這是一次真實事故的教訓**：協調 VM 遷移後，`gcp1` 的通道
+# 連續斷線好幾天，每次都是固定 15 秒後重試，累積下來對 Google IAP 端點
+# （`wss://tunnel.cloudproxy.app/...`）連續打了超過一萬七千次連線請求
+# （3 天 × 86400 秒 / 15 秒 ≈ 17,280 次）。查證時發現**同一個連線失敗
+# 訊息本身會忽好忽壞**：IAM／防火牆／服務帳戶／OAuth scope 全部確認
+# 正確，手動單次測試會成功，但這支程式的高頻重試迴圈卻穩定失敗
+# （`ConnectionCreationError: Error while connecting [4033: 'not
+# authorized']`）——最合理的解釋是打太頻繁觸發了 IAP 這一層的某種
+# 頻率限制／防濫用機制，不是真的權限設定錯誤。改成失敗次數越多、
+# 等越久的漸進式退避，才不會在偶發的網路抖動或短暫額度限制時，
+# 反而用高頻重試把自己鎖死在被拒絕的狀態出不來。
+RESTART_BACKOFF_S = 15           # 第一次失敗後的等待秒數（維持原本反應速度）
+RESTART_BACKOFF_MAX_S = 300      # 退避上限（5 分鐘），不要無限拉長
+RESTART_BACKOFF_MULT = 2         # 每次失敗，等待時間乘這個倍數
 
 # 見 gcp_vm_lifecycle.py 同一行的說明：gcloud 在 Windows 上是
 # gcloud.cmd，用 shutil.which() 才能正確解析出完整路徑。
@@ -151,6 +166,11 @@ def main() -> None:
     atexit.register(release_lock)
 
     procs: dict[str, subprocess.Popen] = {}
+    # 每個 worker 各自累計「連續失敗次數」，算漸進式退避秒數用
+    # （見上面 RESTART_BACKOFF_* 常數的說明）。成功一次
+    # （tunnel 撐過一輪 CHECK_SECS 都還活著）就把對應計數歸零，
+    # 不然只要斷過一次線，之後即使恢復正常也會一直用最長等待時間。
+    fail_counts: dict[str, int] = {}
     print(f"IAP tunnel 管理器啟動 {datetime.now():%Y-%m-%d %H:%M:%S}",
          flush=True)
     # 2026-08-26 CodeRabbit review 訂正：原本只註冊 release_lock()，
@@ -176,12 +196,20 @@ def main() -> None:
             for name, w in targets.items():
                 proc = procs.get(name)
                 if proc is not None and proc.poll() is None:
-                    continue    # 還活著，不用管
+                    # 還活著。撐過一輪檢查間隔（CHECK_SECS）才算真的穩定，
+                    # 把失敗計數歸零，下次萬一又斷線，重新從最短等待時間
+                    # 開始退避，不會因為很久以前斷過一次就一直等很久。
+                    fail_counts[name] = 0
+                    continue
                 if proc is not None:
+                    n = fail_counts.get(name, 0)
+                    wait_s = min(RESTART_BACKOFF_S * (RESTART_BACKOFF_MULT ** n),
+                                RESTART_BACKOFF_MAX_S)
+                    fail_counts[name] = n + 1
                     print(f"[{datetime.now():%H:%M:%S}] {name} 的 tunnel 斷了"
-                         f"（exit code {proc.returncode}），"
-                         f"{RESTART_BACKOFF_S} 秒後重開", flush=True)
-                    time.sleep(RESTART_BACKOFF_S)
+                         f"（exit code {proc.returncode}，連續第 {n + 1} 次），"
+                         f"{wait_s:.0f} 秒後重開", flush=True)
+                    time.sleep(wait_s)
                 procs[name] = _spawn(name, w)
             # 設定檔裡拿掉的 worker，順便關掉對應的 tunnel 行程，不留孤兒。
             for name in list(procs):
