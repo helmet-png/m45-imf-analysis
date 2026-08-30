@@ -18,13 +18,14 @@
    `stage_map.py` 加一筆，這是本設計已知、刻意接受的維護成本，不是
    忘了做。
 
-**已知的路徑落差**：`cloud_queue.py`／`ssh_sync.py` 已經 merge 進這個
-repo（PR #121），但目前活著在跑的派工器行程工作目錄還是
-`m45_cloud_workers_wt` worktree，`cloud_queue.txt`／
-`logs/cloud_queue_done.txt`／`logs/cloud_queue.lock` 這些檔案只存在那裡。
-`CLOUD_QUEUE_ROOT` 這個常數就是為了這個落差而存在——等使用者把 worktree
-收斂回 main，把這一行改成指向 `REPO_ROOT` 即可，不用動其他程式碼
-（`cloud_queue.py` 自己的路徑常數是用它自己的 `__file__` 位置算出來的）。
+**`CLOUD_QUEUE_ROOT` 是什麼**：派工器（`cloud_queue.py`）的佇列檔與
+log 不一定跟這支主控板在同一個目錄——例如派工器跑在另一個 worktree、
+或搬到雲端協調 VM 上。這個常數就是給那種情況用的環境變數，**預設值
+就是這個 repo 自己**，多數情況不用設。2026-08-30 訂正：原本這段寫著
+「目前活著在跑的派工器在 m45_cloud_workers_wt worktree、等收斂回 main
+再把這行改成 REPO_ROOT」，但那個改動 2026-08-25 就做完了（現在就是
+`os.environ.get(..., REPO_ROOT)`），註解沒跟著更新，讀的人會誤以為
+還寫死著某台機器的路徑。
 
 用法：
     py app.py
@@ -87,20 +88,6 @@ sys.path.insert(0, str(HERE))
 from stage_map import STAGES  # noqa: E402
 
 PORT = 8866
-# 監聽位址。預設 127.0.0.1 = 只有這台電腦連得到（最安全的預設）。
-# **要讓同學看到彼此的雲端帳號狀態時**（2026-08-26 使用者要求），把環境
-# 變數 M45_DASH_HOST 設成 0.0.0.0，同一個網路裡的其他機器就連得進來。
-#
-# **為什麼做成環境變數而不是直接改成 0.0.0.0**：這個頁面沒有任何密碼
-# 保護，看得到就看得到全部（在跑什麼工作、哪台機器連不上、專案結構）。
-# 預設就對外開放的話，在學校、宿舍、咖啡廳這種共用網路底下，同網段的
-# 陌生人也看得到。改成「要開放的人自己明確設一個環境變數」，等於強迫
-# 做一次有意識的決定，不會不小心開著。
-#
-# **建議搭配 Tailscale 之類的私人網路使用**，不要直接開在公開網路上：
-# 那類工具會在兩台機器之間建一條只有你們自己看得到的加密通道，
-# 同學連的是通道內的位址，路由器外面的人連不到。
-HOST = os.environ.get("M45_DASH_HOST", "127.0.0.1")
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
 PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
 PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
@@ -1346,7 +1333,7 @@ def _bind_server(retries: int = 10, delay: float = 0.5) -> ThreadingHTTPServer:
     連接埠前就先啟動，短暫重試等它讓出來，而不是直接炸掉。"""
     for attempt in range(retries):
         try:
-            return ThreadingHTTPServer((HOST, PORT), Handler)
+            return ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
         except OSError:
             if attempt == retries - 1:
                 raise
@@ -1358,11 +1345,6 @@ def main() -> None:
     server = _bind_server()
     url = f"http://127.0.0.1:{PORT}/"
     print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
-    if HOST != "127.0.0.1":
-        print(f"⚠ 監聽位址 {HOST}：同一個網路（或 VPN）裡的其他機器連得到"
-              f"這個主控板。這個頁面沒有密碼保護，請只在私人網路"
-              f"（例如 Tailscale）底下這樣開，不要對公開網路開放。",
-              flush=True)
     # 開瀏覽器交給桌面捷徑用的 launch_dashboard.vbs 負責（sh.Run 那行），
     # 這裡不重複開，避免透過捷徑啟動時跳出兩個分頁。直接用
     # `py app.py` 手動跑的話，自己貼網址開就好。
