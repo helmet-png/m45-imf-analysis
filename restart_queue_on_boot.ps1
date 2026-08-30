@@ -168,6 +168,26 @@ try {
     # 兩行的註解拿掉即可，不用改別的地方。
     # Restart-QueueIfNotRunning -ScriptName "cloud_queue.py" -LogFile "cloud_queue_runner.log"
     # Restart-QueueIfNotRunning -ScriptName "iap_tunnel_manager.py" -LogFile "iap_tunnel_manager_runner.log"
+
+    # **2026-08-30 新增：狀態主控板**（status_dashboard/app.py，本機網頁
+    # 伺服器，開 http://localhost:8866/ 看各 worker 現況）。
+    #
+    # 為什麼需要自動重啟：這台筆電進入睡眠會把背景行程整個砍掉，2026-08-29
+    # 到 30 兩天之內主控板就這樣掉了四次，每次都要人工發現、手動重開。
+    # 跟當初 run_queue.py 被重開機砍掉閒置 8.5 小時是同一類問題，用同一套
+    # 機制解決即可。
+    #
+    # **跟上面兩支停用的協調角色不衝突**：主控板只讀狀態（讀佇列檔、對
+    # worker 做唯讀探測），不派工、不寫 cloud_queue_done.txt，兩邊同時跑
+    # 不會搶工作，也不會重複提交。這正是它可以留在本機、而 cloud_queue.py
+    # 不行的原因。
+    #
+    # 這支沒有自己的單例鎖檔（不像 run_queue.py／cloud_queue.py 有
+    # acquire_lock()），所以 Restart-QueueIfNotRunning 會走第二道判準
+    # ——比對命令列裡的完整絕對路徑。函式本身用 Join-Path $repo $ScriptName
+    # 組出要比對的路徑，且啟動時也是用同一個絕對路徑，兩邊一致，不會重演
+    # 該函式註解裡記的「相對路徑啟動導致每 15 分鐘誤判一次」那個坑。
+    Restart-QueueIfNotRunning -ScriptName "status_dashboard\app.py" -LogFile "status_dashboard.log"
 }
 catch {
     Write-SelfLog "例外，重啟失敗：$($_.Exception.Message)"
