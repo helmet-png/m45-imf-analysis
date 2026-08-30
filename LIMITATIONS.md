@@ -26,7 +26,7 @@
 
 ## A 類
 
-### A1 精修 bug 波及的結果尚未以完整精修（`--refines 3,3`）重跑（headline `p2_final2_v3` 已解除；p6_lowmass_v3 否、p6b_inject_lowmass_v2 否、p11_outlierfrac_v3 否）
+### A1 精修 bug 波及的結果尚未以完整精修（`--refines 3,3`）重跑（headline `p2_final2_v3`、p6b_inject_lowmass_v2 已解除；p6_lowmass_v3、p11_outlierfrac_v3 否）
 
 **問題**：`injection_recovery.multi_stage_best()` 修好前，`--refines` 給單一值
 等於完全沒精修（回傳純粗網格 argmax），給 `3,3` 只精修一階。程式碼已修，
@@ -34,9 +34,10 @@
 
 **後果**：headline（`p2_final2_v3`，alpha=2.382±0.068）與 `verify_bprperr_off`／
 `on`（見 B1，alpha=2.384±0.079／2.433±0.075）已用完整精修重跑確認，可以
-引用。仍未重跑、精確值不可引用的：`p6_lowmass`（A3 的 0.248 系統誤差
-來源，完全沒精修）、`P6b`（ratio 0.92）、`P11`、`P12`（完全沒精修或只
-精修一階）。alpha 的實際解析度在這些未重跑項目上是 0.20（完全沒精修）
+引用。`P6b` 已用 9 次完整精修注入回收確認：識別度斜率 0.796，
+bootstrap 95% 範圍 0.593–1.019，且沒有 p 貼牆。仍未重跑、精確值不可
+引用的：`p6_lowmass`（A3 的 0.248 系統誤差來源，完全沒精修）、`P11`、`P12`
+（完全沒精修或只精修一階）。alpha 的實際解析度在這些未重跑項目上是 0.20（完全沒精修）
 或 0.067（一階），不是宣稱的 0.022。已修好一個會讓重跑靜默失效的 bug
 （`checkpoint.check_manifest()` 原本對沒有 manifest 的舊結果檔只印警告
 就視為信任沿用，已改成強制擋下、要求人明確決定要不要沿用舊檔）。重跑
