@@ -85,6 +85,25 @@ sys.path.insert(0, str(HERE))
 from stage_map import STAGES  # noqa: E402
 
 PORT = 8866
+# 監聽位址。預設 127.0.0.1＝只有這台電腦連得到，是最安全的預設值。
+#
+# **要讓隊友看到同一份主控板時**（2026-08-30 使用者要求），把環境變數
+# M45_DASH_HOST 設成 0.0.0.0，同一個 Tailscale 網路裡的其他機器就能用
+# 這台的 Tailscale 位址（100.x.x.x）連進來，看到的是同一份即時狀態
+# ——而不是各自在自己電腦跑一份、各自看到空的 worker 清單（憑證檔
+# kaggle_accounts.json／ssh_workers.json 不進版控，隊友的機器上沒有）。
+#
+# **為什麼做成環境變數、而不是直接把預設值改掉**：這個頁面沒有任何
+# 密碼保護，看得到就看得到全部（在跑什麼工作、哪台機器連不上、專案
+# 結構）。預設就對外開放的話，在學校、宿舍、咖啡廳這種共用網路底下，
+# 同網段的陌生人也看得到。改成「要開放的人自己明確設一個環境變數」，
+# 等於強迫做一次有意識的決定，不會不小心開著。
+#
+# **搭配 Tailscale 使用，不要直接開在公開網路上**：Tailscale 會在成員
+# 機器之間建一條加密通道，只有被邀請進同一個 tailnet 的人連得到，
+# 路由器外面的人連不到。設 0.0.0.0 之後這台同時也會接受區域網路的
+# 連線，所以在公共 Wi-Fi 底下要留意。
+HOST = os.environ.get("M45_DASH_HOST", "127.0.0.1")
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
 PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
 PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
@@ -993,7 +1012,7 @@ def _bind_server(retries: int = 10, delay: float = 0.5) -> ThreadingHTTPServer:
     連接埠前就先啟動，短暫重試等它讓出來，而不是直接炸掉。"""
     for attempt in range(retries):
         try:
-            return ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+            return ThreadingHTTPServer((HOST, PORT), Handler)
         except OSError:
             if attempt == retries - 1:
                 raise
@@ -1005,6 +1024,10 @@ def main() -> None:
     server = _bind_server()
     url = f"http://127.0.0.1:{PORT}/"
     print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
+    if HOST != "127.0.0.1":
+        print(f"注意：監聽位址 {HOST}，同一個網路（或 Tailscale）裡的其他機器"
+              f"連得到這個主控板。這個頁面沒有密碼保護，請只在私人網路"
+              f"底下這樣開，不要對公開網路開放。", flush=True)
     # 開瀏覽器交給桌面捷徑用的 launch_dashboard.vbs 負責（sh.Run 那行），
     # 這裡不重複開，避免透過捷徑啟動時跳出兩個分頁。直接用
     # `py app.py` 手動跑的話，自己貼網址開就好。
