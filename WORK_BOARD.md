@@ -375,7 +375,7 @@ smoke test（3 個 3k paired seeds）顯示 alpha 差仍不穩定，不能下科
    （2026-08-20，用 `_prelim`）已經做過方向性比對，但 A5 真正的解除
    條件要求用 `radial_final_reruns` 的 `_final` 誤差棒版本重做，這步
    目前還沒有人排。是純比對計算，不需要重新起跑合成星團，任何一台
-   閒置機器都能做，優先度最高但成本最低，建議最先認領。
+   閒置的雲端 worker 都能做，優先度最高但成本最低，建議最先認領。
 2. `nbody_prior_from_radial` 的初步校準網格——A5 解除條件的另一半
    （第 5 步 N-body 交叉驗證），前置的三個定義不一致已解決，缺的是
    真的跑一組小規模模擬網格。跟第 1 項不衝突，可以平行進行。
@@ -406,9 +406,10 @@ smoke test（3 個 3k paired seeds）顯示 alpha 差仍不穩定，不能下科
 改變頭條中心值，但可能改變誤差預算與 alpha 的解讀——LIMITATIONS.md
 A3 已記錄低質量段冪次固定是目前最大的單一系統誤差來源，這一項完成
 前不能宣稱「不影響結論」；論文也需要誠實揭露這些還沒測過）**：
-7. `p6_lowmass_v3`、`mass_dependent_fbin`、`configCD_real_data_compare`
-   ——已經排在 gcp1 佇列裡（依序執行），不用額外動作，跑完後直接
-   寫結果進 LIMITATIONS.md 對應條目。
+7. `p6_lowmass_v3`、`mass_dependent_fbin`——已經排在 gcp1 佇列裡
+   （依序執行）；`configCD_real_data_compare` 改派到 senior24
+   平行跑。三項都不用額外動作，跑完後直接寫結果進 LIMITATIONS.md
+   對應條目。
 8. `p6b_inject_lowmass_v2` 的 Kaggle 三分片（`justinlan11`／
    `teammate2`／`helmetalbert`）——已經排進 `cloud_queue.txt`（見
    PR #136），還有 `account5`／`account6`／`account7` 三個 Kaggle
