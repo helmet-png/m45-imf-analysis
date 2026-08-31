@@ -185,3 +185,25 @@ p6b_inject_lowmass_v2_t2_retry3|inject_lowmass.py|--procs 4 --n-syn 40000 --tria
 bp20_formal_40k_rep0_retry3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 0 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep0|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
 bp20_formal_40k_rep1_retry3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 1 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep1|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
 bp20_formal_40k_rep2_retry3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 2 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep2|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
+
+# 2026-08-31：補齊 BP15/BP20 配對比較的第 4、5 組（rep3／rep4）。
+# rep0-2 三組已於 2026-08-30 全部完成（BP15 alpha 2.456／2.589／2.322，
+# BP20 2.389／2.367／2.278，三組差值都是正的：+0.067／+0.222／+0.044），
+# 但 scripts/diagnostics/summarize_bp15_formal_paired.py 刻意設計成
+# **少於 5 組唯一 offset 就直接拒絕產出結果**（"Need at least five unique
+# non-negative offsets"）——這是防止用不足的配對數下結論的保護機制，
+# 不是可以繞過的參數檢查。補完 rep3／rep4 之後才跑得動那支彙總腳本。
+#
+# 參數與 rep0-2 逐字一致（只改 --repeat-offset 與 --tag 的編號），
+# 這是配對設計的前提：seed_scheme 是
+# "fit-real-offset-v1:2000+13*(rep+repeat_offset)"，同一個 offset 的
+# BP15／BP20 兩邊拿到同一組亂數，差值才是「只有門檻不同」造成的。
+# 相依檔案清單照抄 _retry3（BP20）與 _retry（BP15）那兩批**實際跑成功**
+# 的版本，不是照抄最早那批漏帶 checkpoint.py／preflight.py 的。
+#
+# 四個工作分散到四個不同帳號同時跑（rep0-2 是同一個 offset 的兩半邊
+# 排在同一個帳號、變成前後跑），單次約 6-8 小時，分開派可以一輪跑完。
+bp20_formal_40k_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 3 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep3|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|justinlan11
+bp15_formal_40k_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 3 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep3 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|teammate2
+bp20_formal_40k_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 4 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep4|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|helmetalbert
+bp15_formal_40k_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 4 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep4 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
