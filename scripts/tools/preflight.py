@@ -207,7 +207,10 @@ def audit_common(model, grid, refines, *, script: str,
     模型實際生效的值有沒有精確等於這個刻意值——如果哪天覆寫那行被
     不小心刪掉、或值被改動，這裡還是抓得到。
     """
-    import tomllib
+    try:                                # Python < 3.11 沒有 tomllib，
+        import tomllib                  # 理由見 pipeline/config.py 同一段
+    except ModuleNotFoundError:
+        import tomli as tomllib
     from injection_recovery import COARSE
     fails, warns = [], []
     overrides = expected_overrides or {}
