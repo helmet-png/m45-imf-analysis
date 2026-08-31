@@ -248,6 +248,52 @@ def _git(*args: str) -> subprocess.CompletedProcess:
                           creationflags=_CREATE_NO_WINDOW)
 
 
+# 2026-08-31 使用者要求：以後任何新推上 GitHub 的程式，都要能自動被
+# 主控板讀取到，不要等人手動回來補 stage_map.py 才看得到。真正的
+# 「自動分類進正確的階段/步驟」做不到（stage_map.py 檔頭已經解釋過：
+# 沒有機器可讀的來源能判斷一支新腳本屬於傳統法還是 PDMF→IMF 第幾步，
+# 這是語意判斷，不是格式判斷）——但「至少讓它出現在主控板上、能點進去
+# 看說明」可以做到，而且不需要等分類決定好。做法：用 `git ls-files`
+# 列出這個 repo 目前追蹤的所有 .py 檔（只看真的推上 GitHub 的，不是
+# 本機隨手建立的暫存檔），扣掉 stage_map.py 裡已經分類過的路徑跟明確
+# 排除的目錄，剩下的就是「存在、但還沒被分類進任何階段/步驟」的程式，
+# 顯示在頁面最後一個獨立區塊，一樣可以點開看檔頭說明——之後要分類，
+# 人只要把路徑從這個清單搬進 stage_map.py 對應的步驟即可，不會漏掉。
+_UNINDEXED_EXCLUDE_PREFIXES = (
+    "_archive/",       # 已封存的舊工作，刻意不算「現役」程式
+    "status_dashboard/",  # 主控板自己，不是專案的分析程式
+    "pyUPMASK/",       # 第三方套件，即使某台機器 clone 了也不算本專案程式
+)
+_UNINDEXED_EXCLUDE_NAMES = {"__init__.py"}  # 空的套件標記檔，沒有內容好看
+
+
+def discover_unindexed_scripts() -> list[str]:
+    """回傳「已經推上 GitHub、但 stage_map.py 裡沒有任何步驟提到」的
+    .py 檔路徑清單，已排序。git 呼叫失敗（離線、逾時）時回傳空清單，
+    不讓這個附加功能拖垮整頁——這個區塊本來就是錦上添花，不是關鍵
+    路徑。"""
+    try:
+        result = _git("ls-files", "*.py")
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+    if result.returncode != 0:
+        return []
+    tracked = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+    indexed: set[str] = set()
+    for stage in STAGES:
+        for step in stage["steps"]:
+            indexed.update(step.get("scripts", []))
+
+    unindexed = [
+        p for p in tracked
+        if p not in indexed
+        and Path(p).name not in _UNINDEXED_EXCLUDE_NAMES
+        and not p.startswith(_UNINDEXED_EXCLUDE_PREFIXES)
+    ]
+    return sorted(unindexed)
+
+
 def sync_repo_from_github() -> dict:
     """`_sync_repo_from_github_uncached()` 加上冷卻時間的外層——見那支
     函式的說明，這裡只處理「多久打一次」。"""
@@ -941,6 +987,39 @@ def _vscode_uri(rel_path: str) -> str:
     return "vscode://file/" + str(abs_path).replace("\\", "/")
 
 
+def _slugify(rel_path: str) -> str:
+    """檔案路徑轉成能當 HTML id 用的字串（給「未分類程式」區塊的錨點
+    用）——路徑分隔符號跟點都不是合法 id 的一部分，全部換成連字號。"""
+    return "script-" + re.sub(r"[^A-Za-z0-9_-]+", "-", rel_path)
+
+
+def _render_script_block(script: str, external: bool = False,
+                         upstream: str | None = None) -> str:
+    """一支腳本的連結＋可收合檔頭說明，抽成共用函式（2026-08-31）——
+    原本只有「階段/步驟」底下的腳本會這樣印，現在「未分類程式」區塊
+    （見 discover_unindexed_scripts()）也要用同一種呈現方式，不要
+    複製貼上兩份長得一樣的邏輯。"""
+    doc = read_docstring(script, external=external, upstream=upstream)
+    exists = (REPO_ROOT / script).exists()
+    # 檔案不在本機時不要給「用 VS Code 開啟」的連結——點了只會
+    # 跳出一個開不了的錯誤視窗。第三方套件另外標一個外連到上游
+    # repo 的連結，那才是真的看得到原始碼的地方。
+    if exists:
+        link = (f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
+                f'<code>{html.escape(script)}</code> ↗</a>')
+    elif external and upstream:
+        link = (f'<span class="script-link missing"><code>'
+                f'{html.escape(script)}</code></span>'
+                f'<a class="upstream-link" href="{html.escape(upstream)}" '
+                f'target="_blank" rel="noopener">第三方套件，看上游原始碼 ↗</a>')
+    else:
+        link = (f'<span class="script-link missing"><code>'
+                f'{html.escape(script)}</code>（本機找不到）</span>')
+    return ('<div class="script-block">' + link
+            + '<details class="doc-details"><summary>程式檔頭原文說明</summary>'
+            f'<div class="doc">{_render_doc(doc)}</div></details></div>')
+
+
 _BUCKET_ORDER = [
     ("live", "live", "進行中"),
     ("pending", "pending", "待派工"),
@@ -1106,28 +1185,34 @@ def render_html(status: dict, sync: dict | None = None) -> str:
             for script in step.get("scripts", []):
                 ext = script in step.get("external", {})
                 upstream = step.get("external", {}).get(script)
-                doc = read_docstring(script, external=ext, upstream=upstream)
-                exists = (REPO_ROOT / script).exists()
-                # 檔案不在本機時不要給「用 VS Code 開啟」的連結——點了只會
-                # 跳出一個開不了的錯誤視窗。第三方套件另外標一個外連到上游
-                # repo 的連結，那才是真的看得到原始碼的地方。
-                if exists:
-                    link = (f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
-                            f'<code>{html.escape(script)}</code> ↗</a>')
-                elif ext and upstream:
-                    link = (f'<span class="script-link missing"><code>'
-                            f'{html.escape(script)}</code></span>'
-                            f'<a class="upstream-link" href="{html.escape(upstream)}" '
-                            f'target="_blank" rel="noopener">第三方套件，看上游原始碼 ↗</a>')
-                else:
-                    link = (f'<span class="script-link missing"><code>'
-                            f'{html.escape(script)}</code>（本機找不到）</span>')
-                content_parts.append(
-                    '<div class="script-block">' + link
-                    + '<details class="doc-details"><summary>程式檔頭原文說明</summary>'
-                    f'<div class="doc">{_render_doc(doc)}</div></details></div>')
+                content_parts.append(_render_script_block(script, ext, upstream))
             content_parts.append("</article>")
 
+        nav_parts.append("</ul>")
+        content_parts.append("</section>")
+
+    # 「未分類程式」：git 上有、但 stage_map.py 沒有任何步驟提到的 .py
+    # 檔（2026-08-31 使用者要求「以後所有程式都要能自動進主控板」）。
+    # 跟上面四大階段平行的第五個區塊，不是塞進某個既有階段底下——這批
+    # 東西的共同點只有「還沒分類」，硬塞進某個階段反而是另一種誤導。
+    unindexed = discover_unindexed_scripts()
+    if unindexed:
+        nav_parts.append('<a class="tree-stage" href="#stage-unindexed">'
+                         f'未分類程式（{len(unindexed)}）</a><ul>')
+        content_parts.append('<section class="stage-block" id="stage-unindexed">'
+                             '<h2>未分類程式</h2>'
+                             '<p class="note">這些 .py 檔已經在 GitHub 上，但還沒有人'
+                             '把它們歸進上面哪個階段/步驟——多半是新腳本、或現有'
+                             '步驟改了實作但忘記回頭更新 stage_map.py。要分類，把'
+                             '路徑從這裡搬進 <code>status_dashboard/stage_map.py</code>'
+                             '對應步驟的 <code>scripts</code> 清單即可（見'
+                             ' CONTRIBUTING.md 第二節）。</p>')
+        for script in unindexed:
+            nav_parts.append(f'<li><a href="#{html.escape(_slugify(script))}">'
+                             f'<code>{html.escape(script)}</code></a></li>')
+            content_parts.append(
+                f'<article class="step-block" id="{html.escape(_slugify(script))}">'
+                + _render_script_block(script) + "</article>")
         nav_parts.append("</ul>")
         content_parts.append("</section>")
 
