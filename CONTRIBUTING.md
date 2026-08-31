@@ -522,6 +522,9 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
 - [ ] 若編輯 `LIMITATIONS.md`：新增／修改的條目照第五節的格式與分級
 - [ ] 若編輯 `WORK_BOARD.md`：任務名稱有標對應的 `LIMITATIONS.md` 條目
       （見五之一），且已回頭同步該條目括號裡的工作狀態
+- [ ] 若在 `WORK_BOARD.md` 新增任務、或新增/搬動了 pipeline 相關腳本：
+      已回頭在 `status_dashboard/stage_map.py` 加一筆對應的步驟（見第二節
+      「主控板」段落），不要讓主控板的索引跟實際工作脫節
 - [ ] 若某條 `LIMITATIONS.md` 因為這次工作而完全解決：已搬到
       `RESOLVED.md`，不是留在原處或直接刪掉
 - [ ] 若這次工作有新發現／推翻舊說法而編輯了 `LIMITATIONS.md` 或

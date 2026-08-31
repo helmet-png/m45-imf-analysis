@@ -492,6 +492,15 @@ STAGES = [
                 "queue_labels": ["p6b_inject_lowmass_v2"],
             },
             {
+                "name": "D2 stars_per_cluster 敏感度掃描",
+                "scripts": [],
+                "note": ("可行性查證已完成、確認執行受阻：repo 缺 pyUPMASK/、"
+                        "缺 prepared/ 輸入，run_variant.py 也未暴露對應的參數"
+                        "旗標，需要有 pyUPMASK 環境的機器才能真的量出敏感度"
+                        "數字（2026-08-25，見 WORK_BOARD.md／"
+                        "WORK_BOARD_DONE.md）。"),
+            },
+            {
                 "name": "D2 membership_threshold 敏感度掃描",
                 "scripts": ["scripts/diagnostics/sensitivity_sweep.py"],
                 # 注意：WORK_BOARD.md 裡這個任務叫
