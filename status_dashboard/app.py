@@ -196,6 +196,14 @@ def dispatcher_alive() -> tuple[bool, int | None]:
     return bool(alive), pid
 
 
+# 見 iap_tunnel_manager.py 同一行的說明：CREATE_NO_WINDOW 只存在於
+# Windows，直接寫 subprocess.CREATE_NO_WINDOW 在 Linux 上會炸
+# AttributeError——2026-08-31 部署到協調 VM（Debian）才踩到，本機
+# （Windows）測試從來沒踩過。getattr 給預設值 0 讓非 Windows 平台
+# 安全地變成無操作。
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 def _git(*args: str) -> subprocess.CompletedProcess:
     """呼叫 git.exe。**一定要帶 `creationflags=CREATE_NO_WINDOW`**：這台
     機器上這個坑已經在 `ssh_workers.py` 的 `remote_run()` 踩過一次
@@ -207,7 +215,7 @@ def _git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(REPO_ROOT), *args],
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=GIT_SYNC_TIMEOUT_S,
-                          creationflags=subprocess.CREATE_NO_WINDOW)
+                          creationflags=_CREATE_NO_WINDOW)
 
 
 def sync_repo_from_github() -> dict:
@@ -279,7 +287,7 @@ def _self_restart() -> None:
         time.sleep(0.5)
         print("偵測到主控板程式碼更新，重新啟動…", flush=True)
         subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
-                         creationflags=subprocess.CREATE_NO_WINDOW)
+                         creationflags=_CREATE_NO_WINDOW)
         os._exit(0)
     threading.Thread(target=_do_restart, daemon=True).start()
 
