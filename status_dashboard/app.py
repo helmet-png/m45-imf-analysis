@@ -47,7 +47,7 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlsplit
 
 HERE = Path(__file__).resolve().parent
 
@@ -1327,7 +1327,14 @@ _ROUTES = {
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 — 覆寫標準函式庫的命名慣例
-        route = _ROUTES.get(self.path)
+        # 路由比對前要先去掉查詢字串（?key=value）——之前是直接拿
+        # self.path 整段比對，2026-08-31 部署到協調 VM 後透過 Cloud
+        # Shell Web Preview／IAP tunnel 測試時發現打不開：Web Preview
+        # 開網址時會自動加 ?authuser=0，self.path 變成
+        # "/?authuser=0"，對不到 _ROUTES 裡的 "/"，直接回 404。
+        # 一般瀏覽器直接打開網址不會加這種參數，本機測試一直沒踩到。
+        path = urlsplit(self.path).path
+        route = _ROUTES.get(path)
         if route is None:
             self.send_response(404)
             self.end_headers()
