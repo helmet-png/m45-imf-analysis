@@ -1,0 +1,83 @@
+{
+  "members": "data\\cluster_NGC_2632_cmd_members.csv",
+  "grid_name": "parsec_v2.0_gaiaEDR3_logt8.2-8.65s0.05_mh0-0s0.05.dat",
+  "logage_grid": 8.55,
+  "av": 0.15869616,
+  "distance_modulus": 6.32631493,
+  "n_finite_members": 381,
+  "n_within_isochrone_colour": 377,
+  "median_delta_g": -0.3700166726370373,
+  "fraction_brighter_0p25": 0.5809018567639257,
+  "fraction_brighter_0p50": 0.38992042440318303,
+  "fraction_fainter_0p25": 0.0,
+  "anchor_g_10_14_median_delta_g": -0.04205283329999965,
+  "low_mass_proxy_g_14_18": {
+    "n": 205,
+    "median_relative_delta_g": -0.5110895897941159,
+    "fraction_relative_brighter_0p25": 0.8,
+    "fraction_relative_brighter_0p50": 0.5073170731707317
+  },
+  "magnitude_bins": [
+    {
+      "g_lo": 6.0,
+      "g_hi": 8.0,
+      "n": 14,
+      "median_delta_g": -1.674466175224742,
+      "fraction_brighter_0p25": 0.9285714285714286,
+      "fraction_brighter_0p50": 0.9285714285714286,
+      "p16_delta_g": -4.474248688526129,
+      "p84_delta_g": -0.8602080477500008
+    },
+    {
+      "g_lo": 8.0,
+      "g_hi": 10.0,
+      "n": 41,
+      "median_delta_g": -0.18544762705000117,
+      "fraction_brighter_0p25": 0.4878048780487805,
+      "fraction_brighter_0p50": 0.24390243902439024,
+      "p16_delta_g": -0.5562915827686599,
+      "p84_delta_g": 0.024669381200000742
+    },
+    {
+      "g_lo": 10.0,
+      "g_hi": 12.0,
+      "n": 55,
+      "median_delta_g": 0.0234866017333335,
+      "fraction_brighter_0p25": 0.14545454545454545,
+      "fraction_brighter_0p50": 0.10909090909090909,
+      "p16_delta_g": -0.08181543544177598,
+      "p84_delta_g": 0.10578670846400136
+    },
+    {
+      "g_lo": 12.0,
+      "g_hi": 14.0,
+      "n": 62,
+      "median_delta_g": -0.07207211174999895,
+      "fraction_brighter_0p25": 0.08064516129032258,
+      "fraction_brighter_0p50": 0.06451612903225806,
+      "p16_delta_g": -0.13841092599058763,
+      "p84_delta_g": 0.0022390649170673915
+    },
+    {
+      "g_lo": 14.0,
+      "g_hi": 16.0,
+      "n": 85,
+      "median_delta_g": -0.3252298289538462,
+      "fraction_brighter_0p25": 0.6588235294117647,
+      "fraction_brighter_0p50": 0.3176470588235294,
+      "p16_delta_g": -0.8571421658156863,
+      "p84_delta_g": -0.15367344833191338
+    },
+    {
+      "g_lo": 16.0,
+      "g_hi": 18.0,
+      "n": 120,
+      "median_delta_g": -0.6607989598588233,
+      "fraction_brighter_0p25": 0.975,
+      "fraction_brighter_0p50": 0.725,
+      "p16_delta_g": -1.0081789005543722,
+      "p84_delta_g": -0.42050244169722856
+    }
+  ],
+  "interpretation_guardrail": "Observational residual diagnostic only; saved forward B fits hit f_bin=1 and remain invalid for IMF inference."
+}

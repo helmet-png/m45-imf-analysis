@@ -1,0 +1,243 @@
+{
+  "status": "diagnostic_complete_model_uncertainty_missing",
+  "inputs": {
+    "model_prediction": "results/limepy_radial_crosscheck.npz",
+    "observations": [
+      "results/fit_real_radial_r1_final.npz",
+      "results/fit_real_radial_r2_final.npz",
+      "results/fit_real_radial_r3_final.npz",
+      "results/fit_real_radial_rall_final.npz"
+    ],
+    "formal_run_manifests": {
+      "r1": {
+        "fix_mh": null,
+        "free_lowmass": false,
+        "g_bright": null,
+        "grid": "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "n_syn": 40000,
+        "native_bprp_err": false,
+        "radius_range": "0,1",
+        "refines": "3,3",
+        "repeat_offset": 0,
+        "manifest_type": "aggregate",
+        "aggregated_repeat_offsets": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "r2": {
+        "fix_mh": null,
+        "free_lowmass": false,
+        "g_bright": null,
+        "grid": "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "n_syn": 40000,
+        "native_bprp_err": false,
+        "radius_range": "0,2",
+        "refines": "3,3",
+        "repeat_offset": 0,
+        "manifest_type": "aggregate",
+        "aggregated_repeat_offsets": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "r3": {
+        "fix_mh": null,
+        "free_lowmass": false,
+        "g_bright": null,
+        "grid": "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "n_syn": 40000,
+        "native_bprp_err": false,
+        "radius_range": "0,3",
+        "refines": "3,3"
+      },
+      "rall": {
+        "fix_mh": null,
+        "free_lowmass": false,
+        "g_bright": null,
+        "grid": "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+        "n_syn": 40000,
+        "native_bprp_err": false,
+        "radius_range": null,
+        "refines": "3,3"
+      }
+    },
+    "manifest_validation": {
+      "checked_fixed_settings": [
+        "fix_mh",
+        "free_lowmass",
+        "g_bright",
+        "grid",
+        "n_syn",
+        "native_bprp_err",
+        "refines"
+      ],
+      "checked_radius_range": {
+        "r1": "0,1",
+        "r2": "0,2",
+        "r3": "0,3",
+        "rall": null
+      },
+      "metadata_absent_from_all_manifests": [
+        "tag",
+        "seed_scheme",
+        "input_file_metadata"
+      ],
+      "offset_metadata_absent": [
+        "r3",
+        "rall"
+      ]
+    }
+  },
+  "absolute_comparison": [
+    {
+      "tag": "r1",
+      "radius_pc": 2.3736477827122884,
+      "model_alpha": 1.7384130343780737,
+      "observed": {
+        "values": [
+          2.0777777777777775,
+          2.033333333333333,
+          2.2333333333333325,
+          2.0777777777777775,
+          1.8999999999999997
+        ],
+        "mean": 2.0644444444444443,
+        "sample_sd": 0.11925695879998859,
+        "sem": 0.05333333333333324
+      },
+      "model_minus_observed_mean": -0.3260314100663706,
+      "difference_over_observed_sample_sd": -2.7338564839069317,
+      "difference_over_observed_sem": -6.113088938744459
+    },
+    {
+      "tag": "r2",
+      "radius_pc": 4.747295565424577,
+      "model_alpha": 1.9575116948543039,
+      "observed": {
+        "values": [
+          2.3888888888888875,
+          2.4333333333333327,
+          2.2333333333333325,
+          2.3888888888888875,
+          2.499999999999999
+        ],
+        "mean": 2.388888888888888,
+        "sample_sd": 0.09813067629253164,
+        "sem": 0.043885372573625556
+      },
+      "model_minus_observed_mean": -0.4313771940345841,
+      "difference_over_observed_sample_sd": -4.39594640873187,
+      "difference_over_observed_sem": -9.829634995370537
+    },
+    {
+      "tag": "r3",
+      "radius_pc": 7.120943348136865,
+      "model_alpha": 2.0609735447203352,
+      "observed": {
+        "values": [
+          2.477777777777777,
+          2.477777777777777,
+          2.277777777777777,
+          2.3888888888888875,
+          2.499999999999999
+        ],
+        "mean": 2.4244444444444433,
+        "sample_sd": 0.09242948596926864,
+        "sem": 0.04133572275052954
+      },
+      "model_minus_observed_mean": -0.36347089972410807,
+      "difference_over_observed_sample_sd": -3.9324128649266368,
+      "difference_over_observed_sem": -8.793142481570658
+    },
+    {
+      "tag": "rall",
+      "radius_pc": 11.696518934855124,
+      "model_alpha": 2.124494089763321,
+      "observed": {
+        "values": [
+          2.3888888888888884,
+          2.3666666666666663,
+          2.277777777777777,
+          2.3888888888888875,
+          2.499999999999999
+        ],
+        "mean": 2.3844444444444433,
+        "sample_sd": 0.07919346524980206,
+        "sem": 0.03541639433446495
+      },
+      "model_minus_observed_mean": -0.25995035468112215,
+      "difference_over_observed_sample_sd": -3.2824722830495396,
+      "difference_over_observed_sem": -7.3398311591577015
+    }
+  ],
+  "paired_radial_increments": [
+    {
+      "comparison": "r2-r1",
+      "model_increment": 0.21909866047623017,
+      "observed_paired_increment": {
+        "values": [
+          0.31111111111111,
+          0.39999999999999947,
+          0.0,
+          0.31111111111111,
+          0.5999999999999994
+        ],
+        "mean": 0.32444444444444376,
+        "sample_sd": 0.21636731457134353,
+        "sem": 0.09676240469812097
+      },
+      "model_minus_observed_increment": -0.10534578396821359,
+      "residual_over_paired_sample_sd": -0.4868840017583967
+    },
+    {
+      "comparison": "r3-r2",
+      "model_increment": 0.10346184986603135,
+      "observed_paired_increment": {
+        "values": [
+          0.08888888888888946,
+          0.04444444444444429,
+          0.04444444444444429,
+          0.0,
+          0.0
+        ],
+        "mean": 0.035555555555555604,
+        "sample_sd": 0.03718489006818133,
+        "sem": 0.016629588385662048
+      },
+      "model_minus_observed_increment": 0.06790629431047575,
+      "residual_over_paired_sample_sd": 1.826179778559635
+    },
+    {
+      "comparison": "rall-r3",
+      "model_increment": 0.06352054504298588,
+      "observed_paired_increment": {
+        "values": [
+          -0.08888888888888857,
+          -0.11111111111111072,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": -0.039999999999999855,
+        "sample_sd": 0.05533288710217195,
+        "sem": 0.024745619390355564
+      },
+      "model_minus_observed_increment": 0.10352054504298573,
+      "residual_over_paired_sample_sd": 1.8708683111335844
+    }
+  ],
+  "interpretation_limits": [
+    "LIMEPY model uncertainty was not estimated.",
+    "The LIMEPY model and radial fits use overlapping stars and are not independent.",
+    "Three LIMEPY mass bins and individual-star forward-model estimates are different estimators.",
+    "r3 and rall manifests predate aggregate-offset metadata; their 0--4 offset provenance is documented in RESULTS_LOG rather than machine-verifiable here.",
+    "Standardized residuals therefore describe scale only and are not formal rejection significances."
+  ]
+}

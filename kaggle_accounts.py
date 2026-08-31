@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -40,6 +41,36 @@ _ARM64_SCRIPTS = (Path.home() / "AppData" / "Local" / "Python" /
                   "pythoncore-3.14-arm64" / "Scripts")
 if _ARM64_SCRIPTS.exists() and str(_ARM64_SCRIPTS) not in os.environ.get("PATH", ""):
     os.environ["PATH"] = f"{_ARM64_SCRIPTS}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+# 呼叫 Kaggle CLI 的指令前綴。**不要寫死成 ["kaggle", ...]**
+# （2026-08-26，這個坑實際擋掉了整批派工）：
+#
+# Windows 的 Smart App Control（智慧型應用程式控制）開啟時，會擋掉
+# 「沒有數位簽章、或簽章知名度不足」的執行檔。`kaggle.exe` 是 pip 安裝時
+# 自動產生的 wrapper，正好屬於這一類，於是 `subprocess.run(["kaggle", ...])`
+# 直接噴 `OSError: [WinError 4551] 應用程式控制原則已封鎖此檔案`。
+#
+# **症狀很容易誤判成別的問題**：派工器推得出去工作，但每次查狀態就拋
+# 例外、保留槽位、下一輪重試，於是所有 Kaggle 帳號看起來都「卡在檢查
+# 中」、永遠不會完成，log 裡只有一長串看起來跟 Kaggle 無關的
+# CreateProcess traceback。2026-08-26 PR #136／#139 合併後，9 個 Kaggle
+# 工作全部卡在這裡。
+#
+# 解法是改用 `python -m kaggle`：跑的是 python.exe（本來就在允許清單裡，
+# 否則這支程式自己也起不來），Kaggle 套件本身是純 Python 模組、不受執行檔
+# 簽章政策管轄。功能與參數跟 kaggle.exe 完全相同——kaggle.exe 本來就只是
+# 這個模組的一層薄殼。
+#
+# **刻意不要求使用者關掉 Smart App Control**：它一旦關閉，就無法在不重灌
+# Windows 的情況下重新開啟。為了一支工具犧牲整台機器的執行檔防護不划算，
+# 而且換一台機器（例如隊友的）一樣會再踩到，改程式才是一勞永逸的修法。
+#
+# 用 `sys.executable` 而不是字面的 "python"：確保用的是「現在正在跑這支
+# 程式的那個 Python」。這跟上面 ARM64 PATH 那段處理的是同一類問題——
+# 這台機器上同時存在好幾個 Python 版本，裝了 kaggle 套件的不一定是 PATH
+# 上排最前面的那一個。
+KAGGLE_CMD = [sys.executable, "-m", "kaggle"]
 
 
 def load_accounts() -> dict[str, dict[str, str]]:

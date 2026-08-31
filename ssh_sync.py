@@ -563,10 +563,24 @@ def pull(worker_name: str, label: str) -> bool:
             print(f"  抓 {f} 失敗（可能該檔案不存在）：{r.stderr.strip()[:200]}")
 
     marker = f"results/.start_{label}"
+    q_marker = shlex.quote(marker)
+    # 2026-08-24 第四輪複查訂正：原本用 `test -f marker && find ...`，
+    # marker 不存在時 `test -f` 失敗會讓整條 `&&` 鏈以非零狀態結束，跟
+    # 下面「查詢本身失敗（逾時／連線斷）」共用同一個 `r.returncode != 0`
+    # 分支——但下面 `if not r.stdout.strip()` 那段的註解原本就宣稱這個
+    # 分支涵蓋「標記檔遺失」的情況，實際上永遠到不了那裡（marker 遺失
+    # 時根本沒有 stdout 可看，在更早的 returncode 分支就 return 了），
+    # 註解描述的行為與程式碼實際行為不一致。改用 shell if/else 讓
+    # 「marker 不存在」單獨輸出一個可辨識的字串，只要 SSH 能連上、cd
+    # 成功，這個分支的 returncode 就固定是 0，不會再被誤判成連線失敗
+    # 見 LIMITATIONS.md D18 對這個 bug 完整後果的說明（主要風險是
+    # cloud_queue.py 的主迴圈把這個查詢失敗一路重試到 MAX_WAIT_HOURS
+    # 逾時，再把一個其實早就成功跑完的工作誤標成 "timeout"）。
     find_cmd = (
-        f"cd {q_dir} && test -f {shlex.quote(marker)} && "
-        f"find results -type f -newer {shlex.quote(marker)} "
-        f"! -name '.start_*'")
+        f"cd {q_dir} 2>/dev/null || exit 9; "
+        f"if [ -f {q_marker} ]; then "
+        f"find results -type f -newer {q_marker} ! -name '.start_*'; "
+        f"else echo __NO_MARKER__; fi")
     # 2026-08-23 CodeRabbit review 第三輪：查詢本身失敗（逾時／連線斷）
     # 跟「查詢成功但沒有新檔案」是兩回事，先前兩者都直接回傳初始值
     # ok=True，cloud_queue.py 會把「根本沒查到」誤判成「查了、確定沒
@@ -582,7 +596,31 @@ def pull(worker_name: str, label: str) -> bool:
         print(f"  查詢 {label} 的 results/ 失敗：{r.stderr.strip()[:200]}",
               flush=True)
         return False
-    if not r.stdout.strip():
+    out = r.stdout.strip()
+    if out == "__NO_MARKER__":
+        # 標記檔真的不存在（不是查詢失敗）。原本這裡無條件當成「一定是
+        # 已經成功 pull 過一次」——但 __NO_MARKER__ 本身分辨不出「真的
+        # 已經成功 pull 過」跟「marker 因為其他原因遺失／從沒建立過」
+        # 這兩種情況，無條件回傳成功等於在沒有本機證據的情況下就讓
+        # cloud_queue.py 把這個工作標成 "ok"，結果可能根本沒被下載過
+        # （2026-08-25 CodeRabbit review 抓到）。改成先查本機是否真的
+        # 已經有這個 label 的結果檔——那才是「已經成功 pull 過」唯一
+        # 站得住腳的證據；沒有本機檔案就不能假設成功，回傳 False 讓
+        # 呼叫端保留這個工作、下一輪再查（可能只是 marker 意外遺失，
+        # 遠端結果其實還在，需要人工介入確認，而不是悄悄放棄）。
+        local_results = out_dir / "results"
+        has_local_copy = local_results.is_dir() and any(local_results.iterdir())
+        if has_local_copy:
+            print(f"  {label} 的標記檔（{marker}）不存在，但本機已有這個"
+                 f"label 的結果檔，視為先前已經成功 pull 過、這次沒有"
+                 f"新結果（見 LIMITATIONS.md D18）", flush=True)
+            return ok
+        print(f"  {label} 的標記檔（{marker}）不存在，且本機找不到這個"
+             f"label 先前 pull 過的結果檔——無法確認結果是否真的已下載，"
+             f"不當成功，保留這個工作供下一輪重試或人工檢查（見"
+             f"LIMITATIONS.md D18）", flush=True)
+        return False
+    if not out:
         # 2026-08-23 修正：沒有新檔案可抓時，原本直接 return，漏了清掉
         # 標記檔——這裡沒有「這次抓失敗要保留基準點重試」的顧慮（根本
         # 沒有東西在抓，下面 if ok: 清標記檔的理由同樣適用），留著不清
@@ -590,11 +628,11 @@ def pull(worker_name: str, label: str) -> bool:
         # smoke test 這種不寫 results/ 的腳本就會踩到）。清掉失敗
         # （連線問題）不影響回傳值，反正下次 run() 一開始就會重新
         # touch 覆寫，不清也不會造成錯誤結果，只是不夠乾淨。
-        print(f"  {label} 目前沒有新的 results/ 檔案可抓（標記檔遺失或"
-             f"工作還沒寫出東西），略過", flush=True)
+        print(f"  {label} 目前沒有新的 results/ 檔案可抓（工作還沒寫出"
+             f"東西），略過", flush=True)
         _rm_marker_best_effort(w, q_dir, marker)
         return ok
-    remote_files = [ln for ln in r.stdout.strip().splitlines() if ln.strip()]
+    remote_files = [ln for ln in out.splitlines() if ln.strip()]
     # 理由同 ensure_static_data()：連線層級的逾時發生一次，就別讓剩下
     # 每個檔案都各自再賭一次 30 分鐘（2026-08-24 CodeRabbit review）。
     connection_ok = True
