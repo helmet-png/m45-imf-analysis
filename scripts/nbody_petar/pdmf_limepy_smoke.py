@@ -16,8 +16,12 @@ import json
 import math
 import sys
 import time
-import tomllib
 from pathlib import Path
+
+try:                                # Python < 3.11 沒有 tomllib，
+    import tomllib                  # 理由見 pipeline/config.py 同一段
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 import numpy as np
 
