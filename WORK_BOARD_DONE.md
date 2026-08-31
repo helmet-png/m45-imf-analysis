@@ -98,12 +98,12 @@ pdmf_step4_radius_expansion（皆仍開放，見 WORK_BOARD.md）共同依賴
 年齡相差一倍，推翻了原本表 4 聲稱的「跨等時線年齡一致」穩健性主張
 （LIMITATIONS.md A4），這點在論文寫作時要一併訂正。
 
-## 2026-08-25 追加完成紀錄
+| 任務名稱 | 完成日期 | 輸入參數 | 輸出參數 |
+|---|---|---|---|
+| limepy_radial_crosscheck（A5、B5） | 2026-08-25 | r1/r2/r3/rall 四段正式五次擬合結果、LIMEPY 多質量模型預測 | 模型 alpha 在 r1/r2/r3/rall 為 1.738/1.958/2.061/2.124，觀測為 2.064/2.389/2.424/2.384，模型低估 0.326/0.431/0.363/0.260（觀測五次樣本散布的 2.73–4.40 倍）；核心到 r2 上升方向一致，2° 外模型仍升而觀測趨平 |
 
-| 日期 | 執行者 | 任務 | 狀態 | 產出 | 結果與限制 |
-|---|---|---|---|---|---|
-| 2026-08-25 | Codex 本機 session | `limepy_radial_crosscheck`（A5、B5）：用正式五次結果驗收 LIMEPY α(<r) | **診斷完成；模型端誤差棒仍未建立** | `scripts/diagnostics/finalize_limepy_radial_crosscheck.py`、`results/limepy_radial_crosscheck.json`、`docs/planning/LIMEPY_RADIAL_CROSSCHECK_FINAL_2026-08-25.md`，分支 `codex/limepy-radial-crosscheck` | 沒有重跑 IMF／前向模型；讀既有 LIMEPY 預測與 r1/r2/r3/rall 正式結果。五組結果初步顯示模型四點比觀測平均低 0.260–0.431，為觀測五次樣本散布的 2.73–4.40 倍；核心到 r2 的上升方向一致，2° 外模型仍升而觀測近乎變平。因模型與觀測共用成員、估計器不同且 LIMEPY 沒有 bootstrap 誤差棒，這是高資訊價值診斷，不是正式否決。開始前已讀 `QUEUE_ALERTS.md`，無待處理列；執行時 Asia/Taipei 日期為 2026-08-25。 |
-## 2026-08-25 D2 可行性完成紀錄
+結論：診斷完成，模型端誤差棒仍未建立，屬高資訊價值診斷而非正式否決；模型與觀測共用成員、估計器不同，見 LIMITATIONS.md B5。
+
 | 任務名稱 | 完成日期 | 輸入參數 | 輸出參數 |
 |---|---|---|---|
 | B/C/D 類待辦逐一查證（八項） | 2026-08-13 | LIMITATIONS.md 既有 C/D 類條目 | LIMITATIONS.md A6 新增、B4／D7 結案、8 項正式列為待辦 |
