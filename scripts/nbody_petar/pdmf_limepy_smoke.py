@@ -26,7 +26,7 @@ except ModuleNotFoundError:
 import numpy as np
 
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
 DEFAULT_MASS_EDGES = np.array([0.30, 0.50, 0.80, 1.20, 2.50])
 DEFAULT_RADIAL_EDGES_DEG = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.1])
 

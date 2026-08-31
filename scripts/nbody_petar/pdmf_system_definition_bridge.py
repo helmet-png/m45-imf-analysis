@@ -33,7 +33,7 @@ from petar_pdmf_analysis import (
 )
 
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
 
 
 def load_catalog(path: Path) -> dict:

@@ -29,7 +29,7 @@ from pdmf_limepy_smoke import (
 )
 
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
 
 
 def category_index(masses, radii, mass_edges, radial_edges):

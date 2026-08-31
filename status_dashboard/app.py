@@ -35,6 +35,7 @@ from __future__ import annotations
 import ast
 import html
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -46,6 +47,7 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote_plus, urlsplit
 
 HERE = Path(__file__).resolve().parent
 
@@ -85,6 +87,31 @@ sys.path.insert(0, str(HERE))
 from stage_map import STAGES  # noqa: E402
 
 PORT = 8866
+# 監聽位址。預設 127.0.0.1＝只有這台電腦自己連得到，任何人在自己電腦
+# 手動 `py app.py` 都不會不小心對外暴露。
+#
+# **2026-08-31 這裡的設計繞了一圈，記錄下來避免以後又搞錯一次**：
+# 8/30 曾經把這個開關整個拿掉、寫死 127.0.0.1，理由是「這個頁面沒有
+# 密碼保護，留一個能開放的環境變數本身就是後門」——但部署到協調 VM、
+# 實際用 `gcloud compute start-iap-tunnel` 測試時發現**連不上**
+# （`[4003: 'failed to connect to backend']`）：IAP tunnel 連的是 VM
+# 網卡本身，接不到只綁 127.0.0.1（等於「只有這台機器自己」）的服務。
+#
+# 重新對照 SSH 的實際做法才發現想錯了：sshd 本來就是綁 `0.0.0.0`（所有
+# 網卡）監聽，它的安全性從來不是靠「只聽自己」，而是靠**防火牆只放行
+# IAP 的固定來源網段 35.235.240.0/20**（見
+# docs/reference/CLOUD_WORKERS_IAP_SETUP.md）——這台協調 VM 的防火牆
+# 規則 `allow-iap-ssh` 已經把 8866 也加進去，一樣限定只有 IAP 網段能連。
+# 所以「比照 SSH 那樣走 IAP tunnel」正確的做法是**主控板也綁
+# `0.0.0.0`，靠同一條防火牆規則守門**，不是綁 127.0.0.1。
+#
+# **這跟先前拿掉的 dashboard-lan-access 分支不一樣**：那支是讓任何一位
+# 隊友在自己電腦上設這個環境變數、搭配 Tailscale 對外開——隊友自己的
+# 電腦沒有這條 GCP 防火牆規則保護，等於真的對外露埠。這裡只有協調 VM
+# 的 systemd 服務會設這個環境變數（見 dashboard.service 的
+# Environment= 那行），且只有這台機器有對應的防火牆限制，兩者不是同一
+# 回事。
+HOST = os.environ.get("M45_DASH_HOST", "127.0.0.1")
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
 PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
 PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
@@ -101,10 +128,22 @@ _restart_pending = False  # 見 sync_repo_from_github()／_self_restart()
 # 資料層
 # ==================================================================
 
-def read_docstring(rel_path: str) -> str:
-    """讀一支腳本檔頭的 module docstring，原文照搬，不重寫一份說明。"""
+def read_docstring(rel_path: str, external: bool = False,
+                   upstream: str | None = None) -> str:
+    """讀一支腳本檔頭的 module docstring，原文照搬，不重寫一份說明。
+
+    `external=True` 代表這是**第三方原始碼**（例如 pyUPMASK，見 .gitignore
+    「第三方原始碼：用 clone 取得，不納入本 repo」那段）——這種檔案本來
+    就不在版控裡，本機沒有 clone 過就是找不到，**這是預期行為，不是路徑
+    搬動的錯誤**。原本一律回「路徑可能已經搬動」會把這種正常情況誤報成
+    壞掉的索引，讓人跑去找一個根本不存在的 bug（2026-08-26 修正）。
+    """
     path = REPO_ROOT / rel_path
     if not path.exists():
+        if external:
+            src = f"，原始出處：{upstream}" if upstream else ""
+            return (f"（第三方套件，依專案慣例不納入版控，需自行 clone 到 "
+                    f"{rel_path}{src}。這裡沒有說明是正常的，不是索引壞掉。）")
         return f"（找不到檔案，路徑可能已經搬動：{rel_path}）"
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
@@ -157,6 +196,14 @@ def dispatcher_alive() -> tuple[bool, int | None]:
     return bool(alive), pid
 
 
+# 見 iap_tunnel_manager.py 同一行的說明：CREATE_NO_WINDOW 只存在於
+# Windows，直接寫 subprocess.CREATE_NO_WINDOW 在 Linux 上會炸
+# AttributeError——2026-08-31 部署到協調 VM（Debian）才踩到，本機
+# （Windows）測試從來沒踩過。getattr 給預設值 0 讓非 Windows 平台
+# 安全地變成無操作。
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 def _git(*args: str) -> subprocess.CompletedProcess:
     """呼叫 git.exe。**一定要帶 `creationflags=CREATE_NO_WINDOW`**：這台
     機器上這個坑已經在 `ssh_workers.py` 的 `remote_run()` 踩過一次
@@ -168,7 +215,7 @@ def _git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(REPO_ROOT), *args],
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=GIT_SYNC_TIMEOUT_S,
-                          creationflags=subprocess.CREATE_NO_WINDOW)
+                          creationflags=_CREATE_NO_WINDOW)
 
 
 def sync_repo_from_github() -> dict:
@@ -240,7 +287,7 @@ def _self_restart() -> None:
         time.sleep(0.5)
         print("偵測到主控板程式碼更新，重新啟動…", flush=True)
         subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
-                         creationflags=subprocess.CREATE_NO_WINDOW)
+                         creationflags=_CREATE_NO_WINDOW)
         os._exit(0)
     threading.Thread(target=_do_restart, daemon=True).start()
 
@@ -589,6 +636,254 @@ def _status_badge(st: dict) -> str:
            f'<span class="detail">{html.escape(detail)}</span>')
 
 
+# ==================================================================
+# 說明區塊的排版：把純文字 docstring 轉成「像教科書那樣可讀」的 HTML
+#
+# 為什麼需要這一段（2026-08-26 使用者要求）：原本的作法是把 docstring
+# 整段丟進 <pre>，等於把作者寫的重點、公式、引用的文獻全部壓成同一種
+# 灰底等寬字，讀者一眼看不出哪句是結論、哪句是註腳。這個主控板要拿去
+# 科展解說，讀者是第一次看到這個專案的人，得先看懂「這一步在幹嘛、
+# 憑什麼這樣做」才有意義，所以說明區塊改成三層：
+#
+#   1. 重點（key_points）——這一步最該記住的兩三句話，人工挑的
+#   2. 公式（formula）——這一步真正在算的數學式，附出處與符號說明
+#   3. 文獻（refs）——這個做法來自哪一篇論文，可以點進去看原文
+#
+# 前三層是 stage_map.py 手動維護的（跟「階段→步驟→腳本」對照表同一種
+# 「沒辦法自動生成、只能手動維護」的性質，見該檔案開頭說明）；最後才
+# 接原本就有的 docstring 原文，並套用下面這個輕量標記轉換讓它好讀。
+# ==================================================================
+
+# docstring 裡本來就在用的輕量標記（作者們一直是用 Markdown 的習慣在
+# 寫 Python docstring），這裡只認最常出現、且轉換後不會誤傷程式碼的
+# 三種：**粗體**、`程式碼`、以及空行分段。**不引入 Markdown 套件**：
+# 這個主控板刻意零外部依賴（見檔頭設計原則第 1 點），而且完整 Markdown
+# 反而會把 docstring 裡的縮排程式碼片段、表格誤判成別的東西。
+_RE_BOLD = re.compile(r"\*\*(.+?)\*\*", re.S)
+_RE_CODE = re.compile(r"`([^`]+?)`")
+# ==螢光標記==：參考版面裡用黃色螢光筆標出「一句話結論」的效果。
+# 用兩個等號當標記是 Markdown 生態常見的 highlight 語法，且不會跟
+# docstring 裡既有的內容衝突（Python 註解不會出現連續等號夾字）。
+_RE_MARK = re.compile(r"==(.+?)==", re.S)
+# 純文字裡直接寫出來的 arXiv 編號（專案文件裡很常見，例如
+# 「arXiv:2603.15779 指出這個偏差不隨樣本數縮小」），轉成可以點的連結。
+_RE_ARXIV = re.compile(r"arXiv:(\d{4}\.\d{4,5})")
+# 看起來像這個 repo 裡某支程式的路徑——用來決定 `xxx` 這個行內程式碼
+# 要不要順便變成「點了就用 VS Code 開啟」的連結。要求以 .py 結尾，
+# 避免把 `f_bin`、`--refines 3,3` 這種一般的行內程式碼誤判成檔案。
+_RE_PYPATH = re.compile(r"^[\w./-]+\.py$")
+
+
+def _code_span(inner: str) -> str:
+    """行內 `程式碼` 的呈現：看起來像本 repo 的 .py 路徑就變成可點的
+    連結（點了在 VS Code 開啟該檔），其餘維持單純的等寬字樣式。
+
+    這是使用者要的「附上連結，讓我能夠點進去看」在 docstring 內文層級
+    的實作——不只步驟標題底下那一排腳本連結可以點，內文提到某支程式時
+    也能直接跳過去。"""
+    if _RE_PYPATH.match(inner) and (REPO_ROOT / inner).exists():
+        return (f'<a class="inline-src" href="{html.escape(_vscode_uri(inner))}">'
+                f'<code>{html.escape(inner)}</code></a>')
+    return f"<code>{html.escape(inner)}</code>"
+
+
+def _inline_markup(escaped: str) -> str:
+    """對**已經 HTML 逃逸過**的一行文字套用行內標記。
+
+    順序很重要：一定要先逃逸再套標記，否則我們自己插進去的 <strong>、
+    <code> 標籤會被後續的逃逸吃掉變成畫面上的亂碼。
+    """
+    out = _RE_MARK.sub(lambda m: f'<mark class="hl">{m.group(1)}</mark>', escaped)
+    out = _RE_BOLD.sub(lambda m: f"<strong>{m.group(1)}</strong>", out)
+    out = _RE_CODE.sub(lambda m: _code_span(html.unescape(m.group(1))), out)
+    out = _RE_ARXIV.sub(
+        lambda m: (f'<a href="https://arxiv.org/abs/{m.group(1)}" '
+                   f'target="_blank" rel="noopener">arXiv:{m.group(1)}</a>'),
+        out)
+    return out
+
+
+def _render_doc(text: str) -> str:
+    """把 docstring 純文字轉成分段、帶行內標記的 HTML。
+
+    刻意保留兩種原文樣貌不動：(1) 明顯是程式碼或資料表的區塊（整段每行
+    都以空白開頭），照原樣放進 <pre>，因為那種內容的對齊本身就是資訊；
+    (2) 其餘段落轉成 <p>，讓長篇說明可以正常斷行、不再是一整片等寬字。
+    """
+    if not text:
+        return ""
+    blocks = re.split(r"\n\s*\n", text.strip())
+    out = []
+    for block in blocks:
+        lines = block.split("\n")
+        indented = [ln for ln in lines if ln.strip()]
+        if indented and all(ln.startswith(("    ", "\t")) for ln in indented):
+            out.append(f'<pre class="doc-pre">{html.escape(block)}</pre>')
+            continue
+        escaped = html.escape(block)
+        out.append(f'<p class="doc-p">{_inline_markup(escaped)}</p>')
+    return "".join(out)
+
+
+def _render_key_points(points: list[str]) -> str:
+    """「重點」區塊：這一步最該先看懂的幾句話。手動挑的，不是自動摘要
+    ——自動摘要在這種內容上只會抓到最長的句子，不是最重要的句子。"""
+    if not points:
+        return ""
+    items = "".join(f"<li>{_inline_markup(html.escape(p))}</li>" for p in points)
+    return ('<div class="callout kp"><div class="callout-h">重點</div>'
+            f'<ul class="kp-list">{items}</ul></div>')
+
+
+def _render_prereq(items: list[str]) -> str:
+    """「這裡用到的新名詞」區塊。
+
+    這個專案的讀者是高一升高二的學生（也是實際在做這個科展的人），
+    課程上還沒教到機率分布、最大概似估計、微積分這些東西。與其假裝
+    讀者都懂、或是整段避開不講，不如==把超出高中課程的名詞單獨挑出來，
+    用一兩句話接回已經學過的概念==（對數、星等、赫羅圖、平均與標準差
+    都是高一地科／數學就有的）。這比在正文裡塞一堆括號註解好讀。
+    """
+    if not items:
+        return ""
+    lis = "".join(f"<li>{_inline_markup(html.escape(x))}</li>" for x in items)
+    return ('<div class="callout pq"><div class="callout-h">這裡用到的新名詞</div>'
+            f'<ul class="kp-list">{lis}</ul></div>')
+
+
+def _render_formula(formulas: list[dict]) -> str:
+    """「公式」區塊：這一步真正在算什麼。
+
+    用純文字數學式（不是 LaTeX 排版）——這個主控板不載入 MathJax 之類的
+    外部函式庫（零外部依賴原則，而且 CSP 也擋外部資源），所以公式以
+    等寬字呈現，符號說明列在下方。這樣在科展現場用筆電離線開也一定看得到。
+    """
+    if not formulas:
+        return ""
+    rows = []
+    for f in formulas:
+        bits = [f'<pre class="formula-expr">{html.escape(f["expr"])}</pre>']
+        # 「公式意義／輸入項／輸出項」三段式拆解（2026-08-26 使用者指定的
+        # 版面）——把一條式子拆成「它在講什麼、餵什麼進去、吐什麼出來」，
+        # 讀者不用先看懂符號就能知道這一步在資料流裡的位置。三個欄位都
+        # 是選填，只有 meaning 沒填時才退回舊的單段 where 敘述。
+        for key, lab in (("plain", "白話說"), ("meaning", "公式意義"),
+                         ("inputs", "輸入項"), ("outputs", "輸出項")):
+            if f.get(key):
+                bits.append(
+                    f'<p class="formula-field"><span class="ff-lab">{lab}</span>'
+                    f'{_inline_markup(html.escape(f[key]))}</p>')
+        if f.get("where"):
+            bits.append(f'<p class="formula-where">{_inline_markup(html.escape(f["where"]))}</p>')
+        if f.get("source"):
+            bits.append(f'<p class="formula-src">出處：{_inline_markup(html.escape(f["source"]))}</p>')
+        rows.append('<div class="formula-item">' + "".join(bits) + "</div>")
+    return ('<div class="callout fm"><div class="callout-h">公式</div>'
+            + "".join(rows) + "</div>")
+
+
+def _ref_url(ref: dict) -> str:
+    """一筆文獻的連結。
+
+    **這份資料要拿去科展，連結指到錯的論文比沒有連結更糟**，所以只用
+    三種一定不會指錯的形式，優先序由上而下：
+
+    1. `arxiv`：直接連 arxiv.org/abs/<編號>。精確、可驗證，點進去就是
+       全文，可以直接跳到需要的章節。
+    2. `bibstem`＋`volume`＋`page`（＋`year`）：組一個**精確的 ADS 查詢**
+       （例如 bibstem:"MNRAS" volume:"322" page:"231" year:2001）。
+       這種查詢在天文文獻裡幾乎必然只命中一篇，等於直接落到那篇論文。
+    3. 都沒有時：退回用引用字串本身去 ADS 搜尋。
+
+    **刻意不自己拼 ADS bibcode**（例如 2001MNRAS.322..231K）：bibcode 是
+    19 個字元、靠位置對齊的編碼，少一個點就會靜默地連到**另一篇**論文
+    ——而且看起來完全正常，是最難被發現的一種錯。用查詢式換來的代價
+    只是多一次點擊，但保證不會指錯。
+    """
+    if ref.get("arxiv"):
+        return f"https://arxiv.org/abs/{ref['arxiv']}"
+    if ref.get("bibstem") and ref.get("volume") and ref.get("page"):
+        # 精確查詢：期刊代號＋卷＋頁（＋年）在天文文獻裡幾乎必然只命中
+        # 一篇，等於直接落到那篇論文，但沒有拼錯 bibcode 的風險。
+        q = (f'bibstem:"{ref["bibstem"]}" volume:"{ref["volume"]}" '
+             f'page:"{ref["page"]}"')
+        if ref.get("year"):
+            q += f' year:{ref["year"]}'
+        return "https://ui.adsabs.harvard.edu/search/q=" + quote_plus(q)
+    return ("https://ui.adsabs.harvard.edu/search/q="
+            + quote_plus(ref["cite"]))
+
+
+GITHUB_REPO = "https://github.com/helmet-png/m45-imf-analysis"
+
+
+def _doc_url(rel_path: str, line: int | None = None) -> str:
+    """本專案自己文件的 GitHub 連結（可帶行號錨點）。
+
+    用 GitHub 網址而不是 VS Code 的 file URI，是因為文獻對照這一欄的用途
+    是「科展現場給人看、或傳連結給隊友」——GitHub 連結在別人的手機、
+    別台電腦都打得開，`vscode://` 只有自己這台裝了 VS Code 的機器有用。
+    行號錨點（#L123）讓人==點下去直接落在講這件事的那一段==，不用自己
+    在幾百行的文件裡找。
+    """
+    anchor = f"#L{line}" if line else ""
+    return f"{GITHUB_REPO}/blob/main/{rel_path}{anchor}"
+
+
+def _render_refs(refs: list[dict]) -> str:
+    """「文獻出處」區塊：這一步的做法是從哪篇論文來的、負責哪一部分。
+
+    內容全部來自專案自己已經核對過的兩張文獻對照表（`docs/teaching/
+    教學_傳統法誤差核算.md` 第十節、`docs/teaching/教學_前向模型.md`
+    第十節），不是這支程式另外去生成的——那兩張表是有人實際讀過原文
+    才寫下來的，這裡只負責把它們接到對應的步驟旁邊、讓人點得到。
+    """
+    if not refs:
+        return ""
+    rows = []
+    for r in refs:
+        url = html.escape(_ref_url(r))
+        cite = html.escape(r["cite"])
+        role = _inline_markup(html.escape(r.get("role", "")))
+        # 第三欄：連到本專案自己文件裡討論這篇的那一段。使用者要的是
+        # 「點下去看到段落」——外部論文連結只能到論文首頁，真正解釋
+        # 「我們為什麼引這篇、用在哪」的是專案自己的教學文件。
+        local = ""
+        if r.get("doc"):
+            durl = html.escape(_doc_url(r["doc"], r.get("doc_line")))
+            local = (f'<a href="{durl}" target="_blank" rel="noopener">'
+                     f'本專案說明 ↗</a>')
+        rows.append(
+            f'<tr><td class="ref-cite">'
+            f'<a href="{url}" target="_blank" rel="noopener">{cite}</a></td>'
+            f'<td class="ref-role">{role}</td>'
+            f'<td class="ref-local">{local}</td></tr>')
+    return ('<div class="callout rf"><div class="callout-h">文獻出處</div>'
+            '<table class="ref-table"><thead><tr><th>文獻</th>'
+            '<th>在這一步負責什麼</th><th></th></tr></thead><tbody>'
+            + "".join(rows) + "</tbody></table></div>")
+
+
+def _render_core(core: dict | None) -> str:
+    """「核心程式碼」區塊：這一步幾十支檔案裡，真正做事的是哪一個函式。
+
+    使用者的原話是「說明出程式中最核心的程式碼，並附上連結，讓我能夠
+    點進去看」。VS Code 的 file URI 支援 `:行號` 後綴，所以這裡直接
+    連到該函式的**那一行**，不是只開啟檔案讓人自己找。
+    """
+    if not core:
+        return ""
+    rel, line = core["file"], core.get("line")
+    uri = _vscode_uri(rel) + (f":{line}" if line else "")
+    where = f"{rel}:{line}" if line else rel
+    why = _inline_markup(html.escape(core.get("why", "")))
+    return ('<div class="callout cr"><div class="callout-h">核心程式碼</div>'
+            f'<p class="core-fn"><a class="inline-src" href="{html.escape(uri)}">'
+            f'<code>{html.escape(core["name"])}</code>'
+            f'<span class="core-where">{html.escape(where)}</span> ↗</a></p>'
+            f'<p class="doc-p">{why}</p></div>')
+
+
 def _vscode_uri(rel_path: str) -> str:
     """組出 `vscode://file/` URI，點了直接在 VS Code 開啟這支腳本
     （2026-08-25 使用者要求：不要在頁面內顯示原始碼，直接跳去編輯器，
@@ -734,14 +1029,41 @@ def render_html(status: dict, sync: dict | None = None) -> str:
                 content_parts.append(
                     f'<div class="status-row"><code>{html.escape(label)}</code>'
                     f'{_status_badge(st)}</div>')
+
+            # 人工整理的解說層，順序是刻意的：先看「重點」知道這一步在
+            # 幹嘛，再看「公式」知道實際在算什麼，再看「文獻出處」知道
+            # 憑什麼這樣算，最後才是「核心程式碼」跳進實作。原始
+            # docstring 排在這些之後（見下面的 script 迴圈），當作想深入
+            # 時的延伸閱讀，不是第一眼就要讀完的東西。
+            content_parts.append(_render_key_points(step.get("key_points", [])))
+            content_parts.append(_render_prereq(step.get("prereq", [])))
+            content_parts.append(_render_formula(step.get("formula", [])))
+            content_parts.append(_render_refs(step.get("refs", [])))
+            content_parts.append(_render_core(step.get("core")))
+
             for script in step.get("scripts", []):
-                doc = read_docstring(script)
+                ext = script in step.get("external", {})
+                upstream = step.get("external", {}).get(script)
+                doc = read_docstring(script, external=ext, upstream=upstream)
+                exists = (REPO_ROOT / script).exists()
+                # 檔案不在本機時不要給「用 VS Code 開啟」的連結——點了只會
+                # 跳出一個開不了的錯誤視窗。第三方套件另外標一個外連到上游
+                # repo 的連結，那才是真的看得到原始碼的地方。
+                if exists:
+                    link = (f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
+                            f'<code>{html.escape(script)}</code> ↗</a>')
+                elif ext and upstream:
+                    link = (f'<span class="script-link missing"><code>'
+                            f'{html.escape(script)}</code></span>'
+                            f'<a class="upstream-link" href="{html.escape(upstream)}" '
+                            f'target="_blank" rel="noopener">第三方套件，看上游原始碼 ↗</a>')
+                else:
+                    link = (f'<span class="script-link missing"><code>'
+                            f'{html.escape(script)}</code>（本機找不到）</span>')
                 content_parts.append(
-                    '<div class="script-block">'
-                    f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
-                    f'<code>{html.escape(script)}</code> ↗</a>'
-                    '<details class="doc-details"><summary>說明</summary>'
-                    f'<pre class="doc">{html.escape(doc)}</pre></details></div>')
+                    '<div class="script-block">' + link
+                    + '<details class="doc-details"><summary>程式檔頭原文說明</summary>'
+                    f'<div class="doc">{_render_doc(doc)}</div></details></div>')
             content_parts.append("</article>")
 
         nav_parts.append("</ul>")
@@ -929,8 +1251,58 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
    docstring 常常很長，看不看得由使用者自己決定，不是一定要展開。 */
 .doc-details summary { cursor: pointer; font-size: 0.8em; color: #777;
                        margin-top: 0.3em; }
-.doc { white-space: pre-wrap; font-size: 0.8em; background: rgba(128,128,128,0.08);
-      padding: 0.6em; border-radius: 3px; margin: 0.3em 0 0; }
+.doc { font-size: 0.85em; background: rgba(128,128,128,0.06);
+      padding: 0.6em 0.9em; border-radius: 3px; margin: 0.3em 0 0; }
+.doc-p { margin: 0.5em 0; line-height: 1.75; }
+.doc-pre { white-space: pre-wrap; font-family: Consolas, monospace;
+          font-size: 0.95em; background: rgba(128,128,128,0.10);
+          padding: 0.5em 0.7em; border-radius: 3px; margin: 0.5em 0;
+          overflow-x: auto; }
+.script-link.missing { font-size: 0.9em; color: #999; }
+.upstream-link { font-size: 0.8em; margin-left: 0.6em; }
+
+/* 解說層（重點／公式／文獻／核心程式碼）——2026-08-26 使用者要求把
+   說明做成「像文獻或教學文件」的可讀性。四塊各給一個左側色條，讓人
+   掃過去就知道這段是哪一類資訊，不用讀完才分辨。 */
+.callout { border-left: 3px solid #888; padding: 0.1em 0 0.1em 0.9em;
+          margin: 0.8em 0 0.8em 0.3em; }
+.callout-h { font-size: 0.78em; font-weight: 600; letter-spacing: 0.08em;
+            color: #777; margin-bottom: 0.3em; }
+.callout.kp { border-left-color: #2a7; }
+.callout.fm { border-left-color: #47c; }
+.callout.rf { border-left-color: #a70; }
+.callout.cr { border-left-color: #c47; }
+.callout.pq { border-left-color: #7a5; }
+.kp-list { margin: 0.2em 0; padding-left: 1.2em; font-size: 0.88em;
+          line-height: 1.7; }
+.kp-list li { margin: 0.25em 0; }
+.formula-item { margin: 0.5em 0 0.8em; }
+.formula-expr { font-family: Consolas, monospace; font-size: 0.9em;
+               background: rgba(70,120,200,0.10); padding: 0.6em 0.8em;
+               border-radius: 3px; margin: 0 0 0.3em; white-space: pre-wrap;
+               overflow-x: auto; }
+.formula-field { font-size: 0.84em; margin: 0.3em 0; line-height: 1.7; }
+.ff-lab { display: inline-block; font-weight: 600; color: #47c;
+         margin-right: 0.5em; font-size: 0.92em; }
+mark.hl { background: rgba(255,214,0,0.35); color: inherit;
+         padding: 0.05em 0.15em; border-radius: 2px; }
+.formula-where, .formula-src { font-size: 0.82em; color: #777;
+                              margin: 0.2em 0; line-height: 1.65; }
+.ref-table { border-collapse: collapse; font-size: 0.82em; width: 100%;
+            margin: 0.2em 0; }
+.ref-table th { text-align: left; font-weight: 600; color: #777;
+               border-bottom: 1px solid rgba(128,128,128,0.35);
+               padding: 0.25em 0.6em 0.25em 0; font-size: 0.95em; }
+.ref-table td { vertical-align: top; padding: 0.3em 0.6em 0.3em 0;
+               border-bottom: 1px solid rgba(128,128,128,0.15);
+               line-height: 1.6; }
+.ref-cite { white-space: normal; min-width: 12em; }
+.ref-role { color: #777; }
+.ref-local { white-space: nowrap; font-size: 0.95em; }
+.core-fn { margin: 0.2em 0 0.4em; font-size: 0.9em; }
+.core-where { color: #888; font-size: 0.85em; margin-left: 0.6em; }
+.inline-src { text-decoration: none; }
+.inline-src:hover { text-decoration: underline; }
 .badge { border-radius: 3px; padding: 0.05em 0.5em; font-size: 0.85em;
         margin-right: 0.5em; }
 .badge.ok { background: rgba(34,170,102,0.2); }
@@ -963,7 +1335,14 @@ _ROUTES = {
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 — 覆寫標準函式庫的命名慣例
-        route = _ROUTES.get(self.path)
+        # 路由比對前要先去掉查詢字串（?key=value）——之前是直接拿
+        # self.path 整段比對，2026-08-31 部署到協調 VM 後透過 Cloud
+        # Shell Web Preview／IAP tunnel 測試時發現打不開：Web Preview
+        # 開網址時會自動加 ?authuser=0，self.path 變成
+        # "/?authuser=0"，對不到 _ROUTES 裡的 "/"，直接回 404。
+        # 一般瀏覽器直接打開網址不會加這種參數，本機測試一直沒踩到。
+        path = urlsplit(self.path).path
+        route = _ROUTES.get(path)
         if route is None:
             self.send_response(404)
             self.end_headers()
@@ -993,7 +1372,7 @@ def _bind_server(retries: int = 10, delay: float = 0.5) -> ThreadingHTTPServer:
     連接埠前就先啟動，短暫重試等它讓出來，而不是直接炸掉。"""
     for attempt in range(retries):
         try:
-            return ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+            return ThreadingHTTPServer((HOST, PORT), Handler)
         except OSError:
             if attempt == retries - 1:
                 raise
@@ -1005,6 +1384,11 @@ def main() -> None:
     server = _bind_server()
     url = f"http://127.0.0.1:{PORT}/"
     print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
+    if HOST != "127.0.0.1":
+        print(f"注意：監聽位址是 {HOST}，這台機器的網卡連得到這個服務"
+              f"（不是只有這台自己）。這個頁面沒有密碼保護，只能靠防火牆"
+              f"擋——確認擋住的來源網段是正確的，不要在沒有對應防火牆"
+              f"規則的機器上這樣設。", flush=True)
     # 開瀏覽器交給桌面捷徑用的 launch_dashboard.vbs 負責（sh.Run 那行），
     # 這裡不重複開，避免透過捷徑啟動時跳出兩個分頁。直接用
     # `py app.py` 手動跑的話，自己貼網址開就好。

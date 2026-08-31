@@ -439,6 +439,25 @@ def main():
         print(f"錯誤：--configs 有不存在的設定名稱 {unknown}"
               f"（可用：{', '.join(CONFIGS)}）", flush=True)
         sys.exit(1)
+    # --free-lowmass 只在有 dav（config C/D）的設定下安全（2026-08-26
+    # CodeRabbit 回溯審查抓到）：enable_lowmass_fit() 一律把 p_lowmass
+    # 疊加在「目前 bounds 的最後一維」，而 JointModel.synthesise() 是位置
+    # 式解讀 theta——len(theta) > 6 時 theta[6] 一律當成 dav。A/B 沒有 dav
+    # （extra 是 None，enable_dav_fit() 不會被呼叫），bounds 只有 6 維，
+    # 若這裡還呼叫 enable_lowmass_fit()，p_lowmass 會被塞進 bounds 的
+    # 索引 6，跑起來卻被 synthesise() 誤讀成 dav；低質量段冪次實際上
+    # 全程沒被觸碰、仍是固定值，但輸出欄位會被標成「自由 p_lowmass」
+    # 擬合出來的結果，安靜地產生錯的數字。目前程式碼還沒有追蹤到底
+    # 疊加的是哪個參數的機制，先直接拒絕這個組合，不要生出誤標的結果。
+    if args.free_lowmass:
+        no_dav = [k for k in requested if CONFIGS[k][2] is None]
+        if no_dav:
+            print(f"錯誤：--free-lowmass 目前只支援有 dav 的設定"
+                  f"（C／D），{no_dav} 沒有 dav，疊加 p_lowmass 會被"
+                  f"synthesise() 誤讀成 dav、產生誤標的結果。請從 "
+                  f"--configs 移除 {no_dav}，或不要帶 --free-lowmass。",
+                  flush=True)
+            sys.exit(1)
     for key in requested:
         desc, s, extra, allow = CONFIGS[key]
         print(f"{'='*74}\n{key}：{desc}\n{'='*74}", flush=True)
