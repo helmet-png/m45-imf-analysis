@@ -35,6 +35,7 @@ from __future__ import annotations
 import ast
 import ctypes
 import html
+import json
 import os
 import re
 import shlex
@@ -48,7 +49,7 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
-from urllib.parse import quote_plus, urlsplit
+from urllib.parse import parse_qs, quote_plus, urlsplit
 
 if sys.platform == "win32":
     # 2026-08-26 使用者實際遇到：git.exe（跟 ssh.exe）偶爾會跳出
@@ -100,7 +101,32 @@ import ssh_sync  # noqa: E402  _get_worker() 會把 remote_dir 的 ~ 展開成�
 import ssh_workers  # noqa: E402  remote_run()
 
 sys.path.insert(0, str(HERE))
-from stage_map import STAGES  # noqa: E402
+import stage_map  # noqa: E402  STEP_EXTRAS（人工整理的教學說明，見 get_stages()）
+
+CATEGORIZATION_PATH = HERE / "categorization.json"
+
+
+def get_stages() -> list[dict]:
+    """回傳跟舊版 `stage_map.STAGES` 一模一樣形狀的清單，但即時組出來，
+    不是模組載入時就固定的常數（2026-08-31，為了管理 UI 能直接寫檔案、
+    不用重啟伺服器就看到新結構）。
+
+    「結構」（哪個階段有哪些步驟、每個步驟對應哪些程式／queue_labels／
+    external）來自 `categorization.json`——管理 UI 只會寫這份檔案，
+    每次都重新讀，UI 操作完立刻反映在頁面上。「教學內容」（重點／公式／
+    文獻出處／核心程式碼／備註）留在 `stage_map.py` 的 `STEP_EXTRAS`，
+    用步驟名稱對應，UI 完全不碰這塊——那是大段手寫散文，機器沒辦法
+    安全地自動生成或編輯，管理 UI 也刻意不提供編輯這塊的功能。"""
+    data = json.loads(CATEGORIZATION_PATH.read_text(encoding="utf-8"))
+    stages = []
+    for stage in data["stages"]:
+        new_stage = {"name": stage["name"], "steps": []}
+        for step in stage["steps"]:
+            merged = dict(step)  # name, scripts, queue_labels?, external?
+            merged.update(stage_map.STEP_EXTRAS.get(step["name"], {}))
+            new_stage["steps"].append(merged)
+        stages.append(new_stage)
+    return stages
 
 PORT = 8866
 # 監聽位址。預設 127.0.0.1＝只有這台電腦自己連得到，任何人在自己電腦
@@ -281,7 +307,7 @@ def discover_unindexed_scripts() -> list[str]:
     tracked = {line.strip() for line in result.stdout.splitlines() if line.strip()}
 
     indexed: set[str] = set()
-    for stage in STAGES:
+    for stage in get_stages():
         for step in stage["steps"]:
             indexed.update(step.get("scripts", []))
 
@@ -596,7 +622,7 @@ def gather_status() -> dict:
     alive, pid = dispatcher_alive()
 
     all_labels = set()
-    for stage in STAGES:
+    for stage in get_stages():
         for step in stage["steps"]:
             all_labels.update(step.get("queue_labels", []))
 
@@ -1129,7 +1155,7 @@ def render_html(status: dict, sync: dict | None = None) -> str:
     nav_parts = ['<nav class="tree" id="tree-pane">']
     content_parts = ['<div class="content">']
 
-    for si, stage in enumerate(STAGES):
+    for si, stage in enumerate(get_stages()):
         stage_id = f"stage-{si}"
         nav_parts.append(f'<a class="tree-stage" href="#{stage_id}">'
                          f'{html.escape(stage["name"])}</a><ul>')
@@ -1271,7 +1297,305 @@ _RESIZE_SCRIPT = """
 
 
 _NAV = ('<nav class="nav"><a href="/">依步驟看</a>'
-       '<a href="/workers">依雲端服務看</a></nav>')
+       '<a href="/workers">依雲端服務看</a>'
+       '<a href="/manage">整理分類</a></nav>')
+
+
+# ==================================================================
+# 分類管理 UI（2026-08-31 使用者要求：不用手動改檔案路徑，直接在頁面
+# 上把程式移到別的步驟、建新分類、刪除/搬動——只寫 categorization.json
+# 這份純結構的檔案（見 get_stages() 的說明），完全不碰 stage_map.py
+# 裡的教學說明散文，不會有把手寫內容改壞的風險。
+#
+# 這是主控板第一個會寫入的功能——檔頭設計原則本來寫「沒有表單提交」，
+# 這裡是刻意的例外，僅限這個管理頁面用，其餘頁面依然是純唯讀 GET。
+# ==================================================================
+
+_MANAGE_LOCK = threading.Lock()  # 保護 categorization.json 的讀-改-寫，
+                                 # 避免兩個分頁同時送出表單互相蓋掉對方
+
+
+def _load_categorization() -> dict:
+    return json.loads(CATEGORIZATION_PATH.read_text(encoding="utf-8"))
+
+
+def _save_categorization(data: dict) -> None:
+    CATEGORIZATION_PATH.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _find_step(data: dict, stage_name: str, step_name: str) -> dict | None:
+    for stage in data["stages"]:
+        if stage["name"] == stage_name:
+            for step in stage["steps"]:
+                if step["name"] == step_name:
+                    return step
+    return None
+
+
+def _remove_script_everywhere(data: dict, script: str) -> None:
+    """一支程式最多只屬於一個步驟——搬動／新增前先把它從目前所在的
+    步驟（不管是哪一個）移除，避免同一支程式出現在兩個步驟底下。"""
+    for stage in data["stages"]:
+        for step in stage["steps"]:
+            if script in step.get("scripts", []):
+                step["scripts"].remove(script)
+
+
+def handle_manage_action(action: str, fields: dict[str, str]) -> str | None:
+    """執行一個管理動作，回傳錯誤訊息（沒錯誤回傳 None）。整段包在鎖跟
+    try/except 裡——寫檔案這件事本身有風險，任何沒預期的例外都要當成
+    「這次操作失敗」處理，不能讓伺服器整個掛掉或寫出半份壞掉的 JSON。"""
+    with _MANAGE_LOCK:
+        data = _load_categorization()
+        warning = None  # 非致命提醒（例如改名後教學說明變孤兒）——跟
+                        # 錯誤不同，錯誤用 return 直接中止；warning 是
+                        # 「動作已經成功存檔，但有件事你該知道」，要走到
+                        # 下面共用的 _save_categorization() 才能回傳。
+
+        if action == "move_script" or action == "add_script":
+            script = fields.get("script", "").strip()
+            to_stage, to_step = fields.get("to_stage", ""), fields.get("to_step", "")
+            if not script:
+                return "程式路徑不能空白。"
+            target = _find_step(data, to_stage, to_step)
+            if target is None:
+                return "找不到目標步驟。"
+            _remove_script_everywhere(data, script)
+            target.setdefault("scripts", []).append(script)
+
+        elif action == "remove_script":
+            script = fields.get("script", "").strip()
+            stage_name, step_name = fields.get("stage", ""), fields.get("step", "")
+            step = _find_step(data, stage_name, step_name)
+            if step is None:
+                return "找不到步驟。"
+            if script in step.get("scripts", []):
+                step["scripts"].remove(script)
+
+        elif action == "create_step":
+            stage_name = fields.get("stage", "")
+            name = fields.get("name", "").strip()
+            if not name:
+                return "步驟名稱不能空白。"
+            for stage in data["stages"]:
+                if stage["name"] == stage_name:
+                    if any(s["name"] == name for s in stage["steps"]):
+                        return "這個階段底下已經有同名步驟了。"
+                    stage["steps"].append({"name": name, "scripts": []})
+                    break
+            else:
+                return "找不到目標階段。"
+
+        elif action == "delete_step":
+            stage_name, name = fields.get("stage", ""), fields.get("name", "")
+            for stage in data["stages"]:
+                if stage["name"] == stage_name:
+                    before = len(stage["steps"])
+                    stage["steps"] = [s for s in stage["steps"] if s["name"] != name]
+                    if len(stage["steps"]) == before:
+                        return "找不到這個步驟。"
+                    break
+            else:
+                return "找不到階段。"
+            # 底下的程式不會被刪除，只是失去分類，下次整理頁面會自動
+            # 出現在「未分類程式」，不會憑空消失。
+
+        elif action == "create_stage":
+            name = fields.get("name", "").strip()
+            if not name:
+                return "階段名稱不能空白。"
+            if any(s["name"] == name for s in data["stages"]):
+                return "已經有同名階段了。"
+            data["stages"].append({"name": name, "steps": []})
+
+        elif action == "delete_stage":
+            name = fields.get("name", "")
+            for stage in data["stages"]:
+                if stage["name"] == name:
+                    if stage["steps"]:
+                        return "這個階段底下還有步驟，先搬空或刪除步驟才能刪階段。"
+                    data["stages"].remove(stage)
+                    break
+            else:
+                return "找不到階段。"
+
+        elif action == "rename_step":
+            stage_name = fields.get("stage", "")
+            old_name, new_name = fields.get("old_name", ""), fields.get("new_name", "").strip()
+            if not new_name:
+                return "新名稱不能空白。"
+            step = _find_step(data, stage_name, old_name)
+            if step is None:
+                return "找不到步驟。"
+            if _find_step(data, stage_name, new_name) is not None:
+                return "這個階段底下已經有同名步驟了。"
+            step["name"] = new_name
+            if old_name in stage_map.STEP_EXTRAS:
+                # 注意：這裡故意不 return（早期版本這裡直接 return 過，
+                # 會跳過下面共用的 _save_categorization()，改名訊息看起來
+                # 「成功」但其實從沒真的寫進檔案——本機測試才抓到，記在
+                # 這裡避免以後又犯同一種「有分支忘記走共用收尾」的錯）。
+                warning = (
+                    f"改名成功，但「{old_name}」在 stage_map.py 裡有教學說明"
+                    f"（重點／公式／文獻出處），改名後對不上了——這部分不會"
+                    f"自動搬，需要手動去 stage_map.py 把那個 key 也改成"
+                    f"「{new_name}」，不然那份說明會變孤兒（顯示不出來，"
+                    f"但也不會遺失，還在檔案裡）。")
+
+        elif action == "rename_stage":
+            old_name, new_name = fields.get("old_name", ""), fields.get("new_name", "").strip()
+            if not new_name:
+                return "新名稱不能空白。"
+            for stage in data["stages"]:
+                if stage["name"] == new_name:
+                    return "已經有同名階段了。"
+            for stage in data["stages"]:
+                if stage["name"] == old_name:
+                    stage["name"] = new_name
+                    break
+            else:
+                return "找不到階段。"
+
+        else:
+            return f"不認得的動作：{action}"
+
+        _save_categorization(data)
+        return warning
+
+
+def render_manage_html(error: str | None = None, notice: str | None = None) -> str:
+    stages = get_stages()
+    unindexed = discover_unindexed_scripts()
+
+    parts = [f"""<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<title>整理分類 - M45 IMF 專案主控板</title>
+<style>{_CSS}</style></head><body>
+<h1>整理分類</h1>
+{_NAV}
+<p class="sub">把程式移到別的步驟、建立/刪除分類、管理步驟底下的程式——
+只改 <code>status_dashboard/categorization.json</code>，不會動到
+<code>stage_map.py</code> 裡的教學說明文字。改完記得自己 commit／push
+（見頁尾說明），這個頁面本身不會自動推上 GitHub。</p>
+"""]
+    if error:
+        parts.append(f'<p class="warn-text">{html.escape(error)}</p>')
+    if notice:
+        parts.append(f'<p class="note">{html.escape(notice)}</p>')
+
+    parts.append('<form method="post" action="/manage/action" class="manage-form">'
+                 '<input type="hidden" name="action" value="create_stage">'
+                 '<input type="text" name="name" placeholder="新階段名稱" required>'
+                 '<button type="submit">新增階段</button></form>')
+
+    for stage in stages:
+        parts.append('<section class="manage-stage">')
+        parts.append(
+            '<h2>'
+            f'<form method="post" action="/manage/action" class="inline-form">'
+            f'<input type="hidden" name="action" value="rename_stage">'
+            f'<input type="hidden" name="old_name" value="{html.escape(stage["name"])}">'
+            f'<input type="text" name="new_name" value="{html.escape(stage["name"])}">'
+            f'<button type="submit">重新命名</button></form>'
+            f'<form method="post" action="/manage/action" class="inline-form"'
+            f' onsubmit="return confirm(\'確定要刪除這個階段？（只有空階段能刪）\')">'
+            f'<input type="hidden" name="action" value="delete_stage">'
+            f'<input type="hidden" name="name" value="{html.escape(stage["name"])}">'
+            f'<button type="submit" class="danger">刪除階段</button></form>'
+            '</h2>')
+
+        for step in stage["steps"]:
+            parts.append('<div class="manage-step">')
+            parts.append(
+                f'<h3><code>{html.escape(step["name"])}</code>'
+                f'<form method="post" action="/manage/action" class="inline-form">'
+                f'<input type="hidden" name="action" value="rename_step">'
+                f'<input type="hidden" name="stage" value="{html.escape(stage["name"])}">'
+                f'<input type="hidden" name="old_name" value="{html.escape(step["name"])}">'
+                f'<input type="text" name="new_name" value="{html.escape(step["name"])}">'
+                f'<button type="submit">重新命名</button></form>'
+                f'<form method="post" action="/manage/action" class="inline-form"'
+                f' onsubmit="return confirm(\'確定要刪除這個步驟？底下的程式會變成'
+                f'未分類，不會被刪除。\')">'
+                f'<input type="hidden" name="action" value="delete_step">'
+                f'<input type="hidden" name="stage" value="{html.escape(stage["name"])}">'
+                f'<input type="hidden" name="name" value="{html.escape(step["name"])}">'
+                f'<button type="submit" class="danger">刪除步驟</button></form></h3>')
+
+            parts.append('<ul class="manage-script-list">')
+            for script in step.get("scripts", []):
+                move_options = "".join(
+                    f'<option value="{html.escape(s["name"])}|{html.escape(st["name"])}">'
+                    f'{html.escape(s["name"])} / {html.escape(st["name"])}</option>'
+                    for s in stages for st in s["steps"]
+                )
+                parts.append(
+                    f'<li><code>{html.escape(script)}</code>'
+                    f'<form method="post" action="/manage/action" class="inline-form">'
+                    f'<input type="hidden" name="action" value="move_script">'
+                    f'<input type="hidden" name="script" value="{html.escape(script)}">'
+                    f'<select name="to_stage_step" onchange="'
+                    f"this.form.to_stage.value=this.value.split('|')[0];"
+                    f"this.form.to_step.value=this.value.split('|')[1]"
+                    f'">{move_options}</select>'
+                    f'<input type="hidden" name="to_stage"><input type="hidden" name="to_step">'
+                    f'<button type="submit">搬到</button></form>'
+                    f'<form method="post" action="/manage/action" class="inline-form">'
+                    f'<input type="hidden" name="action" value="remove_script">'
+                    f'<input type="hidden" name="script" value="{html.escape(script)}">'
+                    f'<input type="hidden" name="stage" value="{html.escape(stage["name"])}">'
+                    f'<input type="hidden" name="step" value="{html.escape(step["name"])}">'
+                    f'<button type="submit" class="danger">移出（變未分類）</button></form>'
+                    '</li>')
+            parts.append('</ul>')
+
+            parts.append(
+                '<form method="post" action="/manage/action" class="inline-form">'
+                '<input type="hidden" name="action" value="add_script">'
+                f'<input type="hidden" name="to_stage" value="{html.escape(stage["name"])}">'
+                f'<input type="hidden" name="to_step" value="{html.escape(step["name"])}">'
+                '<input list="unindexed-scripts" name="script" '
+                'placeholder="程式路徑（可從未分類清單挑，或手動輸入）" required>'
+                '<button type="submit">加進這個步驟</button></form>')
+            parts.append('</div>')
+
+        parts.append(
+            '<form method="post" action="/manage/action" class="manage-form">'
+            '<input type="hidden" name="action" value="create_step">'
+            f'<input type="hidden" name="stage" value="{html.escape(stage["name"])}">'
+            '<input type="text" name="name" placeholder="新步驟名稱" required>'
+            '<button type="submit">在這個階段新增步驟</button></form>')
+        parts.append('</section>')
+
+    parts.append('<datalist id="unindexed-scripts">'
+                 + "".join(f'<option value="{html.escape(s)}">' for s in unindexed)
+                 + '</datalist>')
+
+    parts.append(f"""
+<section class="manage-stage">
+<h2>未分類程式（{len(unindexed)}）</h2>
+<p class="note">還沒被歸進任何步驟——用上面各步驟的「加進這個步驟」表單
+把它們分類進去。</p>
+<ul class="manage-script-list">""")
+    for script in unindexed:
+        parts.append(f'<li><code>{html.escape(script)}</code></li>')
+    parts.append("</ul></section>")
+
+    parts.append("""
+<section class="manage-stage">
+<h2>改完之後</h2>
+<p class="note">這個頁面只會寫本機的 <code>status_dashboard/categorization.json</code>，
+不會自動 commit 或 push。整理到一個段落後，自己開一個終端機：<br>
+<code>git add status_dashboard/categorization.json &amp;&amp;
+git checkout -b claude/reorganize-stage-map &amp;&amp;
+git commit -m "整理分類" &amp;&amp; git push -u origin claude/reorganize-stage-map</code><br>
+然後照 CONTRIBUTING.md 開 PR——這個檔案是共用結構，跟其他任何改動一樣
+要走 PR，不要直接推 main。</p>
+</section>""")
+
+    parts.append("</body></html>")
+    return "".join(parts)
 
 
 def _worker_badge(w: dict) -> str:
@@ -1471,6 +1795,29 @@ code { font-family: Consolas, monospace; }
   .tree { position: static; max-height: none; width: 100% !important; }
   .resizer { display: none; }
 }
+
+/* 分類管理頁（/manage，2026-08-31）——跟其他頁面共用同一份 CSS，這裡
+   只加表單相關的樣式。inline-form 讓每個小動作（搬到/移出/重新命名）
+   看起來像一顆按鈕＋一個小輸入框，不是一大坨表單擠在一起。 */
+.manage-stage { border-top: 2px solid #999; padding-top: 0.6em; margin-top: 1.5em; }
+.manage-stage h2 { display: flex; align-items: center; gap: 0.6em; font-size: 1.1em; }
+.manage-step { border-left: 2px solid #ccc; margin: 0.8em 0; padding-left: 0.8em; }
+.manage-step h3 { display: flex; align-items: center; gap: 0.6em; flex-wrap: wrap;
+                  font-size: 0.95em; margin: 0.4em 0; }
+.manage-script-list { list-style: none; margin: 0.3em 0; padding: 0; }
+.manage-script-list li { display: flex; align-items: center; gap: 0.5em;
+                         flex-wrap: wrap; padding: 0.2em 0; font-size: 0.88em; }
+.inline-form, .manage-form { display: inline-flex; align-items: center; gap: 0.3em; }
+.manage-form { margin: 0.6em 0; }
+.inline-form input[type="text"], .inline-form input[list],
+.manage-form input[type="text"] {
+  font-size: 0.85em; padding: 0.15em 0.4em; border: 1px solid #ccc; border-radius: 3px;
+}
+.inline-form button, .manage-form button {
+  font-size: 0.82em; padding: 0.15em 0.6em; cursor: pointer;
+}
+.inline-form button.danger, .manage-form button.danger { color: #c33; }
+.inline-form select { font-size: 0.82em; }
 """
 
 
@@ -1481,8 +1828,10 @@ code { font-family: Consolas, monospace; }
 # sync 只做一次、兩個路由共用——workers 頁不特別顯示同步狀態，但一樣
 # 從這次同步受益（資料層讀的是同一份 REPO_ROOT）。
 _ROUTES = {
-    "/": lambda sync: render_html(gather_status(), sync),
-    "/workers": lambda sync: render_workers_html(gather_worker_status()),
+    "/": lambda sync, query: render_html(gather_status(), sync),
+    "/workers": lambda sync, query: render_workers_html(gather_worker_status()),
+    "/manage": lambda sync, query: render_manage_html(
+        error=query.get("error", [None])[0], notice=query.get("notice", [None])[0]),
 }
 
 
@@ -1494,15 +1843,16 @@ class Handler(BaseHTTPRequestHandler):
         # 開網址時會自動加 ?authuser=0，self.path 變成
         # "/?authuser=0"，對不到 _ROUTES 裡的 "/"，直接回 404。
         # 一般瀏覽器直接打開網址不會加這種參數，本機測試一直沒踩到。
-        path = urlsplit(self.path).path
-        route = _ROUTES.get(path)
+        split = urlsplit(self.path)
+        route = _ROUTES.get(split.path)
         if route is None:
             self.send_response(404)
             self.end_headers()
             return
+        query = parse_qs(split.query)
         try:
             sync = sync_repo_from_github()
-            body = route(sync).encode("utf-8")
+            body = route(sync, query).encode("utf-8")
         except Exception as e:  # noqa: BLE001 — 任何未預期例外都不該讓伺服器整個掛掉
             import traceback
             traceback.print_exc()
@@ -1515,6 +1865,32 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
         if _restart_pending:
             _self_restart()
+
+    def do_POST(self) -> None:  # noqa: N802
+        """目前只有 `/manage/action` 會用到——整個主控板唯一的寫入路徑
+        （見「分類管理 UI」那段的說明）。動作失敗（找不到步驟、名稱
+        重複之類）不會回 500，是導回 `/manage` 帶錯誤訊息，這樣使用者
+        在瀏覽器上看得到發生了什麼事，不用去翻 log。"""
+        path = urlsplit(self.path).path
+        if path != "/manage/action":
+            self.send_response(404)
+            self.end_headers()
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode("utf-8", errors="replace")
+        fields = {k: v[0] for k, v in parse_qs(body).items()}
+        action = fields.get("action", "")
+        try:
+            error = handle_manage_action(action, fields)
+        except Exception as e:  # noqa: BLE001 — 同上，寫入失敗不能讓伺服器掛掉
+            import traceback
+            traceback.print_exc()
+            error = f"發生未預期的錯誤：{e}"
+        location = "/manage?error=" + quote_plus(error) if error else "/manage"
+        self.send_response(303)  # See Other——POST 之後導向 GET，避免重整頁面時重複送出表單
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"[{datetime.now():%H:%M:%S}] " + fmt % args, flush=True)
