@@ -114,6 +114,12 @@
 |---|---|---|---|
 | praesepe_fbin_wall_residual（D17） | 2026-08-24 | 固定 HR23 年齡與消光、太陽金屬量 PARSEC 單星軌跡；比較對象是 `_postmerge_d8` 保存的 clean CMD | G=10–14 中段殘差對齊；G=14–18 中位偏亮 0.511 mag，支持暗端失配驅動 f_bin=1。細節見 `docs/planning/D17_PRAESEPE_CMD_RESIDUAL_2026-08-24.md` |
 
+### 多星團 selection 診斷（2026-08-24）
+
+| 任務名稱 | 完成日期 | 輸入參數 | 輸出參數 |
+|---|---|---|---|
+| ngc3532_selection_rootcause（D16） | 2026-08-24 | 已保存的 NGC 3532 Gaia 成員與 `_postmerge` selection 結果，只讀重播品質切割 | 紅側 28/31、藍側 24/32 通過；差異主要來自 BP/RP 超額失敗（紅 3、藍 7）；Fisher 精確檢定 p=0.302，不足以證明普遍色偏。細節見 `docs/planning/D16_NGC3532_SELECTION_ROOTCAUSE_2026-08-24.md` |
+
 ### B/C/D 類補齊（2026-08-13 查證過程）
 
 | 任務（括號＝對應 `LIMITATIONS.md` 條目） | 起手式 | 驗收標準 |

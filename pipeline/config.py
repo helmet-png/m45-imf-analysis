@@ -6,8 +6,26 @@
 """
 from __future__ import annotations
 
-import tomllib
 from pathlib import Path
+
+# tomllib 是 Python 3.11 才進標準庫的；3.10 以下要用 PyPI 上的 tomli
+# （同一批作者、同一套 API——tomllib 本來就是從 tomli 收編進標準庫的，
+# 所以 `import tomli as tomllib` 之後下游程式碼一行都不用改）。
+#
+# **2026-08-29 實際踩到才補上**：新接進來的運算節點是 Ubuntu 22.04，
+# 內建 Python 3.10.12，`import tomllib` 直接 ModuleNotFoundError，
+# 整條 pipeline 在載入設定檔這一步就死掉。原本的寫法等於隱性要求每台
+# worker 都是 3.11+，但這個限制既沒寫進文件、也沒有任何檢查會提早
+# 報錯——只有真的派工下去、跑到一半才會發現。
+#
+# 不改成「要求 worker 升級 Python」的理由：升級系統 Python 需要 root
+# 權限，而 worker 常常是別人提供的機器（這次就是學長的），不該為了
+# 我們的專案去動人家的系統環境；裝一個純 Python 的相容套件到使用者
+# 家目錄就能解決，代價小得多。
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PATH = ROOT / "config.toml"
