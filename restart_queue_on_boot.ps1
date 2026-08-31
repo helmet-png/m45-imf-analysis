@@ -158,13 +158,16 @@ try {
     # 新工作一律排 cloud_queue.txt 交給 cloud_queue.py（GCP/Kaggle）。
     # 若之後要恢復本機運算，把下面這行的註解拿掉即可，不用改別的地方。
     # Restart-QueueIfNotRunning -ScriptName "run_queue.py" -LogFile "queue_runner8.log"
-    Restart-QueueIfNotRunning -ScriptName "cloud_queue.py" -LogFile "cloud_queue_runner.log"
-    # 2026-08-26 新增：多帳號 GCP 資源池走 IAP tunnel 連線（見
-    # docs/reference/CLOUD_WORKERS_IAP_SETUP.md），iap_tunnel_manager.py
-    # 常駐維護那幾條 tunnel，跟 cloud_queue.py 一樣需要開機/登入後自動
-    # 重啟——沒設定任何 IAP worker 時這支腳本自己會閒置等待，不影響
-    # 只用傳統直連的既有 worker。
-    Restart-QueueIfNotRunning -ScriptName "iap_tunnel_manager.py" -LogFile "iap_tunnel_manager_runner.log"
+    # **2026-08-27 起停用**：協調角色（cloud_queue.py + iap_tunnel_manager.py）
+    # 已經整組遷移到雲端協調 VM（instance-20260827-035250，e2-micro，
+    # us-central1，systemd 常駐，見 docs/reference/CLOUD_WORKERS_IAP_SETUP.md
+    # 「給協調 VM 操作者做一次」一節）。這台筆電不再需要、也不應該自動
+    # 重啟這兩支——兩邊同時跑會對同一批 cloud_queue.txt／Kaggle 帳號搶著
+    # 派工，可能造成同一個工作被重複提交，IAP tunnel 也會被兩邊各自搶著
+    # 建立。若之後真的要把協調角色搬回本機（例如雲端 VM 停用），把下面
+    # 兩行的註解拿掉即可，不用改別的地方。
+    # Restart-QueueIfNotRunning -ScriptName "cloud_queue.py" -LogFile "cloud_queue_runner.log"
+    # Restart-QueueIfNotRunning -ScriptName "iap_tunnel_manager.py" -LogFile "iap_tunnel_manager_runner.log"
 }
 catch {
     Write-SelfLog "例外，重啟失敗：$($_.Exception.Message)"

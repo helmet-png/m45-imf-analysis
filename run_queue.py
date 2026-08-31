@@ -29,6 +29,18 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# subprocess.CREATE_NO_WINDOW 只存在於 Windows 版的 subprocess 模組。
+# **2026-08-29 實際造成事故才補上**：cloud_queue.py 匯入這支模組，而
+# 協調角色已經搬到 Linux VM 上跑——直接參照 subprocess.CREATE_NO_WINDOW
+# 會在 subprocess.run() 執行前就先拋 AttributeError，讓 cloud_queue.py
+# 每次啟動幾秒內就崩潰，systemd 不斷重啟（實測重試計數器累積到 5130
+# 次），服務看起來 active 但實際上完全沒在派工，gcp1 因此閒置超過 20
+# 小時、算完的結果沒人收，兩台 VM 都在計費卻都沒產出。
+# 用 getattr 給預設值 0，非 Windows 平台安全地變成無操作，跟沒傳這個
+# 參數效果相同。ssh_workers.py／gcp_vm_lifecycle.py 早就是這個寫法，
+# 這支跟 cloud_queue.py 當初漏掉了。
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
@@ -122,13 +134,47 @@ def _pid_alive(pid: int) -> bool | None:
     """回傳 True/False/None —— None 代表探測本身失敗（tasklist 逾時、
     找不到指令等），不能當成 False。
 
-    Windows 沒有 POSIX 的 os.kill(pid, 0) 探測語意 —— 傳 0 給 os.kill()
-    在 Windows 上會呼叫 TerminateProcess(handle, 0)，也就是真的把行程
-    殺掉，不是安全的存活探測。改用 tasklist 查詢，不會動到目標行程。
-    引數是 list 形式（不是 shell=True 的字串），pid 這裡永遠是
-    int(LOCK.read_text()) 解析出來的整數，不存在 shell injection 的
-    問題——自動掃描工具的 CWE-78 標記是這個模式的通用誤判，不是真的
-    有可控字串被組進 shell 命令。"""
+    **2026-08-26 加上 POSIX 分支**：`cloud_queue.py`／
+    `iap_tunnel_manager.py` 現在也會跑在 Linux 協調 VM 上（多帳號
+    資源池的中控機不再限定是某個人的 Windows 筆電，見
+    docs/reference/CLOUD_WORKERS_IAP_SETUP.md），這兩支程式的
+    `acquire_lock()` 都靠這支函式判斷鎖檔案裡的 PID 還活不活著——
+    原本這裡只有下面的 Windows `tasklist` 分支，在 Linux 上
+    `subprocess.run(["tasklist", ...])` 一定拋 `FileNotFoundError`
+    （被下面的 `except Exception` 接住），一律回傳 `None`，而
+    `acquire_lock()` 對 `None` 的處置是「保守當作還活著，直接
+    `sys.exit(1)` 退出」——後果是協調 VM 上只要發生過一次不乾淨的
+    結束（systemd 強制重啟、VM 被自動關機打斷），鎖檔案就永遠卡住，
+    之後每次 systemd 想重啟都會立刻退出、不會真的重新開始工作，
+    等於把「無人值守自動復原」這個換到雲端 VM 的整個目的完全抵銷，
+    而且不會有明顯的崩潰訊息，只會安靜地卡住。
+    Linux／macOS 用 POSIX 語意的 `os.kill(pid, 0)` 探測——送訊號 0
+    不會真的送出任何訊號，只做權限／存在性檢查，是不會誤殺目標行程的
+    安全做法（下面註解裡「傳 0 會殺掉行程」的陷阱是 Windows 特有的，
+    POSIX 平台上 signal 0 沒有這個問題，這是 Python 官方文件記載的
+    標準用法）。Windows 沒有這個 POSIX 語意，維持原本的 tasklist
+    查詢，邏輯完全不動。"""
+    if sys.platform != "win32":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # 行程存在，只是不是目前使用者能送訊號的對象（例如換了
+            # 使用者身分重啟過）——存在本身已經確定，當作活著。
+            return True
+        except OSError:
+            return None
+        else:
+            return True
+
+    # Windows 沒有 POSIX 的 os.kill(pid, 0) 探測語意 —— 傳 0 給 os.kill()
+    # 在 Windows 上會呼叫 TerminateProcess(handle, 0)，也就是真的把行程
+    # 殺掉，不是安全的存活探測。改用 tasklist 查詢，不會動到目標行程。
+    # 引數是 list 形式（不是 shell=True 的字串），pid 這裡永遠是
+    # int(LOCK.read_text()) 解析出來的整數，不存在 shell injection 的
+    # 問題——自動掃描工具的 CWE-78 標記是這個模式的通用誤判，不是真的
+    # 有可控字串被組進 shell 命令。
     # **2026-08-20 修**：原本用 text=True 讓 subprocess 自己決定編碼。
     # 這台是中文 Windows，`tasklist` 輸出 cp950（Big5）——平常剛好能解，
     # 但只要環境有 PYTHONUTF8=1（用 UTF-8 去解 Big5 位元組），解碼會在
@@ -150,7 +196,7 @@ def _pid_alive(pid: int) -> bool | None:
         out = subprocess.run(
             ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
             capture_output=True, timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+            creationflags=_CREATE_NO_WINDOW)
     except Exception:                                 # noqa: BLE001
         return None
     if out.returncode != 0 or out.stdout is None:
@@ -192,7 +238,7 @@ def _process_tree_cpu_ticks(root_pid: int) -> int | None:
              "Select-Object ProcessId,ParentProcessId,KernelModeTime,"
              "UserModeTime | ConvertTo-Csv -NoTypeInformation"],
             capture_output=True, timeout=30,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+            creationflags=_CREATE_NO_WINDOW)
     except Exception:                                     # noqa: BLE001
         return None
     # 同 _pid_alive() 的理由（見那邊 2026-08-20 的說明）：自己解碼，
@@ -299,7 +345,7 @@ def _kill_process_tree(pid: int):
     try:
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
                        capture_output=True, timeout=15,
-                       creationflags=subprocess.CREATE_NO_WINDOW)
+                       creationflags=_CREATE_NO_WINDOW)
     except Exception:                                     # noqa: BLE001
         pass
 
