@@ -88,8 +88,15 @@ def load_accounts() -> dict[str, dict[str, str]]:
                 f"多人使用：複製 {EXAMPLE_FILE.name} 改名成 "
                 f"{ACCOUNTS_FILE.name}，每個帳號去 kaggle.com/settings/api "
                 f"按 Generate New Token 貼進去。")
-        # 舊流程沒有登記 username，用 kaggle.json 裡的（若存在）或留空 ——
-        # 留空只會影響組 ID 時的顯示，實際認證只看 token。
+        # 舊流程沒有登記 username，用 kaggle.json 裡的（若存在）。
+        # **不能留空**（2026-08-26 CodeRabbit 回溯審查抓到）：username 不只
+        # 影響顯示，kaggle_sync.py 的 make_dataset_metadata()／make_kernel()
+        # 直接拿它組 dataset/kernel ID（f"{username}/m45-imf-{slug}"）。
+        # 留空會組出 "/m45-imf-xxx" 這種缺 owner 前綴的 ID，Kaggle CLI 在
+        # datasets create 才會失敗，而且錯誤訊息看不出是 username 缺失。
+        # 這支模組的 docstring 明講「不需要下載 kaggle.json」，所以「只有
+        # access_token、沒有 kaggle.json」是真的會發生的狀態，這裡要直接
+        # 擋下來、給可行動的錯誤訊息，而不是留給下游一個查不出原因的失敗。
         username = ""
         kj = Path.home() / ".kaggle" / "kaggle.json"
         if kj.exists():
@@ -98,6 +105,12 @@ def load_accounts() -> dict[str, dict[str, str]]:
                     "username", "")
             except (json.JSONDecodeError, OSError):
                 pass
+        if not username:
+            raise ValueError(
+                f"找到 {token_path} 但無法取得 username（{kj} 不存在，或"
+                f"存在但沒有 username 欄位）。組 dataset/kernel ID 需要"
+                f"username，請改用 {ACCOUNTS_FILE.name}（複製 "
+                f"{EXAMPLE_FILE.name}）明確登記 username 與 token。")
         return {"default": {"username": username,
                             "token": token_path.read_text(encoding="utf-8").strip()}}
 

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -291,11 +292,20 @@ def run(cmd: list[str], env: dict | None = None) -> subprocess.CompletedProcess:
                           env=env)
 
 
-def push(item: dict, account_name: str) -> tuple[bool, str, Path]:
+def push(item: dict, account_name: str, username: str) -> tuple[bool, str, Path]:
     """呼叫 kaggle_sync.py push（用獨立行程，出例外不會拖垮這支常駐執行器）。
 
     回傳 (是否成功, kernel id, work_dir)。kid 用跟 kaggle_sync.py 相同的
     公式算出來，而不是解析它印出的文字 —— 少一層字串解析就少一種脆弱點。
+
+    **username 由呼叫端傳入，這裡不自己重新 load_accounts()**（2026-08-26
+    CodeRabbit 回溯審查抓到）：main() 開始時已經載入過一次 accounts；
+    docstring 明講「執行中可以把新工作追加到 kaggle_queue.txt 末端」，
+    使用者也可能在執行中編輯 kaggle_accounts.json——若該檔案當下正好是
+    半寫入狀態，這裡重新 json.loads() 會拋 JSONDecodeError，而 main()
+    的主迴圈沒有包 try/except，整支常駐執行器就會直接掛掉，所有槽位裡
+    正在跑的 kernel 沒人追蹤。就算沒撞到半寫入，執行中途檔案內容改變，
+    也可能讓這裡算出的 kid 跟實際 push 出去的 kernel 對不上。
     """
     slug = item["label"].replace("_", "-")
     cmd = [sys.executable, "kaggle_sync.py", "push",
@@ -310,8 +320,6 @@ def push(item: dict, account_name: str) -> tuple[bool, str, Path]:
     if r.returncode != 0:
         _safe_print("--- push 失敗 stderr ---")
         _safe_print(r.stderr[-3000:])
-    accounts = kaggle_accounts.load_accounts()
-    username = accounts[account_name]["username"]
     kid = f"{username}/m45-imf-run-{slug}"
     work_dir = HERE / "kaggle_work" / account_name
     return r.returncode == 0, kid, work_dir
@@ -477,8 +485,17 @@ def pull(kid: str, label: str, env: dict) -> bool:
     不會再重試，等於一次網路中斷就永久丟掉一個已經算完的 kernel 的結果。
     這在這個專案不是假設性風險：rep5 的下載就曾經因為 IncompleteRead 中斷
     過，當時是人工發現才補拉的。
+
+    **下載前先清空 `out`**（2026-08-26 CodeRabbit 回溯審查抓到）：原本只
+    `mkdir(exist_ok=True)`，不會清掉上一次重試留下的舊檔案。Kaggle CLI
+    下載時用輸出檔案原始檔名、沒有明確的覆寫選項，若重試這次跟上次的
+    輸出檔名不同，舊檔案會一直留著。`is_mount_race_failure()` 會掃描
+    這個目錄底下所有 `*.log`，殘留的舊檔案可能讓它把這次的真腳本錯誤
+    誤判成掛載時序問題，造成不必要的額外重試、浪費 Kaggle quota。
     """
     out = HERE / "kaggle_results" / label
+    if out.exists():
+        shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
     r = run([*kaggle_accounts.KAGGLE_CMD, "kernels", "output", kid, "-p", str(out)], env=env)
     if r.returncode != 0:
@@ -531,6 +548,21 @@ def main() -> None:
         # 第 2、3 次重試——MAX_PUSH_RETRIES 形同虛設。
         retryable_push_failure = False
 
+        # 0.5) 指定了不存在帳號的工作，永遠塞不進任何槽位（下面 1) 的迴圈
+        # 只會把工作派給 `it["account"] in (None, name)` 的槽位）——這個
+        # 狀態是可以到達的：kaggle_accounts.load_accounts() 會在 token 看
+        # 起來像佔位字串時略過該帳號、只印一行警告，佇列裡卻可能還指定
+        # 著那個帳號名稱。不擋下來的話，這個工作會永遠留在 pending，迴圈
+        # 尾端的結束條件（not pending）永遠不成立，執行器每 60 秒空轉一次，
+        # 不印任何診斷訊息、也不會結束（2026-08-26 CodeRabbit 回溯審查抓到）。
+        unknown = [it for it in pending
+                   if it["account"] is not None and it["account"] not in accounts]
+        for it in unknown:
+            print(f"錯誤：{it['label']} 指定的帳號 {it['account']!r} 不在"
+                  f"登記檔裡，可用帳號：{list(accounts)}，標記失敗", flush=True)
+            mark_done(it["label"], "unknown_account", 0, it["account"])
+            pending.remove(it)
+
         # 1) 把待辦工作塞進閒置的帳號槽位
         for name in accounts:
             if slots[name] is not None:
@@ -544,7 +576,7 @@ def main() -> None:
                   f"帳號 {name} 開始 {item['label']}"
                   f"\n  {item['script']} {item['args']}\n{'='*70}",
                   flush=True)
-            ok, kid, work_dir = push(item, name)
+            ok, kid, work_dir = push(item, name, accounts[name]["username"])
             if ok:
                 push_fail_counts.pop(item["label"], None)
                 slots[name] = {"phase": "running", "item": item, "kid": kid,
