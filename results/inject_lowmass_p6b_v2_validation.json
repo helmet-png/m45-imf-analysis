@@ -1,0 +1,104 @@
+{
+  "status": "validated",
+  "source": "results/inject_lowmass_p6b_v2.npz",
+  "source_sha256": "1d16fa7ef466789b7302d7e828f4046dd61977e40c93dfe6ea688afbd1c57561",
+  "column_order": [
+    "logage",
+    "av_mean",
+    "f_bin",
+    "alpha",
+    "MH",
+    "q_gamma",
+    "dav",
+    "p_lowmass"
+  ],
+  "manifest": {
+    "dav_max": 0.6,
+    "n_syn": 40000,
+    "refines": "3,3",
+    "trial_offset": "aggregate_0_1_2",
+    "manifest_type": "aggregate",
+    "aggregated_trial_offsets": [
+      0,
+      1,
+      2
+    ]
+  },
+  "n_trials_total": 9,
+  "p_true": [
+    0.9,
+    1.3,
+    1.7
+  ],
+  "p_recovered_trials": [
+    [
+      0.966666666666667,
+      0.922222222222222,
+      1.1
+    ],
+    [
+      1.366666666666667,
+      1.3222222222222224,
+      1.1444444444444444
+    ],
+    [
+      1.8111111111111113,
+      1.5888888888888892,
+      1.5000000000000002
+    ]
+  ],
+  "p_recovered_mean": [
+    0.9962962962962963,
+    1.277777777777778,
+    1.6333333333333335
+  ],
+  "p_recovered_sample_sd": [
+    0.09251848886516152,
+    0.11758894715842642,
+    0.16024672335395507
+  ],
+  "p_bias": [
+    0.09629629629629632,
+    -0.022222222222222143,
+    -0.06666666666666643
+  ],
+  "p_bias_rmse": 0.06882646846798192,
+  "identifiability_slope": 0.7962962962962963,
+  "identifiability_intercept": 0.2672839506172843,
+  "bootstrap": {
+    "method": "resample three trials independently within each injected truth",
+    "draws": 20000,
+    "seed": 20260829,
+    "slope_percentiles_2p5_16_50_84_97p5": [
+      0.5925925925925926,
+      0.685185185185185,
+      0.7962962962962962,
+      0.9074074074074074,
+      1.0185185185185177
+    ]
+  },
+  "alpha_true": 2.35,
+  "alpha_recovered_mean": [
+    2.388888888888888,
+    2.4629629629629615,
+    2.388888888888888
+  ],
+  "alpha_bias": [
+    0.03888888888888786,
+    0.11296296296296138,
+    0.03888888888888786
+  ],
+  "minimum_p_wall_distance": 0.4888888888888885,
+  "criteria": {
+    "absolute_p_bias_below_0p3": true,
+    "no_p_wall_hit": true,
+    "recovery_tracks_truth": true,
+    "absolute_alpha_bias_below_0p3": true
+  },
+  "interpretation_limits": [
+    "Only three trials are available at each injected truth.",
+    "The bootstrap is conditional on these nine deterministic fake catalogues.",
+    "A slope below one indicates compression toward the middle of the tested range.",
+    "This validates identifiability but does not replace the pending P6 alpha-versus-p profile."
+  ]
+}

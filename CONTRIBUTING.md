@@ -28,6 +28,23 @@ Claude，先讀 `CLAUDE.md`；這份是通用規則，兩者都要遵守。
 疑點，不要用猜的。開始時在 `WORK_BOARD.md` 認領一行。完整格式規則見
 零之四。
 
+**格式規則本身會變，讀過一次不等於現在還適用**：`CONTRIBUTING.md` 跟
+`AGENTS.md` 記的是格式與流程規則，不是任務內容，所以不像
+`WORK_BOARD.md` 那樣「認領過就不會被別人動」——任何 session 都可能
+在你上次讀過之後修改這裡的規則（例如重新設計 `WORK_BOARD.md` 的欄位
+格式）。動手編輯 `WORK_BOARD.md`／`WORK_BOARD_DONE.md`／
+`LIMITATIONS.md`／`QUEUE_ALERTS.md` 這類受規則管控的檔案前，兩份規則
+文件都要各自確認是不是最新版：`git fetch origin main` 後對
+`CONTRIBUTING.md` 與 `AGENTS.md` 各自比對本機 commit（`git log -1
+--format=%H -- <檔名>`）跟 `origin/main` 的是否一致；不一致就用
+`git diff <你上次讀到的 commit>..origin/main -- <檔名>` 只看差異部分
+（便宜，不用整份重讀），確認相關章節有沒有變。**只比對已 commit 的
+版本不夠**：工作目錄裡若還有這兩份文件尚未 commit 的修改（`git status
+--short -- CONTRIBUTING.md AGENTS.md` 看得出來），commit hash 比對
+不到那些改動，這種情況要直接讀工作目錄裡的當前檔案內容，不能只信
+commit hash。長對話中途也一樣——不要憑對話稍早讀過的規則操作，過程
+中可能已經有別的 PR 合併改了格式。
+
 ---
 
 ## 零之一、自動 PR 審查——CodeRabbit（免費，公開 repo 自動適用）
@@ -369,7 +386,7 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
 
 **不要寫進 `LIMITATIONS.md` 的東西**：追查過程、修正過程、方法論心得、
 基礎設施故障、已推翻的說法、作廢的數值。分別歸到本檔（心得，見下一節）、
-`docs/reference/REFUTED.md`（推翻與作廢）、`KAGGLE_DIAGNOSIS.md`（派工基礎設施）。
+`docs/reference/REFUTED.md`（推翻與作廢）、`docs/reference/KAGGLE_DIAGNOSIS.md`（派工基礎設施）。
 **問題修好、且對應工作全部跑完確認後，那一條要搬到 `RESOLVED.md`（見
 五之一），不要留在 `LIMITATIONS.md` 裡寫「已修正」，也不要直接刪掉不留
 紀錄**——刪掉會讓下一輪重新踩到同一個問題時查不到「這件事我們做過了」。
@@ -480,6 +497,8 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
    參數向量永久消失，事後想核對邊界時無資料可查。輸出要帶 tag。
 
 6. **兩個現象同時出現，不要假設同一個成因。** 先個別驗證。
+   （Kaggle 掛載失敗與網頁 Editor 卡死被錯誤關聯，拖慢查真正根因的速度，
+   見 `docs/reference/KAGGLE_DIAGNOSIS.md`。）
 
 7. **懷疑外部服務之前，先確認自己組出來的路徑／參數字串。**
    100% 重現的失敗是確定性的程式碼 bug，不會是機率性的平台不穩。

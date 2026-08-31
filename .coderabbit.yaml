@@ -26,7 +26,16 @@ reviews:
     # 結果檔案（.npz/.csv/.json）跟快取的等時線網格不是給人看 diff 的，
     # 審這些只會製造噪音，排除掉。
     - "!results/**"
+    # data/** 大部分是可重建的原始下載（Gaia 查詢結果、HR23 交叉比對），
+    # 排除掉。**但下面三類是 fit_real.py／cluster_imf_tier1.py 等生產
+    # 腳本直接讀取的執行期輸入**（成員表、誤差模型、選擇函數），不是
+    # 單純的結果 diff 或快取——修改這些檔案時 CodeRabbit 必須看得到，
+    # 才審得出模型契約有沒有被改掉（2026-08-26 CodeRabbit 回溯審查
+    # PR #140 抓到原本整個 data/** 排除掉會連這三類一起藏住）。
     - "!data/**"
+    - "data/*cmd_members.csv"
+    - "data/*errmodel.npz"
+    - "data/*selection.npz"
     - "!isochrones/**"
     - "!logs/**"
     - "!kaggle_work/**"

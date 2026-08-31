@@ -105,6 +105,16 @@ def build_payload(script: str, extra_files: list[str], work_dir: Path,
     寫同一批檔案，內容互相覆蓋。改成每次呼叫傳入不同路徑
     （kaggle_queue.py 用帳號名稱區分），彼此才不會互相干擾。
     """
+    # rmtree 不可復原。只允許刪除 kaggle_work/ 底下的路徑——`--work-dir`
+    # 直接來自 CLI 參數，中間沒有任何驗證，誤傳 `--work-dir .` 或
+    # `--work-dir ~` 會遞歸刪光那個目錄的全部內容且沒有確認提示
+    # （2026-08-26 CodeRabbit 回溯審查抓到）。
+    work_dir = work_dir.resolve()
+    allowed_root = (HERE / "kaggle_work").resolve()
+    if allowed_root != work_dir and allowed_root not in work_dir.parents:
+        raise ValueError(
+            f"拒絕使用 {work_dir} 當打包目錄：必須位於 {allowed_root} "
+            f"底下（這個目錄會被整個清空重建）")
     if work_dir.exists():
         shutil.rmtree(work_dir)
     work_dir.mkdir(parents=True)
