@@ -1067,11 +1067,26 @@ def render_html(status: dict, sync: dict | None = None) -> str:
             # 憑什麼這樣算，最後才是「核心程式碼」跳進實作。原始
             # docstring 排在這些之後（見下面的 script 迴圈），當作想深入
             # 時的延伸閱讀，不是第一眼就要讀完的東西。
-            content_parts.append(_render_key_points(step.get("key_points", [])))
-            content_parts.append(_render_prereq(step.get("prereq", [])))
-            content_parts.append(_render_formula(step.get("formula", [])))
-            content_parts.append(_render_refs(step.get("refs", [])))
-            content_parts.append(_render_core(step.get("core")))
+            #
+            # 包在同一個 <details> 裡（2026-08-31 使用者要求可收合）：
+            # 預設展開（跟 script 的 doc-details 相反——那個是延伸閱讀，
+            # 這個是主要內容，第一眼就該看到，只是想收起來清空間時
+            # 收得起來）。五個 _render_* 沒內容時各自回傳空字串，先組出
+            # 內容再判斷是否為空，沒有任何一段有東西就不要印出空殼
+            # <details>（大部分「穩健性/敏感度診斷」的步驟目前都還沒
+            # 補這層說明）。
+            teach_html = "".join([
+                _render_key_points(step.get("key_points", [])),
+                _render_prereq(step.get("prereq", [])),
+                _render_formula(step.get("formula", [])),
+                _render_refs(step.get("refs", [])),
+                _render_core(step.get("core")),
+            ])
+            if teach_html:
+                content_parts.append(
+                    '<details class="teach-details" open>'
+                    '<summary>教學說明（重點／公式／文獻出處／核心程式碼）</summary>'
+                    f'{teach_html}</details>')
 
             for script in step.get("scripts", []):
                 ext = script in step.get("external", {})
@@ -1278,6 +1293,12 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .script-block { margin: 0.5em 0 0.5em 0.6em; }
 .script-link { font-size: 0.9em; text-decoration: none; }
 .script-link:hover { text-decoration: underline; }
+/* 教學說明（重點／公式／文獻／核心程式碼）整層可收合，預設展開
+   （2026-08-31 使用者要求）——跟下面 docstring 那個收合是同一種
+   <details>，差別只在預設狀態：docstring 是延伸閱讀所以預設收合，
+   這裡是主要內容所以預設展開，只是想清空間時收得起來。 */
+.teach-details > summary { cursor: pointer; font-size: 0.82em; color: #666;
+                           font-weight: 600; margin: 0.4em 0 0.2em; }
 /* 說明（docstring）可收合，預設展開（2026-08-25 使用者要求）——
    跟 stage/step 層不一樣：那兩層拿掉了折疊，這裡是特意留著，因為
    docstring 常常很長，看不看得由使用者自己決定，不是一定要展開。 */
