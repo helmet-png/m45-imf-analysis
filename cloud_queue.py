@@ -53,6 +53,7 @@ worker 名稱可以是 `kaggle_accounts.json` 裡的帳號、也可以是
 """
 from __future__ import annotations
 
+import ctypes
 import os
 import subprocess
 import sys
@@ -66,7 +67,23 @@ import kaggle_accounts
 import kaggle_queue
 import ssh_sync
 import ssh_workers
-from run_queue import _pid_alive
+from run_queue import _pid_alive, keep_system_awake, release_system_awake
+
+if sys.platform == "win32":
+    # 2026-08-26 使用者實際遇到才發現：sync_queue_file() 每 60 秒對這個
+    # repo（跟另外幾個 worktree 共用同一份 .git 物件庫）打一次 git
+    # fetch/checkout，長時間跑下來偶爾會撞上 git.exe 自己初始化失敗
+    # （0xc0000142，STATUS_DLL_INIT_FAILED——這台機器是 ARM64，git.exe
+    # 是 x64 版，靠模擬層跑，加上這個 repo 同時有好幾個 worktree 在頻繁
+    # 打同一份物件庫，比一般狀況更容易踩到這類初始化競態）。這支程式是
+    # 沒人盯著的背景常駐服務，git.exe 崩潰時 Windows 照預設行為會跳出
+    # 「應用程式無法正常啟動...請按一下確定」的對話框，卡在那裡等人
+    # 手動點掉——但沒有人在看這台機器，對話框只會一直卡著。
+    # SetErrorMode(SEM_NOGPFAULTERRORBOX) 讓這個行程（跟它之後開的所有
+    # 子行程，包括 git.exe）崩潰時直接安靜結束、不跳對話框，崩潰本身
+    # 該有的處理（這裡是 subprocess.run() 檢查 returncode != 0 印警告、
+    # 沿用本機現有內容）完全不受影響，只是不再需要人去點「確定」。
+    ctypes.windll.kernel32.SetErrorMode(0x0002)  # SEM_NOGPFAULTERRORBOX
 
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "cloud_queue.txt"
@@ -178,14 +195,15 @@ def sync_queue_file(branch: str = "main") -> None:
     try:
         r = subprocess.run(["git", "fetch", "origin", branch],
                            cwd=str(HERE), capture_output=True, text=True,
-                           timeout=30)
+                           timeout=30, creationflags=ssh_workers.CREATE_NO_WINDOW)
         if r.returncode != 0:
             print(f"  同步 {QUEUE.name} 失敗（git fetch：{r.stderr.strip()[:200]}），"
                  f"這輪沿用本機現有內容", flush=True)
             return
         r = subprocess.run(
             ["git", "checkout", f"origin/{branch}", "--", QUEUE.name],
-            cwd=str(HERE), capture_output=True, text=True, timeout=15)
+            cwd=str(HERE), capture_output=True, text=True, timeout=15,
+            creationflags=ssh_workers.CREATE_NO_WINDOW)
         if r.returncode != 0:
             print(f"  同步 {QUEUE.name} 失敗（git checkout："
                  f"{r.stderr.strip()[:200]}），這輪沿用本機現有內容",
@@ -523,6 +541,29 @@ def main() -> None:
     acquire_lock()
     import atexit
     atexit.register(release_lock)
+
+    # **要求系統別把這個行程當閒置節流**（2026-08-27 追查反覆掉線後補上）。
+    #
+    # `run_queue.py` 從一開始就有這個宣告（見它的 `keep_system_awake()`），
+    # 但 2026-08-23 改成「本機不再跑計算、全部排雲端」之後，常駐的是這支
+    # `cloud_queue.py`，而它**從來沒有做過同樣的宣告**——搬遷時漏掉了。
+    #
+    # 症狀是這支程式會在機器閒置一段時間後安靜消失，`logs/autorestart.log`
+    # 只留下「鎖檔殘留（PID 已不存在），視為沒在跑」然後由 15 分鐘一次的
+    # watchdog 重啟，一天下來反覆好幾次（2026-08-26 15:30、2026-08-27
+    # 15:30／17:29 都是同一個模式）。每次掉線期間：Kaggle 跑完的工作沒人
+    # 拉結果、gcp1 跑完沒人接著派下一項，等於算力空轉，而使用者明確要求
+    # 過「不要讓現有資源空轉」。
+    #
+    # 這支程式本身幾乎不吃 CPU（大部分時間在 sleep 等輪詢間隔），正是最
+    # 容易被系統判定成「閒置、可以睡」的那種行程——它要保護的不是自己的
+    # 運算速度，而是**它作為協調者不能中斷**這件事。
+    #
+    # 用 `ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED`，螢幕仍可正常關閉，
+    # 只是系統不進入睡眠。失敗只印警告不中斷（見該函式說明）——保持常駐
+    # 是可用性優化，不是這支程式能不能跑的前提。
+    keep_system_awake()
+    atexit.register(release_system_awake)
 
     workers = load_all_workers()
     if not workers:
