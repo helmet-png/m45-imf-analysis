@@ -429,10 +429,10 @@ STAGES = [
             {
                 "name": "第5步 N-body 校準（PeTar / Converse & Stahler 2010）",
                 "scripts": [
-                    "nbody_pdmf_smoke.py",
-                    "nbody_pdmf_ensemble.py",
-                    "petar_pdmf_analysis.py",
-                    "petar_pdmf_ensemble.py",
+                    "scripts/nbody_petar/nbody_pdmf_smoke.py",
+                    "scripts/nbody_petar/nbody_pdmf_ensemble.py",
+                    "scripts/nbody_petar/petar_pdmf_analysis.py",
+                    "scripts/nbody_petar/petar_pdmf_ensemble.py",
                 ],
                 "queue_labels": ["nbody_prior_from_radial"],
                 "key_points": [
@@ -563,7 +563,7 @@ STAGES = [
                 "name": "praesepe_pr11_close_out（D8、A5）Praesepe 多星團驗證收尾",
                 "scripts": [
                     "scripts/multicluster/cluster_imf_tier1.py",
-                    "cluster_forward_validation.py",
+                    "scripts/multicluster/cluster_forward_validation.py",
                 ],
                 # PR #11 實際上已經合併（codex/ngc3532-praesepe-generalization，
                 # 見 WORK_BOARD_DONE.md 2026-08-20 那行），這個任務名稱本身
@@ -576,7 +576,7 @@ STAGES = [
                 "name": "comaber_tier1（A5、D8）Coma Berenices 多星團驗證",
                 "scripts": [
                     "scripts/multicluster/cluster_imf_tier1.py",
-                    "prepare_cluster_tier2.py",
+                    "scripts/multicluster/prepare_cluster_tier2.py",
                 ],
                 "queue_labels": ["comaber_tier1"],
             },

@@ -1,0 +1,30 @@
+name: Dashboard stage_map path check
+
+# status_dashboard/stage_map.py 是手動維護的「步驟→腳本」索引（見該檔頭
+# 說明），跟真正的腳本檔案之間沒有任何程式層級的關聯——搬檔案／改名
+# 的 PR 完全不會動到它，路徑對不上只會讓主控板悄悄顯示「本機找不到」，
+# 沒人會主動發現（2026-08-31 實際發生過，nbody/multicluster 那批腳本
+# 搬進子目錄後才注意到）。
+#
+# 不限定 paths 觸發條件：任何一次 PR 都跑，因為問題可能來自「動了
+# 腳本」也可能來自「動了 stage_map.py」，這支檢查很快（只讀檔案系統，
+# 不需要任何依賴），限縮觸發範圍省的時間不值得冒著漏檢的風險。
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify stage_map.py script paths exist
+        run: python3 scripts/tools/check_stage_map_paths.py
