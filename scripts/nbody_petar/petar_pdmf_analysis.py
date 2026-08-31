@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
 DEFAULT_RADII_PC = np.array([2.0, 4.0, 8.0, 12.09, 20.0])
 
 
