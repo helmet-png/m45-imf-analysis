@@ -489,7 +489,18 @@ STAGES = [
             {
                 "name": "p6b_inject_lowmass_v2（A1）低質量段可辨識性",
                 "scripts": ["inject_lowmass.py"],
-                "queue_labels": ["p6b_inject_lowmass_v2"],
+                # 實際派工用的是逐試驗（t0/t1/t2）＋逐次重派（_retry／
+                # _retry2）的標籤，從沒有單獨一個 p6b_inject_lowmass_v2
+                # 標籤存在過——2026-08-31 對照 cloud_queue.txt 實際內容
+                # 訂正，同一類「任務名稱≠真正佇列標籤」的坑。
+                "queue_labels": [
+                    "p6b_inject_lowmass_v2_t0", "p6b_inject_lowmass_v2_t0_retry",
+                    "p6b_inject_lowmass_v2_t0_retry2",
+                    "p6b_inject_lowmass_v2_t1", "p6b_inject_lowmass_v2_t1_retry",
+                    "p6b_inject_lowmass_v2_t1_retry2",
+                    "p6b_inject_lowmass_v2_t2", "p6b_inject_lowmass_v2_t2_retry",
+                    "p6b_inject_lowmass_v2_t2_retry2",
+                ],
             },
             {
                 "name": "D2 stars_per_cluster 敏感度掃描",
@@ -595,7 +606,22 @@ STAGES = [
                     "scripts/diagnostics/prepare_bp15_paired_dispatch.py",
                     "scripts/diagnostics/summarize_bp15_formal_paired.py",
                 ],
-                "queue_labels": ["bp15_bp20_paired_comparison"],
+                # 實際派工用的是逐 config（bp15／bp20）逐重複次數（rep0/
+                # rep1/rep2）＋逐次重派（_retry／_retry2）的標籤，從沒有
+                # 單獨一個 bp15_bp20_paired_comparison 標籤存在過
+                # （2026-08-31 對照 cloud_queue.txt 實際內容訂正，同一類
+                # 「任務名稱≠真正佇列標籤」的坑）。
+                "queue_labels": [
+                    "bp15_formal_40k_rep0", "bp15_formal_40k_rep0_retry",
+                    "bp15_formal_40k_rep1", "bp15_formal_40k_rep1_retry",
+                    "bp15_formal_40k_rep2", "bp15_formal_40k_rep2_retry",
+                    "bp20_formal_40k_rep0", "bp20_formal_40k_rep0_retry",
+                    "bp20_formal_40k_rep0_retry2",
+                    "bp20_formal_40k_rep1", "bp20_formal_40k_rep1_retry",
+                    "bp20_formal_40k_rep1_retry2",
+                    "bp20_formal_40k_rep2", "bp20_formal_40k_rep2_retry",
+                    "bp20_formal_40k_rep2_retry2",
+                ],
             },
         ],
     },
