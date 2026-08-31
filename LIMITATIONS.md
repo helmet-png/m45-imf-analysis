@@ -444,7 +444,7 @@ f_bin／alpha 搜尋範圍再試、拿掉或放寬亮端截斷（代價是失去
 對照組「只差等時線」這個單一變因）、或接受「亮端截斷後的 BHAC15 比較
 做不出可信數字」本身就是結論。
 
-### D2 未做過敏感度測試的設定（部分進行中；`membership_threshold` 0.5–0.9 五點已測完但帶兩個但書，見下方；其餘設定與 `stars_per_cluster` 仍未做）
+### D2 未做過敏感度測試的設定（現役缺陷．優先度中；`membership_threshold` 0.5–0.9 五點已測完但帶兩個但書；其餘設定與 `stars_per_cluster` 仍未做）
 
 **問題**：`pca_dims` 本身（非開關）、`stars_per_cluster`、`clustering_method`、
 `inner_loop_runs`、`hess_color_range`／`hess_mag_range`、BP 訊噪比門檻 20
