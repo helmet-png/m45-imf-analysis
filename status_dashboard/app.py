@@ -87,24 +87,31 @@ sys.path.insert(0, str(HERE))
 from stage_map import STAGES  # noqa: E402
 
 PORT = 8866
-# 監聽位址寫死 127.0.0.1，不提供任何「設環境變數就對外開放」的開關。
+# 監聽位址。預設 127.0.0.1＝只有這台電腦自己連得到，任何人在自己電腦
+# 手動 `py app.py` 都不會不小心對外暴露。
 #
-# **2026-08-30 拿掉先前的 M45_DASH_HOST opt-in 機制，這是刻意的決定，
-# 不是忘記加**：這個頁面沒有任何密碼保護，連得到就看得到全部（在跑
-# 什麼工作、哪台機器連不上、專案結構）。之前留了「設環境變數就能對外
-# 開」的後門，即使預設值安全，這個後門本身就是問題——它就是被拿去用
-# 的入口（另一支分支 dashboard-lan-access 真的把它設成 0.0.0.0 監聽，
-# 搭配 Tailscale 對外開了）。
+# **2026-08-31 這裡的設計繞了一圈，記錄下來避免以後又搞錯一次**：
+# 8/30 曾經把這個開關整個拿掉、寫死 127.0.0.1，理由是「這個頁面沒有
+# 密碼保護，留一個能開放的環境變數本身就是後門」——但部署到協調 VM、
+# 實際用 `gcloud compute start-iap-tunnel` 測試時發現**連不上**
+# （`[4003: 'failed to connect to backend']`）：IAP tunnel 連的是 VM
+# 網卡本身，接不到只綁 127.0.0.1（等於「只有這台機器自己」）的服務。
 #
-# 這台機器（協調 VM）的資安模型是「完全不對外露埠」：SSH 走 IAP tunnel
-# （見 docs/reference/CLOUD_WORKERS_IAP_SETUP.md），這支主控板也比照
-# 辦理——隊友一律用
-#     gcloud compute start-iap-tunnel <instance> 8866 \
-#         --local-host-port=localhost:8866 --zone=<zone> --project=<project>
-# 把自己的 localhost:8866 接進來，不會有任何一個監聽位址是這台 VM
-# 網卡本身能被連到的。要放寬這個限制得先跟整個團隊討論資安模型要怎麼
-# 改，不是加一個環境變數就繞過。
-HOST = "127.0.0.1"
+# 重新對照 SSH 的實際做法才發現想錯了：sshd 本來就是綁 `0.0.0.0`（所有
+# 網卡）監聽，它的安全性從來不是靠「只聽自己」，而是靠**防火牆只放行
+# IAP 的固定來源網段 35.235.240.0/20**（見
+# docs/reference/CLOUD_WORKERS_IAP_SETUP.md）——這台協調 VM 的防火牆
+# 規則 `allow-iap-ssh` 已經把 8866 也加進去，一樣限定只有 IAP 網段能連。
+# 所以「比照 SSH 那樣走 IAP tunnel」正確的做法是**主控板也綁
+# `0.0.0.0`，靠同一條防火牆規則守門**，不是綁 127.0.0.1。
+#
+# **這跟先前拿掉的 dashboard-lan-access 分支不一樣**：那支是讓任何一位
+# 隊友在自己電腦上設這個環境變數、搭配 Tailscale 對外開——隊友自己的
+# 電腦沒有這條 GCP 防火牆規則保護，等於真的對外露埠。這裡只有協調 VM
+# 的 systemd 服務會設這個環境變數（見 dashboard.service 的
+# Environment= 那行），且只有這台機器有對應的防火牆限制，兩者不是同一
+# 回事。
+HOST = os.environ.get("M45_DASH_HOST", "127.0.0.1")
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
 PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
 PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
@@ -1362,6 +1369,11 @@ def main() -> None:
     server = _bind_server()
     url = f"http://127.0.0.1:{PORT}/"
     print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
+    if HOST != "127.0.0.1":
+        print(f"注意：監聽位址是 {HOST}，這台機器的網卡連得到這個服務"
+              f"（不是只有這台自己）。這個頁面沒有密碼保護，只能靠防火牆"
+              f"擋——確認擋住的來源網段是正確的，不要在沒有對應防火牆"
+              f"規則的機器上這樣設。", flush=True)
     # 開瀏覽器交給桌面捷徑用的 launch_dashboard.vbs 負責（sh.Run 那行），
     # 這裡不重複開，避免透過捷徑啟動時跳出兩個分頁。直接用
     # `py app.py` 手動跑的話，自己貼網址開就好。
