@@ -121,6 +121,10 @@ PORT = 8866
 # 網卡本身能被連到的。要放寬這個限制得先跟整個團隊討論資安模型要怎麼
 # 改，不是加一個環境變數就繞過。
 HOST = "127.0.0.1"
+LOCK = HERE / "dashboard.lock"  # 見 acquire_lock()——防止雙擊桌面捷徑（或
+                                # 舊行程還沒真的死透就又被啟動一次）疊出
+                                # 多個行程搶同一個埠（2026-08-31，使用者
+                                # 實際遇到 4 個殘留行程、其中一個殺不掉）
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
 PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
 PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
@@ -310,6 +314,10 @@ def _self_restart() -> None:
     def _do_restart() -> None:
         time.sleep(0.5)
         print("偵測到主控板程式碼更新，重新啟動…", flush=True)
+        # 先放掉鎖再生新行程：acquire_lock() 只擋「已經有活著的行程」，
+        # 這裡是同一個行程自己交棒，不放掉的話新行程會誤判成重複啟動、
+        # 直接退出，變成兩邊都沒有伺服器在跑。
+        release_lock()
         subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
                          creationflags=subprocess.CREATE_NO_WINDOW)
         os._exit(0)
@@ -1397,7 +1405,51 @@ def _bind_server(retries: int = 10, delay: float = 0.5) -> ThreadingHTTPServer:
     raise RuntimeError("unreachable")  # pragma: no cover
 
 
+def acquire_lock() -> None:
+    """單一實例鎖，跟 `cloud_queue.py` 的 `acquire_lock()` 同一套邏輯
+    （2026-08-31 補上）——起因：`launch_dashboard.vbs` 每次雙擊都無條件
+    `pyw app.py`，不會檢查是不是已經有一份在跑。`ThreadingHTTPServer`
+    預設 `allow_reuse_address=True`，同一個埠被第二個行程綁上時 Windows
+    不會報錯擋下來，於是同一頁面背後疊了好幾個互相搶連線的行程，其中
+    有的還會因為 pyw 沒主控台、使用者連 PID 是哪個都看不到、殺不掉
+    （見 taskkill 對某個殘留行程回報「拒絕存取」的實際案例）。
+
+    偵測到活著的舊行程就直接結束，讓 `launch_dashboard.vbs` 後面那行
+    `sh.Run "http://127.0.0.1:8866/"` 開瀏覽器連到那個既有行程即可，
+    不是錯誤，所以用 exit code 0。鎖檔案殘留但行程已死（例如上次被
+    taskkill /F 或斷電）視為正常，直接接手。"""
+    try:
+        fd = os.open(str(LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        try:
+            old_pid = int(LOCK.read_text().strip())
+        except (ValueError, OSError):
+            old_pid = None
+        alive = cloud_queue._pid_alive(old_pid) if old_pid is not None else False
+        if alive:
+            print(f"偵測到主控板已經在跑（PID {old_pid}），這次啟動結束，"
+                 f"改開瀏覽器連過去。", flush=True)
+            sys.exit(0)
+        print("鎖檔案殘留但行程已經不在了，清掉重新接手。", flush=True)
+        try:
+            LOCK.unlink()
+        except FileNotFoundError:
+            pass
+        fd = os.open(str(LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(str(os.getpid()))
+
+
+def release_lock() -> None:
+    try:
+        if int(LOCK.read_text().strip()) == os.getpid():
+            LOCK.unlink()
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+
+
 def main() -> None:
+    acquire_lock()
     server = _bind_server()
     url = f"http://127.0.0.1:{PORT}/"
     print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
@@ -1408,6 +1460,8 @@ def main() -> None:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        release_lock()
 
 
 if __name__ == "__main__":
