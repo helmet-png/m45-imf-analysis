@@ -666,6 +666,32 @@ BP/RP 超額失敗星的 Gaia 旗標、鄰星與外部成員身分。細節見
 概似貢獻，定位是哪一段主序把聯星比例推向上限。細節見
 `docs/planning/D17_PRAESEPE_CMD_RESIDUAL_2026-08-24.md`。
 
+### D18 SSH worker 結果下載的標記檔遺失時可能被誤判（現役缺陷．優先度中；偵測邏輯已修好，尚未在真實 SSH worker 上驗證）
+
+**問題**：`ssh_sync.py` 的 `pull()` 用 `results/.start_<label>` 這個時間戳記
+標記檔分辨「這次工作寫出的是哪些新檔案」。原本的查詢指令
+`test -f <marker> && find results -type f -newer <marker> ...`，marker 不存在
+時 `test -f` 失敗會讓整條 `&&` 鏈以非零狀態結束，跟真正的連線／查詢失敗共用
+同一個分支，無法區分——這會讓 `cloud_queue.py` 把一個其實早就成功跑完的工作
+一路重試到 `MAX_WAIT_HOURS` 逾時，最後誤標成 `"timeout"`（終態失敗，
+`read_done()` 不會再重試），工作實際上已完成、結果檔還留在遠端。已改用 shell
+`if/else` 讓「marker 不存在」回傳可辨識的 `__NO_MARKER__`，不再跟連線失敗
+共用分支。
+
+**後果**：改用 `__NO_MARKER__` 後又發現第二個問題：`pull()` 原本不管
+`__NO_MARKER__` 的成因為何（成功 pull 過一次後 marker 依設計被刪除、或
+marker 因其他原因遺失／從沒建立過），一律當成「先前已成功 pull」回傳
+成功，讓 `cloud_queue.py` 在沒有本機證據的情況下把工作標成 `"ok"`，結果
+可能根本沒被下載過。已改成只有本機確實存有這個 label 的結果檔（`out_dir/
+results/` 非空）才視為「先前已成功 pull」；沒有本機檔案就回傳失敗，保留
+這個工作供下一輪重試或人工檢查，不再無條件假設成功。標記檔遺失只會在
+`pull()` 被重複呼叫、或同一個 worker 上同時有兩個 label 在跑（`pull()`
+docstring 記載的另一個已知限制，時間戳無法分辨是哪個 label 寫出的檔案）
+這類邊界情況觸發，目前沒有證據顯示已經在實際派工中發生過並污染任何已
+引用的結果。這次修正只用 `py_compile` 語法檢查與程式碼推導驗證過，還沒
+有實際連到一台 SSH worker 重現「marker 遺失」情境確認行為，留給下次在
+遠端 worker 上派工時觀察。
+
 ---
 
 ## 附：不需要做的事（避免重複提案）
