@@ -33,6 +33,7 @@ repo（PR #121），但目前活著在跑的派工器行程工作目錄還是
 from __future__ import annotations
 
 import ast
+import ctypes
 import html
 import os
 import re
@@ -48,6 +49,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
 from urllib.parse import quote_plus, urlsplit
+
+if sys.platform == "win32":
+    # 2026-08-26 使用者實際遇到：git.exe（跟 ssh.exe）偶爾會跳出
+    # Windows 的「應用程式無法正常啟動...請按一下確定」對話框
+    # （0xc0000142）——這台機器是 ARM64、git.exe 是 x64 版靠模擬層跑，
+    # 這個 repo 又同時有好幾個 worktree（cloud_queue.py 的、這支主控板
+    # 的）在頻繁打同一份共用 .git 物件庫，比一般狀況更容易踩到 git.exe
+    # 自己的初始化競態。這支主控板是沒人盯著、雙擊桌面捷徑就丟到背景跑
+    # 的服務，子行程崩潰跳互動對話框只會卡在那邊等人點，沒有意義。
+    # SetErrorMode(SEM_NOGPFAULTERRORBOX) 讓這個行程跟它開的所有子行程
+    # 崩潰時直接安靜結束、不跳對話框——`_git()`／`probe_live()` 這些
+    # 呼叫端本來就有檢查 returncode／逾時／例外並優雅降級（顯示「同步
+    # 失敗」而不是硬湊資料），這裡只是不要讓 Windows 額外插一個要人手動
+    # 關掉的對話框進來。跟 cloud_queue.py 同一輪修的同一個坑。
+    ctypes.windll.kernel32.SetErrorMode(0x0002)  # SEM_NOGPFAULTERRORBOX
 
 HERE = Path(__file__).resolve().parent
 
@@ -112,6 +128,10 @@ PORT = 8866
 # Environment= 那行），且只有這台機器有對應的防火牆限制，兩者不是同一
 # 回事。
 HOST = os.environ.get("M45_DASH_HOST", "127.0.0.1")
+LOCK = HERE / "dashboard.lock"  # 見 acquire_lock()——防止雙擊桌面捷徑（或
+                                # 舊行程還沒真的死透就又被啟動一次）疊出
+                                # 多個行程搶同一個埠（2026-08-31，使用者
+                                # 實際遇到 4 個殘留行程、其中一個殺不掉）
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
 PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
 PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
@@ -122,6 +142,16 @@ GIT_SYNC_TIMEOUT_S = 8   # git fetch/pull 單次逾時；離線時最多讓頁�
                          # 多等這麼久，不要無限卡住
 _probe_cache: dict[str, tuple[float, dict]] = {}
 _restart_pending = False  # 見 sync_repo_from_github()／_self_restart()
+GIT_SYNC_COOLDOWN_S = 60  # 這段時間內重複整理頁面，不重打 git（2026-08-26
+                          # 使用者遇到 git.exe 偶爾崩潰彈出「應用程式無法
+                          # 正常啟動」對話框後加的）——這個 repo 同時有
+                          # cloud_queue.py 的 worktree 每 60 秒自己也在打
+                          # 同一份共用 .git 物件庫，主控板這邊按到重新
+                          # 整理就再連打 4～7 個 git 呼叫，兩邊疊在一起
+                          # 對同一份物件庫的併發壓力，是這類初始化競態
+                          # 更容易發生的成因之一。冷卻時間刻意跟
+                          # cloud_queue.py 的同步週期同一個量級。
+_sync_cache: tuple[float, dict] | None = None
 
 
 # ==================================================================
@@ -218,10 +248,69 @@ def _git(*args: str) -> subprocess.CompletedProcess:
                           creationflags=_CREATE_NO_WINDOW)
 
 
+# 2026-08-31 使用者要求：以後任何新推上 GitHub 的程式，都要能自動被
+# 主控板讀取到，不要等人手動回來補 stage_map.py 才看得到。真正的
+# 「自動分類進正確的階段/步驟」做不到（stage_map.py 檔頭已經解釋過：
+# 沒有機器可讀的來源能判斷一支新腳本屬於傳統法還是 PDMF→IMF 第幾步，
+# 這是語意判斷，不是格式判斷）——但「至少讓它出現在主控板上、能點進去
+# 看說明」可以做到，而且不需要等分類決定好。做法：用 `git ls-files`
+# 列出這個 repo 目前追蹤的所有 .py 檔（只看真的推上 GitHub 的，不是
+# 本機隨手建立的暫存檔），扣掉 stage_map.py 裡已經分類過的路徑跟明確
+# 排除的目錄，剩下的就是「存在、但還沒被分類進任何階段/步驟」的程式，
+# 顯示在頁面最後一個獨立區塊，一樣可以點開看檔頭說明——之後要分類，
+# 人只要把路徑從這個清單搬進 stage_map.py 對應的步驟即可，不會漏掉。
+_UNINDEXED_EXCLUDE_PREFIXES = (
+    "_archive/",       # 已封存的舊工作，刻意不算「現役」程式
+    "status_dashboard/",  # 主控板自己，不是專案的分析程式
+    "pyUPMASK/",       # 第三方套件，即使某台機器 clone 了也不算本專案程式
+)
+_UNINDEXED_EXCLUDE_NAMES = {"__init__.py"}  # 空的套件標記檔，沒有內容好看
+
+
+def discover_unindexed_scripts() -> list[str]:
+    """回傳「已經推上 GitHub、但 stage_map.py 裡沒有任何步驟提到」的
+    .py 檔路徑清單，已排序。git 呼叫失敗（離線、逾時）時回傳空清單，
+    不讓這個附加功能拖垮整頁——這個區塊本來就是錦上添花，不是關鍵
+    路徑。"""
+    try:
+        result = _git("ls-files", "*.py")
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+    if result.returncode != 0:
+        return []
+    tracked = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+    indexed: set[str] = set()
+    for stage in STAGES:
+        for step in stage["steps"]:
+            indexed.update(step.get("scripts", []))
+
+    unindexed = [
+        p for p in tracked
+        if p not in indexed
+        and Path(p).name not in _UNINDEXED_EXCLUDE_NAMES
+        and not p.startswith(_UNINDEXED_EXCLUDE_PREFIXES)
+    ]
+    return sorted(unindexed)
+
+
 def sync_repo_from_github() -> dict:
-    """每次整理頁面都嘗試把這個 repo 從 `origin/main` 同步到最新——別人
-    （或別的 session）push 新程式碼、改 docstring、加新腳本之後，不用
-    手動 `git pull`，重新整理主控板就看得到（2026-08-25 使用者要求）。
+    """`_sync_repo_from_github_uncached()` 加上冷卻時間的外層——見那支
+    函式的說明，這裡只處理「多久打一次」。"""
+    global _sync_cache
+    now = time.monotonic()
+    if _sync_cache and now - _sync_cache[0] < GIT_SYNC_COOLDOWN_S:
+        return _sync_cache[1]
+    result = _sync_repo_from_github_uncached()
+    _sync_cache = (now, result)
+    return result
+
+
+def _sync_repo_from_github_uncached() -> dict:
+    """每次冷卻時間到了整理頁面，就嘗試把這個 repo 從 `origin/main`
+    同步到最新——別人（或別的 session）push 新程式碼、改 docstring、
+    加新腳本之後，不用手動 `git pull`，重新整理主控板就看得到
+    （2026-08-25 使用者要求）。
 
     跟 `cloud_queue.py` 的 `sync_queue_file()` 同一個精神：安全第一，
     失敗就跳過用本機現有內容，不讓網路問題擋住整頁。
@@ -286,6 +375,10 @@ def _self_restart() -> None:
     def _do_restart() -> None:
         time.sleep(0.5)
         print("偵測到主控板程式碼更新，重新啟動…", flush=True)
+        # 先放掉鎖再生新行程：acquire_lock() 只擋「已經有活著的行程」，
+        # 這裡是同一個行程自己交棒，不放掉的話新行程會誤判成重複啟動、
+        # 直接退出，變成兩邊都沒有伺服器在跑。
+        release_lock()
         subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
                          creationflags=_CREATE_NO_WINDOW)
         os._exit(0)
@@ -894,6 +987,39 @@ def _vscode_uri(rel_path: str) -> str:
     return "vscode://file/" + str(abs_path).replace("\\", "/")
 
 
+def _slugify(rel_path: str) -> str:
+    """檔案路徑轉成能當 HTML id 用的字串（給「未分類程式」區塊的錨點
+    用）——路徑分隔符號跟點都不是合法 id 的一部分，全部換成連字號。"""
+    return "script-" + re.sub(r"[^A-Za-z0-9_-]+", "-", rel_path)
+
+
+def _render_script_block(script: str, external: bool = False,
+                         upstream: str | None = None) -> str:
+    """一支腳本的連結＋可收合檔頭說明，抽成共用函式（2026-08-31）——
+    原本只有「階段/步驟」底下的腳本會這樣印，現在「未分類程式」區塊
+    （見 discover_unindexed_scripts()）也要用同一種呈現方式，不要
+    複製貼上兩份長得一樣的邏輯。"""
+    doc = read_docstring(script, external=external, upstream=upstream)
+    exists = (REPO_ROOT / script).exists()
+    # 檔案不在本機時不要給「用 VS Code 開啟」的連結——點了只會
+    # 跳出一個開不了的錯誤視窗。第三方套件另外標一個外連到上游
+    # repo 的連結，那才是真的看得到原始碼的地方。
+    if exists:
+        link = (f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
+                f'<code>{html.escape(script)}</code> ↗</a>')
+    elif external and upstream:
+        link = (f'<span class="script-link missing"><code>'
+                f'{html.escape(script)}</code></span>'
+                f'<a class="upstream-link" href="{html.escape(upstream)}" '
+                f'target="_blank" rel="noopener">第三方套件，看上游原始碼 ↗</a>')
+    else:
+        link = (f'<span class="script-link missing"><code>'
+                f'{html.escape(script)}</code>（本機找不到）</span>')
+    return ('<div class="script-block">' + link
+            + '<details class="doc-details"><summary>程式檔頭原文說明</summary>'
+            f'<div class="doc">{_render_doc(doc)}</div></details></div>')
+
+
 _BUCKET_ORDER = [
     ("live", "live", "進行中"),
     ("pending", "pending", "待派工"),
@@ -1035,37 +1161,58 @@ def render_html(status: dict, sync: dict | None = None) -> str:
             # 憑什麼這樣算，最後才是「核心程式碼」跳進實作。原始
             # docstring 排在這些之後（見下面的 script 迴圈），當作想深入
             # 時的延伸閱讀，不是第一眼就要讀完的東西。
-            content_parts.append(_render_key_points(step.get("key_points", [])))
-            content_parts.append(_render_prereq(step.get("prereq", [])))
-            content_parts.append(_render_formula(step.get("formula", [])))
-            content_parts.append(_render_refs(step.get("refs", [])))
-            content_parts.append(_render_core(step.get("core")))
+            #
+            # 包在同一個 <details> 裡（2026-08-31 使用者要求可收合）：
+            # 預設展開（跟 script 的 doc-details 相反——那個是延伸閱讀，
+            # 這個是主要內容，第一眼就該看到，只是想收起來清空間時
+            # 收得起來）。五個 _render_* 沒內容時各自回傳空字串，先組出
+            # 內容再判斷是否為空，沒有任何一段有東西就不要印出空殼
+            # <details>（大部分「穩健性/敏感度診斷」的步驟目前都還沒
+            # 補這層說明）。
+            teach_html = "".join([
+                _render_key_points(step.get("key_points", [])),
+                _render_prereq(step.get("prereq", [])),
+                _render_formula(step.get("formula", [])),
+                _render_refs(step.get("refs", [])),
+                _render_core(step.get("core")),
+            ])
+            if teach_html:
+                content_parts.append(
+                    '<details class="teach-details" open>'
+                    '<summary>教學說明（重點／公式／文獻出處／核心程式碼）</summary>'
+                    f'{teach_html}</details>')
 
             for script in step.get("scripts", []):
                 ext = script in step.get("external", {})
                 upstream = step.get("external", {}).get(script)
-                doc = read_docstring(script, external=ext, upstream=upstream)
-                exists = (REPO_ROOT / script).exists()
-                # 檔案不在本機時不要給「用 VS Code 開啟」的連結——點了只會
-                # 跳出一個開不了的錯誤視窗。第三方套件另外標一個外連到上游
-                # repo 的連結，那才是真的看得到原始碼的地方。
-                if exists:
-                    link = (f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
-                            f'<code>{html.escape(script)}</code> ↗</a>')
-                elif ext and upstream:
-                    link = (f'<span class="script-link missing"><code>'
-                            f'{html.escape(script)}</code></span>'
-                            f'<a class="upstream-link" href="{html.escape(upstream)}" '
-                            f'target="_blank" rel="noopener">第三方套件，看上游原始碼 ↗</a>')
-                else:
-                    link = (f'<span class="script-link missing"><code>'
-                            f'{html.escape(script)}</code>（本機找不到）</span>')
-                content_parts.append(
-                    '<div class="script-block">' + link
-                    + '<details class="doc-details"><summary>程式檔頭原文說明</summary>'
-                    f'<div class="doc">{_render_doc(doc)}</div></details></div>')
+                content_parts.append(_render_script_block(script, ext, upstream))
             content_parts.append("</article>")
 
+        nav_parts.append("</ul>")
+        content_parts.append("</section>")
+
+    # 「未分類程式」：git 上有、但 stage_map.py 沒有任何步驟提到的 .py
+    # 檔（2026-08-31 使用者要求「以後所有程式都要能自動進主控板」）。
+    # 跟上面四大階段平行的第五個區塊，不是塞進某個既有階段底下——這批
+    # 東西的共同點只有「還沒分類」，硬塞進某個階段反而是另一種誤導。
+    unindexed = discover_unindexed_scripts()
+    if unindexed:
+        nav_parts.append('<a class="tree-stage" href="#stage-unindexed">'
+                         f'未分類程式（{len(unindexed)}）</a><ul>')
+        content_parts.append('<section class="stage-block" id="stage-unindexed">'
+                             '<h2>未分類程式</h2>'
+                             '<p class="note">這些 .py 檔已經在 GitHub 上，但還沒有人'
+                             '把它們歸進上面哪個階段/步驟——多半是新腳本、或現有'
+                             '步驟改了實作但忘記回頭更新 stage_map.py。要分類，把'
+                             '路徑從這裡搬進 <code>status_dashboard/stage_map.py</code>'
+                             '對應步驟的 <code>scripts</code> 清單即可（見'
+                             ' CONTRIBUTING.md 第二節）。</p>')
+        for script in unindexed:
+            nav_parts.append(f'<li><a href="#{html.escape(_slugify(script))}">'
+                             f'<code>{html.escape(script)}</code></a></li>')
+            content_parts.append(
+                f'<article class="step-block" id="{html.escape(_slugify(script))}">'
+                + _render_script_block(script) + "</article>")
         nav_parts.append("</ul>")
         content_parts.append("</section>")
 
@@ -1246,6 +1393,12 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .script-block { margin: 0.5em 0 0.5em 0.6em; }
 .script-link { font-size: 0.9em; text-decoration: none; }
 .script-link:hover { text-decoration: underline; }
+/* 教學說明（重點／公式／文獻／核心程式碼）整層可收合，預設展開
+   （2026-08-31 使用者要求）——跟下面 docstring 那個收合是同一種
+   <details>，差別只在預設狀態：docstring 是延伸閱讀所以預設收合，
+   這裡是主要內容所以預設展開，只是想清空間時收得起來。 */
+.teach-details > summary { cursor: pointer; font-size: 0.82em; color: #666;
+                           font-weight: 600; margin: 0.4em 0 0.2em; }
 /* 說明（docstring）可收合，預設展開（2026-08-25 使用者要求）——
    跟 stage/step 層不一樣：那兩層拿掉了折疊，這裡是特意留著，因為
    docstring 常常很長，看不看得由使用者自己決定，不是一定要展開。 */
@@ -1380,7 +1533,51 @@ def _bind_server(retries: int = 10, delay: float = 0.5) -> ThreadingHTTPServer:
     raise RuntimeError("unreachable")  # pragma: no cover
 
 
+def acquire_lock() -> None:
+    """單一實例鎖，跟 `cloud_queue.py` 的 `acquire_lock()` 同一套邏輯
+    （2026-08-31 補上）——起因：`launch_dashboard.vbs` 每次雙擊都無條件
+    `pyw app.py`，不會檢查是不是已經有一份在跑。`ThreadingHTTPServer`
+    預設 `allow_reuse_address=True`，同一個埠被第二個行程綁上時 Windows
+    不會報錯擋下來，於是同一頁面背後疊了好幾個互相搶連線的行程，其中
+    有的還會因為 pyw 沒主控台、使用者連 PID 是哪個都看不到、殺不掉
+    （見 taskkill 對某個殘留行程回報「拒絕存取」的實際案例）。
+
+    偵測到活著的舊行程就直接結束，讓 `launch_dashboard.vbs` 後面那行
+    `sh.Run "http://127.0.0.1:8866/"` 開瀏覽器連到那個既有行程即可，
+    不是錯誤，所以用 exit code 0。鎖檔案殘留但行程已死（例如上次被
+    taskkill /F 或斷電）視為正常，直接接手。"""
+    try:
+        fd = os.open(str(LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        try:
+            old_pid = int(LOCK.read_text().strip())
+        except (ValueError, OSError):
+            old_pid = None
+        alive = cloud_queue._pid_alive(old_pid) if old_pid is not None else False
+        if alive:
+            print(f"偵測到主控板已經在跑（PID {old_pid}），這次啟動結束，"
+                 f"改開瀏覽器連過去。", flush=True)
+            sys.exit(0)
+        print("鎖檔案殘留但行程已經不在了，清掉重新接手。", flush=True)
+        try:
+            LOCK.unlink()
+        except FileNotFoundError:
+            pass
+        fd = os.open(str(LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(str(os.getpid()))
+
+
+def release_lock() -> None:
+    try:
+        if int(LOCK.read_text().strip()) == os.getpid():
+            LOCK.unlink()
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+
+
 def main() -> None:
+    acquire_lock()
     server = _bind_server()
     url = f"http://127.0.0.1:{PORT}/"
     print(f"M45 IMF 主控板啟動：{url}（Ctrl+C 結束）", flush=True)
@@ -1396,6 +1593,8 @@ def main() -> None:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        release_lock()
 
 
 if __name__ == "__main__":
