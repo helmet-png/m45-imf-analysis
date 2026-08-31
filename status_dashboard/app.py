@@ -33,6 +33,7 @@ repo（PR #121），但目前活著在跑的派工器行程工作目錄還是
 from __future__ import annotations
 
 import ast
+import ctypes
 import html
 import os
 import re
@@ -48,6 +49,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
 from urllib.parse import quote_plus
+
+if sys.platform == "win32":
+    # 2026-08-26 使用者實際遇到：git.exe（跟 ssh.exe）偶爾會跳出
+    # Windows 的「應用程式無法正常啟動...請按一下確定」對話框
+    # （0xc0000142）——這台機器是 ARM64、git.exe 是 x64 版靠模擬層跑，
+    # 這個 repo 又同時有好幾個 worktree（cloud_queue.py 的、這支主控板
+    # 的）在頻繁打同一份共用 .git 物件庫，比一般狀況更容易踩到 git.exe
+    # 自己的初始化競態。這支主控板是沒人盯著、雙擊桌面捷徑就丟到背景跑
+    # 的服務，子行程崩潰跳互動對話框只會卡在那邊等人點，沒有意義。
+    # SetErrorMode(SEM_NOGPFAULTERRORBOX) 讓這個行程跟它開的所有子行程
+    # 崩潰時直接安靜結束、不跳對話框——`_git()`／`probe_live()` 這些
+    # 呼叫端本來就有檢查 returncode／逾時／例外並優雅降級（顯示「同步
+    # 失敗」而不是硬湊資料），這裡只是不要讓 Windows 額外插一個要人手動
+    # 關掉的對話框進來。跟 cloud_queue.py 同一輪修的同一個坑。
+    ctypes.windll.kernel32.SetErrorMode(0x0002)  # SEM_NOGPFAULTERRORBOX
 
 HERE = Path(__file__).resolve().parent
 
@@ -115,6 +131,16 @@ GIT_SYNC_TIMEOUT_S = 8   # git fetch/pull 單次逾時；離線時最多讓頁�
                          # 多等這麼久，不要無限卡住
 _probe_cache: dict[str, tuple[float, dict]] = {}
 _restart_pending = False  # 見 sync_repo_from_github()／_self_restart()
+GIT_SYNC_COOLDOWN_S = 60  # 這段時間內重複整理頁面，不重打 git（2026-08-26
+                          # 使用者遇到 git.exe 偶爾崩潰彈出「應用程式無法
+                          # 正常啟動」對話框後加的）——這個 repo 同時有
+                          # cloud_queue.py 的 worktree 每 60 秒自己也在打
+                          # 同一份共用 .git 物件庫，主控板這邊按到重新
+                          # 整理就再連打 4～7 個 git 呼叫，兩邊疊在一起
+                          # 對同一份物件庫的併發壓力，是這類初始化競態
+                          # 更容易發生的成因之一。冷卻時間刻意跟
+                          # cloud_queue.py 的同步週期同一個量級。
+_sync_cache: tuple[float, dict] | None = None
 
 
 # ==================================================================
@@ -204,9 +230,22 @@ def _git(*args: str) -> subprocess.CompletedProcess:
 
 
 def sync_repo_from_github() -> dict:
-    """每次整理頁面都嘗試把這個 repo 從 `origin/main` 同步到最新——別人
-    （或別的 session）push 新程式碼、改 docstring、加新腳本之後，不用
-    手動 `git pull`，重新整理主控板就看得到（2026-08-25 使用者要求）。
+    """`_sync_repo_from_github_uncached()` 加上冷卻時間的外層——見那支
+    函式的說明，這裡只處理「多久打一次」。"""
+    global _sync_cache
+    now = time.monotonic()
+    if _sync_cache and now - _sync_cache[0] < GIT_SYNC_COOLDOWN_S:
+        return _sync_cache[1]
+    result = _sync_repo_from_github_uncached()
+    _sync_cache = (now, result)
+    return result
+
+
+def _sync_repo_from_github_uncached() -> dict:
+    """每次冷卻時間到了整理頁面，就嘗試把這個 repo 從 `origin/main`
+    同步到最新——別人（或別的 session）push 新程式碼、改 docstring、
+    加新腳本之後，不用手動 `git pull`，重新整理主控板就看得到
+    （2026-08-25 使用者要求）。
 
     跟 `cloud_queue.py` 的 `sync_queue_file()` 同一個精神：安全第一，
     失敗就跳過用本機現有內容，不讓網路問題擋住整頁。
