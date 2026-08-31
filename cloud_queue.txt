@@ -82,7 +82,10 @@ p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trial
 mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3||false|gcp1
 
 # configCD_real_data_compare（D10）：真實資料上比較 config C／D 的
-# alpha 一致性，目前只在合成資料上驗證過。
+# alpha 一致性，目前只在合成資料上驗證過。加 --tag，否則 fit_real.py
+# 沒帶這個旗標會輸出 results/fit_real.npz，跟 WORK_BOARD.md 規劃的
+# results/fit_real_configCD_compare.npz 對不上（--tag 這個規則見上面
+# sensitivity_sweep.py／D10 的說明；改派 senior24 那次不小心把它漏帶）。
 #
 # **2026-08-29 改派到 senior24，--procs 4 -> 24**：新接進來一台 24 核的
 # SSH worker（隊友提供的 Ubuntu 22.04 機器，見 CLOUD_WORKERS.md）。這一項
@@ -107,7 +110,7 @@ mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --
 # RSS 把 fork 共享的頁面在每個子行程各算了一次。改看 `/proc/meminfo`
 # 的 MemAvailable 在開工前後的實際變化才是對的，兩者差了一個數量級。
 # 以後要估這類平行工作的記憶體，不要用 per-process RSS 加總。
-configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 24 --n-syn 40000 --refines 3,3||false|senior24
+configcd_real_data_compare|fit_real.py|--configs C,D --repeats 5 --procs 24 --n-syn 40000 --refines 3,3 --tag _configCD_compare||false|senior24
 
 # bp15_bp20_paired_comparison（D12）：account5／account6／account7 三個
 # Kaggle 帳號原本閒置，用來跑 results/bp15_formal_paired_dispatch.json
