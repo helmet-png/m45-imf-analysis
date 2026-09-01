@@ -228,3 +228,25 @@ bp15_formal_40k_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-of
 mass_dependent_fbin_c000|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --only 0.0 --tag _c000|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|justinlan11
 mass_dependent_fbin_c015|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --only 0.15 --tag _c015|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|teammate2
 mass_dependent_fbin_c030|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --only 0.30 --tag _c030|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|helmetalbert
+
+# 2026-09-01：bhac15_isochrone_test（C1／D1）派給 senior24。
+#
+# 指令直接照 WORK_BOARD.md 該任務欄位寫的：
+#   fit_real.py --grid bhac15_gaia_logt7.6-8.4.dat --procs 8 --n-syn 40000
+#               --repeats 5 --configs A,C
+# 只把 --procs 8 改成 24（senior24 是 24 核），其餘逐字不動——工作板上
+# 已經寫明這是「唯一剩下要做的」，參數不是我自己決定的。
+#
+# **為什麼一定要派給 senior24、不能給 Kaggle**：BHAC15 網格檔
+# （bhac15_gaia_logt7.6-8.4.dat）不在 kaggle_sync.py 的
+# NEEDED_ISOCHRONE_GLOBS 白名單裡，Kaggle 打包時不會帶上它，工作會在
+# 讀等時線那一步失敗。senior24 上已經有這個檔案（2026-09-01 用
+# sha256sum 確認過實際存在於 ~/m45_membership/isochrones/），SSH worker
+# 走 git pull + 既有靜態資料，不需要重新上傳。
+#
+# **結果解讀的已知限制**（見 pipeline/bhac.py 檔頭與 LIMITATIONS.md
+# C1/D1）：BHAC15 只涵蓋 0.015–1.4 M_sun，蓋不過 M45 的擬合上限
+# 2.50 M_sun，所以這次比較**只驗證得了低質量段**，寫進比較表時要誠實
+# 標注，不能宣稱驗證了全質量範圍。另外官方檔只有太陽金屬量一組，
+# MH 這個維度在用 BHAC15 重跑時形同鎖死。
+bhac15_isochrone_test|fit_real.py|--grid bhac15_gaia_logt7.6-8.4.dat --procs 24 --n-syn 40000 --repeats 5 --configs A,C --tag _bhac15||false|senior24
