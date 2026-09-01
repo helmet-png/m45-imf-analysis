@@ -79,7 +79,7 @@ p6b_inject_lowmass_v2_t2_retry|inject_lowmass.py|--procs 4 --n-syn 40000 --trial
 # mass_dependent_fbin（D14 衍生）：雙星比例是否隨質量變化，contrast
 # 掃 0.0/0.15/0.30（腳本內建，不用額外旗標指定），contrast=0 是必要
 # 對照組，扣掉 C13 記錄的 -0.050 注入回收本身的偏差地板才能判讀。
-mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3||false|gcp1
+# mass_dependent_fbin|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3||false|gcp1   ← 2026-09-01 停用，改拆成下面三個 Kaggle 分片平行跑（見檔尾說明）
 
 # configCD_real_data_compare（D10）：真實資料上比較 config C／D 的
 # alpha 一致性，目前只在合成資料上驗證過。加 --tag，否則 fit_real.py
@@ -207,3 +207,24 @@ bp20_formal_40k_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-of
 bp15_formal_40k_rep3|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 3 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep3 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|teammate2
 bp20_formal_40k_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 4 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp20_formal_40k_rep4|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|helmetalbert
 bp15_formal_40k_rep4|fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --repeat-offset 4 --configs C --refines 3,3 --grid parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat --tag _bp15_formal_40k_rep4 --members-file cmd_members_bp15_smoke.csv --errmodel-file errmodel_bp15_smoke.npz --selection-file selection_bp15_smoke.npz|measure_overconfidence.py,injection_recovery.py,results/cmd_members_bp15_smoke.csv,results/errmodel_bp15_smoke.npz,results/selection_bp15_smoke.npz,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
+
+# 2026-09-01：mass_dependent_fbin 從「gcp1 一台跑完三個 contrast」改成
+# 「三個 Kaggle 帳號各跑一個 contrast」（上面第 82 行的原始碼已註解停用）。
+#
+# **為什麼要拆**：原本那行把 CONTRAST_LIST=[0.0, 0.15, 0.30] 三個值排在
+# 同一個工作裡循序跑，而且只指派給 gcp1 這一台 8 核 VM。單一 contrast
+# 就要幾個小時，三個加起來會佔住 gcp1 很久，同時六個 Kaggle 帳號全部
+# 閒置。用 --only 把三個 contrast 拆開，就能同時開跑。
+#
+# **為什麼每個分片要各自的 --tag**：`inject_massdep_fbin.py` 的輸出檔名
+# 由 --tag 決定，三個分片如果共用同一個 tag，結果檔會互相覆蓋
+# （這跟該檔案裡 --trial-offset 那段註解講的是同一類坑）。用
+# _c000／_c015／_c030 對應三個 contrast 值，天然分開，跑完再一起分析。
+#
+# **相依檔案清單**：inject_massdep_fbin.py 實際 import 了 checkpoint、
+# injection_recovery、measure_overconfidence（用 AST 掃描確認，含函式內的
+# 縮排 import）。preflight.py 一併帶上——它是這批腳本共用的開跑前檢查，
+# 歷史上成功的 Kaggle payload 都有它，漏帶會在跑到一半才失敗。
+mass_dependent_fbin_c000|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --only 0.0 --tag _c000|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|justinlan11
+mass_dependent_fbin_c015|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --only 0.15 --tag _c015|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|teammate2
+mass_dependent_fbin_c030|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials 3 --refines 3,3 --only 0.30 --tag _c030|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|helmetalbert
