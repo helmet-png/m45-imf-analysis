@@ -345,7 +345,16 @@ def _sync_repo_from_github_uncached() -> dict:
             ahead, behind = counts.stdout.split()
             result["ahead"], result["behind"] = int(ahead), int(behind)
 
-        result["dirty"] = bool(_git("status", "--porcelain").stdout.strip())
+        # --untracked-files=no：只在意「有沒有修改過已追蹤的檔案」，不
+        # 管工作目錄裡有沒有未追蹤的雜項檔案——2026-09-02 實際踩到：
+        # acquire_lock() 自己寫的 status_dashboard/dashboard.lock、
+        # 別人手滑留下的殘餘檔案，都會被算進舊版的 --porcelain（含
+        # 未追蹤），讓這個判斷永遠卡在「髒」，自動同步從此完全失效、
+        # 而且沒有任何錯誤訊息——「落後幾個 commit 不動手」是刻意設計
+        # 的保護（怕蓋掉別人真正的未提交修改），但未追蹤的雜項檔案
+        # 不构成「別人正在改的東西」，不該一起算進去。
+        result["dirty"] = bool(
+            _git("status", "--porcelain", "--untracked-files=no").stdout.strip())
 
         if (result["branch"] == "main" and not result["dirty"]
                 and result["behind"] > 0):
