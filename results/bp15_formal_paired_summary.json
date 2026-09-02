@@ -1,0 +1,39 @@
+{
+  "status": "complete_formal_paired_summary",
+  "pairs": [
+    {
+      "offset": 0,
+      "alpha_bp20": 2.3888888888888884,
+      "alpha_bp15": 2.455555555555555,
+      "delta_alpha_bp15_minus_bp20": 0.06666666666666643
+    },
+    {
+      "offset": 1,
+      "alpha_bp20": 2.3666666666666663,
+      "alpha_bp15": 2.5888888888888877,
+      "delta_alpha_bp15_minus_bp20": 0.22222222222222143
+    },
+    {
+      "offset": 2,
+      "alpha_bp20": 2.277777777777777,
+      "alpha_bp15": 2.322222222222221,
+      "delta_alpha_bp15_minus_bp20": 0.04444444444444429
+    },
+    {
+      "offset": 3,
+      "alpha_bp20": 2.3888888888888875,
+      "alpha_bp15": 2.3888888888888884,
+      "delta_alpha_bp15_minus_bp20": 8.881784197001252e-16
+    },
+    {
+      "offset": 4,
+      "alpha_bp20": 2.499999999999999,
+      "alpha_bp15": 2.322222222222222,
+      "delta_alpha_bp15_minus_bp20": -0.17777777777777715
+    }
+  ],
+  "mean_delta_alpha": 0.03111111111111118,
+  "paired_standard_error": 0.0642525879768929,
+  "n_pairs": 5,
+  "rule": "This is a BP-threshold diagnostic, not a replacement M45 headline."
+}
