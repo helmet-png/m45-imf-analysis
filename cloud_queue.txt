@@ -40,7 +40,7 @@ c5_davform_truncexp|injection_recovery.py|--procs 4 --n-syn 40000 --trials 3 --r
 # 會長期佔用機器（見 WORK_BOARD.md 說明），本機因此排到最後、後來
 # 因為改成只用雲端算力被停掉——GCP 是持久機器、不擋其他本機工作，
 # 排一支長工正好填閒置時間。
-p6_lowmass_v3|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3||false|gcp1
+# p6_lowmass_v3|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3||false|gcp1   <- 2026-09-01 停用，改拆成下面四個分片平行跑（見檔尾說明）
 
 # p6b_inject_lowmass_v2（A1）：p6 低質量段冪次的注入回收驗證，跟
 # p6_lowmass_v3 互補（一個是真實資料擬合，一個是合成資料驗證方法）。
@@ -250,3 +250,36 @@ mass_dependent_fbin_c030|inject_massdep_fbin.py|--procs 4 --n-syn 40000 --trials
 # 標注，不能宣稱驗證了全質量範圍。另外官方檔只有太陽金屬量一組，
 # MH 這個維度在用 BHAC15 重跑時形同鎖死。
 bhac15_isochrone_test|fit_real.py|--grid bhac15_gaia_logt7.6-8.4.dat --procs 24 --n-syn 40000 --repeats 5 --configs A,C --tag _bhac15||false|senior24
+
+# 2026-09-01：p6_lowmass_v3（A1／A3）從「gcp1 一台掃完五個點」改成
+# 「四台機器分掃」（上面的原始行已註解停用）。
+#
+# **這個工作在測什麼**：`alpha` 這個自由參數只控制 Kroupa 分段冪律
+# m>0.5 M_sun 那一段，0.08–0.5 M_sun 那段固定在 1.3、從來沒參與擬合。
+# 但 M45 的 1,078 顆成員裡有 641 顆（59.5%）落在那個固定段，Hess 圖
+# 概似是整張圖一起算的——如果 1.3 對 M45 不對，模型會用其他參數去補償，
+# alpha 可能被系統性拖偏卻看起來很精確。`profile_lowmass.py` 掃
+# SLOPES=[0.9, 1.1, 1.3, 1.5, 1.7] 五個點，量 d(alpha)/d(p) 這條曲線。
+#
+# **為什麼要拆**：五個掃描點在同一行裡是循序跑的，全部塞給 gcp1 這台
+# 8 核 VM 會佔住它很久，同時三個 Kaggle 帳號閒置。用 --slopes 拆開
+# 就能同時開跑。gcp1 拿兩個點（8 核，比 Kaggle 的 4 核快），三個
+# Kaggle 帳號各拿一個點。
+#
+# **每個分片必須各自的 --tag**：輸出檔名是
+# `results/profile_lowmass{tag}.npz`（見該檔第 117 行），共用 tag 會
+# 互相覆蓋。用 _s0911／_s13／_s15／_s17 對應各自掃的點。
+#
+# **相依檔案**：AST 掃描確認 profile_lowmass.py 直接 import 了
+# checkpoint、injection_recovery、measure_overconfidence、preflight
+# 四支（preflight 是這支自己就會呼叫的，不是順便帶的）。gcp1 是 SSH
+# worker、整個 repo 都會同步，欄位留空即可；Kaggle 要明列。
+#
+# **注意這不取代 p6b**：p6b_inject_lowmass_v2 是「低質量段冪次可不可
+# 辨識」的通行閘（2026-08-29 已由 finalize_lowmass_recovery.py 驗收
+# 通過，見 RESULTS_LOG 該行），這裡是接下來要做的 d(alpha)/d(p) 正式
+# 輪廓，兩者不同，RESULTS_LOG 那行結尾也明講了「不取代」。
+p6_lowmass_v3_s0911|profile_lowmass.py|--procs 8 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 0.9,1.1 --tag _s0911||false|gcp1
+p6_lowmass_v3_s13|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.3 --tag _s13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
+p6_lowmass_v3_s15|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.5 --tag _s15|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
+p6_lowmass_v3_s17|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.7 --tag _s17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
