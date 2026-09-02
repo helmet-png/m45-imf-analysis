@@ -174,7 +174,10 @@ def read_docstring(rel_path: str, external: bool = False,
             src = f"，原始出處：{upstream}" if upstream else ""
             return (f"（第三方套件，依專案慣例不納入版控，需自行 clone 到 "
                     f"{rel_path}{src}。這裡沒有說明是正常的，不是索引壞掉。）")
-        return f"（找不到檔案，路徑可能已經搬動：{rel_path}）"
+        return (f"（本機（協調 VM 的 checkout）目前找不到這個檔案："
+                f"{rel_path}——可能是路徑搬動了，也可能只是本機還沒同步到"
+                f"剛推上 GitHub 的新檔案，過一輪自動同步通常就會出現。上面"
+                f"的連結一律連到 GitHub，不受本機有沒有這個檔案影響。）")
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError as e:
@@ -675,8 +678,15 @@ def gather_worker_status() -> dict:
     for name, kind in sorted(cloud_workers.items()):
         if name in probe_results:
             r = probe_results[name]
+            # 這個 worker 現在跑的腳本，直接從 cloud_queue.txt 那一行讀
+            # （2026-09-02 使用者要求）——不查 stage_map.py／
+            # categorization.json，佇列檔自己就有 label→script 的對應，
+            # 不需要另外維護一份索引才能知道「這個 worker 在跑哪支程式」，
+            # 也不會因為新腳本還沒補進索引就看不到連結。
+            script = assigned[name].get("script") or None
             workers_out.append({"name": name, "kind": kind, "assigned": True,
-                                "label": assigned[name]["label"], **r})
+                                "label": assigned[name]["label"],
+                                "script": script, **r})
         elif name in ping_results:
             p = ping_results[name]
             # _run_concurrent() 逾時/例外時的補值只有 status/error，沒有
@@ -769,13 +779,14 @@ _RE_PYPATH = re.compile(r"^[\w./-]+\.py$")
 
 def _code_span(inner: str) -> str:
     """行內 `程式碼` 的呈現：看起來像本 repo 的 .py 路徑就變成可點的
-    連結（點了在 VS Code 開啟該檔），其餘維持單純的等寬字樣式。
+    連結（點了在 GitHub 開啟該檔——見 _doc_url() 的說明，2026-09-02
+    起從 vscode://file/ 改過來），其餘維持單純的等寬字樣式。
 
     這是使用者要的「附上連結，讓我能夠點進去看」在 docstring 內文層級
     的實作——不只步驟標題底下那一排腳本連結可以點，內文提到某支程式時
     也能直接跳過去。"""
     if _RE_PYPATH.match(inner) and (REPO_ROOT / inner).exists():
-        return (f'<a class="inline-src" href="{html.escape(_vscode_uri(inner))}">'
+        return (f'<a class="inline-src" href="{html.escape(_doc_url(inner))}">'
                 f'<code>{html.escape(inner)}</code></a>')
     return f"<code>{html.escape(inner)}</code>"
 
@@ -961,13 +972,16 @@ def _render_core(core: dict | None) -> str:
     """「核心程式碼」區塊：這一步幾十支檔案裡，真正做事的是哪一個函式。
 
     使用者的原話是「說明出程式中最核心的程式碼，並附上連結，讓我能夠
-    點進去看」。VS Code 的 file URI 支援 `:行號` 後綴，所以這裡直接
-    連到該函式的**那一行**，不是只開啟檔案讓人自己找。
+    點進去看」。用 `_doc_url()` 的 GitHub 行號錨點（`#L123`）直接連到
+    該函式的**那一行**，不是只開啟檔案讓人自己找（2026-09-02 起改用
+    GitHub 連結，見 `_doc_url()` 說明——原本用 `vscode://` 只有本機
+    裝了 VS Code 才打得開，主控板搬到協調 VM 之後，`vscode://` 指向的
+    是協調 VM 自己的檔案路徑，根本不是看的人電腦上的任何東西）。
     """
     if not core:
         return ""
     rel, line = core["file"], core.get("line")
-    uri = _vscode_uri(rel) + (f":{line}" if line else "")
+    uri = _doc_url(rel, line)
     where = f"{rel}:{line}" if line else rel
     why = _inline_markup(html.escape(core.get("why", "")))
     return ('<div class="callout cr"><div class="callout-h">核心程式碼</div>'
@@ -975,16 +989,6 @@ def _render_core(core: dict | None) -> str:
             f'<code>{html.escape(core["name"])}</code>'
             f'<span class="core-where">{html.escape(where)}</span> ↗</a></p>'
             f'<p class="doc-p">{why}</p></div>')
-
-
-def _vscode_uri(rel_path: str) -> str:
-    """組出 `vscode://file/` URI，點了直接在 VS Code 開啟這支腳本
-    （2026-08-25 使用者要求：不要在頁面內顯示原始碼，直接跳去編輯器，
-    比較貼近「順手可以改」的體感）。前提是這台機器裝了 VS Code 桌面版
-    ——標準安裝都會自動註冊這個協定，不需要額外設定；沒裝的話瀏覽器
-    會顯示「找不到處理這個連結的應用程式」，不是這支程式的錯誤。"""
-    abs_path = (REPO_ROOT / rel_path).resolve()
-    return "vscode://file/" + str(abs_path).replace("\\", "/")
 
 
 def _slugify(rel_path: str) -> str:
@@ -1001,20 +1005,24 @@ def _render_script_block(script: str, external: bool = False,
     複製貼上兩份長得一樣的邏輯。"""
     doc = read_docstring(script, external=external, upstream=upstream)
     exists = (REPO_ROOT / script).exists()
-    # 檔案不在本機時不要給「用 VS Code 開啟」的連結——點了只會
-    # 跳出一個開不了的錯誤視窗。第三方套件另外標一個外連到上游
-    # repo 的連結，那才是真的看得到原始碼的地方。
-    if exists:
-        link = (f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
-                f'<code>{html.escape(script)}</code> ↗</a>')
-    elif external and upstream:
+    # 2026-09-02 起連結一律指向 GitHub（見 _doc_url() 說明），不再要求
+    # 本機（協調 VM 的 checkout）先有這個檔案才給連結——GitHub 才是
+    # 權威來源，本機落後一步是常態（例如 PR 剛合併，下一輪自動同步
+    # 還沒跑到），舊邏輯會因此完全不給連結、讓使用者以為程式不存在，
+    # 但其實只是連結生成方式（vscode://file/ 指向本機路徑）本身就有
+    # 問題：主控板搬到協調 VM 之後，那個路徑對看的人來說完全是別台
+    # 機器上的東西，不管本機找不找得到檔案都一樣打不開。
+    if external and upstream:
         link = (f'<span class="script-link missing"><code>'
                 f'{html.escape(script)}</code></span>'
                 f'<a class="upstream-link" href="{html.escape(upstream)}" '
                 f'target="_blank" rel="noopener">第三方套件，看上游原始碼 ↗</a>')
     else:
-        link = (f'<span class="script-link missing"><code>'
-                f'{html.escape(script)}</code>（本機找不到）</span>')
+        note = ("" if exists else
+               '<span class="script-link-note">（本機尚未同步到這個檔案，'
+               '連結仍指向 GitHub 上的版本）</span>')
+        link = (f'<a class="script-link" href="{html.escape(_doc_url(script))}">'
+                f'<code>{html.escape(script)}</code> ↗</a>{note}')
     return ('<div class="script-block">' + link
             + '<details class="doc-details"><summary>程式檔頭原文說明</summary>'
             f'<div class="doc">{_render_doc(doc)}</div></details></div>')
@@ -1274,28 +1282,48 @@ _NAV = ('<nav class="nav"><a href="/">依步驟看</a>'
        '<a href="/workers">依雲端服務看</a></nav>')
 
 
+def _worker_label_html(w: dict) -> str:
+    """label 本身＋（有的話）它對應程式的可點連結。程式路徑直接來自
+    cloud_queue.txt 那一行（見 gather_worker_status()），不查任何索引。"""
+    label_html = html.escape(w["label"])
+    script = w.get("script")
+    if not script:
+        return label_html
+    return (f'{label_html}'
+           f'<a class="script-link worker-script-link" '
+           f'href="{html.escape(_doc_url(script))}"><code>'
+           f'{html.escape(script)}</code> ↗</a>')
+
+
 def _worker_badge(w: dict) -> str:
+    """`text` 這裡是**已經處理過逃逸**的 HTML 片段，不是純文字——
+    `_worker_label_html()` 會內嵌一個真的 `<a>` 連結，所以組完之後
+    不能再對 `text` 整段 `html.escape()`（那樣會把連結標籤逃逸成看得到
+    的文字，不會真的變成連結）。純文字分支（閒置/連不上）本身是寫死
+    的字面字串，不含使用者或外部資料，不逃逸也安全。`detail` 仍然是
+    純文字，維持原本逐一逃逸。"""
     if w["assigned"]:
         state = w["state"]
         if state == "live":
-            cls, text = "live", f"執行中：{w['label']}"
+            cls, text = "live", f"執行中：{_worker_label_html(w)}"
             bits = []
             if w.get("elapsed"):
-                bits.append(f"已耗時 {w['elapsed']}")
+                bits.append(html.escape(w["elapsed"]))
             if w.get("error"):
-                bits.append(w["error"])
+                bits.append(html.escape(w["error"]))
             detail = "　".join(bits)
         else:
-            cls, text = "unknown", f"排定了 {w['label']}，但探測結果是「{w.get('status', '?')}」"
-            detail = w.get("note", w.get("error", ""))
+            cls = "unknown"
+            text = f"排定了 {_worker_label_html(w)}，但探測結果是「{html.escape(str(w.get('status', '?')))}」"
+            detail = html.escape(w.get("note", w.get("error", "")))
     elif w.get("reachable") is True:
         cls, text, detail = "ok", "閒置中（機器連得上）", ""
     elif w.get("reachable") is False:
-        cls, text, detail = "fail", "連不上", w.get("error", "")
+        cls, text, detail = "fail", "連不上", html.escape(w.get("error", ""))
     else:
         cls, text, detail = "pending", "閒置中", "Kaggle 沒有常駐機器，沒有工作時無法探測連線"
-    return (f'<span class="badge {cls}">{html.escape(text)}</span>'
-           f'<span class="detail">{html.escape(detail)}</span>')
+    return (f'<span class="badge {cls}">{text}</span>'
+           f'<span class="detail">{detail}</span>')
 
 
 def render_workers_html(status: dict) -> str:
@@ -1392,6 +1420,7 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .status-row code { margin-right: 0.5em; }
 .script-block { margin: 0.5em 0 0.5em 0.6em; }
 .script-link { font-size: 0.9em; text-decoration: none; }
+.worker-script-link { margin-left: 0.5em; font-size: 0.85em; }
 .script-link:hover { text-decoration: underline; }
 /* 教學說明（重點／公式／文獻／核心程式碼）整層可收合，預設展開
    （2026-08-31 使用者要求）——跟下面 docstring 那個收合是同一種
@@ -1412,6 +1441,7 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
           padding: 0.5em 0.7em; border-radius: 3px; margin: 0.5em 0;
           overflow-x: auto; }
 .script-link.missing { font-size: 0.9em; color: #999; }
+.script-link-note { font-size: 0.8em; color: #999; margin-left: 0.4em; }
 .upstream-link { font-size: 0.8em; margin-left: 0.6em; }
 
 /* 解說層（重點／公式／文獻／核心程式碼）——2026-08-26 使用者要求把
