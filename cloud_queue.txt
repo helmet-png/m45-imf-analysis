@@ -283,3 +283,26 @@ p6_lowmass_v3_s0911|profile_lowmass.py|--procs 8 --n-syn 40000 --repeats 3 --ref
 p6_lowmass_v3_s13|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.3 --tag _s13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
 p6_lowmass_v3_s15|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.5 --tag _s15|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
 p6_lowmass_v3_s17|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.7 --tag _s17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
+
+# 2026-09-02：mass_dependent_fbin 的三分片派工設計錯誤，改回單一工作
+# 派給 senior24，見這行以上 c000／c015／c030 三行的說明與判斷。
+#
+# **錯在哪**：inject_massdep_fbin.py 的「淨偏移」判讀（contrast=X 減
+# contrast=0 的偏差地板）要求三個 contrast 在**同一個行程記憶體裡**
+# 算完才能比較；且這支腳本的 atomic_savez 只防當機掉資料，**沒有跨
+# 行程的續傳/合併機制**（不像 fit_real.py／inject_lowmass.py 那樣有
+# checkpoint.load_partial() 可以接續）。三個 --only 分片各自獨立行程，
+# 互相看不到對方的記憶體內容，c015／c030 都因為「沒有 contrast=0 對照
+# 組」以非零碼故意結束（腳本自己的完整性把關，不是 bug）。
+#
+# **c000／c015／c030 三個 Kaggle 分片的運算本身沒有錯**（alpha／f_bin
+# 數字合理，各自 3/3 次試驗都成功），只是沒能跑到最後的比較結論。
+# 不採用硬拼三份 npz 的做法——這支腳本沒有為此設計過，硬湊風險太高，
+# 寧可用 senior24 的算力優勢重跑一次乾淨的。
+#
+# **為什麼直接放 senior24、不再拆分**：這次用 24 核（而非分給多個
+# 4 核 Kaggle 帳號），2026-09-01 的 benchmark 顯示同類運算在 24 核上
+# 比 4 核快約 34 倍，三個 contrast 各 3 次試驗、總共 9 次擬合，
+# 單一行程內依序跑，抓的資料集一致、比較邏輯天然正確，預期一小時內
+# 可以跑完，不需要再冒風險拆分。
+mass_dependent_fbin_v2|inject_massdep_fbin.py|--procs 24 --n-syn 40000 --trials 3 --refines 3,3||false|senior24
