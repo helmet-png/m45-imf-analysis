@@ -72,6 +72,29 @@ if [ -n "${CONDA_PREFIX:-}" ]; then
     export CPPFLAGS="-I$CONDA_PREFIX/include ${CPPFLAGS:-}"
     export LDFLAGS="-L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib ${LDFLAGS:-}"
     echo "偵測到 conda 環境，已補上 include／lib 路徑：$CONDA_PREFIX"
+
+    # **還要幫工具鏈建純名稱的符號連結**（2026-09-03 實測第二關）：
+    # conda 的 binutils 也全部帶前綴（x86_64-conda-linux-gnu-ar 等），
+    # conda 有正確設好 $AR／$RANLIB／$NM／$LD，但 PeTar 的
+    # bse-interface/Makefile 是**寫死純名稱 `ar`** 的，不吃 $(AR)，
+    # 實測直接爛在 `make[1]: ar: No such file or directory`。
+    #
+    # 與其逐一去 patch 第三方 Makefile（PeTar／mcluster 都是研究用程式碼，
+    # 寫死純名稱的地方可能不只一處，改了還要跟著上游版本維護），不如建一個
+    # 只放符號連結的目錄插到 PATH 最前面，讓純名稱一律解析到 conda 的工具。
+    # 這也正是 conda 自己 build 套件時的做法。
+    SHIM_DIR="$NBODY_DIR/.toolchain-shims"
+    mkdir -p "$SHIM_DIR"
+    # 用 if 而不是 `[ -x ] && ln`——後者在最後一輪測試失敗時會讓整個 for
+    # 迴圈回傳非零，配上開頭的 `set -e` 會讓腳本無聲中止。
+    for tool in ar ranlib nm ld as objcopy objdump strip gcc g++ gfortran cc c++; do
+        src="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-$tool"
+        if [ -x "$src" ]; then
+            ln -sf "$src" "$SHIM_DIR/$tool"
+        fi
+    done
+    export PATH="$SHIM_DIR:$PATH"
+    echo "已建立工具鏈符號連結（純名稱 -> conda 帶前綴版本）：$SHIM_DIR"
 fi
 # GSL 是 mcluster 的相依函式庫，沒有對應的執行檔可以用 command -v 檢查，
 # 改看標頭檔在不在（-dev 套件才會裝標頭檔，只有執行期函式庫不夠編譯）。
