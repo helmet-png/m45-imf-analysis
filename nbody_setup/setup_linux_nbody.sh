@@ -152,8 +152,25 @@ echo "=== 編譯 PeTar（含 BSE 恆星演化）==="
 cd "$NBODY_DIR/PeTar"
 CXX="$CXX" CC="$CC" FC="$FC" ./configure --prefix="$NBODY_DIR/install" \
     --with-mpi=no --with-interrupt=bse
-make -j"$(nproc)"
-make install
+
+# **FCLIBS 要自己補**（2026-09-03 實測第三關）：BSE 是 Fortran 寫的，
+# bse-interface/Makefile 連結時用 `$(CXX) ... -lbse $(FCLIBS)`，靠
+# configure 的 AC_FC_LIBRARY_LDFLAGS 去偵測 Fortran 執行期函式庫。但
+# conda 的 gfortran 是個 wrapper，它 `-v` 的輸出格式跟 autoconf 預期的
+# 不一樣，偵測結果是**空字串**（實測 config.log 裡就是 `FCLIBS='`），
+# 於是連結時整批 `_gfortran_st_write`／`_gfortran_transfer_*` 符號全部
+# undefined reference。
+#
+# make 命令列上的變數指派優先權高於 Makefile 內的指派，所以直接覆寫。
+# 帶 rpath 是必要的：編出來的執行檔要在執行期找得到 conda 的 libgfortran，
+# 不然離開 activate 的 shell 就跑不起來（派工器跑的是非互動 shell）。
+FCLIBS_FIX=""
+if [ -n "${CONDA_PREFIX:-}" ]; then
+    FCLIBS_FIX="-L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib -lgfortran -lm"
+    echo "conda 環境：明確指定 FCLIBS=$FCLIBS_FIX"
+fi
+make -j"$(nproc)" ${FCLIBS_FIX:+FCLIBS="$FCLIBS_FIX"}
+make install ${FCLIBS_FIX:+FCLIBS="$FCLIBS_FIX"}
 
 # Linux 上不需要 mingw_compat.o（那是補 MinGW 缺的 rand48／feenableexcept），
 # 但 -lgfortran 要留著——mcluster_sse 會連結 SSE（恆星演化）的 Fortran 常式。
