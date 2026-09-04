@@ -34,7 +34,7 @@ PeTar、FDPS、SDAR、mcluster 本身都是外部專案，不進這個 repo 的�
    演算法（`X_{n+1}=(0x5DEECE66D·X_n+0xB) mod 2^48`）跟一個空的
    `feenableexcept`（不影響結果正確性，只是少了除錯用的 FP 例外中斷）。
 
-## 重現步驟
+## 重現步驟（Windows／MSYS2）
 
 ```bash
 # 1. 裝 MSYS2（若尚未安裝）
@@ -47,6 +47,33 @@ winget install --id MSYS2.MSYS2 --silent --accept-package-agreements --accept-so
 # 3. 跑這個資料夾的 setup_windows_nbody.sh（clone 到 ~/../nbody，跟本 repo 平行、不進版控）
 bash nbody_setup/setup_windows_nbody.sh
 ```
+
+## 重現步驟（Linux 運算節點）
+
+**正式的 M45 模擬網格建議跑在這裡，不是 Windows 筆電**（2026-09-03）：
+`petar_m45_grid.csv` 每次要跑 2,369 顆星（1,215 個系統、1,154 對聯星），
+比上面驗證用的 128／1024 顆星大一個量級；而筆電闔蓋睡眠會直接砍掉背景
+行程（2026-08-29～30 主控板就這樣掉了四次），長時間模擬跑不完。SSH 常駐
+運算節點沒有這個問題，也沒有 Kaggle 那種 12 小時 session 上限。
+
+```bash
+# 1. 裝編譯工具（Debian/Ubuntu；需要 sudo，先確認機器擁有者同意）
+sudo apt update && sudo apt install -y build-essential gfortran \
+     autoconf automake libtool libgsl-dev git
+
+# 2. 跑這個資料夾的 setup_linux_nbody.sh
+bash nbody_setup/setup_linux_nbody.sh
+```
+
+Linux 版**不套用任何 patch**——`petar_configure_mingw.patch` 與
+`mcluster_main_mingw.patch`／`mingw_compat.c` 都只是繞過 MinGW 的相容性
+問題（`configure` 認不得全大寫的 `MINGW64_NT-*`、MinGW runtime 缺
+`srand48`／`drand48`／`feenableexcept`），Linux 的 glibc 本來就有這些。
+釘選的四個 commit 兩個平台完全一致，確保跨機器比對模擬結果時不會多出
+無法歸因的變因。
+
+腳本會**先檢查編譯工具齊不齊、缺什麼就列出來並停下**，不會未經確認就
+對別人提供的機器 `sudo apt install`。
 
 ## 驗證（2026-08-12 已跑過，結果正常）
 
