@@ -280,9 +280,9 @@ bhac15_isochrone_test|fit_real.py|--grid bhac15_gaia_logt7.6-8.4.dat --procs 24 
 # 通過，見 RESULTS_LOG 該行），這裡是接下來要做的 d(alpha)/d(p) 正式
 # 輪廓，兩者不同，RESULTS_LOG 那行結尾也明講了「不取代」。
 p6_lowmass_v3_s0911|profile_lowmass.py|--procs 8 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 0.9,1.1 --tag _s0911||false|gcp1
-p6_lowmass_v3_s13|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.3 --tag _s13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5
-p6_lowmass_v3_s15|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.5 --tag _s15|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6
-p6_lowmass_v3_s17|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.7 --tag _s17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7
+# p6_lowmass_v3_s13|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.3 --tag _s13|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account5   <- 2026-09-03 停用，撞 Kaggle 12 小時執行上限被取消，改派 senior24（見檔尾說明）
+# p6_lowmass_v3_s15|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.5 --tag _s15|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account6   <- 2026-09-03 停用，撞 Kaggle 12 小時執行上限被取消，改派 senior24（見檔尾說明）
+# p6_lowmass_v3_s17|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.7 --tag _s17|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|account7   <- 2026-09-03 停用，撞 Kaggle 12 小時執行上限被取消，改派 senior24（見檔尾說明）
 
 # 2026-09-02：mass_dependent_fbin 的三分片派工設計錯誤，改回單一工作
 # 派給 senior24，見這行以上 c000／c015／c030 三行的說明與判斷。
@@ -306,3 +306,22 @@ p6_lowmass_v3_s17|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refin
 # 單一行程內依序跑，抓的資料集一致、比較邏輯天然正確，預期一小時內
 # 可以跑完，不需要再冒風險拆分。
 mass_dependent_fbin_v2|inject_massdep_fbin.py|--procs 24 --n-syn 40000 --trials 3 --refines 3,3||false|senior24
+
+# 2026-09-03：p6_lowmass_v3 的 s13／s15／s17 三個 Kaggle 分片全部撞到
+# Kaggle 的 12 小時執行上限被強制取消（上面三行已停用，見說明）。
+#
+# **實測發現**：p=1.3 光是第 1 次重複（共要跑 3 次）就花了 26,796 秒
+# （7.4 小時）。3 次重複合計超過 22 小時，遠遠超過 Kaggle 免費 CPU
+# session 的執行時間上限（`kernels output` 抓到的 log 顯示
+# `Timeout waiting for execute reply (43200s)`，即 12 小時）——這不是
+# 誰手動取消的，是 Kaggle 自己的時間上限，跟先前 p6b 系列的
+# CANCEL_ACKNOWLEDGED 很可能是同一種根因。
+#
+# 昨天派工時是拿 mass_dependent_fbin 的單次重複耗時（70-90 分鐘）去
+# 估這支腳本的量級，低估了——profile_lowmass.py 明顯貴很多，Kaggle
+# 4 核完全不適合這個工作量。
+#
+# **改派 senior24**：三個掃描點（1.3／1.5／1.7）合併成一個工作，用
+# --slopes 逗號分隔一次帶三個值。24 核不只速度快，且是 SSH 常駐機器、
+# 沒有 Kaggle 那種 session 時數上限，跑多久都不會被強制中斷。
+p6_lowmass_v3_s131517|profile_lowmass.py|--procs 24 --n-syn 40000 --repeats 3 --refines 3,3 --slopes 1.3,1.5,1.7 --tag _s131517||false|senior24
