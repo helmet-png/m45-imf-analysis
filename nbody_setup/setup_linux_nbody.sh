@@ -41,26 +41,46 @@ MCLUSTER_COMMIT=a147bb5f1c0186a2d2d5b513ed112992929dd12a
 # 先列出來，讓操作的人自己決定要不要裝、用什麼方式裝。
 echo "=== 檢查編譯需要的工具 ==="
 MISSING=()
-for cmd in git gcc g++ gfortran make autoconf automake libtool; do
+# **編譯器要支援兩種來源**（2026-09-03 實測補上）：系統套件（apt）裝的是
+# 純名稱 `gcc`／`g++`／`gfortran`；但沒有 sudo 的機器只能用 conda-forge
+# 在家目錄裝，而 conda 的編譯器執行檔是**帶目標三元組前綴**的
+# （`x86_64-conda-linux-gnu-cc` 之類），純名稱根本不存在，只有啟動環境時
+# 設好的 $CC／$CXX／$FC 指得到。原本只檢查純名稱，在 conda 環境下會誤判
+# 成「缺工具」而停下——senior24 就是這個情況（學長的機器，我們沒有 sudo）。
+: "${CC:=gcc}"
+: "${CXX:=g++}"
+: "${FC:=gfortran}"
+for var in CC CXX FC; do
+    bin="${!var}"
+    command -v "$bin" >/dev/null 2>&1 || MISSING+=("$var=$bin")
+done
+for cmd in git make autoconf automake libtool; do
     command -v "$cmd" >/dev/null 2>&1 || MISSING+=("$cmd")
 done
 # GSL 是 mcluster 的相依函式庫，沒有對應的執行檔可以用 command -v 檢查，
 # 改看標頭檔在不在（-dev 套件才會裝標頭檔，只有執行期函式庫不夠編譯）。
-if ! echo '#include <gsl/gsl_rng.h>' | gcc -E - >/dev/null 2>&1; then
-    MISSING+=("libgsl-dev（GSL 標頭檔）")
+# 用 $CC 而不是寫死 gcc，理由同上。
+if ! echo '#include <gsl/gsl_rng.h>' | "$CC" -E - >/dev/null 2>&1; then
+    MISSING+=("GSL 標頭檔（apt: libgsl-dev／conda: gsl）")
 fi
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     echo "缺少以下項目：${MISSING[*]}"
     echo
-    echo "Debian/Ubuntu 系統可以這樣裝（需要 sudo，請先確認這台機器的擁有者同意）："
+    echo "有 sudo 的機器（Debian/Ubuntu）："
     echo "  sudo apt update && sudo apt install -y build-essential gfortran \\"
     echo "       autoconf automake libtool libgsl-dev git"
+    echo
+    echo "沒有 sudo 的機器（裝在家目錄，不動系統）："
+    echo "  micromamba create -y -n nbody -c conda-forge \\"
+    echo "      gcc_linux-64 gxx_linux-64 gfortran_linux-64 gsl make cmake \\"
+    echo "      autoconf automake libtool"
+    echo "  然後在啟動該環境的 shell 裡重跑這個腳本（\$CC/\$CXX/\$FC 會自動設好）"
     echo
     echo "裝好之後重新執行這個腳本。"
     exit 1
 fi
-echo "編譯工具齊全"
+echo "編譯工具齊全（CC=$CC  CXX=$CXX  FC=$FC）"
 
 # ---------------------------------------------------------------- clone
 mkdir -p "$NBODY_DIR"
@@ -87,18 +107,21 @@ clone_pinned mcluster  https://github.com/lwang-astro/mcluster.git "$MCLUSTER_CO
 #   不跨機器分散，省掉 MPI 的安裝與設定。
 # --with-interrupt=bse：把 BSE 恆星演化編進去。第 5 步要比較的是
 #   「動力學演化 + 恆星演化」之後的質量函數，少了 BSE 就少一個真實效應。
+# 用上面解析出來的 $CC／$CXX／$FC，不寫死 gcc／g++／gfortran——conda
+# 環境下那些純名稱不存在（見前面檢查段落的說明）。
 echo "=== 編譯 PeTar（含 BSE 恆星演化）==="
 cd "$NBODY_DIR/PeTar"
-CXX=g++ CC=gcc FC=gfortran ./configure --prefix="$NBODY_DIR/install" \
+CXX="$CXX" CC="$CC" FC="$FC" ./configure --prefix="$NBODY_DIR/install" \
     --with-mpi=no --with-interrupt=bse
 make -j"$(nproc)"
 make install
 
 # Linux 上不需要 mingw_compat.o（那是補 MinGW 缺的 rand48／feenableexcept），
 # 但 -lgfortran 要留著——mcluster_sse 會連結 SSE（恆星演化）的 Fortran 常式。
+# mcluster 的 Makefile 預設用 `gcc`，conda 環境下要明確覆寫成 $CC。
 echo "=== 編譯 mcluster ==="
 cd "$NBODY_DIR/mcluster"
-make mcluster_sse CFLAGS='-lgfortran'
+make mcluster_sse CC="$CC" FC="$FC" CFLAGS='-lgfortran'
 
 # ---------------------------------------------------------------- 驗證
 # 跟 Windows 版同一組煙霧測試，只差執行檔沒有 .exe 副檔名。
