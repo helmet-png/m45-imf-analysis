@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# 在 Linux 運算節點上重現 PDMF->IMF 第 5 步的 N-body 編譯環境
+# （PeTar + mcluster）。跟同資料夾的 setup_windows_nbody.sh 是同一件事
+# 的兩個平台版本，釘選的 commit 完全一致。
+#
+# **為什麼要有 Linux 版**（2026-09-03）：原本只有 Windows 版，因為當時
+# 唯一的機器是使用者的筆電。但正式的 M45 模擬網格（petar_m45_grid.csv）
+# 每次要跑 2,369 顆星（1,215 個系統、1,154 對聯星），比先前驗證用的
+# 128／1024 顆星大一個量級，在 15W 的筆電 CPU 上跑不切實際，而且那台
+# 筆電闔蓋睡眠會直接砍掉背景行程（2026-08-29～30 主控板就這樣掉了四次）。
+# 改在 24 核的 SSH 常駐運算節點上跑，速度快、不會被睡眠中斷、也沒有
+# Kaggle 那種 12 小時 session 上限。
+#
+# **Linux 版比 Windows 版簡單**：Windows 版需要的兩個 patch
+# （petar_configure_mingw.patch、mcluster_main_mingw.patch + mingw_compat.c）
+# 純粹是繞過 MinGW 的相容性問題——`configure` 認不得全大寫的
+# `MINGW64_NT-*`、MinGW runtime 缺 `srand48`／`drand48`／`feenableexcept`。
+# Linux 的 glibc 本來就有這些，所以這裡完全不套用任何 patch。
+#
+# 用法：
+#   bash nbody_setup/setup_linux_nbody.sh
+#
+# 冪等：外部專案 clone 到跟本 repo 平行的 nbody/ 目錄（不進版控），
+# 已存在就跳過 clone，只重新 checkout 釘選 commit 並重新 build。
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$HERE/.." && pwd)"
+NBODY_DIR="$(cd "$REPO_ROOT/.." && pwd)/nbody"
+
+# 跟 setup_windows_nbody.sh 逐字相同——兩個平台編出來的必須是同一份
+# 原始碼，否則跨機器比對模擬結果時會多出一個無法歸因的變因。
+FDPS_COMMIT=6fedb4b8bd7a504598e83a4189a7a83c533a0848
+SDAR_COMMIT=f64f11801f494bdceda9f4c93dad71dd64c57278
+PETAR_COMMIT=84b81a8c339c49291de53f7a72829dd80e188182
+MCLUSTER_COMMIT=a147bb5f1c0186a2d2d5b513ed112992929dd12a
+
+# ---------------------------------------------------------------- 前置檢查
+# **先檢查、不要直接 sudo apt install**：這個腳本會跑在別人提供的機器上
+# （目前是學長借給我們的那台），不該未經確認就動人家的系統套件。缺什麼
+# 先列出來，讓操作的人自己決定要不要裝、用什麼方式裝。
+echo "=== 檢查編譯需要的工具 ==="
+MISSING=()
+for cmd in git gcc g++ gfortran make autoconf automake libtool; do
+    command -v "$cmd" >/dev/null 2>&1 || MISSING+=("$cmd")
+done
+# GSL 是 mcluster 的相依函式庫，沒有對應的執行檔可以用 command -v 檢查，
+# 改看標頭檔在不在（-dev 套件才會裝標頭檔，只有執行期函式庫不夠編譯）。
+if ! echo '#include <gsl/gsl_rng.h>' | gcc -E - >/dev/null 2>&1; then
+    MISSING+=("libgsl-dev（GSL 標頭檔）")
+fi
+
+if [ ${#MISSING[@]} -gt 0 ]; then
+    echo "缺少以下項目：${MISSING[*]}"
+    echo
+    echo "Debian/Ubuntu 系統可以這樣裝（需要 sudo，請先確認這台機器的擁有者同意）："
+    echo "  sudo apt update && sudo apt install -y build-essential gfortran \\"
+    echo "       autoconf automake libtool libgsl-dev git"
+    echo
+    echo "裝好之後重新執行這個腳本。"
+    exit 1
+fi
+echo "編譯工具齊全"
+
+# ---------------------------------------------------------------- clone
+mkdir -p "$NBODY_DIR"
+cd "$NBODY_DIR"
+
+clone_pinned () {
+    local name="$1" url="$2" commit="$3"
+    if [ -d "$name/.git" ]; then
+        echo "[$name] 已存在，跳過 clone"
+    else
+        git clone "$url" "$name"
+    fi
+    (cd "$name" && git checkout "$commit")
+}
+
+echo "=== Clone 並釘選 commit ==="
+clone_pinned FDPS      https://github.com/FDPS/FDPS.git            "$FDPS_COMMIT"
+clone_pinned SDAR      https://github.com/lwang-astro/SDAR.git     "$SDAR_COMMIT"
+clone_pinned PeTar     https://github.com/lwang-astro/PeTar.git    "$PETAR_COMMIT"
+clone_pinned mcluster  https://github.com/lwang-astro/mcluster.git "$MCLUSTER_COMMIT"
+
+# ---------------------------------------------------------------- 編譯
+# --with-mpi=no：單機多核心用 OpenMP 就夠（編出來的是 petar.omp.*），
+#   不跨機器分散，省掉 MPI 的安裝與設定。
+# --with-interrupt=bse：把 BSE 恆星演化編進去。第 5 步要比較的是
+#   「動力學演化 + 恆星演化」之後的質量函數，少了 BSE 就少一個真實效應。
+echo "=== 編譯 PeTar（含 BSE 恆星演化）==="
+cd "$NBODY_DIR/PeTar"
+CXX=g++ CC=gcc FC=gfortran ./configure --prefix="$NBODY_DIR/install" \
+    --with-mpi=no --with-interrupt=bse
+make -j"$(nproc)"
+make install
+
+# Linux 上不需要 mingw_compat.o（那是補 MinGW 缺的 rand48／feenableexcept），
+# 但 -lgfortran 要留著——mcluster_sse 會連結 SSE（恆星演化）的 Fortran 常式。
+echo "=== 編譯 mcluster ==="
+cd "$NBODY_DIR/mcluster"
+make mcluster_sse CFLAGS='-lgfortran'
+
+# ---------------------------------------------------------------- 驗證
+# 跟 Windows 版同一組煙霧測試，只差執行檔沒有 .exe 副檔名。
+echo "=== 驗證 ==="
+export OMP_STACKSIZE=128M
+"$NBODY_DIR/install/bin/petar" -h > /dev/null && echo "petar: OK"
+"$NBODY_DIR/mcluster/mcluster_sse" -N 10 -b 0.5 -C 5 -u 1 > /dev/null 2>&1 \
+    && echo "mcluster_sse: OK"
+
+echo
+echo "=== 完成 ==="
+echo "PeTar 安裝路徑： $NBODY_DIR/install/bin"
+echo "mcluster 執行檔：$NBODY_DIR/mcluster/mcluster_sse"
+echo
+echo "提醒：環境能編譯 ≠ 正式模擬可以跑。正式模擬還需要正確的初始條件"
+echo "參數與第 2 步的觀測基準線，見 nbody_setup/README.md 最後一節。"
