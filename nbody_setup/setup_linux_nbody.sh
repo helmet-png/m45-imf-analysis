@@ -57,10 +57,26 @@ done
 for cmd in git make autoconf automake libtool; do
     command -v "$cmd" >/dev/null 2>&1 || MISSING+=("$cmd")
 done
+
+# **conda 環境要手動補 include／lib 路徑**（2026-09-03 實測踩到）：
+# conda 把 GSL 的標頭檔放在 $CONDA_PREFIX/include，理論上 activate 時會設
+# CPATH 讓編譯器自動找到，但實測 senior24 上 activate 之後 CPATH 是空的
+# （不同 conda-forge 編譯器套件版本行為不一致），結果
+# `echo '#include <gsl/gsl_rng.h>' | $CC -E -` 直接失敗、腳本誤判成沒裝
+# GSL。加 -I$CONDA_PREFIX/include 就過。
+#
+# 這不只影響檢查，**後面編譯 PeTar／mcluster 時會踩到同一個問題**，所以
+# 統一用 autotools 的標準變數 CPPFLAGS／LDFLAGS 帶下去，兩邊都受益。
+# 非 conda 環境（$CONDA_PREFIX 沒設）時這段完全不做事，行為不變。
+if [ -n "${CONDA_PREFIX:-}" ]; then
+    export CPPFLAGS="-I$CONDA_PREFIX/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib ${LDFLAGS:-}"
+    echo "偵測到 conda 環境，已補上 include／lib 路徑：$CONDA_PREFIX"
+fi
 # GSL 是 mcluster 的相依函式庫，沒有對應的執行檔可以用 command -v 檢查，
 # 改看標頭檔在不在（-dev 套件才會裝標頭檔，只有執行期函式庫不夠編譯）。
 # 用 $CC 而不是寫死 gcc，理由同上。
-if ! echo '#include <gsl/gsl_rng.h>' | "$CC" -E - >/dev/null 2>&1; then
+if ! echo '#include <gsl/gsl_rng.h>' | "$CC" -E ${CPPFLAGS:-} - >/dev/null 2>&1; then
     MISSING+=("GSL 標頭檔（apt: libgsl-dev／conda: gsl）")
 fi
 
@@ -121,7 +137,10 @@ make install
 # mcluster 的 Makefile 預設用 `gcc`，conda 環境下要明確覆寫成 $CC。
 echo "=== 編譯 mcluster ==="
 cd "$NBODY_DIR/mcluster"
-make mcluster_sse CC="$CC" FC="$FC" CFLAGS='-lgfortran'
+# CFLAGS 要把 $CPPFLAGS（conda 的 -I）也帶進去——mcluster 的 Makefile 不吃
+# CPPFLAGS，只認 CFLAGS，不併進來的話 conda 環境下找不到 gsl 標頭檔。
+make mcluster_sse CC="$CC" FC="$FC" \
+    CFLAGS="${CPPFLAGS:-} -lgfortran ${LDFLAGS:-}"
 
 # ---------------------------------------------------------------- 驗證
 # 跟 Windows 版同一組煙霧測試，只差執行檔沒有 .exe 副檔名。
