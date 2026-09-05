@@ -200,6 +200,29 @@ r=5° 擴到 8–17°，重抓 Gaia、重跑成員判定、重建選擇函數。
   怎麼來的（文獻公式 vs 我們自己量）
 - `PAPER_OUTLINE.md` 的表 5 誤差預算要新增「徑向覆蓋」一列
 
+**路線 C（N-body）的用詞規範（H15，2026-09-05 使用者要求先定案，之後
+所有 N-body 產出的文字比照辦理）**：
+
+1. **`nbody_pdmf_smoke.py` 只是核心演算法的理解佐證，不是科學結果**——
+   它自己的 docstring 已經寫得很清楚（"This is a PeTar/AMUSE *pre-flight
+   test*, not a production cluster model"），沒有恆星演化、銀河潮汐、
+   原初雙星族群、或觀測選擇函數。引用它的輸出時只能說「驗證了分析鏈的
+   演算法邏輯」，不能拿來支持任何跟 M45 本身有關的科學主張——這條界線
+   要延續到所有未來的 N-body smoke test，不是這一支腳本專屬。
+2. **在套用 Δα 修正之前，路線 C 產出的任何質量函數只能稱為「system
+   PDMF」，不能稱為 IMF**——這是 A5 的直接延伸：即使 N-body 模擬了完整
+   的動力學演化，`petar_pdmf_analysis.py` 輸出的仍是模擬終止時刻（見
+   H11）的現時質量函數，要先完成 Δα（現時 vs 初始）的修正、且修正本身
+   通過驗證，才能改口叫 IMF。
+3. **初始條件本身要標明是「氣體驅散後（post-gas expulsion）」的狀態**——
+   直接查證 arXiv:1002.2229 原文確認：Converse & Stahler (2010) 的
+   Table 1 初始條件是「起始狀態是氣體驅離後、已達 virial 平衡」（論文
+   原文："already had a virial radius... after the cloud gas has been
+   expelled"），不含胚胎星團／氣體動力學階段本身。任何沿用這組初始條件
+   的 N-body 結果，論文行文都要明確標注「post-gas-expulsion」這個限定，
+   不能省略成單純的「初始質量函數」，讀者才知道這不涵蓋更早期、還在
+   胚胎階段的物理過程。
+
 ---
 
 ## 七、給其他協作者／agent
