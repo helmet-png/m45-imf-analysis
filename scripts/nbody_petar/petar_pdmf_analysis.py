@@ -545,6 +545,11 @@ def analyze(initial, final, mass_min, mass_max, radii_pc, n_projections=32):
         "limitations": [
             "Component-star mass functions; unresolved observational systems are not synthesized.",
             "Missing IDs combine escape, removal and merger unless event catalogs are supplied.",
+            # H7 / LIMITATIONS.md D19 (2026-09-05): this is a real, measured
+            # gap, not a hypothetical one. results/hr23_cmd_recall_by_magnitude.json
+            # shows recall dropping to 0.7963 for 16<=G<18 (vs 0.950/0.924 for
+            # brighter bins), i.e. ~15-20% extra loss at the low-mass end that
+            # this aperture-only selection does not reproduce.
             "Uniform sky projections quantify orientation sensitivity but not Gaia selection.",
             "A production inference needs an ensemble over initial conditions and random seeds.",
         ],
