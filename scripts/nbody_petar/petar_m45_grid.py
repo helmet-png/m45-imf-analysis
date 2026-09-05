@@ -108,10 +108,22 @@ def render_commands(row: dict) -> str:
             "petar.init -s bse -v kms2pcmyr -f input <MCLUSTER_OUTPUT>",
             "export OMP_STACKSIZE=128M",
             "export OMP_NUM_THREADS=8",
+            # H11（2026-09-05 使用者回報）：本專案對 M45 年齡有三個彼此不同
+            # 的估計——前向模型 headline logage=8.026（106.2 Myr）、
+            # Converse & Stahler (2010) 沿用 Stauffer+1998 鋰耗竭邊界法的
+            # 125 Myr（petar_m45_grid.py 原本就是照這個值積分，見上方對
+            # C&S 初始條件的引用）、白矮星冷卻定年法約 132 Myr。積分只跑到
+            # 125.0 沒辦法涵蓋 132 Myr 那個估計，於是把停止時間延到
+            # 135.0（`-o 5.0` 快照間隔不變），這樣同一次模擬跑出的快照
+            # 就會涵蓋 106/110/115/120/125/130/135 Myr 全部整數倍 5 的
+            # 格點，含 100–135 Myr 這個年齡不確定度範圍裡的三個關鍵值
+            # （106、125、132 最近的格點 130/135），可以直接把「假設的
+            # 星團年齡」當成敏感度測試的一個維度，不需要為了測不同年齡
+            # 重新積分一次。
             (
                 f"petar -u 1 -b {row['n_binaries']} --bse-metallicity 0.02 "
                 "--stellar-evolution 1 --detect-interrupt 1 "
-                "-t 125.0 -o 5.0 input > petar.log 2>&1"
+                "-t 135.0 -o 5.0 input > petar.log 2>&1"
             ),
             "petar.data.gether data",
             "petar.data.process -i bse data.snap.lst",
