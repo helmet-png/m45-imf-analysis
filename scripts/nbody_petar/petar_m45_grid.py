@@ -60,6 +60,21 @@ def validate_grid(rows: list[dict]) -> dict:
             errors.append(f"{row['run_id']}: profile 2 requires 0 <= S < 0.5")
         if row["half_mass_radius_pc"] <= 0:
             errors.append(f"{row['run_id']}: half-mass radius must be positive")
+        # H3（2026-09-05 使用者回報查出）：這個欄位曾經只被 parse_row()
+        # 解析成布林值，卻從未被 render_commands() 使用——galpy 外部潮汐場
+        # 還沒真的接上 PeTar（見 docs/planning/PETAR_M45_EXPERIMENT.md
+        # 「Galactic tide 對照（需 PeTar+Galpy）」，這條線目前還沒人做），
+        # 設成 true 只會靜默產生一個看起來有加潮汐、實際上完全沒有的指令，
+        # 而樣本孔徑（11.7-12.1 pc）已經到 0.9 r_J（Jacobi 半徑
+        # 12.96 pc，見 PDMF_TO_IMF_PLAN.md 第二節），這個誤判的代價不小。
+        # 在真的接上 galpy 之前，寧可讓 true 直接擋下來，也不要讓
+        # render_commands() 悄悄吞掉這個欄位。
+        if row["galactic_tide"]:
+            errors.append(
+                f"{row['run_id']}: galactic_tide=true 但 render_commands() "
+                f"還沒接上 galpy 外部潮汐場（見 PETAR_M45_EXPERIMENT.md），"
+                f"目前只能設 false，否則會誤以為結果含潮汐場但實際沒有"
+            )
 
     summary = {
         "status": "pass" if not errors else "fail",
@@ -82,6 +97,10 @@ def validate_grid(rows: list[dict]) -> dict:
 
 
 def render_commands(row: dict) -> str:
+    # H3：row["galactic_tide"] 目前刻意沒有使用——validate_grid() 已經擋掉
+    # 任何 galactic_tide=true 的列（galpy 外部潮汐場還沒接上 PeTar），所以
+    # 走到這裡的一定是 false，這支函式本來就不用做任何事。真的接上 galpy
+    # 之後，這裡要照真值產生對應的 PeTar 旗標，不能再直接忽略這個欄位。
     row = parse_row(row)
     run_id = shlex.quote(row["run_id"])
     command = [
