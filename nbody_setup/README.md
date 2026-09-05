@@ -75,6 +75,29 @@ Linux 版**不套用任何 patch**——`petar_configure_mingw.patch` 與
 腳本會**先檢查編譯工具齊不齊、缺什麼就列出來並停下**，不會未經確認就
 對別人提供的機器 `sudo apt install`。
 
+## 為什麼是 shell 腳本，不是 Dockerfile（H14，2026-09-05 考慮過後的決定）
+
+`setup_linux_nbody.sh`／`setup_windows_nbody.sh` 已經做到 H14 真正要的
+東西——**釘選 commit（見上表）＋可重現的建置流程**，而且是實測跑過、
+真的編出可用執行檔的版本，不是紙上談兵。沒有另外包一層 Dockerfile：
+這批運算節點是隊友／學長借用的既有機器（見 `WORK_BOARD.md` 的
+`senior24`／`gcp1`），不是我們自己申請的乾淨容器環境，臨時要求對方
+先裝 Docker、把工作流程改成容器化，成本比維持現有 shell 腳本高，且
+腳本本身已經內建「先檢查、缺什麼列出來、不擅自 `sudo apt install`」
+這個對借用機器的禮貌——直接用 Docker 反而繞不過這個限制（容器化通常
+需要更高權限或至少要能裝 Docker daemon）。如果未來運算節點換成我們
+能完全控制的雲端 VM（例如比照 `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`
+的協調 VM 模式），再回頭評估 Dockerfile 值不值得投資。
+
+**唯一發現且已修的版本鎖定缺口：galpy**——`petar_m45_grid.py` 目前還
+沒有任何指令用到 galpy（見 D19／H3，銀河潮汐場還沒接上），但兩支
+setup 腳本都已經預先加了鎖版本的安裝路徑（`INSTALL_GALPY=1` 觸發，
+`pip install "galpy<=1.10.2"`），理由是 PeTar 官方文件明講只支援
+galpy 到 1.10.2（1.11.0 改了 `PowerSphericalPotentialwCutoff`，跟
+PeTar 現在對 `MWPotential2014` 的參數設定不相容，且不一定會直接報錯，
+是「跑起來但結果不對」這種最難發現的失敗模式）。等 H3 真的把銀河潮汐場
+接上 PeTar 時，直接設這個環境變數重跑腳本即可。
+
 ## 驗證（2026-08-12 已跑過，結果正常）
 
 - `petar.omp.avx2.bse -h`：正常印出說明並結束（exit 0）
