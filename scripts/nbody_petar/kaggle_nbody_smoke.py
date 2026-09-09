@@ -183,10 +183,27 @@ def main() -> None:
     petar_dir = NBODY_DIR / "PeTar"
     env = os.environ.copy()
     env.update({"CXX": "g++", "CC": "gcc", "FC": "gfortran"})
+
+    # PeTar's configure.ac autodetects galpy by searching $HOME/.local,
+    # $VIRTUAL_ENV, or a sibling directory literally named "galpy" -- none
+    # apply here (no venv, no sibling clone), so autodetect silently falls
+    # back to PeTar's own directory and fails with a confusing "can't find
+    # Galpy library" error even though the header IS present in the pip
+    # package (confirmed: site-packages/galpy/potential/potential_c_ext/
+    # galpy_potentials.h exists). Locate it explicitly instead of relying
+    # on autodetect.
+    galpy_prefix = subprocess.run(
+        [sys.executable, "-c", "import galpy, os; print(os.path.dirname(galpy.__file__))"],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    results["galpy_prefix"] = galpy_prefix
+    log(f"galpy_prefix = {galpy_prefix}")
+
     r = run_step(
         "configure_petar",
         ["./configure", f"--prefix={INSTALL_DIR}", "--with-mpi=no",
-         "--with-interrupt=bse", "--with-external=galpy"],
+         "--with-interrupt=bse", "--with-external=galpy",
+         f"--with-galpy-prefix={galpy_prefix}"],
         cwd=petar_dir, env=env,
     )
     if r["returncode"] != 0:

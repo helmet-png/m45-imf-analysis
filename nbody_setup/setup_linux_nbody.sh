@@ -87,11 +87,24 @@ cd "$NBODY_DIR/PeTar"
 # Linux 原生不需要 Windows 版的 MinGW uname 判斷 patch（那個 patch 只解決
 # MSYS2 的 uname 回傳全大寫 MINGW64_NT-... 的問題，Linux 的 configure
 # case 判斷式本來就吃得到 Linux*）。
+#
+# --with-galpy-prefix 明確指定（2026-09 實測踩到的坑）：PeTar 的
+# configure.ac 自動偵測只找 $HOME/.local、$VIRTUAL_ENV、或跟 PeTar
+# 同一層、名字剛好叫 galpy 的資料夾——這裡的 venv 只是把
+# $VENV_DIR/bin 塞進 PATH 最前面（沒有 `source activate`），不會設定
+# $VIRTUAL_ENV 這個環境變數，三個自動偵測路徑全部落空，會安靜地退回
+# 檢查 PeTar 自己的目錄，報一個誤導性的「找不到 Galpy library」錯誤
+# ——即使 headers（potential/potential_c_ext/galpy_potentials.h）明明
+# 就在 pip 裝好的套件裡。直接用 python 問 galpy 自己裝在哪裡，不依賴
+# 自動偵測。
+GALPY_PREFIX="$("$VENV_DIR/bin/python" -c 'import galpy, os; print(os.path.dirname(galpy.__file__))')"
+echo "galpy_prefix=$GALPY_PREFIX"
 CXX=g++ CC=gcc FC=gfortran ./configure \
     --prefix="$NBODY_DIR/install" \
     --with-mpi=no \
     --with-interrupt=bse \
-    --with-external=galpy
+    --with-external=galpy \
+    --with-galpy-prefix="$GALPY_PREFIX"
 make -j"$(nproc)"
 make install
 
