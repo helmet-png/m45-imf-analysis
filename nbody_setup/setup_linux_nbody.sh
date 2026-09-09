@@ -115,7 +115,17 @@ make mcluster_sse CFLAGS='-lgfortran'
 echo ""
 echo "=== 驗收（S0，三關）==="
 export OMP_STACKSIZE=128M
-export PATH="$NBODY_DIR/install/bin:$PATH"
+# petar.data.process 等分析工具是 Python 腳本，`#!/usr/bin/env python3`
+# 找到的是 PATH 第一個 python3——一定要是 venv 裡裝了 numpy/astropy 的
+# 那個，不能是系統 python3（2026-09 實測踩到：先前只把
+# install/bin 放進 PATH，系統 python3 沒有 numpy，直接
+# ModuleNotFoundError）。同時 PeTar 的分析模組（`import petar`）是
+# 裝在 install/include/petar/，不在任何套件搜尋路徑上，一定要另外把
+# install/include 加進 PYTHONPATH。這兩行是 run_nbody_case.py 與任何
+# 之後要呼叫 petar.data.process／`import petar` 的程式都必須複製的
+# 環境設定，不是這支腳本自己專屬的。
+export PATH="$VENV_DIR/bin:$NBODY_DIR/install/bin:$PATH"
+export PYTHONPATH="$NBODY_DIR/install/include${PYTHONPATH:+:$PYTHONPATH}"
 
 pass=0
 total=3
@@ -149,6 +159,12 @@ echo ""
 echo "=== S0 結果：$pass / $total 關通過 ==="
 echo "安裝路徑：$NBODY_DIR/install/bin"
 echo "galpy venv：$VENV_DIR"
+echo ""
+echo "之後任何要呼叫 petar／petar.data.process／run_nbody_case.py 的 shell"
+echo "（包含新開的 SSH session）都要先 export 這三行，不會自動繼承："
+echo "  export PATH=\"$VENV_DIR/bin:$NBODY_DIR/install/bin:\$PATH\""
+echo "  export PYTHONPATH=\"$NBODY_DIR/install/include\""
+echo "  export OMP_STACKSIZE=128M"
 if [ "$pass" -ne "$total" ]; then
     echo "有關卡沒過，不要繼續跑 S1-S4——先查上面的 FAIL 訊息。"
     exit 1
