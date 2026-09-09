@@ -125,12 +125,25 @@ def render_commands(row: dict) -> str:
     if row["profile"] == 2:
         command[9:9] = ["-S", f"{row['mcluster_S']:.2f}"]
     mcluster = " ".join(shlex.quote(part) for part in command)
+    # -t / -c 在 petar.init 這裡是必要旗標，不是只有 galactic_tide=true
+    # 的列才要加（2026-09 在 GCP VM 上實測踩到）：petar 二進位檔一旦用
+    # `--with-external=galpy` 編譯，不管執行時有沒有真的傳
+    # `--galpy-set`，都預期輸入檔的表頭多帶 6 個質心位置/速度偏移值、
+    # 每行粒子資料多帶一欄 pot_ext——這是編譯期選項決定的檔案格式，
+    # 不是執行期選項。沒加 `-t` 會在讀檔第一步就崩潰
+    # （"FPSoft Data reading fails! requiring data number is 6, only
+    # obtain 1"）。這裡先固定給 0 偏移（不影響動力學，`--galpy-set`
+    # 沒開就沒有外部力作用在任何人身上）；`galactic_tide=true` 真正需要
+    # 銀河潮汐時，`-c` 要換成 `m45_orbit_init.py` 算出的座標、且
+    # `petar` 那行要加 `--galpy-set MWPotential2014`——這兩處目前
+    # 都還沒做（`validate_grid()` 也還在擋 `galactic_tide=true` 的列，
+    # 見 H3），先讓不含潮汐的列在檔案格式上正確可跑。
     return "\n".join(
         [
             f"mkdir -p runs/{run_id}",
             f"cd runs/{run_id}",
             f"{mcluster} > mcluster.log",
-            "petar.init -s bse -v kms2pcmyr -f input <MCLUSTER_OUTPUT>",
+            "petar.init -s bse -v kms2pcmyr -t -c 0,0,0,0,0,0 -f input <MCLUSTER_OUTPUT>",
             "export OMP_STACKSIZE=128M",
             "export OMP_NUM_THREADS=8",
             (
@@ -139,7 +152,7 @@ def render_commands(row: dict) -> str:
                 "-t 125.0 -o 5.0 input > petar.log 2>&1"
             ),
             "petar.data.gether data",
-            "petar.data.process -i bse data.snap.lst",
+            "petar.data.process -i bse -t galpy data.snap.lst",
         ]
     )
 
