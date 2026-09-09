@@ -1,5 +1,20 @@
 #!/usr/bin/env python
-"""Validate the M45 PeTar screening grid and render reproducible commands."""
+"""Validate the M45 PeTar screening grid and render reproducible commands.
+
+功能：讀 petar_m45_grid.csv 一列，驗證欄位一致性（n_binaries/n_stars 算術、
+S 範圍、half_mass_radius 為正…），並把該列組裝成 mcluster_sse -> petar.init
+-> petar -> petar.data.gether -> petar.data.process 的完整 shell 指令序列。
+
+方法：純字串／字典操作，不執行任何外部程式（執行交給 run_nbody_case.py，
+2026-09 之後新增）。指令模板對照 docs/planning/PETAR_M45_EXPERIMENT.md 手動
+核對過，這裡是唯一產生指令字串的地方，避免兩處各自組一份、彼此漂移。
+
+已知未完成（2026-09 審視 H3）：`galactic_tide` 欄位目前只被解析成布林，
+render_commands() 完全沒有讀它——設 true 也會生成跟 false 完全相同的指令，
+銀河潮汐（--galpy-set MWPotential2014、petar.init -c 銀心座標）尚未實作。
+在真正接上 m45_orbit_init.py 算出的座標之前，validate_grid() 直接拒絕
+galactic_tide=true 的列，避免使用者以為潮汐已經生效。
+"""
 from __future__ import annotations
 
 import argparse
@@ -60,6 +75,16 @@ def validate_grid(rows: list[dict]) -> dict:
             errors.append(f"{row['run_id']}: profile 2 requires 0 <= S < 0.5")
         if row["half_mass_radius_pc"] <= 0:
             errors.append(f"{row['run_id']}: half-mass radius must be positive")
+        if row["galactic_tide"]:
+            # H3（2026-09 審視）：render_commands() 還沒實作潮汐（見檔頭
+            # 說明），設 true 目前只會安靜地生成無潮汐指令。在銀河軌道
+            # 初始化（m45_orbit_init.py）與 --galpy-set 佈線完成前，寧可
+            # 拒絕也不要讓人誤以為潮汐已經生效。
+            errors.append(
+                f"{row['run_id']}: galactic_tide=true 尚未實作，"
+                "render_commands() 不會加入 --galpy-set；"
+                "改回 false，或先完成 m45_orbit_init.py 的整合"
+            )
 
     summary = {
         "status": "pass" if not errors else "fail",
