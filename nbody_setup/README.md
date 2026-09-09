@@ -1,5 +1,12 @@
 # N-body（PeTar + mcluster）Windows 原生編譯設定
 
+**2026-09 起，正式模擬改在 Linux 上跑**（`setup_linux_nbody.sh`）：
+`--with-external=galpy`（銀河潮汐）需要 galpy，而 galpy 對 Windows ARM64
+沒有 wheel、對 Windows x64 也只到 Python 3.13（本機是 3.14），裝不起來。
+這個檔案的內容（Windows/MSYS2 編譯）繼續保留給協作者 Windows 機使用，
+但**不含銀河潮汐**，只用於管線通暢與能量守恆等級的驗證（smoke test
+S0-S2），不是正式網格的執行環境。
+
 PDMF→IMF 第 5 步（N-body 重建 M45 初始狀態）的環境設定，記錄如何在
 **沒有 WSL** 的 Windows 機器上用 MSYS2/MinGW-w64 編譯 PeTar（含 BSE 恆星
 演化）與 mcluster。背景見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節。
