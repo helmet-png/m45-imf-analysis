@@ -111,6 +111,13 @@ make install
 echo "=== 4/4　編譯 mcluster（Linux 原生，不需要 Windows 版的相容層）==="
 cd "$NBODY_DIR/mcluster"
 make mcluster_sse CFLAGS='-lgfortran'
+# mcluster 沒有 `make install`（不像 PeTar 有 --prefix），編出來的執行檔
+# 留在原地 $NBODY_DIR/mcluster/ 底下。2026-09 實測踩到：先前 PATH 只加
+# install/bin，run_nbody_case.py 呼叫 mcluster_sse 時
+# FileNotFoundError——這裡直接複製進 install/bin，跟 PeTar 的執行檔放
+# 同一個目錄，之後只需要記一組 PATH，不用另外多記 mcluster 的原始碼路徑。
+mkdir -p "$NBODY_DIR/install/bin"
+cp mcluster_sse "$NBODY_DIR/install/bin/"
 
 echo ""
 echo "=== 驗收（S0，三關）==="
