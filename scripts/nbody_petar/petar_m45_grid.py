@@ -9,11 +9,23 @@ S 範圍、half_mass_radius 為正…），並把該列組裝成 mcluster_sse ->
 2026-09 之後新增）。指令模板對照 docs/planning/PETAR_M45_EXPERIMENT.md 手動
 核對過，這裡是唯一產生指令字串的地方，避免兩處各自組一份、彼此漂移。
 
-已知未完成（2026-09 審視 H3）：`galactic_tide` 欄位目前只被解析成布林，
-render_commands() 完全沒有讀它——設 true 也會生成跟 false 完全相同的指令，
-銀河潮汐（--galpy-set MWPotential2014、petar.init -c 銀心座標）尚未實作。
-在真正接上 m45_orbit_init.py 算出的座標之前，validate_grid() 直接拒絕
-galactic_tide=true 的列，避免使用者以為潮汐已經生效。
+2026-09（H3 修復）：`galactic_tide=true` 的列會讀
+`results/m45_orbit_init.json`（`m45_orbit_init.py` 算出、往返自洽誤差
+1.34e-6 的 125 Myr 前銀心座標），把 `petar.init -c` 換成真實六維座標、
+並在 `petar` 那行加 `--galpy-set MWPotential2014`；`galactic_tide=false`
+維持 `-c 0,0,0,0,0,0`、不加 `--galpy-set`（供 Method A 的 A5 潮汐對照組
+使用）。
+
+2026-09（H5 修復）：mcluster 不再固定 `-f 1`（Kroupa 2001 內建常數），
+改用 `-f 2` 兩段自訂冪律，斷點固定在 0.5 M☉（跟前向模型/傳統法同一個
+斷點，才能跨方法比較），`imf_alpha_low`／`imf_alpha_high` 兩欄位決定
+兩段斜率。**斜率符號**：直接讀 mcluster `main.c`（pin 版 a147bb5）
+`case 'a'` 與 `mfunc==5`（Marks & Kroupa 2012）區塊確認——`-a` 疊代填入
+的 `alpha[]` 是程式內部慣例（`generate_m2()` 用 `subint(..., alpha[i]+1.)`
+積分 dN/dm ∝ m^alpha[i]），Kroupa 標準值以**負數**傳入（`alpha[0]=-1.3`
+對應物理慣例 dN/dm ∝ m^-1.3）；這裡 `imf_alpha_low`／`imf_alpha_high`
+欄位維持本專案一貫的**正數**慣例（跟 `step5_imf.py` 的 α 同號），
+`render_commands()` 內部轉負號才傳給 `-a`。
 """
 from __future__ import annotations
 
@@ -25,6 +37,7 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
+ORBIT_JSON = HERE / "results" / "m45_orbit_init.json"  # m45_orbit_init.py 的輸出，galactic_tide=true 時讀這裡的 -c 座標
 
 
 def load_grid(path: Path) -> list[dict]:
@@ -39,7 +52,13 @@ def parse_row(raw: dict) -> dict:
     row = dict(raw)
     for key in ("n_systems", "n_stars", "n_binaries", "profile", "seed", "priority"):
         row[key] = int(row[key])
-    for key in ("binary_system_fraction", "mcluster_S", "half_mass_radius_pc"):
+    for key in (
+        "binary_system_fraction",
+        "mcluster_S",
+        "half_mass_radius_pc",
+        "imf_alpha_low",
+        "imf_alpha_high",
+    ):
         row[key] = float(row[key])
     row["galactic_tide"] = row["galactic_tide"].strip().lower() == "true"
     return row
@@ -75,15 +94,19 @@ def validate_grid(rows: list[dict]) -> dict:
             errors.append(f"{row['run_id']}: profile 2 requires 0 <= S < 0.5")
         if row["half_mass_radius_pc"] <= 0:
             errors.append(f"{row['run_id']}: half-mass radius must be positive")
-        if row["galactic_tide"]:
-            # H3（2026-09 審視）：render_commands() 還沒實作潮汐（見檔頭
-            # 說明），設 true 目前只會安靜地生成無潮汐指令。在銀河軌道
-            # 初始化（m45_orbit_init.py）與 --galpy-set 佈線完成前，寧可
-            # 拒絕也不要讓人誤以為潮汐已經生效。
+        # H5：兩段冪律斜率的合理範圍（正數慣例，見檔頭說明）——寬鬆檢查，
+        # 只擋明顯打錯（例如把 -2.3 直接填進去、或忘記換號）。
+        if not 0.0 < row["imf_alpha_low"] < 4.0:
+            errors.append(f"{row['run_id']}: imf_alpha_low 超出合理範圍 (0, 4)")
+        if not 0.0 < row["imf_alpha_high"] < 5.0:
+            errors.append(f"{row['run_id']}: imf_alpha_high 超出合理範圍 (0, 5)")
+        if row["galactic_tide"] and not ORBIT_JSON.exists():
+            # H3（2026-09 修復）：真跑之前 results/m45_orbit_init.json 必須
+            # 已經存在（`python m45_orbit_init.py` 產生），render_commands()
+            # 才讀得到真實座標——不存在就直接擋，不要安靜地退回原點。
             errors.append(
-                f"{row['run_id']}: galactic_tide=true 尚未實作，"
-                "render_commands() 不會加入 --galpy-set；"
-                "改回 false，或先完成 m45_orbit_init.py 的整合"
+                f"{row['run_id']}: galactic_tide=true 但找不到 "
+                f"{ORBIT_JSON}，請先跑 m45_orbit_init.py"
             )
 
     summary = {
@@ -109,13 +132,24 @@ def validate_grid(rows: list[dict]) -> dict:
 def render_commands(row: dict) -> str:
     row = parse_row(row)
     run_id = shlex.quote(row["run_id"])
+    # H5：mcluster 官方 main.c（pin 版 a147bb5）`case 'f'` 只是設定
+    # mfunc；真正吃斜率/斷點的是 `mfunc==2` 分支，用重複的 `-a`／`-m`
+    # 疊代填 alpha[]/mlim[] 陣列，且強制 mn = an+1（讀原始碼
+    # `if (an >= mn) an = mn - 1; mn = an + 1;` 這段確認），所以兩段
+    # 冪律要給恰好 3 個 `-m`（兩段的三個邊界）、2 個 `-a`（兩段斜率）。
+    # 斷點固定 0.5 M☉、上限固定 150 M☉（沿用 mcluster 預設 upper_IMF_limit，
+    # M45 實際最亮的星遠低於這個質量，不會被截斷）。
+    mcluster_alpha_low = -row["imf_alpha_low"]
+    mcluster_alpha_high = -row["imf_alpha_high"]
     command = [
         "mcluster_sse",
         "-N", str(row["n_stars"]),
         "-B", str(row["n_binaries"]),
         "-P", str(row["profile"]),
         "-R", f"{row['half_mass_radius_pc']:.2f}",
-        "-f", "1",
+        "-f", "2",
+        "-m", "0.08", "-m", "0.5", "-m", "150",
+        "-a", f"{mcluster_alpha_low:.4f}", "-a", f"{mcluster_alpha_high:.4f}",
         "-C", "5",
         "-u", "1",
         "-s", str(row["seed"]),
@@ -123,8 +157,9 @@ def render_commands(row: dict) -> str:
         "-o", row["run_id"],
     ]
     if row["profile"] == 2:
-        command[9:9] = ["-S", f"{row['mcluster_S']:.2f}"]
+        command[-2:-2] = ["-S", f"{row['mcluster_S']:.2f}"]
     mcluster = " ".join(shlex.quote(part) for part in command)
+
     # -t / -c 在 petar.init 這裡是必要旗標，不是只有 galactic_tide=true
     # 的列才要加（2026-09 在 GCP VM 上實測踩到）：petar 二進位檔一旦用
     # `--with-external=galpy` 編譯，不管執行時有沒有真的傳
@@ -132,23 +167,34 @@ def render_commands(row: dict) -> str:
     # 每行粒子資料多帶一欄 pot_ext——這是編譯期選項決定的檔案格式，
     # 不是執行期選項。沒加 `-t` 會在讀檔第一步就崩潰
     # （"FPSoft Data reading fails! requiring data number is 6, only
-    # obtain 1"）。這裡先固定給 0 偏移（不影響動力學，`--galpy-set`
-    # 沒開就沒有外部力作用在任何人身上）；`galactic_tide=true` 真正需要
-    # 銀河潮汐時，`-c` 要換成 `m45_orbit_init.py` 算出的座標、且
-    # `petar` 那行要加 `--galpy-set MWPotential2014`——這兩處目前
-    # 都還沒做（`validate_grid()` 也還在擋 `galactic_tide=true` 的列，
-    # 見 H3），先讓不含潮汐的列在檔案格式上正確可跑。
+    # obtain 1"）。
+    #
+    # H3（2026-09 修復）：galactic_tide=true 的列讀
+    # results/m45_orbit_init.json（m45_orbit_init.py 算出、往返自洽誤差
+    # 1.34e-6 的 125 Myr 前銀心座標）當真正的 -c 偏移，並在 petar 那行
+    # 加 --galpy-set MWPotential2014；false 的列維持 0 偏移、不開
+    # --galpy-set（A5 潮汐對照組要用）。validate_grid() 已確保
+    # galactic_tide=true 時這個檔案存在，這裡不再重複檢查。
+    if row["galactic_tide"]:
+        orbit = json.loads(ORBIT_JSON.read_text(encoding="utf-8"))
+        c_flag = orbit["petar_init_c_flag"]  # "-c x,y,z,vx,vy,vz"（已含 -c）
+        galpy_set = " --galpy-set MWPotential2014"
+    else:
+        c_flag = "-c 0,0,0,0,0,0"
+        galpy_set = ""
+
     return "\n".join(
         [
             f"mkdir -p runs/{run_id}",
             f"cd runs/{run_id}",
             f"{mcluster} > mcluster.log",
-            "petar.init -s bse -v kms2pcmyr -t -c 0,0,0,0,0,0 -f input <MCLUSTER_OUTPUT>",
+            f"petar.init -s bse -v kms2pcmyr -t {c_flag} -f input <MCLUSTER_OUTPUT>",
             "export OMP_STACKSIZE=128M",
             "export OMP_NUM_THREADS=8",
             (
                 f"petar -u 1 -b {row['n_binaries']} --bse-metallicity 0.02 "
-                "--stellar-evolution 1 --detect-interrupt 1 "
+                "--stellar-evolution 1 --detect-interrupt 1"
+                f"{galpy_set} "
                 "-t 125.0 -o 5.0 input > petar.log 2>&1"
             ),
             "petar.data.gether data",
