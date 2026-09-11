@@ -200,7 +200,10 @@ def read_docstring(rel_path: str, external: bool = False,
             src = f"，原始出處：{upstream}" if upstream else ""
             return (f"（第三方套件，依專案慣例不納入版控，需自行 clone 到 "
                     f"{rel_path}{src}。這裡沒有說明是正常的，不是索引壞掉。）")
-        return f"（找不到檔案，路徑可能已經搬動：{rel_path}）"
+        return (f"（本機（協調 VM 的 checkout）目前找不到這個檔案："
+                f"{rel_path}——可能是路徑搬動了，也可能只是本機還沒同步到"
+                f"剛推上 GitHub 的新檔案，過一輪自動同步通常就會出現。上面"
+                f"的連結一律連到 GitHub，不受本機有沒有這個檔案影響。）")
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError as e:
@@ -368,7 +371,16 @@ def _sync_repo_from_github_uncached() -> dict:
             ahead, behind = counts.stdout.split()
             result["ahead"], result["behind"] = int(ahead), int(behind)
 
-        result["dirty"] = bool(_git("status", "--porcelain").stdout.strip())
+        # --untracked-files=no：只在意「有沒有修改過已追蹤的檔案」，不
+        # 管工作目錄裡有沒有未追蹤的雜項檔案——2026-09-02 實際踩到：
+        # acquire_lock() 自己寫的 status_dashboard/dashboard.lock、
+        # 別人手滑留下的殘餘檔案，都會被算進舊版的 --porcelain（含
+        # 未追蹤），讓這個判斷永遠卡在「髒」，自動同步從此完全失效、
+        # 而且沒有任何錯誤訊息——「落後幾個 commit 不動手」是刻意設計
+        # 的保護（怕蓋掉別人真正的未提交修改），但未追蹤的雜項檔案
+        # 不构成「別人正在改的東西」，不該一起算進去。
+        result["dirty"] = bool(
+            _git("status", "--porcelain", "--untracked-files=no").stdout.strip())
 
         if (result["branch"] == "main" and not result["dirty"]
                 and result["behind"] > 0):
@@ -614,7 +626,14 @@ def _run_probes(to_probe: dict[str, dict]) -> dict[str, dict]:
     return _post_process_probes(to_probe, raw)
 
 
-def gather_status() -> dict:
+def gather_status(probe: bool = True) -> dict:
+    """`probe=False`：跳過所有即時探測（SSH／Kaggle API 呼叫），需要
+    探測的 label 一律標成 `state: "checking"`，其餘照舊——2026-09-02
+    使用者要求：頁面要先秒開，探測是背景後續的事，不要卡住整頁的回應
+    （之前是同一次請求裡做完所有探測才回應，最壞情況等到
+    `PROBE_DEADLINE_S`，工作閒置或連線本身較慢時很常見）。首頁走
+    `probe=False` 立刻回應，瀏覽器再用小段 JS 打 `/probe-status.json`
+    （用 `probe=True`）補上真正的狀態，見 `_PROBE_SCRIPT`。"""
     cloud_workers = cloud_queue.load_all_workers()
     cloud_items = {it["label"]: it for it in cloud_queue.read_queue()}
     cloud_done = parse_cloud_done()
@@ -635,7 +654,11 @@ def gather_status() -> dict:
             to_probe[label] = result
         else:
             label_status[label] = result
-    label_status.update(_run_probes(to_probe))
+    if probe:
+        label_status.update(_run_probes(to_probe))
+    else:
+        label_status.update({label: {"state": "checking", **info}
+                            for label, info in to_probe.items()})
 
     return {
         "alive": alive, "pid": pid,
@@ -644,7 +667,7 @@ def gather_status() -> dict:
     }
 
 
-def gather_worker_status() -> dict:
+def gather_worker_status(probe: bool = True) -> dict:
     """以雲端服務（worker）為單位，不是以步驟為單位——單純回答「這個
     worker 現在是不是真的在跑」（2026-08-25 使用者要求新增的第二種
     介面）。跟 `gather_status()` 是同一批來源資料的另一種切法，不重複
@@ -652,7 +675,10 @@ def gather_worker_status() -> dict:
     探測的是「這個 worker 上排定的第一個未完成 label」，`gather_status()`
     探測的是「stage_map.py 裡列出的每個 label」——兩邊在同一個 worker
     同時只有一個槽位在跑的前提下通常會對到同一個工作，但這支函式就算
-    stage_map.py 完全沒收錄某個 label，也照樣看得到。"""
+    stage_map.py 完全沒收錄某個 label，也照樣看得到。
+
+    `probe=False`：跟 `gather_status()` 同一個理由，見那邊的說明——
+    跳過所有即時探測，`/workers` 頁面秒開，JS 再補上真正的狀態。"""
     cloud_workers = cloud_queue.load_all_workers()
     cloud_items = {it["label"]: it for it in cloud_queue.read_queue()}
     cloud_done = parse_cloud_done()
@@ -680,6 +706,27 @@ def gather_worker_status() -> dict:
     idle_ssh = [name for name, kind in cloud_workers.items()
                if kind == "ssh" and name not in assigned]
 
+    if not probe:
+        # 秒開版：不打任何 SSH／Kaggle API，`to_probe`／`idle_ssh` 裡的
+        # worker 一律標成「探測中」，讓 _worker_badge() 顯示佔位樣式，
+        # 交給 JS 之後打 /workers-probe.json 補上真正結果。
+        workers_out = []
+        for name, kind in sorted(cloud_workers.items()):
+            if name in to_probe:
+                script = assigned[name].get("script") or None
+                workers_out.append({"name": name, "kind": kind, "assigned": True,
+                                    "state": "checking",
+                                    "label": assigned[name]["label"],
+                                    "script": script,
+                                    "args": assigned[name].get("args") or None})
+            elif name in idle_ssh:
+                workers_out.append({"name": name, "kind": kind, "assigned": False,
+                                    "checking": True})
+            else:
+                workers_out.append({"name": name, "kind": kind, "assigned": False,
+                                    "reachable": None})
+        return {"workers": workers_out}
+
     # 已派工的 worker（要探測工作狀態）跟閒置的 SSH worker（只要 ping）
     # 併成同一次 _run_concurrent() 呼叫，共用同一份 PROBE_DEADLINE_S——
     # 原本分兩次呼叫，各自都用完整預算，最壞情況（兩邊都連不上）整頁
@@ -701,8 +748,24 @@ def gather_worker_status() -> dict:
     for name, kind in sorted(cloud_workers.items()):
         if name in probe_results:
             r = probe_results[name]
+            # 這個 worker 現在跑的腳本，直接從 cloud_queue.txt 那一行讀
+            # （2026-09-02 使用者要求）——不查 stage_map.py／
+            # categorization.json，佇列檔自己就有 label→script 的對應，
+            # 不需要另外維護一份索引才能知道「這個 worker 在跑哪支程式」，
+            # 也不會因為新腳本還沒補進索引就看不到連結。
+            #
+            # args 也一併帶出來（同一次使用者反映）：像
+            # p6_lowmass_v3_s13/s15/s17 這種同一支腳本、切成多個 shard
+            # 平行跑的工作，光看腳本名稱三個都長一樣（本來就是同一支，
+            # 不是 bug），區分靠的是參數（--slopes 1.3/1.5/1.7 這種），
+            # 不帶出來的話連結旁邊看不出這幾個 worker 實際在算不同的
+            # 東西。
+            script = assigned[name].get("script") or None
             workers_out.append({"name": name, "kind": kind, "assigned": True,
-                                "label": assigned[name]["label"], **r})
+                                "label": assigned[name]["label"],
+                                "script": script,
+                                "args": assigned[name].get("args") or None,
+                                **r})
         elif name in ping_results:
             p = ping_results[name]
             # _run_concurrent() 逾時/例外時的補值只有 status/error，沒有
@@ -728,7 +791,7 @@ def gather_worker_status() -> dict:
 
 STATE_LABEL = {
     "done_ok": "已完成", "done_fail": "失敗", "live": "進行中",
-    "pending": "待派工", "unknown": "沒有紀錄",
+    "pending": "待派工", "unknown": "沒有紀錄", "checking": "探測中",
 }
 
 
@@ -749,6 +812,12 @@ def _status_badge(st: dict) -> str:
         detail = "　".join(bits)
     elif state == "pending":
         cls, text, detail = "pending", "待派工", st.get("note", "")
+    elif state == "checking":
+        # 2026-09-02：頁面先秒開、探測結果用 JS 背景補上（見
+        # _PROBE_SCRIPT）——這是還沒補上之前的暫時樣子，不是真正的
+        # 狀態，所以用問號圖示跟中性配色，不要跟 pending／unknown 的
+        # 配色搞混（那兩個是「真的查過、結果就是這樣」）。
+        cls, text, detail = "checking", "探測中…", f"worker={st.get('worker', '?')}"
     else:
         cls, text, detail = "unknown", "沒有紀錄", st.get("note", "")
     return (f'<span class="badge {cls}">{html.escape(text)}</span>'
@@ -795,13 +864,14 @@ _RE_PYPATH = re.compile(r"^[\w./-]+\.py$")
 
 def _code_span(inner: str) -> str:
     """行內 `程式碼` 的呈現：看起來像本 repo 的 .py 路徑就變成可點的
-    連結（點了在 VS Code 開啟該檔），其餘維持單純的等寬字樣式。
+    連結（點了在 GitHub 開啟該檔——見 _doc_url() 的說明，2026-09-02
+    起從 vscode://file/ 改過來），其餘維持單純的等寬字樣式。
 
     這是使用者要的「附上連結，讓我能夠點進去看」在 docstring 內文層級
     的實作——不只步驟標題底下那一排腳本連結可以點，內文提到某支程式時
     也能直接跳過去。"""
     if _RE_PYPATH.match(inner) and (REPO_ROOT / inner).exists():
-        return (f'<a class="inline-src" href="{html.escape(_vscode_uri(inner))}">'
+        return (f'<a class="inline-src" href="{html.escape(_doc_url(inner))}">'
                 f'<code>{html.escape(inner)}</code></a>')
     return f"<code>{html.escape(inner)}</code>"
 
@@ -987,13 +1057,16 @@ def _render_core(core: dict | None) -> str:
     """「核心程式碼」區塊：這一步幾十支檔案裡，真正做事的是哪一個函式。
 
     使用者的原話是「說明出程式中最核心的程式碼，並附上連結，讓我能夠
-    點進去看」。VS Code 的 file URI 支援 `:行號` 後綴，所以這裡直接
-    連到該函式的**那一行**，不是只開啟檔案讓人自己找。
+    點進去看」。用 `_doc_url()` 的 GitHub 行號錨點（`#L123`）直接連到
+    該函式的**那一行**，不是只開啟檔案讓人自己找（2026-09-02 起改用
+    GitHub 連結，見 `_doc_url()` 說明——原本用 `vscode://` 只有本機
+    裝了 VS Code 才打得開，主控板搬到協調 VM 之後，`vscode://` 指向的
+    是協調 VM 自己的檔案路徑，根本不是看的人電腦上的任何東西）。
     """
     if not core:
         return ""
     rel, line = core["file"], core.get("line")
-    uri = _vscode_uri(rel) + (f":{line}" if line else "")
+    uri = _doc_url(rel, line)
     where = f"{rel}:{line}" if line else rel
     why = _inline_markup(html.escape(core.get("why", "")))
     return ('<div class="callout cr"><div class="callout-h">核心程式碼</div>'
@@ -1001,16 +1074,6 @@ def _render_core(core: dict | None) -> str:
             f'<code>{html.escape(core["name"])}</code>'
             f'<span class="core-where">{html.escape(where)}</span> ↗</a></p>'
             f'<p class="doc-p">{why}</p></div>')
-
-
-def _vscode_uri(rel_path: str) -> str:
-    """組出 `vscode://file/` URI，點了直接在 VS Code 開啟這支腳本
-    （2026-08-25 使用者要求：不要在頁面內顯示原始碼，直接跳去編輯器，
-    比較貼近「順手可以改」的體感）。前提是這台機器裝了 VS Code 桌面版
-    ——標準安裝都會自動註冊這個協定，不需要額外設定；沒裝的話瀏覽器
-    會顯示「找不到處理這個連結的應用程式」，不是這支程式的錯誤。"""
-    abs_path = (REPO_ROOT / rel_path).resolve()
-    return "vscode://file/" + str(abs_path).replace("\\", "/")
 
 
 def _slugify(rel_path: str) -> str:
@@ -1027,20 +1090,24 @@ def _render_script_block(script: str, external: bool = False,
     複製貼上兩份長得一樣的邏輯。"""
     doc = read_docstring(script, external=external, upstream=upstream)
     exists = (REPO_ROOT / script).exists()
-    # 檔案不在本機時不要給「用 VS Code 開啟」的連結——點了只會
-    # 跳出一個開不了的錯誤視窗。第三方套件另外標一個外連到上游
-    # repo 的連結，那才是真的看得到原始碼的地方。
-    if exists:
-        link = (f'<a class="script-link" href="{html.escape(_vscode_uri(script))}">'
-                f'<code>{html.escape(script)}</code> ↗</a>')
-    elif external and upstream:
+    # 2026-09-02 起連結一律指向 GitHub（見 _doc_url() 說明），不再要求
+    # 本機（協調 VM 的 checkout）先有這個檔案才給連結——GitHub 才是
+    # 權威來源，本機落後一步是常態（例如 PR 剛合併，下一輪自動同步
+    # 還沒跑到），舊邏輯會因此完全不給連結、讓使用者以為程式不存在，
+    # 但其實只是連結生成方式（vscode://file/ 指向本機路徑）本身就有
+    # 問題：主控板搬到協調 VM 之後，那個路徑對看的人來說完全是別台
+    # 機器上的東西，不管本機找不找得到檔案都一樣打不開。
+    if external and upstream:
         link = (f'<span class="script-link missing"><code>'
                 f'{html.escape(script)}</code></span>'
                 f'<a class="upstream-link" href="{html.escape(upstream)}" '
                 f'target="_blank" rel="noopener">第三方套件，看上游原始碼 ↗</a>')
     else:
-        link = (f'<span class="script-link missing"><code>'
-                f'{html.escape(script)}</code>（本機找不到）</span>')
+        note = ("" if exists else
+               '<span class="script-link-note">（本機尚未同步到這個檔案，'
+               '連結仍指向 GitHub 上的版本）</span>')
+        link = (f'<a class="script-link" href="{html.escape(_doc_url(script))}">'
+                f'<code>{html.escape(script)}</code> ↗</a>{note}')
     return ('<div class="script-block">' + link
             + '<details class="doc-details"><summary>程式檔頭原文說明</summary>'
             f'<div class="doc">{_render_doc(doc)}</div></details></div>')
@@ -1179,8 +1246,9 @@ def render_html(status: dict, sync: dict | None = None) -> str:
                 if st is None:
                     continue
                 content_parts.append(
-                    f'<div class="status-row"><code>{html.escape(label)}</code>'
-                    f'{_status_badge(st)}</div>')
+                    f'<div class="status-row" data-label="{html.escape(label)}">'
+                    f'<code>{html.escape(label)}</code>'
+                    f'<span class="status-badge-slot">{_status_badge(st)}</span></div>')
 
             # 人工整理的解說層，順序是刻意的：先看「重點」知道這一步在
             # 幹嘛，再看「公式」知道實際在算什麼，再看「文獻出處」知道
@@ -1252,16 +1320,18 @@ def render_html(status: dict, sync: dict | None = None) -> str:
     parts.append("</div>")
 
     parts.append(_RESIZE_SCRIPT)
+    parts.append(_PROBE_SCRIPT)
     parts.append("</body></html>")
     return "".join(parts)
 
 
 # 左右欄寬度可拖曳（2026-08-25 使用者要求，像 IDE 的側欄一樣）。純
 # vanilla JS，沒有外部依賴；寬度存 localStorage，下次整理頁面／換頁
-# 還記得（不然每次都要重拖一次，形同沒有這個功能）。這是整個主控板
-# 唯一用到 JS 的地方——拖曳互動沒辦法用純 HTML/CSS 做到，其餘所有
-# 「不用手動展開」的需求都還是靠伺服器端 render + <details>，能不用
-# JS 就不用。
+# 還記得（不然每次都要重拖一次，形同沒有這個功能）。這是主控板第一個
+# 用到 JS 的地方——拖曳互動沒辦法用純 HTML/CSS 做到，其餘所有「不用
+# 手動展開」的需求都還是靠伺服器端 render + <details>，能不用 JS 就
+# 不用；`_PROBE_SCRIPT`（見下面）是第二個，理由同樣是純 HTML/CSS
+# 做不到「頁面先秒開、探測結果晚一點自己冒出來」這件事。
 _RESIZE_SCRIPT = """
 <script>
 (function () {
@@ -1291,6 +1361,29 @@ _RESIZE_SCRIPT = """
     document.body.style.userSelect = "";
     localStorage.setItem("m45DashTreeWidth", parseInt(tree.style.width, 10));
   });
+})();
+</script>
+"""
+
+# 頁面先秒開（server 端跳過即時探測，見 gather_status(probe=False)），
+# 載入後這段 JS 打 /probe-status.json 補上真正的狀態（2026-09-02 使用者
+# 要求）。回傳的是算好的 badge HTML 片段（見 _probe_status_json()），
+# 這裡只負責找到對應的 .status-badge-slot 塞進去，不重算任何邏輯——
+# 「怎麼畫一個 badge」只在 Python 維護一份。找不到對應 data-label 的
+# 項目（理論上不會發生，兩邊資料同一次請求算出來的）直接跳過，不報錯。
+_PROBE_SCRIPT = """
+<script>
+(function () {
+  fetch("/probe-status.json").then(function (r) { return r.json(); })
+    .then(function (data) {
+      document.querySelectorAll(".status-row[data-label]").forEach(function (row) {
+        var frag = data[row.dataset.label];
+        if (frag === undefined) return;
+        var slot = row.querySelector(".status-badge-slot");
+        if (slot) slot.innerHTML = frag;
+      });
+    })
+    .catch(function () { /* 探測失敗就維持「探測中」的樣子，不彈錯誤 */ });
 })();
 </script>
 """
@@ -1598,28 +1691,64 @@ git commit -m "整理分類" &amp;&amp; git push -u origin claude/reorganize-sta
     return "".join(parts)
 
 
+def _worker_label_html(w: dict) -> str:
+    """label 本身＋（有的話）它對應程式的可點連結＋執行參數。程式路徑
+    跟參數直接來自 cloud_queue.txt 那一行（見 gather_worker_status()），
+    不查任何索引。
+
+    參數要一起顯示：像 p6_lowmass_v3_s13/s15/s17 這種同一支腳本切成
+    多個 shard 平行跑的工作，光看腳本名稱三個都一樣（本來就是同一支，
+    不是 bug），區分靠的是參數（--slopes 1.3/1.5/1.7），不顯示的話
+    連結旁邊完全看不出這幾個 worker 實際在算不同的東西
+    （2026-09-02 使用者反映）。"""
+    label_html = html.escape(w["label"])
+    script = w.get("script")
+    if not script:
+        return label_html
+    args = w.get("args")
+    args_html = (f'<code class="worker-args">{html.escape(args)}</code>'
+                if args else "")
+    return (f'{label_html}'
+           f'<a class="script-link worker-script-link" '
+           f'href="{html.escape(_doc_url(script))}"><code>'
+           f'{html.escape(script)}</code> ↗</a>{args_html}')
+
+
 def _worker_badge(w: dict) -> str:
+    """`text` 這裡是**已經處理過逃逸**的 HTML 片段，不是純文字——
+    `_worker_label_html()` 會內嵌一個真的 `<a>` 連結，所以組完之後
+    不能再對 `text` 整段 `html.escape()`（那樣會把連結標籤逃逸成看得到
+    的文字，不會真的變成連結）。純文字分支（閒置/連不上）本身是寫死
+    的字面字串，不含使用者或外部資料，不逃逸也安全。`detail` 仍然是
+    純文字，維持原本逐一逃逸。"""
     if w["assigned"]:
         state = w["state"]
-        if state == "live":
-            cls, text = "live", f"執行中：{w['label']}"
+        if state == "checking":
+            cls = "checking"
+            text = f"排定了 {_worker_label_html(w)}，探測中…"
+            detail = ""
+        elif state == "live":
+            cls, text = "live", f"執行中：{_worker_label_html(w)}"
             bits = []
             if w.get("elapsed"):
-                bits.append(f"已耗時 {w['elapsed']}")
+                bits.append(html.escape(w["elapsed"]))
             if w.get("error"):
-                bits.append(w["error"])
+                bits.append(html.escape(w["error"]))
             detail = "　".join(bits)
         else:
-            cls, text = "unknown", f"排定了 {w['label']}，但探測結果是「{w.get('status', '?')}」"
-            detail = w.get("note", w.get("error", ""))
+            cls = "unknown"
+            text = f"排定了 {_worker_label_html(w)}，但探測結果是「{html.escape(str(w.get('status', '?')))}」"
+            detail = html.escape(w.get("note", w.get("error", "")))
+    elif w.get("checking"):
+        cls, text, detail = "checking", "探測中…", ""
     elif w.get("reachable") is True:
         cls, text, detail = "ok", "閒置中（機器連得上）", ""
     elif w.get("reachable") is False:
-        cls, text, detail = "fail", "連不上", w.get("error", "")
+        cls, text, detail = "fail", "連不上", html.escape(w.get("error", ""))
     else:
         cls, text, detail = "pending", "閒置中", "Kaggle 沒有常駐機器，沒有工作時無法探測連線"
-    return (f'<span class="badge {cls}">{html.escape(text)}</span>'
-           f'<span class="detail">{html.escape(detail)}</span>')
+    return (f'<span class="badge {cls}">{text}</span>'
+           f'<span class="detail">{detail}</span>')
 
 
 def render_workers_html(status: dict) -> str:
@@ -1655,12 +1784,35 @@ ping 一下確認連得上；Kaggle 帳號閒置時沒有常駐機器可以探�
 
     for w in workers:
         parts.append(
-            f'<div class="worker-row"><strong>{html.escape(w["name"])}</strong>'
+            f'<div class="worker-row" data-worker="{html.escape(w["name"])}">'
+            f'<strong>{html.escape(w["name"])}</strong>'
             f'<span class="kind">（{html.escape(w["kind"])}）</span>'
-            f'{_worker_badge(w)}</div>')
+            f'<span class="worker-badge-slot">{_worker_badge(w)}</span></div>')
 
+    parts.append(_WORKERS_PROBE_SCRIPT)
     parts.append("</body></html>")
     return "".join(parts)
+
+
+# 跟 _PROBE_SCRIPT 同一個理由、同一套做法，見那邊的說明——這裡對應的
+# 是 .worker-row[data-worker] / .worker-badge-slot，資料來源是
+# /workers-probe.json。
+_WORKERS_PROBE_SCRIPT = """
+<script>
+(function () {
+  fetch("/workers-probe.json").then(function (r) { return r.json(); })
+    .then(function (data) {
+      document.querySelectorAll(".worker-row[data-worker]").forEach(function (row) {
+        var frag = data[row.dataset.worker];
+        if (frag === undefined) return;
+        var slot = row.querySelector(".worker-badge-slot");
+        if (slot) slot.innerHTML = frag;
+      });
+    })
+    .catch(function () { /* 探測失敗就維持「探測中」的樣子，不彈錯誤 */ });
+})();
+</script>
+"""
 
 
 _CSS = """
@@ -1716,6 +1868,8 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
 .status-row code { margin-right: 0.5em; }
 .script-block { margin: 0.5em 0 0.5em 0.6em; }
 .script-link { font-size: 0.9em; text-decoration: none; }
+.worker-script-link { margin-left: 0.5em; font-size: 0.85em; }
+.worker-args { margin-left: 0.5em; font-size: 0.78em; color: #888; }
 .script-link:hover { text-decoration: underline; }
 /* 教學說明（重點／公式／文獻／核心程式碼）整層可收合，預設展開
    （2026-08-31 使用者要求）——跟下面 docstring 那個收合是同一種
@@ -1736,6 +1890,7 @@ h1 { font-size: 1.4em; margin-bottom: 0.2em; }
           padding: 0.5em 0.7em; border-radius: 3px; margin: 0.5em 0;
           overflow-x: auto; }
 .script-link.missing { font-size: 0.9em; color: #999; }
+.script-link-note { font-size: 0.8em; color: #999; margin-left: 0.4em; }
 .upstream-link { font-size: 0.8em; margin-left: 0.6em; }
 
 /* 解說層（重點／公式／文獻／核心程式碼）——2026-08-26 使用者要求把
@@ -1787,6 +1942,7 @@ mark.hl { background: rgba(255,214,0,0.35); color: inherit;
 .badge.live { background: rgba(200,140,0,0.2); }
 .badge.pending { background: rgba(128,128,128,0.15); }
 .badge.unknown { background: rgba(128,128,128,0.1); }
+.badge.checking { background: rgba(128,128,128,0.1); font-style: italic; }
 .detail { color: #777; font-size: 0.85em; }
 code { font-family: Consolas, monospace; }
 
@@ -1827,12 +1983,37 @@ code { font-family: Consolas, monospace; }
 
 # sync 只做一次、兩個路由共用——workers 頁不特別顯示同步狀態，但一樣
 # 從這次同步受益（資料層讀的是同一份 REPO_ROOT）。
+def _probe_status_json() -> str:
+    """`/` 頁面秒開後，JS 拿這個補上真正的探測結果（2026-09-02 使用者
+    要求）。回傳 {label: 這個 label 現在該顯示的 badge HTML} ——直接
+    回傳算好的 HTML 片段，不是原始狀態資料，是為了讓 badge 怎麼畫這件
+    事只在 Python（`_status_badge()`）維護一份，不要在 JS 那邊重寫一次
+    同樣的邏輯、之後兩邊各自改各自的、越改越不同步。"""
+    status = gather_status(probe=True)
+    label_status = status["label_status"]
+    fragments = {label: _status_badge(st) for label, st in label_status.items()}
+    return json.dumps(fragments, ensure_ascii=False)
+
+
+def _workers_probe_json() -> str:
+    """`/workers` 頁面版的 `_probe_status_json()`，同一個理由。"""
+    status = gather_worker_status(probe=True)
+    fragments = {w["name"]: _worker_badge(w) for w in status["workers"]}
+    return json.dumps(fragments, ensure_ascii=False)
+
+
 _ROUTES = {
-    "/": lambda sync, query: render_html(gather_status(), sync),
-    "/workers": lambda sync, query: render_workers_html(gather_worker_status()),
+    "/": lambda sync, query: render_html(gather_status(probe=False), sync),
+    "/workers": lambda sync, query: render_workers_html(gather_worker_status(probe=False)),
     "/manage": lambda sync, query: render_manage_html(
         error=query.get("error", [None])[0], notice=query.get("notice", [None])[0]),
+    "/probe-status.json": lambda sync, query: _probe_status_json(),
+    "/workers-probe.json": lambda sync, query: _workers_probe_json(),
 }
+
+# 上面兩個 .json 路由回傳的是 application/json，不是 text/html——
+# do_GET() 用副檔名判斷，不用另外開一份路由表。
+_JSON_ROUTES = {"/probe-status.json", "/workers-probe.json"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1850,16 +2031,21 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         query = parse_qs(split.query)
+        is_json = split.path in _JSON_ROUTES
         try:
             sync = sync_repo_from_github()
             body = route(sync, query).encode("utf-8")
         except Exception as e:  # noqa: BLE001 — 任何未預期例外都不該讓伺服器整個掛掉
             import traceback
             traceback.print_exc()
-            body = (f"<pre>整理狀態時發生錯誤：\n{html.escape(str(e))}\n\n"
-                    "看主控台的完整 traceback。</pre>").encode()
+            if is_json:
+                body = json.dumps({"_error": str(e)}).encode()
+            else:
+                body = (f"<pre>整理狀態時發生錯誤：\n{html.escape(str(e))}\n\n"
+                        "看主控台的完整 traceback。</pre>").encode()
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        content_type = "application/json; charset=utf-8" if is_json else "text/html; charset=utf-8"
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
