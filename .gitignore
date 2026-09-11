@@ -32,6 +32,14 @@ data/astrophys.csv
 # ============================================================
 logs/
 figs/
+# 2026-09-02：這兩個是主控板自己執行期間產生的，本來只是沒進版控
+# （從沒被 git add 過），沒有正式排除——直到發現未追蹤檔案會讓
+# sync_repo_from_github() 的「髒」判斷永遠卡住、自動同步從此失效
+# （見 app.py 那邊 --untracked-files=no 那次修正的說明），才正式排除，
+# 避免以後又靠「反正沒人 add」這種脆弱的默契。
+status_dashboard/dashboard.lock
+status_dashboard/dashboard_console.log
+status_dashboard/open_dashboard.log
 __pycache__/
 *.pyc
 prepared/
