@@ -119,6 +119,28 @@ def parse_rendered_commands(rendered: str, run_id: str) -> list[str]:
     return commands
 
 
+def apply_petar_binary_override(command: str, petar_bin: str) -> str:
+    """把 petar 那一步的執行檔換成 `petar_bin`（預設 "petar"，不做任何事）。
+
+    2026-09-11 跟協作者對過：PeTar `make install` 會把通用符號連結
+    `petar` 指向**最後一次編譯**的變體——同一台機器先裝一般版、後來
+    又跑 `add_galpy_support_linux.sh` 加裝 galpy 支援後，`petar` 這個
+    裸名字現在指向 galpy 版本；但這個符號連結會隨著任何人下次重跑
+    `setup_linux_nbody.sh`（不含 galpy）而悄悄改回沒有 galpy 的版本。
+    本專案訓練網格 100% 需要 galpy（`galactic_tide=true`），長時間
+    無人值守批次跑到一半符號連結被換掉會造成難以追查的失敗，所以
+    派工到共用機器（例如 senior24）時**一律用完整檔名**
+    （如 `petar.omp.avx512.bse.galpy`），不依賴裸的 `petar`；本機／
+    專用 VM（符號連結不會被別人動）維持預設空字串、沿用裸 `petar`
+    不需要額外指定。
+    """
+    if not petar_bin or petar_bin == "petar":
+        return command
+    if command.split()[0] != "petar":
+        return command
+    return petar_bin + command[len("petar"):]
+
+
 def apply_smoke_overrides(command: str, t_myr: float, o_myr: float) -> str:
     """--smoke 模式：覆寫 -t/-o，並關掉恆星演化與銀河潮汐相關旗標。
 
@@ -203,6 +225,7 @@ def run_case(
     smoke_o_myr: float,
     dry_run: bool,
     n_threads: int,
+    petar_bin: str = "petar",
 ) -> dict:
     rows = load_grid(grid_path)
     matches = [r for r in rows if r["run_id"] == run_id]
@@ -212,8 +235,14 @@ def run_case(
 
     rendered = render_commands(row)
     commands = parse_rendered_commands(rendered, run_id)
+    # 順序重要：smoke override 用 `command.split()[0] != "petar"` 判斷
+    # 哪一步是 petar，一定要在 petar_bin override 把裸 "petar" 換成完整
+    # 檔名（如 petar.omp.avx512.bse.galpy）**之前**做，否則 smoke 模式
+    # 會找不到要改的那一步、悄悄不生效（2026-09-11 加 petar_bin 支援時
+    # 差點漏掉這個順序依賴）。
     if smoke:
         commands = [apply_smoke_overrides(c, smoke_t_myr, smoke_o_myr) for c in commands]
+    commands = [apply_petar_binary_override(c, petar_bin) for c in commands]
 
     if dry_run:
         return {
@@ -368,6 +397,13 @@ def main():
     parser.add_argument("--smoke-t-myr", type=float, default=1.0)
     parser.add_argument("--smoke-o-myr", type=float, default=0.5)
     parser.add_argument("--n-threads", type=int, default=os.cpu_count() or 1)
+    parser.add_argument(
+        "--petar-bin", default="petar",
+        help="petar 執行檔名稱；共用機器上 `petar` 符號連結可能被別人的"
+             "後續建置動作改指向不同變體，長跑批次建議傳完整檔名"
+             "（例如 petar.omp.avx512.bse.galpy），見 "
+             "apply_petar_binary_override() 的說明",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -390,6 +426,7 @@ def main():
         args.smoke_o_myr,
         args.dry_run,
         args.n_threads,
+        args.petar_bin,
     )
     print(json.dumps(summary, indent=2))
     if summary["status"] not in ("complete", "dry_run"):

@@ -63,6 +63,8 @@ def main():
     parser.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs_training")
     parser.add_argument("--n-threads", type=int, default=8)
     parser.add_argument("--energy-threshold", type=float, default=1e-3)
+    parser.add_argument("--petar-bin", default="petar",
+                         help="轉傳給 run_nbody_case.py，見該檔案 --petar-bin 的說明")
     parser.add_argument("--limit", type=int, default=None,
                          help="只跑前 N 個尚未完成的 run（測試用），預設全部")
     args = parser.parse_args()
@@ -90,6 +92,7 @@ def main():
                 "--runs-dir", str(args.runs_dir),
                 "--n-threads", str(args.n_threads),
                 "--energy-threshold", str(args.energy_threshold),
+                "--petar-bin", args.petar_bin,
             ],
             cwd=REPO_ROOT,
         )
