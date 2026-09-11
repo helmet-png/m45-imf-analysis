@@ -194,14 +194,37 @@ fi
 make -j"$(nproc)" ${FCLIBS_FIX:+FCLIBS="$FCLIBS_FIX"}
 make install ${FCLIBS_FIX:+FCLIBS="$FCLIBS_FIX"}
 
-# Linux 上不需要 mingw_compat.o（那是補 MinGW 缺的 rand48／feenableexcept），
-# 但 -lgfortran 要留著——mcluster_sse 會連結 SSE（恆星演化）的 Fortran 常式。
-# mcluster 的 Makefile 預設用 `gcc`，conda 環境下要明確覆寫成 $CC。
+# Linux 上不需要 mingw_compat.o（那是補 MinGW 缺的 rand48／feenableexcept
+# 兩個函式，Linux 的 glibc 本來就有 rand48），但 -lgfortran 要留著——
+# mcluster_sse 會連結 SSE（恆星演化）的 Fortran 常式。mcluster 的
+# Makefile 預設用 `gcc`，conda 環境下要明確覆寫成 $CC。
 echo "=== 編譯 mcluster ==="
 cd "$NBODY_DIR/mcluster"
-# CFLAGS 要把 $CPPFLAGS（conda 的 -I）也帶進去——mcluster 的 Makefile 不吃
-# CPPFLAGS，只認 CFLAGS，不併進來的話 conda 環境下找不到 gsl 標頭檔。
-make mcluster_sse CC="$CC" FC="$FC" \
+# **這個 Makefile 的 CC 變數本身就綁死編譯旗標**（2026-09-11 實測
+# 才發現，用 CFLAGS 完全沒用）：原始碼裡是
+#     CC = gcc -O2 -fopenmp -Wall
+#     mcluster_sse: ...
+#         $(CC) -c main.c -D SSE -lm
+#     	  $(CC) $(OBJECTS) main.o -o mcluster_sse -lm $(CFLAGS)
+# 編譯 main.c 那一行只用 $(CC)，完全沒有引用 $(CFLAGS)——CFLAGS 只在
+# 最後連結那行才用得到。所以上一輪「把 -D_GNU_SOURCE 加進 CFLAGS」
+# 完全沒有生效，實際執行的指令裡看不到這個旗標。正確做法是**把整個
+# CC 變數覆寫掉**，保留原本的 -O2/-fopenmp/-Wall，換成 conda 的編譯器
+# 路徑，並把 -D_GNU_SOURCE 也塞進去。
+#
+# **為什麼需要 -D_GNU_SOURCE**：main.c 用到的 feenableexcept 是 GNU
+# 延伸函式（設定浮點例外 trap，只在除錯用），Linux 的 glibc 真的有
+# 這個函式，但宣告藏在 <fenv.h> 裡被 `#ifdef __USE_GNU` 包住的區塊，
+# 沒有明確定義 _GNU_SOURCE 就看不到宣告，編譯器噴 implicit
+# declaration。一般 Ubuntu 系統的 gcc 常常已經預設打開等價巨集所以
+# 感覺不到這個問題，但不能假設 conda 的標頭檔一樣寬鬆。這不是缺
+# 函式庫，純粹是編譯期看不到宣告，不用碰上游 main.c 原始碼（那是
+# 外部專案釘選的 commit）。
+#
+# $(OBJECTS) 那些檔案是透過 make 內建的隱含規則編譯的（會用到
+# CFLAGS／CPPFLAGS），跟 main.c 這條寫死的明確規則是兩回事，所以
+# CFLAGS 裡的 conda include 路徑對它們仍然有效，不能拿掉。
+make mcluster_sse CC="$CC -O2 -fopenmp -Wall -D_GNU_SOURCE" FC="$FC" \
     CFLAGS="${CPPFLAGS:-} -lgfortran ${LDFLAGS:-}"
 
 # ---------------------------------------------------------------- 驗證
