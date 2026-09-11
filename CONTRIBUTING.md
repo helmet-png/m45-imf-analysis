@@ -330,16 +330,39 @@ diff 完全看不出真正改了什麼，審查等於白審。**這才是「PR �
 「王小明」），commit hash 填**跑這個結果當下** `git rev-parse HEAD`
 的值，讓任何人事後都能精確對回當時的程式碼版本，不必另外拉 git tag。
 
-**主控板（`status_dashboard/`，2026-08-24 新增）**：`py
-status_dashboard/app.py`（或雙擊桌面捷徑）開一個本機網頁，把「傳統法／
-前向模型／PDMF→IMF／穩健性診斷」四大類底下有哪些步驟、每個步驟對應
-哪些腳本、目前執行到哪，整理在同一頁——取代翻十幾份 `.md` 文件才能拼
-出全貌的做法。「階段 → 步驟 → 腳本」的對照表在
-`status_dashboard/stage_map.py`，是**手動維護**的索引（沒有機器可讀的
-來源能自動生成傳統法／PDMF→IMF／診斷類的分類結構）。**新增
+**主控板（`status_dashboard/`，2026-08-24 新增；2026-09-02 起搬到協調
+VM，見下段）**：把「傳統法／前向模型／PDMF→IMF／穩健性診斷」四大類
+底下有哪些步驟、每個步驟對應哪些腳本、目前執行到哪，整理在同一頁——
+取代翻十幾份 `.md` 文件才能拼出全貌的做法。「階段 → 步驟 → 腳本」的
+對照表在 `status_dashboard/stage_map.py`，是**手動維護**的索引（沒有
+機器可讀的來源能自動生成傳統法／PDMF→IMF／診斷類的分類結構）。**新增
 `WORK_BOARD.md` 任務或新腳本時，記得回來 `stage_map.py` 加一筆**，
 跟這裡「新結果要記進 `RESULTS_LOG.md`」是同一種「找不到自動生成辦法、
 只能手動維護索引」的協作規則。
+
+**只有一份、跑在協調 VM 上，不是每個人各自跑一份**（2026-09-02 決定）：
+主控板本身現在跟 `cloud_queue.py` 一樣常駐在協調 VM（見「三、雲端
+worker」段落跟 `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`），所有人
+看到的是同一份即時派工狀態，不會有「我這份」「你那份」各自不同步的
+問題。要連上去：
+
+```bash
+gcloud compute start-iap-tunnel instance-20260827-035250 8866 \
+  --local-host-port=localhost:8866 --zone=us-central1-a \
+  --project=project-f6e2d0e1-cd17-4cfb-a9b
+```
+
+跑完在瀏覽器開 `http://localhost:8866/`。**Windows 使用者**：雙擊
+`status_dashboard/launch_dashboard.vbs`（或桌面捷徑）會自動處理上面
+這件事（開 tunnel、等連上、開瀏覽器），不用背指令。**macOS／Linux**：
+把上面那行存成自己的 shell script／alias，或直接照
+`status_dashboard/open_dashboard.py` 的邏輯（連得到就開瀏覽器，連不到
+就先開 tunnel）寫一支對應的本機啟動器。
+
+**改主控板程式碼**：`app.py` 每次有人整理頁面都會自動 `git pull`，PR
+合併進 `main` 之後下一次任何人重新整理頁面就自動套用新版，不用手動
+登入協調 VM。`cloud_queue.py` 沒有這套自動重啟，改了要手動 SSH 進去
+`git pull && sudo systemctl restart cloud-queue.service`。
 
 ---
 

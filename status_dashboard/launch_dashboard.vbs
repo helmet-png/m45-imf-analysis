@@ -2,13 +2,10 @@ Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 dir_ = fso.GetParentFolderName(WScript.ScriptFullName)
 
-' Temporary override until the worktree is folded back into main;
-' see app.py header comment for the full explanation (kept out of
-' this file because non-ASCII text here breaks cscript/wscript on
-' a Chinese-codepage Windows system).
-Set env = sh.Environment("Process")
-env("CLOUD_QUEUE_ROOT") = "C:\Users\Alber\Claude\m45_cloud_workers_wt"
-
-sh.Run "pyw """ & dir_ & "\app.py""", 0, False
-WScript.Sleep 1500
-sh.Run "http://127.0.0.1:8866/", 1, False
+' 2026-09-02: main board now runs on the coordinator VM (see
+' docs/reference/CLOUD_WORKERS_IAP_SETUP.md), not locally. This just
+' opens an IAP tunnel (if not already open) and the browser; see
+' open_dashboard.py for the full explanation. Non-ASCII text kept out
+' of this file because it breaks cscript/wscript on a Chinese-codepage
+' Windows system.
+sh.Run "pyw """ & dir_ & "\open_dashboard.py""", 0, False
