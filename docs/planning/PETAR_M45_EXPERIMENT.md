@@ -93,18 +93,28 @@ cd runs/m45_ref_s101
 mcluster_sse -N 2369 -B 1154 -P 2 -S 0.30 -R 3.10 \
   -f 1 -C 5 -u 1 -s 101 -Z 0.02 -o m45_ref_s101 > mcluster.log
 
-# McLuster 的實際輸出檔名以 mcluster.log 與目錄內容為準；不要猜檔名。
-petar.init -s bse -v kms2pcmyr -f input <MCLUSTER_OUTPUT>
+# McLuster (-C 5, Nbody6++ 格式) 一次會產生兩個檔案：
+#   <prefix>.input   -> Nbody6++ 控制參數卡（KSTART 等設定值，跟星數無關，
+#                        2026-09-11 在 senior24 上實測只有 14 行，這是正常的，
+#                        不代表只生成了 14 顆星）
+#   <prefix>.dat.10  -> 真正的星表：每行一顆星，7 欄 = mass, x, y, z, vx, vy, vz
+# petar.init 吃的是星表，一定要指到 <prefix>.dat.10，不要用 <prefix>.input，
+# 也不要只看 <prefix>.input 的行數來判斷生成了幾顆星（這個誤會曾導致誤判
+# mcluster_sse「只生成 14 顆粒子」，並連帶誤診 PeTar 的 r_out/r_bin 崩潰）。
+petar.init -s bse -v kms2pcmyr -f input m45_ref_s101.dat.10
 
 export OMP_STACKSIZE=128M
 export OMP_NUM_THREADS=8
-petar -u 1 -b 1154 --bse-metallicity 0.02 \
+petar.omp.avx512.bse -u 1 -b 1154 --bse-metallicity 0.02 \
   --stellar-evolution 1 --detect-interrupt 1 \
   -t 125.0 -o 5.0 input > petar.log 2>&1
 
 petar.data.gether data
 petar.data.process -i bse data.snap.lst
 ```
+
+`petar`/`petar.init` 等工具通常不在系統 PATH 或 conda 環境的 PATH 上，必須用安裝目錄下的完整路徑呼叫（例如 senior24 上是
+`~/nbody/install/bin/petar.init`、`~/nbody/install/bin/petar.omp.avx512.bse`），實際檔名以 `nbody_setup/setup_linux_nbody.sh` 或該機器的安裝紀錄為準。
 
 `-b 1154` 必須等於這一列的 `n_binaries`。開始長跑前，先在 log 核對：
 
@@ -206,6 +216,25 @@ fail closed。物理方向測試刻意讓低質量星較易逃逸、重星更集
 
 這些數字只驗證程式會在已知效應下產生正確方向，**不是 M45 的物理結果**。
 正式數字必須由協作者 PeTar 125 Myr 快照取代。
+
+## senior24 (Linux) pilot 已端到端驗證（2026-09-11）
+
+在 senior24（24-core，`nbody_setup/setup_linux_nbody.sh` 建置的環境）上用縮小規模
+（N=100，`-B 49` 對應正式版 95% 聯星比例，`-P 2 -S 0.30 -R 3.10` 跟正式中央模型
+一致）跑過一次完整 `mcluster_sse -> petar.init -> petar.omp.avx512.bse` 流程，
+跑到 t=1 Myr：
+
+- `N_real(glb)`: t=0 時 100、t=1 Myr 時 99（`N_remove(glb)=1`，屬正常動力學/
+  恆星演化事件，非錯誤）；
+- 能量誤差 `Error/Total` 約 5.6e-9，數值穩定；
+- `FDPS has successfully finished.`，無崩潰、無 NaN。
+
+這確認了整條工具鏈在 Linux 上是可信的，之前的 PeTar `r_bin` assertion 崩潰
+純粹是餵錯檔案（`<prefix>.input` 控制卡當成星表）所致，不是 PeTar 本身或
+`r_out`/`r_bin` auto-compute 公式有問題；上面「協作者 x64/MSYS2 機器執行步驟」
+的指令已對應更正。正式 2,369 顆星、125 Myr 的長跑前，仍需先做一次
+timing pilot（例如 N=2369、`-t 1.0`）量測 senior24 上實際每 Myr 耗時，
+再決定 3 個中央 seed 要同時跑還是排隊跑。
 
 ## 尚未解決
 
