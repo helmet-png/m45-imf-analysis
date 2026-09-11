@@ -172,15 +172,27 @@ fi
 make -j"$(nproc)" ${FCLIBS_FIX:+FCLIBS="$FCLIBS_FIX"}
 make install ${FCLIBS_FIX:+FCLIBS="$FCLIBS_FIX"}
 
-# Linux 上不需要 mingw_compat.o（那是補 MinGW 缺的 rand48／feenableexcept），
-# 但 -lgfortran 要留著——mcluster_sse 會連結 SSE（恆星演化）的 Fortran 常式。
-# mcluster 的 Makefile 預設用 `gcc`，conda 環境下要明確覆寫成 $CC。
+# Linux 上不需要 mingw_compat.o（那是補 MinGW 缺的 rand48／feenableexcept
+# 兩個函式，Linux 的 glibc 本來就有 rand48），但 -lgfortran 要留著——
+# mcluster_sse 會連結 SSE（恆星演化）的 Fortran 常式。mcluster 的
+# Makefile 預設用 `gcc`，conda 環境下要明確覆寫成 $CC。
 echo "=== 編譯 mcluster ==="
 cd "$NBODY_DIR/mcluster"
-# CFLAGS 要把 $CPPFLAGS（conda 的 -I）也帶進去——mcluster 的 Makefile 不吃
-# CPPFLAGS，只認 CFLAGS，不併進來的話 conda 環境下找不到 gsl 標頭檔。
+# **feenableexcept 要加 -D_GNU_SOURCE**（2026-09-11 實測第六關）：跟
+# MinGW 那邊「函式根本不存在」不同，Linux 的 glibc 真的有這個函式
+# （GNU 延伸功能，用來設定浮點例外 trap，main.c 只在除錯用），但它的
+# 宣告藏在 <fenv.h> 裡一段被 `#ifdef __USE_GNU` 包住的區塊——沒有明確
+# 定義 _GNU_SOURCE（或等價巨集）就看不到宣告，編譯器噴
+# "implicit declaration of function 'feenableexcept'"。一般 Ubuntu
+# 系統的 gcc 常常已經預設打開等價的巨集所以感覺不到這個問題，但 conda
+# 的標頭檔比較嚴格、不能假設有這層預設。這不是缺函式庫，純粹是編譯期
+# 看不到宣告，加旗標讓標頭檔露出宣告就好，不用碰上游 main.c 原始碼
+# （那是外部專案釘選的 commit，不該為了單一環境去改它）。
+# CFLAGS 也要把 $CPPFLAGS（conda 的 -I）併進去——mcluster 的 Makefile
+# 不吃 CPPFLAGS，只認 CFLAGS，不併進來的話 conda 環境下找不到 gsl
+# 標頭檔（這是這幾輪修正踩過的另一個坑，見上面的說明）。
 make mcluster_sse CC="$CC" FC="$FC" \
-    CFLAGS="${CPPFLAGS:-} -lgfortran ${LDFLAGS:-}"
+    CFLAGS="-D_GNU_SOURCE ${CPPFLAGS:-} -lgfortran ${LDFLAGS:-}"
 
 # ---------------------------------------------------------------- 驗證
 # 跟 Windows 版同一組煙霧測試，只差執行檔沒有 .exe 副檔名。
