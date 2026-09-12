@@ -30,6 +30,10 @@ if [ ! -d "$NBODY_DIR/PeTar/.git" ]; then
     echo "找不到 $NBODY_DIR/PeTar，請先跑 nbody_setup/setup_linux_nbody.sh"
     exit 1
 fi
+if [ ! -x "$NBODY_DIR/install/bin/petar.omp.avx512.bse" ]; then
+    echo "找不到原始 PeTar 執行檔，請先成功完成 nbody_setup/setup_linux_nbody.sh"
+    exit 1
+fi
 
 : "${CC:=gcc}"
 : "${CXX:=g++}"
@@ -121,9 +125,11 @@ echo "=== 驗證 ==="
     && echo "galpy 支援: HAS_GALPY" \
     || { echo "galpy 支援: NO_GALPY（有問題，不要當作已經修好）"; exit 1; }
 
-if [ -x "$NBODY_DIR/install/bin/petar.omp.avx512.bse" ]; then
-    echo "確認沒有 galpy 的舊版本仍在：petar.omp.avx512.bse（我們自己 M45 正式模擬用這個）"
+if [ ! -x "$NBODY_DIR/install/bin/petar.omp.avx512.bse" ]; then
+    echo "找不到沒有 Galpy 的基準執行檔（有問題，不要當作已經修好）"
+    exit 1
 fi
+echo "確認沒有 galpy 的舊版本仍在：petar.omp.avx512.bse（我們自己 M45 正式模擬用這個）"
 
 echo
 echo "=== 完成 ==="
