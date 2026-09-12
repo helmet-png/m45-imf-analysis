@@ -80,7 +80,7 @@ profile 2、S=0.30 作中央模型，S=0–0.49 作靈敏度範圍；尺度以 P
 - 逐質量段徑向密度；
 - 聯星比例隨半徑的變化。
 
-## 協作者 x64/MSYS2 機器執行步驟
+## senior24（Linux）執行步驟
 
 每一列先建立獨立目錄，避免 PeTar 的 `data.*`、`input.par*` 互相覆蓋。以下以
 中央模型第一個 seed 為例；執行前用該機器上 `mcluster_sse -h`、`petar -h`
@@ -90,7 +90,10 @@ profile 2、S=0.30 作中央模型，S=0–0.49 作靈敏度範圍；尺度以 P
 mkdir -p runs/m45_ref_s101
 cd runs/m45_ref_s101
 
-mcluster_sse -N 2369 -B 1154 -P 2 -S 0.30 -R 3.10 \
+NBODY_ROOT="${NBODY_ROOT:-$HOME/nbody}"
+PETAR_BIN="$NBODY_ROOT/install/bin"
+
+"$NBODY_ROOT/mcluster/mcluster_sse" -N 2369 -B 1154 -P 2 -S 0.30 -R 3.10 \
   -f 1 -C 5 -u 1 -s 101 -Z 0.02 -o m45_ref_s101 > mcluster.log
 
 # McLuster (-C 5, Nbody6++ 格式) 一次會產生兩個檔案：
@@ -101,20 +104,21 @@ mcluster_sse -N 2369 -B 1154 -P 2 -S 0.30 -R 3.10 \
 # petar.init 吃的是星表，一定要指到 <prefix>.dat.10，不要用 <prefix>.input，
 # 也不要只看 <prefix>.input 的行數來判斷生成了幾顆星（這個誤會曾導致誤判
 # mcluster_sse「只生成 14 顆粒子」，並連帶誤診 PeTar 的 r_out/r_bin 崩潰）。
-petar.init -s bse -v kms2pcmyr -f input m45_ref_s101.dat.10
+"$PETAR_BIN/petar.init" -s bse -v kms2pcmyr -f input m45_ref_s101.dat.10
 
 export OMP_STACKSIZE=128M
-export OMP_NUM_THREADS=8
-petar.omp.avx512.bse -u 1 -b 1154 --bse-metallicity 0.02 \
+export OMP_NUM_THREADS=24
+"$PETAR_BIN/petar.omp.avx512.bse" -u 1 -b 1154 --bse-metallicity 0.02 \
   --stellar-evolution 1 --detect-interrupt 1 \
   -t 125.0 -o 5.0 input > petar.log 2>&1
 
-petar.data.gether data
-petar.data.process -i bse data.snap.lst
+"$PETAR_BIN/petar.data.gether" data
+"$PETAR_BIN/petar.data.process" -i bse data.snap.lst
 ```
 
-`petar`/`petar.init` 等工具通常不在系統 PATH 或 conda 環境的 PATH 上，必須用安裝目錄下的完整路徑呼叫（例如 senior24 上是
-`~/nbody/install/bin/petar.init`、`~/nbody/install/bin/petar.omp.avx512.bse`），實際檔名以 `nbody_setup/setup_linux_nbody.sh` 或該機器的安裝紀錄為準。
+`petar`/`petar.init` 等工具通常不在系統 PATH 或 conda 環境的 PATH 上；上面的
+`NBODY_ROOT` 預設對應 `nbody_setup/setup_linux_nbody.sh` 的安裝位置。若實際安裝在
+別處，執行前設定 `NBODY_ROOT`，不要依賴裸工具名稱。
 
 `-b 1154` 必須等於這一列的 `n_binaries`。開始長跑前，先在 log 核對：
 
@@ -229,10 +233,11 @@ fail closed。物理方向測試刻意讓低質量星較易逃逸、重星更集
 - 能量誤差 `Error/Total` 約 5.6e-9，數值穩定；
 - `FDPS has successfully finished.`，無崩潰、無 NaN。
 
-這確認了整條工具鏈在 Linux 上是可信的，之前的 PeTar `r_bin` assertion 崩潰
-純粹是餵錯檔案（`<prefix>.input` 控制卡當成星表）所致，不是 PeTar 本身或
-`r_out`/`r_bin` auto-compute 公式有問題；上面「協作者 x64/MSYS2 機器執行步驟」
-的指令已對應更正。正式 2,369 顆星、125 Myr 的長跑前，仍需先做一次
+這確認了 senior24 上 N=100、t=1 Myr 的工具鏈 pilot 可執行。在已重現的
+`<prefix>.input` 控制卡誤當星表案例中，`r_bin` assertion 崩潰可歸因於該錯誤
+輸入；這次 pilot 不足以排除 PeTar 或 `r_out`/`r_bin` auto-compute 公式的其他
+問題，也不代表 N=2,369、t=125 Myr 的正式執行已驗證。上面執行步驟已對應
+更正；正式 2,369 顆星、125 Myr 的長跑前，仍需先做一次
 timing pilot（例如 N=2369、`-t 1.0`）量測 senior24 上實際每 Myr 耗時，
 再決定 3 個中央 seed 要同時跑還是排隊跑。
 
