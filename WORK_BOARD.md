@@ -125,6 +125,12 @@ Tailscale 連線（不需要固定對外 IP，也不用改路由器）。**`proc
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| professor_report_preparation | 進行中 | 開始：2026-09-13 | M45 觀測分析、正式 10-run PeTar grid、既有限制與 GitHub 結果紀錄 | 教授討論簡報分工、報告流程、待確認科學問題 |
+
+professor_report_preparation：Codex 認領，為下週與教授的線上討論整理共同報告。先以已合併的 `docs/planning/NBODY_M45_FORMAL_RESULTS_20260913.md` 與現有結果為準，安排各成員負責觀測資料、前向模型、N-body、限制與下一步，並列出希望教授協助判斷的問題。這是報告準備工作，不會把 N-body component-star 修正誤寫成最終 IMF 結論；詳細草案見 `docs/planning/M45_PROFESSOR_REPORT_PLAN_2026-09-13.md`。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
 | p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | 合成星數 N = 40,000 顆；重複次數 = 3；精修階數 = 2 階；低質量段冪次 p 的掃描點 5 個 | 低質量段冪次 p 對 α 的關係曲線（斜率 d(alpha)/d(p)） |
 
 p6_lowmass_v3：量低質量段冪次 d(alpha)/d(p) 的斜率，這是目前最大的
