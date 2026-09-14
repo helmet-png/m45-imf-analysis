@@ -7,6 +7,16 @@ triple and binary-binary quadruple files all become component rows sharing one
 ``system_id``.  Omitting a non-empty multiplicity catalog changes the scientific
 definition, so the command records every supplied path and requires an explicit
 ``--confirm-complete`` acknowledgement.
+
+2026-09 新增（供 observe_snapshot.py 使用）：當 ``--interrupt-mode`` 含
+``bse`` 時，PeTar 的 ``Particle`` 物件會多帶一個 ``star``
+(``SSEStarParameter``) 子物件，內含 ``star.type``（SSE 恆星型態編號，
+1=主序星，>=10 為白矮星／中子星／黑洞等演化終態，見 PeTar
+``tools/analysis/bse.py`` 的 ``SSEStarParameter`` 定義，本次已逐字核對
+過欄位存在）與 ``star.mass``（恆星演化後的目前質量，可能小於出生質量）。
+這兩個欄位用 ``getattr`` 保護性讀取——沒有 ``star`` 屬性（例如
+``interrupt_mode='none'`` 或自我測試用的假資料）就退回
+``star_type=1``、``current_mass=mass``，不會因為缺欄位而炸掉。
 """
 from __future__ import annotations
 
@@ -41,6 +51,22 @@ def _leaves(node):
         yield node
 
 
+def _leaf_star_type(leaf, n: int) -> np.ndarray:
+    """SSE 恆星型態編號，沒有 `.star` 屬性（非 bse 模式）就當全部主序星。"""
+    star = getattr(leaf, "star", None)
+    if star is None:
+        return np.ones(n, np.int64)
+    return np.asarray(star.type, np.int64)
+
+
+def _leaf_current_mass(leaf, mass: np.ndarray) -> np.ndarray:
+    """恆星演化後的目前質量，沒有 `.star` 屬性就等於出生質量。"""
+    star = getattr(leaf, "star", None)
+    if star is None:
+        return mass.copy()
+    return np.asarray(star.mass, float)
+
+
 def _append_category(
     node,
     category: str,
@@ -49,6 +75,8 @@ def _append_category(
     masses: list,
     positions: list,
     system_ids: list,
+    star_types: list,
+    current_masses: list,
 ):
     leaves = list(_leaves(node))
     if not leaves:
@@ -58,10 +86,13 @@ def _append_category(
         raise ValueError(f"{category} leaf arrays have inconsistent sizes: {sizes}")
     n_systems = sizes.pop()
     for leaf in leaves:
+        leaf_mass = np.asarray(leaf.mass, float)
         particle_ids.append(np.asarray(leaf.id))
-        masses.append(np.asarray(leaf.mass, float))
+        masses.append(leaf_mass)
         positions.append(np.asarray(leaf.pos, float))
         system_ids.append(np.arange(system_offset, system_offset + n_systems))
+        star_types.append(_leaf_star_type(leaf, n_systems))
+        current_masses.append(_leaf_current_mass(leaf, leaf_mass))
     return system_offset + n_systems, {
         "category": category,
         "n_systems": n_systems,
@@ -76,15 +107,19 @@ def export_catalog(args) -> dict:
     import petar
 
     particle_ids, masses, positions, system_ids = [], [], [], []
+    star_types, current_masses = [], []
     categories = []
     offset = 0
 
     single = _load_ascii(_particle(petar, args.interrupt_mode), args.single)
     n_single = int(single.size)
+    single_mass = np.asarray(single.mass, float)
     particle_ids.append(np.asarray(single.id))
-    masses.append(np.asarray(single.mass, float))
+    masses.append(single_mass)
     positions.append(np.asarray(single.pos, float))
     system_ids.append(np.arange(offset, offset + n_single))
+    star_types.append(_leaf_star_type(single, n_single))
+    current_masses.append(_leaf_current_mass(single, single_mass))
     categories.append(
         {
             "category": "single",
@@ -137,6 +172,8 @@ def export_catalog(args) -> dict:
             masses,
             positions,
             system_ids,
+            star_types,
+            current_masses,
         )
         accounting["path"] = str(path)
         categories.append(accounting)
@@ -145,6 +182,8 @@ def export_catalog(args) -> dict:
     mass = np.concatenate(masses)
     position = np.concatenate(positions)
     system_id = np.concatenate(system_ids)
+    star_type = np.concatenate(star_types)
+    current_mass = np.concatenate(current_masses)
     if len(np.unique(particle_id)) != len(particle_id):
         unique, count = np.unique(particle_id, return_counts=True)
         duplicate = unique[count > 1][:10].tolist()
@@ -165,6 +204,8 @@ def export_catalog(args) -> dict:
         pos=position,
         system_id=system_id,
         time_myr=np.array([args.time_myr]),
+        star_type=star_type,
+        current_mass=current_mass,
     )
     metadata = {
         "status": "physical_system_catalog",
@@ -205,8 +246,10 @@ def run_self_test() -> dict:
         ),
     )
     particle_ids, masses, positions, system_ids = [], [], [], []
+    star_types, current_masses = [], []
     offset, accounting = _append_category(
-        tree, "triple", 10, particle_ids, masses, positions, system_ids
+        tree, "triple", 10, particle_ids, masses, positions, system_ids,
+        star_types, current_masses,
     )
     ids = np.concatenate(particle_ids)
     groups = np.concatenate(system_ids)

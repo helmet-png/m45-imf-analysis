@@ -1,5 +1,12 @@
 # N-body（PeTar + mcluster）Windows 原生編譯設定
 
+**2026-09 起，正式模擬改在 Linux 上跑**（`setup_linux_nbody.sh`）：
+`--with-external=galpy`（銀河潮汐）需要 galpy，而 galpy 對 Windows ARM64
+沒有 wheel、對 Windows x64 也只到 Python 3.13（本機是 3.14），裝不起來。
+這個檔案的內容（Windows/MSYS2 編譯）繼續保留給協作者 Windows 機使用，
+但**不含銀河潮汐**，只用於管線通暢與能量守恆等級的驗證（smoke test
+S0-S2），不是正式網格的執行環境。
+
 PDMF→IMF 第 5 步（N-body 重建 M45 初始狀態）的環境設定，記錄如何在
 **沒有 WSL** 的 Windows 機器上用 MSYS2/MinGW-w64 編譯 PeTar（含 BSE 恆星
 演化）與 mcluster。背景見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節。
@@ -74,6 +81,24 @@ Linux 版**不套用任何 patch**——`petar_configure_mingw.patch` 與
 
 腳本會**先檢查編譯工具齊不齊、缺什麼就列出來並停下**，不會未經確認就
 對別人提供的機器 `sudo apt install`。
+
+### 需要銀河潮汐（Galpy）支援時
+
+上面 `setup_linux_nbody.sh` 編出來的 PeTar **沒有** Galpy 外部重力場支援
+（`--galpy-set` 這類旗標用不了），因為我們自己 M45 正式模擬刻意不加銀河
+潮汐（見 `docs/planning/PETAR_M45_EXPERIMENT.md`）。如果協作者的模擬
+需要銀河潮汐（例如 `--galpy-set MWPotential2014`），先跑完上面的
+`setup_linux_nbody.sh`，再跑：
+
+```bash
+bash nbody_setup/add_galpy_support_linux.sh
+```
+
+這支腳本會另外裝 Galpy（版本鎖在 <=1.10.2，PeTar 官方文件說更新版本不
+相容）並重新編譯出 `petar.omp.avx512.bse.galpy`，跟原本沒有 galpy 的
+`petar.omp.avx512.bse` **同時保留**在 `install/bin/` 底下，不會互相覆蓋。
+腳本裡有註解記錄一個實測踩到的編譯坑（conda 新版 GCC 的 `omp.h` 跟
+Galpy 標頭檔的 `extern "C"` 衝突），已經自動處理，不需要手動介入。
 
 ## 驗證（2026-08-12 已跑過，結果正常）
 
