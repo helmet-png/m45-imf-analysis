@@ -38,6 +38,13 @@ component-star PDMF 分析。全部最終能量誤差小於 `1e-3`，最大約 `
 Gaia 選擇效應、unresolved system 定義與銀河潮汐對照完整併入。因此它適合
 展示「動力學校正量級與初始條件敏感度」，不能單獨變成最終頭條 IMF。
 
+目前可直接使用的主圖是
+`results/figures/m45_nbody_correction_summary_20260914.png`：左圖展示中央
+模型三個 seeds 的可重複性，右圖展示完整 10-run grid 的初始條件敏感度。
+這張圖的投影片一句話可寫為：「中央模型的 seed 散布小，但不同合理初始條件
+會使 component-star 動力修正落在較寬的範圍，因此報告時呈現範圍而不是單一
+最終 IMF。」
+
 ## 建議問教授的三個問題
 
 1. 在目前科展範圍內，是否應把 10-run screening grid 作為主要動力學證據，
