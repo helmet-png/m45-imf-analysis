@@ -306,3 +306,9 @@ p6_lowmass_v3_s17|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refin
 # 單一行程內依序跑，抓的資料集一致、比較邏輯天然正確，預期一小時內
 # 可以跑完，不需要再冒風險拆分。
 mass_dependent_fbin_v2|inject_massdep_fbin.py|--procs 24 --n-syn 40000 --trials 3 --refines 3,3||false|senior24
+
+# 2026-09-09：診斷「senior24 配不到工」的回報——查證後不是 bug（senior24
+# 註冊、金鑰、Tailscale 都正常，8/31、9/3 都成功配過工），是佇列從 9/2
+# 之後就沒有新工作。這行純粹驗證派工機制現在還正常：kaggle_smoketest.py
+# 幾秒內跑完，不佔用 24 核太久，只是眼見為憑。
+senior24_dispatch_smoketest|kaggle_smoketest.py|||true|senior24
