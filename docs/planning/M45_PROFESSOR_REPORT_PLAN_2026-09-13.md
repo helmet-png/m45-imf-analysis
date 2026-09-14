@@ -69,7 +69,8 @@ Gaia 選擇效應、unresolved system 定義與銀河潮汐對照完整併入。
 1. 將正式 N-body 10-run 結果整理成簡報圖與一頁表，而不是再無目的擴張網格。
 2. 用 processed catalog 完成 component、primary、photometric-system 三種定義的
    bridge，檢查動力修正能否對齊觀測 system MF；這直接回應目前最重要的定義
-   缺口。
+   缺口。2026-09-14 已依 `cloud_queue.txt` 派出 10-run 後處理；尚未回收驗收前
+   不把它說成已完成。
 3. 依教授意見決定是否補一組銀河潮汐對照。它是物理完整度檢查，不應在沒有
    真實 M45 軌道初始條件時直接與無潮汐基準混合。
 

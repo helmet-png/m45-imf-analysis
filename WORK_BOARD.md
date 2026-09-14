@@ -131,6 +131,12 @@ professor_report_preparation：Codex 認領，為下週與教授的線上討論�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| m45_system_definition_bridge | 進行中 | 開始：2026-09-14 | 10 組 PeTar run 的 t = 0、125 Myr processed 多重星目錄；質量範圍 0.30–2.50 M☉；孔徑 11.68 pc | component、primary、system-total 與 photometric-system 的動力學斜率修正 |
+
+m45_system_definition_bridge：Codex 認領，將已完成的 10-run screening grid 做 definition-matched 後處理，不重新積分 N-body。每個 run 必須確認 `petar.data.process` 輸出的 single/binary/triple/quadruple 目錄完整，再同時匯出 t=0 和 t=125 Myr 的 system catalog；任何必要目錄遺失時腳本會停止，不用 component-star 修正冒充 primary/system 修正。工作由 `cloud_queue.txt` 派往 senior24，完成後先驗收 manifest 和 10 份 bridge JSON，才可把結果記入 `results/RESULTS_LOG.md`。耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
 | p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | 合成星數 N = 40,000 顆；重複次數 = 3；精修階數 = 2 階；低質量段冪次 p 的掃描點 5 個 | 低質量段冪次 p 對 α 的關係曲線（斜率 d(alpha)/d(p)） |
 
 p6_lowmass_v3：量低質量段冪次 d(alpha)/d(p) 的斜率，這是目前最大的
