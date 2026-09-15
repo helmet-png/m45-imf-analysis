@@ -698,6 +698,38 @@ docstring 記載的另一個已知限制，時間戳無法分辨是哪個 label 
 有實際連到一台 SSH worker 重現「marker 遺失」情境確認行為，留給下次在
 遠端 worker 上派工時觀察。
 
+### D19 N-body 分析只套用空間孔徑選擇，沒有套用 Gaia 星等相關的召回率（H7，2026-09-05 使用者回報；已用 results/hr23_cmd_recall_by_magnitude.json 驗算確認數字，尚無認領工作）
+
+**問題**：`scripts/nbody_petar/petar_pdmf_analysis.py` 的 `analyze()`
+把 PeTar 模擬快照轉成「可觀測」樣本時，只做空間孔徑篩選（3D 半徑或
+投影半徑 <= aperture_pc），完全沒有套用 Gaia 星等相關的偵測完整度——
+函式自己輸出的 `"limitations"` 清單裡其實已經寫了「Uniform sky
+projections quantify orientation sensitivity but not Gaia selection」，
+只是這個自承的缺口從沒被提升到這份權威清單。實際查驗
+`results/hr23_cmd_recall_by_magnitude.json`（2026-08-22 量的，
+`threshold=0.5`）：`16 <= G < 18` 這個星等區間的 recall 只有
+**0.7963**（432 顆 HR23 外部目錄成員裡，只有 344 顆出現在
+`cmd_members.csv`），對照 `8 <= G < 12` 的 0.950 與 `12 <= G < 16` 的
+0.924，明顯在低質量端（G 越暗對應質量越小）額外流失約 15–20%。
+
+**後果**：N-body 模擬產生的「合成觀測樣本」目前完全不會複製這個星等
+相關的流失——`analyze()` 只有空間選擇，沒有星等選擇，等於假設 PeTar
+快照裡每一顆星只要落在孔徑內就一定會被「觀測到」。這會讓 N-body 預測
+的 PDMF→IMF 修正量系統性低估低質量端的額外損失，跟真實觀測（會受
+星等相關召回率影響）不是同一個可觀測量，比較起來會有偏差，但偏差
+方向與量級目前未知——`petar_m45_grid.csv` 還在校準階段，尚未產生任何
+已引用的 N-body 結果，所以還沒有污染既有主張。
+
+正確修法需要一支類似「observe_snapshot」的轉換：用
+`pipeline.step5_imf.main_sequence_mass_luminosity()`（已有、已在生產
+用的質量-光度反查函式）把粒子質量換算成表觀 G 星等（需要跟前向模型
+一致的 isochrone／距離模數／消光），再對每顆星套用上面量到的星等-召回
+曲線當成接受機率，跟現有的孔徑選擇疊加。這牽涉到跨模組整合（`pipeline`
+用的是真正的 `astropy.table.Table`，`scripts/nbody_petar/` 目前完全
+沒有這個相依套件）與「星等選擇要不要跟空間孔徑選擇疊乘」這個方法學
+決定，沒有把握能一次做對，這裡先誠實記錄查證過的數字與缺口位置，
+不在這個 PR 匆促接上一個沒驗證過的轉換。
+
 ---
 
 ## 附：不需要做的事（避免重複提案）
