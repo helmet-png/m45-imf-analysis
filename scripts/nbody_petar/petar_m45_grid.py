@@ -90,6 +90,12 @@ def render_commands(row: dict) -> str:
         "-B", str(row["n_binaries"]),
         "-P", str(row["profile"]),
         "-R", f"{row['half_mass_radius_pc']:.2f}",
+        # H5／LIMITATIONS.md D19：-f 1 用 mcluster 內建的 Kroupa (2001)
+        # 三段冪次，低質量段（0.08-0.5 Msun）鎖死在官方預設值 -1.3——
+        # 跟本專案前向模型正在懷疑、目前最大單一系統誤差項用的是同一個
+        # 數字，且 mcluster 的 -f 1 沒有 CLI 參數可以覆寫它（README 只說
+        # 要改原始碼或改用 -f 2）。這代表現階段 PeTar 網格沒辦法拿低質量
+        # 段冪次的 N-body 結果去獨立驗證前向模型，見 D19 完整說明。
         "-f", "1",
         "-C", "5",
         "-u", "1",
