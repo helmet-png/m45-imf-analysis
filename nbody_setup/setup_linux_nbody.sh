@@ -141,13 +141,35 @@ clone_pinned SDAR      https://github.com/lwang-astro/SDAR.git     "$SDAR_COMMIT
 clone_pinned PeTar     https://github.com/lwang-astro/PeTar.git    "$PETAR_COMMIT"
 clone_pinned mcluster  https://github.com/lwang-astro/mcluster.git "$MCLUSTER_COMMIT"
 
+# ---------------------------------------------------------------- galpy（可選，銀河潮汐場）
+# **預設不裝**（H14，2026-09-05）：目前還沒有任何 petar_m45_grid.py 產生
+# 的指令會用到 galpy（見 LIMITATIONS.md D19／H3——galactic_tide 欄位目前
+# 被 validate_grid() 直接擋下，還沒真的接上），裝了也用不到，維持這支
+# 腳本原本「不多裝非必要套件」的精神。等 H3 的銀河潮汐場真的接上 PeTar
+# 時，設 INSTALL_GALPY=1 重跑這支腳本即可補裝。
+#
+# **版本一定要鎖在 <=1.10.2**：PeTar 的 galpy 介面官方文件明講「only
+# supports Galpy versions up to 1.10.2」——galpy 1.11.0 修改了
+# PowerSphericalPotentialwCutoff，跟 PeTar 目前對 MWPotential2014 的
+# 參數設定不相容。不鎖版本、讓 pip 裝到最新版，會在 petar.galpy 呼叫
+# MWPotential2014 時給出錯誤或不相容的結果，且不一定會直接報錯，屬於
+# 「跑起來但結果不對」這種最難發現的失敗模式。
+if [ "${INSTALL_GALPY:-0}" = "1" ]; then
+    echo "=== 安裝 galpy（銀河潮汐場，鎖版本 <=1.10.2）==="
+    pip install "galpy<=1.10.2"
+else
+    echo "=== 跳過 galpy（未設 INSTALL_GALPY=1；銀河潮汐場尚未接上 PeTar，見 D19） ==="
+fi
+
 # ---------------------------------------------------------------- 編譯
 # --with-mpi=no：單機多核心用 OpenMP 就夠（編出來的是 petar.omp.*），
 #   不跨機器分散，省掉 MPI 的安裝與設定。
 # --with-interrupt=bse：把 BSE 恆星演化編進去。第 5 步要比較的是
 #   「動力學演化 + 恆星演化」之後的質量函數，少了 BSE 就少一個真實效應。
 # 用上面解析出來的 $CC／$CXX／$FC，不寫死 gcc／g++／gfortran——conda
-# 環境下那些純名稱不存在（見前面檢查段落的說明）。
+# 環境下那些純名稱不存在（見前面檢查段落的說明）。galpy 若已用上面的
+# 區塊裝好，configure 會自動偵測到（pip 裝的話不需要額外傳
+# --with-galpy-prefix）。
 echo "=== 編譯 PeTar（含 BSE 恆星演化）==="
 cd "$NBODY_DIR/PeTar"
 CXX="$CXX" CC="$CC" FC="$FC" ./configure --prefix="$NBODY_DIR/install" \
