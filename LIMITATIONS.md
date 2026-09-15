@@ -598,6 +598,25 @@ RUWE 明顯偏高（2.3–4.1，符合亮端已知聯星/聚星的天文學背�
 屬於架構層級的增修，建議先在 `docs/planning/` 開獨立子計畫評估成本再
 動工，不建議直接動 `pipeline/joint_fit.py`。
 
+**H6 補充（2026-09-05，已直接查證兩篇文獻原文確認數字）**：headline
+`f_bin=0.568±0.022`（`p2_final2_v3`）比獨立文獻高出不少——
+[Liu, Shao & Li (2025), ApJL](https://iopscience.iop.org/article/10.3847/2041-8213/adbe60)
+第 2.1 節明確寫 M45 整體雙星比例 `f_b = 0.34 ± 0.02`；Hobart,
+Baumgardt & Sweet (2026) 用 NAUTILUS 貝氏抽樣對 Alpha Per／Pleiades／
+Praesepe 三個星團量到的現時未解析雙星比例落在 (20.0±0.8)%–(23.8±1.2)%
+之間（H6 引用的 0.200 落在這個範圍內，但沒有查到單獨標示「這就是
+Pleiades」的那一個數字，區間本身已足夠支撐「headline 明顯偏高」這個
+判斷）。差距量級（0.568 vs 0.20–0.34）遠超過任一方的誤差棒，跟本條目
+描述的簡併風險方向一致：`f_bin` 除了吸收真實雙星訊號，也可能在吸收
+CMD 展寬的其他成因（自轉、黑子活動造成的測光散布），而這些成因目前
+完全沒有進模型。**這個數字不能不加說明就拿去當 N-body（路線 C）的
+初始雙星比例使用**——`petar_m45_grid.csv` 目前用的 `binary_system_
+fraction=0.95` 其實是 Converse & Stahler (2010) 的**原初**雙星比例
+（見 `PDMF_TO_IMF_PLAN.md`），跟這裡討論的 `f_bin=0.568` 是不同時期
+（原初 vs 現時觀測）、不同方法（N-body 初始條件擬合 vs CMD 展寬擬合）
+量到的不同量，兩者剛好沒有被搞混，但下次有人想拿 headline 的 0.568
+當任何初始條件輸入前，要先確認清楚是哪一種雙星比例。
+
 ### D14 system MF 與 stellar MF 的區分已在文件與程式碼中明確標註（已完成）
 
 **問題**：`fit_real.py`／`pipeline/joint_fit.py` 曾經沒有在程式碼註解
