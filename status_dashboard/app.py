@@ -760,6 +760,150 @@ def gather_worker_status(probe: bool = True) -> dict:
     return {"workers": workers_out}
 
 
+def _build_label_index() -> dict[str, dict]:
+    """label -> {stage_idx, step_idx, stage_name, step_name, scripts}，
+    靜態對照表（不牽涉即時狀態），只給「時間軸」頁用來把一筆完成紀錄
+    連回它屬於哪個階段/步驟——跟 `classify_label()` 不是同一件事，那個
+    關心「現在狀態」，這個只回答「這個 label 定義在哪」。"""
+    index: dict[str, dict] = {}
+    for si, stage in enumerate(STAGES):
+        for ti, step in enumerate(stage["steps"]):
+            for label in step.get("queue_labels", []):
+                index[label] = {
+                    "stage_idx": si, "step_idx": ti,
+                    "stage_name": stage["name"], "step_name": step["name"],
+                    "scripts": step.get("scripts", []),
+                }
+    return index
+
+
+def gather_timeline() -> list[dict]:
+    """所有「已經跑完」的 queue_label，依完成時間新到舊排序——回答
+    使用者「最近跑過了哪些」，是跨越四大分類的時間切面，跟依步驟看／
+    依雲端服務看是同一批來源資料的第三種切法（2026-09-02 使用者要求）。
+
+    刻意直接讀 `cloud_done`／`local_done` 的完整內容，不像 `gather_status()`
+    只看 `stage_map.py` 已經索引過的 label——時間軸不該因為索引沒跟上
+    就漏掉最近才跑完的工作，一筆記錄查不到對應的階段/步驟時，畫面上
+    照樣顯示 label 本身，只是沒有可點的程式連結。
+
+    `push_failed`／`stalled_giveup`／`preflight_fail` 這幾種不算「真的
+    跑完」，跟 `classify_label()` 用同一個判準排除；同一個 label 雲端
+    跟本機都有紀錄時，雲端優先（`classify_label()` 的既有優先序）。"""
+    index = _build_label_index()
+    cloud_done = parse_cloud_done()
+    local_done = parse_local_done()
+
+    entries = []
+    for label, rec in cloud_done.items():
+        if rec["status"] == "push_failed":
+            continue
+        entries.append({"label": label, "source": "雲端", **rec,
+                        **index.get(label, {})})
+    for label, rec in local_done.items():
+        if label in cloud_done:
+            continue
+        if rec["status"] in ("stalled_giveup", "preflight_fail"):
+            continue
+        entries.append({"label": label, "source": "本機（已停用）", **rec,
+                        **index.get(label, {})})
+
+    entries.sort(key=lambda e: e.get("when", ""), reverse=True)
+    return entries
+
+
+# 2026-09-02 使用者要求「時間軸」頁一併顯示「現在的進度規劃是如何」，
+# 直接複用 WORK_BOARD.md（既有的協作規劃文件，見 CONTRIBUTING.md
+# 零之四），不另外開一份要手動同步的規劃資料——WORK_BOARD.md 本來就是
+# 「大家共同維護的當前工作清單」，另開一份等於製造第二個要保持同步的
+# 來源。格式（見該檔案「規則」一節）固定是：一列表頭
+# `| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |`、
+# 一列 `|---|`、一列真正的資料，後面接一段散文說明，直到下一個表頭或
+# `## ` 章節結束。這裡只解析「## 待辦事項」這個章節，不動「現況說明」
+# 那段（那是自由格式的基礎設施說明，不是任務表）。
+_WORK_BOARD_SECTION = "## 待辦事項"
+
+
+def parse_work_board() -> list[dict]:
+    """回傳待辦事項清單，每筆 {name, status, date, input, output, note,
+    line}——`line` 是表頭列在檔案裡的行號（1-based），給 GitHub 連結
+    定位用（連不到 stage_map.py 裡任何步驟的任務，退而求其次連到
+    WORK_BOARD.md 原文那幾行，維持「一定點得進去」）。檔案不存在或格式
+    跟預期不符時回傳空清單，不讓這個附加區塊拖垮整頁。"""
+    path = REPO_ROOT / "WORK_BOARD.md"
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    try:
+        start = next(i for i, l in enumerate(lines) if l.strip() == _WORK_BOARD_SECTION)
+    except StopIteration:
+        return []
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith("## "):
+            end = i
+            break
+    section = lines[start + 1:end]
+
+    def _is_header(line: str) -> bool:
+        return line.startswith("| 任務名稱 |")
+
+    def _is_sep(line: str) -> bool:
+        return line.startswith("|---") or line.startswith("| ---")
+
+    tasks: list[dict] = []
+    i = 0
+    while i < len(section):
+        if _is_header(section[i]):
+            header_line = i  # 記這組表頭第一次出現的位置，給 GitHub 連結用
+            j = i + 1
+            if j < len(section) and _is_sep(section[j]):
+                j += 1
+            # WORK_BOARD.md 裡有幾處是表頭＋分隔線後面又緊接著另一組
+            # 表頭＋分隔線（複製貼上留下的空白樣板），一路跳過找到真正
+            # 的資料列，不要把表頭本身誤判成一筆任務。
+            while j < len(section) and _is_header(section[j]):
+                j += 1
+                if j < len(section) and _is_sep(section[j]):
+                    j += 1
+            if (j < len(section) and section[j].startswith("|")
+                    and not _is_header(section[j])):
+                cells = [c.strip() for c in section[j].strip().strip("|").split("|")]
+                if len(cells) >= 5 and cells[0]:
+                    note_lines = []
+                    k = j + 1
+                    while k < len(section) and not _is_header(section[k]):
+                        note_lines.append(section[k])
+                        k += 1
+                    tasks.append({
+                        "name": cells[0], "status": cells[1], "date": cells[2],
+                        "input": cells[3], "output": cells[4],
+                        "note": "\n".join(note_lines).strip(),
+                        "line": start + 1 + header_line + 1,  # 表頭列本身，1-based
+                    })
+                    i = k
+                    continue
+        i += 1
+    return tasks
+
+
+def _match_task_link(task_name: str, index: dict[str, dict]) -> str | None:
+    """把 WORK_BOARD.md 的任務名稱連回主控板「依步驟看」頁對應的步驟
+    （如果找得到），否則退回 WORK_BOARD.md 原文的那幾行——「差別在於
+    它真的是可以點進去的」（使用者原話），任何一筆任務都要有連結，
+    不能因為對不到 stage_map.py 就變成純文字。任務名稱格式固定是
+    `label（LIMITATIONS.md 條目，可省略）`，先去掉括號部分再比對。"""
+    candidate = re.sub(r"[（(].*$", "", task_name).strip()
+    if candidate in index:
+        info = index[candidate]
+        return f"/#step-{info['stage_idx']}-{info['step_idx']}"
+    for si, stage in enumerate(STAGES):
+        for ti, step in enumerate(stage["steps"]):
+            if candidate and candidate in step["name"]:
+                return f"/#step-{si}-{ti}"
+    return None
+
+
 # ==================================================================
 # HTML render（純 HTML + <details>/<summary> 折疊，不用 JS）
 # ==================================================================
@@ -1172,6 +1316,7 @@ def render_html(status: dict, sync: dict | None = None) -> str:
 右邊全部內容一次展開，不用逐層點開；左右欄寬度可以拖曳中間的分隔線
 調整）</p>
 {_sync_banner(sync or {})}
+{_search_box_html()}
 
 <div class="summary">
   <div class="pill {'alive' if status['alive'] else 'dead'}">
@@ -1199,9 +1344,11 @@ def render_html(status: dict, sync: dict | None = None) -> str:
 
     for si, stage in enumerate(STAGES):
         stage_id = f"stage-{si}"
-        nav_parts.append(f'<a class="tree-stage" href="#{stage_id}">'
+        nav_parts.append(f'<a class="tree-stage" href="#{stage_id}" '
+                         f'data-nav-for="{stage_id}">'
                          f'{html.escape(stage["name"])}</a><ul>')
-        content_parts.append(f'<section class="stage-block" id="{stage_id}">'
+        content_parts.append(f'<section class="stage-block" id="{stage_id}" '
+                             f'data-search-group="{stage_id}">'
                              f'<h2>{html.escape(stage["name"])}</h2>')
 
         for ti, step in enumerate(stage["steps"]):
@@ -1209,10 +1356,12 @@ def render_html(status: dict, sync: dict | None = None) -> str:
             badge = _step_summary_badge(step, label_status)
             badge_html = (f'<span class="badge {badge[0]} tree-badge">{badge[1]}</span>'
                          if badge else "")
-            nav_parts.append(f'<li><a href="#{step_id}">'
+            nav_parts.append(f'<li data-nav-for="{step_id}"><a href="#{step_id}">'
                              f'{html.escape(step["name"])}{badge_html}</a></li>')
 
-            content_parts.append(f'<article class="step-block" id="{step_id}">'
+            content_parts.append(f'<article class="step-block" id="{step_id}" '
+                                 f'data-search-item="{step_id}" '
+                                 f'data-search-parent="{stage_id}">'
                                  f'<h3>{html.escape(step["name"])}</h3>')
             if step.get("note"):
                 content_parts.append(f'<p class="note">{html.escape(step["note"])}</p>')
@@ -1266,9 +1415,11 @@ def render_html(status: dict, sync: dict | None = None) -> str:
     # 東西的共同點只有「還沒分類」，硬塞進某個階段反而是另一種誤導。
     unindexed = discover_unindexed_scripts()
     if unindexed:
-        nav_parts.append('<a class="tree-stage" href="#stage-unindexed">'
+        nav_parts.append('<a class="tree-stage" href="#stage-unindexed" '
+                         'data-nav-for="stage-unindexed">'
                          f'未分類程式（{len(unindexed)}）</a><ul>')
-        content_parts.append('<section class="stage-block" id="stage-unindexed">'
+        content_parts.append('<section class="stage-block" id="stage-unindexed" '
+                             'data-search-group="stage-unindexed">'
                              '<h2>未分類程式</h2>'
                              '<p class="note">這些 .py 檔已經在 GitHub 上，但還沒有人'
                              '把它們歸進上面哪個階段/步驟——多半是新腳本、或現有'
@@ -1277,10 +1428,12 @@ def render_html(status: dict, sync: dict | None = None) -> str:
                              '對應步驟的 <code>scripts</code> 清單即可（見'
                              ' CONTRIBUTING.md 第二節）。</p>')
         for script in unindexed:
-            nav_parts.append(f'<li><a href="#{html.escape(_slugify(script))}">'
+            slug = html.escape(_slugify(script))
+            nav_parts.append(f'<li data-nav-for="{slug}"><a href="#{slug}">'
                              f'<code>{html.escape(script)}</code></a></li>')
             content_parts.append(
-                f'<article class="step-block" id="{html.escape(_slugify(script))}">'
+                f'<article class="step-block" id="{slug}" '
+                f'data-search-item="{slug}" data-search-parent="stage-unindexed">'
                 + _render_script_block(script) + "</article>")
         nav_parts.append("</ul>")
         content_parts.append("</section>")
@@ -1296,6 +1449,7 @@ def render_html(status: dict, sync: dict | None = None) -> str:
 
     parts.append(_RESIZE_SCRIPT)
     parts.append(_PROBE_SCRIPT)
+    parts.append(_SEARCH_SCRIPT)
     parts.append("</body></html>")
     return "".join(parts)
 
@@ -1365,7 +1519,61 @@ _PROBE_SCRIPT = """
 
 
 _NAV = ('<nav class="nav"><a href="/">依步驟看</a>'
-       '<a href="/workers">依雲端服務看</a></nav>')
+       '<a href="/workers">依雲端服務看</a>'
+       '<a href="/timeline">時間軸</a></nav>')
+
+
+def _search_box_html() -> str:
+    """搜尋欄（2026-09-02 使用者要求，打程式名稱或關鍵字如「N-body」
+    「質量分層」就能直接跳到相關的程式）——三個頁面共用同一顆輸入框
+    跟同一套 JS（見 `_SEARCH_SCRIPT`），不各自重寫一份過濾邏輯。純
+    前端字串比對（`innerText` 含不含關鍵字），不用打任何請求，跟主控板
+    「零外部依賴、能離線用」的設計原則一致。"""
+    return ('<p class="search-box"><input type="search" id="dash-search" '
+           'placeholder="搜尋程式名稱或關鍵字（例如「N-body」「質量分層」）…" '
+           'autocomplete="off"></p>')
+
+
+# 三個頁面共用：凡是想被搜尋到的區塊都標 data-search-item（比對對象是
+# 這個元素的 innerText），需要「子項全部被濾掉就跟著收起來」的容器
+# （階段區塊、左側導覽的 stage）標 data-search-group。導覽列（左側樹狀
+# 導覽、或任何「這個內容區塊對應哪個導覽項」的元素）標
+# data-nav-for="<跟內容區塊一樣的 id>"，內容顯／隱時導覽項跟著同步——
+# 「怎麼過濾」只在這裡維護一份，三個頁面的 render 函式只負責把這些
+# data-* 屬性標對，不各自重寫一份 JS。用 class 切換而不是原生 hidden
+# 屬性：`.tree-stage { display: block }` 這類既有樣式的優先權（作者
+# 樣式）本來就高於瀏覽器內建的 `[hidden]{display:none}`（UA 樣式），
+# 靠 hidden 屬性在這裡實際上不會生效。
+_SEARCH_SCRIPT = """
+<script>
+(function () {
+  var input = document.getElementById("dash-search");
+  if (!input) return;
+  var items = document.querySelectorAll("[data-search-item]");
+  var groups = document.querySelectorAll("[data-search-group]");
+  function setHidden(el, hide) { el.classList.toggle("dash-hidden", hide); }
+  function apply() {
+    var q = input.value.trim().toLowerCase();
+    items.forEach(function (el) {
+      var show = !q || el.innerText.toLowerCase().indexOf(q) !== -1;
+      setHidden(el, !show);
+      var id = el.getAttribute("data-search-item");
+      var nav = id && document.querySelector('[data-nav-for="' + id + '"]');
+      if (nav) setHidden(nav, !show);
+    });
+    groups.forEach(function (g) {
+      var id = g.getAttribute("data-search-group");
+      var any = document.querySelector(
+        '[data-search-item][data-search-parent="' + id + '"]:not(.dash-hidden)') !== null;
+      setHidden(g, !any);
+      var nav = document.querySelector('[data-nav-for="' + id + '"]');
+      if (nav) setHidden(nav, !any);
+    });
+  }
+  input.addEventListener("input", apply);
+})();
+</script>
+"""
 
 
 def _worker_label_html(w: dict) -> str:
@@ -1447,6 +1655,7 @@ def render_workers_html(status: dict) -> str:
 <p class="sub">依雲端服務看——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
 （每個 worker 即時探測：有排工作的查工作狀態，SSH 閒置機器單純
 ping 一下確認連得上；Kaggle 帳號閒置時沒有常駐機器可以探測）</p>
+{_search_box_html()}
 
 <div class="summary">
   <div class="pill {'live' if running_n else ''}">正在跑 {running_n}</div>
@@ -1461,12 +1670,14 @@ ping 一下確認連得上；Kaggle 帳號閒置時沒有常駐機器可以探�
 
     for w in workers:
         parts.append(
-            f'<div class="worker-row" data-worker="{html.escape(w["name"])}">'
+            f'<div class="worker-row" data-worker="{html.escape(w["name"])}" '
+            f'data-search-item="worker-{html.escape(w["name"])}">'
             f'<strong>{html.escape(w["name"])}</strong>'
             f'<span class="kind">（{html.escape(w["kind"])}）</span>'
             f'<span class="worker-badge-slot">{_worker_badge(w)}</span></div>')
 
     parts.append(_WORKERS_PROBE_SCRIPT)
+    parts.append(_SEARCH_SCRIPT)
     parts.append("</body></html>")
     return "".join(parts)
 
@@ -1492,9 +1703,134 @@ _WORKERS_PROBE_SCRIPT = """
 """
 
 
+def _task_badge_cls(status: str) -> str:
+    if "進行中" in status:
+        return "live"
+    if "尚未" in status:
+        return "pending"
+    return "unknown"
+
+
+def _task_card_html(task: dict, idx: int, index: dict[str, dict]) -> str:
+    """WORK_BOARD.md 一筆待辦任務，卡片形式——跟 WORK_BOARD.md 本身格式
+    類似（任務名稱／狀態／日期／輸入／輸出／說明），但（使用者原話）
+    「差別在於它真的是可以點進去的」：`_match_task_link()` 找得到對應
+    步驟就連去「依步驟看」頁對應段落，找不到就退回 WORK_BOARD.md 原文
+    那幾行，任何一筆都保證點得進去。"""
+    cls = _task_badge_cls(task["status"])
+    link = _match_task_link(task["name"], index) or _doc_url("WORK_BOARD.md", task["line"])
+    note_html = "".join(f'<p class="doc-p">{html.escape(p)}</p>'
+                        for p in task["note"].split("\n\n") if p.strip())
+    return (
+        f'<div class="task-card" data-search-item="task-{idx}">'
+        f'<div class="task-head"><a class="script-link" href="{html.escape(link)}">'
+        f'<strong>{html.escape(task["name"])}</strong> ↗</a>'
+        f'<span class="badge {cls}">{html.escape(task["status"])}</span></div>'
+        f'<p class="detail">{html.escape(task["date"])}</p>'
+        f'<p class="task-io"><b>輸入：</b>{html.escape(task["input"])}<br>'
+        f'<b>輸出：</b>{html.escape(task["output"])}</p>'
+        + (f'<details class="doc-details"><summary>說明</summary>'
+           f'<div class="doc">{note_html}</div></details>' if note_html else "")
+        + '</div>')
+
+
+def _timeline_row_html(entry: dict, idx: int) -> str:
+    """時間軸一列：一筆已完成的 queue_label。找得到對應步驟就連回
+    「依步驟看」頁的段落＋列出該步驟的程式連結；找不到（label 還沒補進
+    stage_map.py）就只顯示 label 本身，不硬掰一個連結。"""
+    ok = entry.get("status") == "ok"
+    cls, text = ("ok", "已完成") if ok else ("fail", f"失敗（{entry.get('status')}）")
+    if "stage_idx" in entry:
+        step_link = (f'<a href="/#step-{entry["stage_idx"]}-{entry["step_idx"]}">'
+                    f'{html.escape(entry["stage_name"])} ／ '
+                    f'{html.escape(entry["step_name"])}</a>')
+        script_links = "".join(
+            f' <a class="script-link" href="{html.escape(_doc_url(s))}">'
+            f'<code>{html.escape(s)}</code> ↗</a>'
+            for s in entry.get("scripts", [])[:3])
+    else:
+        step_link = '<span class="note">（尚未編入 stage_map.py 索引）</span>'
+        script_links = ""
+    detail = (f"{entry.get('secs', '?')}　worker={entry.get('worker', '?')}"
+             f"　來源={entry['source']}")
+    return (
+        f'<div class="timeline-row" data-search-item="timeline-{idx}">'
+        f'<span class="tl-when">{html.escape(entry.get("when", ""))}</span>'
+        f'<span class="badge {cls}">{text}</span>'
+        f'<code>{html.escape(entry["label"])}</code> '
+        f'{step_link}{script_links}'
+        f'<p class="detail">{html.escape(detail)}</p></div>')
+
+
+def render_timeline_html() -> str:
+    """第三種切法：不分階段/步驟，只看「時間」——最近跑完了哪些工作、
+    現在的待辦規劃是什麼（2026-09-02 使用者要求：新的第三類要能從時間
+    看，且要跟 WORK_BOARD.md 同步、但點得進去，跟原始 WORK_BOARD.md
+    純文字不同）。沒有即時探測（純粹是歷史紀錄＋靜態規劃文件，不牽涉
+    任何網路呼叫），秒開，不需要另外的 probe.json。"""
+    entries = gather_timeline()
+    tasks = parse_work_board()
+    index = _build_label_index()
+
+    done_ok = sum(1 for e in entries if e.get("status") == "ok")
+    done_fail = len(entries) - done_ok
+
+    parts = [f"""<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<title>M45 IMF 專案主控板 — 時間軸</title>
+<style>
+{_CSS}
+</style></head><body>
+<h1>M45 IMF 專案主控板</h1>
+{_NAV}
+<p class="sub">時間軸——整理時間：{datetime.now():%Y-%m-%d %H:%M:%S}
+（上半部「進度規劃」同步自 WORK_BOARD.md 的待辦事項；下半部「執行
+時間軸」是所有已完成工作依完成時間新到舊排序，來源是
+logs/cloud_queue_done.txt／queue_done.txt 的原始紀錄——跟依步驟看／
+依雲端服務看是同一批底層資料，只是換一種時間切面看）</p>
+{_search_box_html()}
+
+<div class="summary">
+  <div class="pill">待辦任務 {len(tasks)}</div>
+  <div class="pill">已完成 {done_ok}</div>
+  <div class="pill {'warn' if done_fail else ''}">失敗 {done_fail}</div>
+</div>
+
+<h2>目前的進度規劃</h2>
+<p class="note">完整規劃見 <a href="{html.escape(_doc_url('WORK_BOARD.md'))}">WORK_BOARD.md</a>
+（含算力池現況、未來規劃與分工建議等，這裡只列「待辦事項」表格的部分）。</p>
+"""]
+
+    if not tasks:
+        parts.append('<p class="note">WORK_BOARD.md 目前沒有待辦事項'
+                     '（或格式跟預期不符，解析不出來）。</p>')
+    for i, task in enumerate(tasks):
+        parts.append(_task_card_html(task, i, index))
+
+    parts.append('<h2>執行時間軸</h2>')
+    if not entries:
+        parts.append('<p class="note">目前沒有任何完成紀錄。</p>')
+    for i, entry in enumerate(entries):
+        parts.append(_timeline_row_html(entry, i))
+
+    parts.append(_SEARCH_SCRIPT)
+    parts.append("</body></html>")
+    return "".join(parts)
+
+
 _CSS = """
 .nav { margin: 0.3em 0 1em; font-size: 0.9em; }
 .nav a { margin-right: 1em; }
+.dash-hidden { display: none !important; }
+.search-box input { width: 100%; max-width: 420px; padding: 0.4em 0.7em;
+                    font-size: 0.95em; border: 1px solid #999; border-radius: 4px;
+                    background: transparent; color: inherit; }
+.timeline-row { border-left: 2px solid #ccc; margin: 0.6em 0; padding: 0.2em 0 0.2em 0.9em; }
+.tl-when { font-size: 0.82em; color: #777; margin-right: 0.6em; font-family: Consolas, monospace; }
+.task-card { border: 1px solid #999; border-radius: 4px; padding: 0.6em 0.9em;
+            margin-bottom: 0.6em; }
+.task-head { display: flex; align-items: baseline; gap: 0.6em; }
+.task-io { font-size: 0.85em; margin: 0.4em 0; line-height: 1.6; }
 .worker-row { border: 1px solid #999; border-radius: 4px; padding: 0.6em 0.9em;
              margin-bottom: 0.6em; }
 .worker-row .kind { color: #777; font-size: 0.85em; margin-right: 0.6em; }
@@ -1659,6 +1995,7 @@ def _workers_probe_json() -> str:
 _ROUTES = {
     "/": lambda sync: render_html(gather_status(probe=False), sync),
     "/workers": lambda sync: render_workers_html(gather_worker_status(probe=False)),
+    "/timeline": lambda sync: render_timeline_html(),
     "/probe-status.json": lambda sync: _probe_status_json(),
     "/workers-probe.json": lambda sync: _workers_probe_json(),
 }

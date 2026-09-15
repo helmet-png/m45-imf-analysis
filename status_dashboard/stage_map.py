@@ -625,4 +625,178 @@ STAGES = [
             },
         ],
     },
+    # ================================================================
+    # 2026-09-02 使用者要求整理「未分類程式」（discover_unindexed_scripts()
+    # 找到的 79 支）——以下三大類是新開的，不是原本科展解說用的四階段。
+    # 「算力調度工具」「雜項」兩類是逐檔核對過用途分類的，信心較高；
+    # 「已完成的專項診斷」底下的細分（HR23／亮端污染／BP15…）是**依檔名
+    # 主題歸類，沒有逐檔重讀內容核對**——這批多半是 docs/planning/ 底下
+    # 某篇已結案調查文件的配套腳本（檔名常常能直接對到文件名），分類
+    # 錯了就把路徑搬到正確的子分類即可，不影響資料正確性（腳本本身
+    # 內容沒有被這裡的分類改動）。
+    # ================================================================
+    {
+        "name": "算力調度工具（Kaggle／GCP／派工器核心）",
+        "steps": [
+            {
+                "name": "Kaggle 派工",
+                "scripts": [
+                    "kaggle_accounts.py",
+                    "kaggle_queue.py",
+                    "kaggle_smoketest.py",
+                    "kaggle_sync.py",
+                ],
+                "note": "Kaggle 帳號登記、派工、連線自我檢測。",
+            },
+            {
+                "name": "GCP 資源管理",
+                "scripts": ["gcp_vm_lifecycle.py", "iap_tunnel_manager.py"],
+                "note": "GCP VM 自動開關機（避免燒光免費額度）、IAP tunnel 常駐維護。",
+            },
+            {
+                "name": "派工器核心（cloud_queue／SSH）",
+                "scripts": [
+                    "cloud_queue.py", "run_queue.py",
+                    "ssh_sync.py", "ssh_workers.py",
+                ],
+                "note": ("cloud_queue.txt 讀寫、鎖檔、SSH worker 連線與結果回收，"
+                        "是本主控板自己 import 的模組本身。run_queue.py 是本機"
+                        "序列佇列，2026-08-23 起已停用但保留（見 WORK_BOARD.md"
+                        "「現況說明」）。"),
+            },
+        ],
+    },
+    {
+        "name": "雜項（畫圖／文獻同步／CI 小工具）",
+        "steps": [
+            {
+                "name": "雜項",
+                "scripts": [
+                    "scripts/plotting/plot_step3.py",
+                    "scripts/plotting/plot_step45.py",
+                    "scripts/plotting/plots.py",
+                    "scripts/tools/zotero_literature_sync.py",
+                    "scripts/tools/zotero_sync.py",
+                    "scripts/tools/checkpoint.py",
+                    "scripts/tools/check_append_only.py",
+                    "scripts/tools/check_stage_map_paths.py",
+                    "scripts/tools/preflight.py",
+                    "scripts/tools/concat_p2final_v3.py",
+                    "scripts/tools/concat_radial_final.py",
+                ],
+                "note": ("沒有獨立分析結論、純工具性質的程式：畫圖、Zotero 文獻"
+                        "同步、CI 檢查（含這個主控板自己的 stage_map 路徑檢查）、"
+                        "結果檔案合併等。"),
+            },
+        ],
+    },
+    {
+        "name": "已完成的專項診斷（closed investigations，見 docs/planning/）",
+        "steps": [
+            {
+                "name": "HR23 文獻光度遺失調查",
+                "scripts": [
+                    "scripts/data_prep/fetch_hr23_lost_photometry.py",
+                    "scripts/diagnostics/check_hr23_cmd_recall.py",
+                    "scripts/diagnostics/crosscheck_hr23_bright_stars.py",
+                    "scripts/diagnostics/replay_hr23_lost_quality_cuts.py",
+                    "scripts/diagnostics/sweep_hr23_lost_quality_thresholds.py",
+                    "scripts/diagnostics/trace_hr23_recall_stages.py",
+                ],
+            },
+            {
+                "name": "亮端／巨星／白矮星污染排除",
+                "scripts": [
+                    "scripts/diagnostics/diagnose_m45_bright_end_loss.py",
+                    "scripts/diagnostics/check_bright_outlier_kinematics.py",
+                    "scripts/diagnostics/check_giant_subgiant_contamination.py",
+                    "scripts/diagnostics/check_wd_exclusion_impact.py",
+                    "scripts/diagnostics/check_white_dwarf_contamination.py",
+                ],
+            },
+            {
+                "name": "BP15／BP20 誤差門檻候選星分析",
+                "scripts": [
+                    "scripts/diagnostics/build_bp15_selection_smoke.py",
+                    "scripts/diagnostics/check_bp15_candidate_cmd_sides.py",
+                    "scripts/diagnostics/compare_bp15_candidate_color_errors.py",
+                    "scripts/diagnostics/map_bp15_candidates_to_mass.py",
+                    "scripts/diagnostics/quantify_bp15_sample_scale.py",
+                    "scripts/diagnostics/summarize_bp15_forward_smoke.py",
+                ],
+            },
+            {
+                "name": "多星團驗證延伸診斷（NGC3532／Praesepe）",
+                "scripts": [
+                    "scripts/diagnostics/diagnose_ngc3532_selection_colour.py",
+                    "scripts/diagnostics/diagnose_praesepe_cmd_residual.py",
+                    "scripts/multicluster/final_imf.py",
+                ],
+            },
+            {
+                "name": "消光／選擇函數／測光交叉校正",
+                "scripts": [
+                    "scripts/diagnostics/assess_stickout_fraction.py",
+                    "scripts/diagnostics/check_massrange_crosscal.py",
+                    "scripts/diagnostics/check_selection_color_residual.py",
+                    "scripts/diagnostics/check_c20_disagree_set.py",
+                    "scripts/data_prep/build_selection.py",
+                    "pipeline/selection.py",
+                ],
+            },
+            {
+                "name": "雙星／IMF 統計方法檢查",
+                "scripts": [
+                    "scripts/diagnostics/check_poisson_vs_multinomial.py",
+                    "scripts/diagnostics/check_rv_binary_fraction.py",
+                    "scripts/diagnostics/verify_binary_detection.py",
+                    "scripts/diagnostics/system_vs_stellar_mf.py",
+                    "scripts/diagnostics/inject_mass_dependent_fbin.py",
+                    "scripts/diagnostics/summarize_mass_dependent_fbin.py",
+                    "scripts/diagnostics/analyze_lowmass.py",
+                    "scripts/diagnostics/finalize_lowmass_recovery.py",
+                    "scripts/diagnostics/dynamics_estimate.py",
+                    "scripts/diagnostics/selection_probe.py",
+                    "scripts/diagnostics/profile_test.py",
+                    "scripts/diagnostics/finalize_limepy_radial_crosscheck.py",
+                    "scripts/diagnostics/check_imf_form.py",
+                    "profile_outlierfrac.py",
+                    "measure_overconfidence.py",
+                    "injection_recovery.py",
+                    "scripts/drivers/run_joint.py",
+                ],
+            },
+            {
+                "name": "Gaia 資料補充／擴充抓取",
+                "scripts": [
+                    "scripts/data_prep/gaia_astrophys.py",
+                    "scripts/data_prep/gaia_radial_velocity.py",
+                    "scripts/data_prep/fetch_m45_field_public_tap.py",
+                    "scripts/data_prep/build_bhac_grid.py",
+                    "scripts/data_prep/build_dr2_grid.py",
+                    "scripts/data_prep/build_mist_grid.py",
+                ],
+            },
+            {
+                "name": "N-body／PDMF 輔助工具",
+                "scripts": [
+                    "nbody_setup/analyze_alpha_r.py",
+                    "scripts/nbody_petar/pdmf_limepy_bootstrap.py",
+                    "scripts/nbody_petar/pdmf_limepy_smoke.py",
+                    "scripts/nbody_petar/pdmf_system_definition_bridge.py",
+                    "scripts/nbody_petar/petar_m45_grid.py",
+                    "scripts/nbody_petar/petar_system_catalog.py",
+                ],
+            },
+            {
+                "name": "pipeline 共用模組",
+                "scripts": [
+                    "pipeline/config.py",
+                    "pipeline/net.py",
+                    "pipeline/table_compat.py",
+                ],
+                "note": "傳統法／前向模型／PDMF→IMF 共用的底層模組，不屬於任一單一步驟。",
+            },
+        ],
+    },
 ]
