@@ -16,6 +16,31 @@ The script reports four compatible mass definitions:
 * photometric_beta_N: the single-star-equivalent mass obtained from
   L proportional to M**N, a transparent sensitivity test for traditional
   single-star mass assignment.
+
+H4.3 (2026-09-05, not implemented here -- documented so it isn't lost):
+``collapse_systems()`` merges every component sharing a ``system_id`` into
+one "unresolved system" regardless of how far apart the components
+currently are.  Real Gaia cannot resolve pairs closer than roughly
+0.4-1 arcsec; at M45's distance (136 pc) that is about 55-135 AU
+projected separation (angular_arcsec = separation_AU / distance_pc, since
+1 AU at 1 pc subtends 1 arcsec by the parsec's own definition).  A bound
+pair wider than that would actually show up as two separate Gaia sources,
+not one -- so this function's "system_total"/"primary" definitions
+currently over-merge relative to what a real observation would produce.
+Implementing the fix correctly needs to decide what happens to
+multiplicity > 2 systems (which of several possible pairs stays merged
+is not well-defined without picking a rule), so it is deliberately left
+as a documented gap rather than a partial, unverified implementation.
+Component-to-component separation itself is already available from
+``pos`` without extra assumptions (Euclidean distance between the two
+positions, in the same length unit as ``pos``); only the angular-limit
+conversion needs the 136 pc distance, and only if a future implementation
+wants to work at the pair level rather than in AU/pc directly.
+
+H4.4 (aperture reconciliation): ``--aperture-pc`` default is 11.70 pc,
+the real ``data/cmd_members.csv`` sample's outermost member (4.9277 deg
+at 136 pc) -- see ``petar_pdmf_analysis.py``'s module docstring for the
+same reconciliation against the previously used 12.09 pc.
 """
 from __future__ import annotations
 
@@ -248,7 +273,7 @@ def synthetic_catalogs(seed=20260813, n_systems=8000):
 def run_self_test(output: Path) -> dict:
     initial, final = synthetic_catalogs()
     summary = analyze_definition_bridge(
-        initial, final, 0.3, 2.5, 12.09, 32, (2.0, 3.0, 4.0)
+        initial, final, 0.3, 2.5, 11.70, 32, (2.0, 3.0, 4.0)
     )
     definitions = summary["definitions"]
     checks = {
@@ -280,7 +305,7 @@ def main():
     parser.add_argument("--final", type=Path)
     parser.add_argument("--mass-min", type=float, default=0.3)
     parser.add_argument("--mass-max", type=float, default=2.5)
-    parser.add_argument("--aperture-pc", type=float, default=12.09)
+    parser.add_argument("--aperture-pc", type=float, default=11.70)
     parser.add_argument("--n-projections", type=int, default=32)
     parser.add_argument("--betas", type=float, nargs="+", default=(2.0, 3.0, 4.0))
     parser.add_argument(

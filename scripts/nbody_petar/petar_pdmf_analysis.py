@@ -14,6 +14,19 @@ NPZ files must contain ``id``, ``mass`` and ``pos`` (N x 3); ``time_myr`` is
 optional.  Results here are component-star mass functions.  Do not add the
 result to a separately inferred unresolved-binary correction unless the two
 selection definitions have explicitly been reconciled.
+
+H4.4 (2026-09-05, aperture reconciliation): the ``12.09`` pc constant used
+below (and in ``pdmf_system_definition_bridge.py``'s ``--aperture-pc``
+default) predates a direct measurement.  Computing the great-circle
+distance for all 1,078 real members of ``data/cmd_members.csv`` (same
+formula as ``run_pipeline.py`` step 5 and ``PDMF_TO_IMF_PLAN.md`` section 2,
+M45 distance = 136 pc) gives a maximum radius of 4.9277 deg = 11.70 pc, not
+12.09 or the 11.87 pc quoted in ``PDMF_TO_IMF_PLAN.md`` (which assumed an
+exact 5.00 deg cone rather than the actual outermost member).  11.70 pc is
+now the authoritative "matches the real sample" aperture; 12.09 pc is kept
+only where changing it would silently reshuffle an existing default's
+position in a list (see ``DEFAULT_RADII_PC`` below) -- new code should use
+11.70, not 12.09.
 """
 from __future__ import annotations
 
@@ -29,7 +42,9 @@ import numpy as np
 
 
 HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
-DEFAULT_RADII_PC = np.array([2.0, 4.0, 8.0, 12.09, 20.0])
+# 11.70 pc = the real sample's outermost member (see module docstring,
+# H4.4); replaces the earlier unmeasured 12.09 pc.
+DEFAULT_RADII_PC = np.array([2.0, 4.0, 8.0, 11.70, 20.0])
 
 
 @dataclass(frozen=True)
@@ -468,7 +483,8 @@ def analyze(initial, final, mass_min, mass_max, radii_pc, n_projections=32):
     initial_alpha = rows[0]["alpha"]
     survivor_birth_alpha = rows[1]["alpha"]
     survivor_current_alpha = rows[2]["alpha"]
-    target_radius = float(radii_pc[np.argmin(np.abs(radii_pc - 12.09))])
+    # 11.70 pc = the real sample's outermost member (H4.4, module docstring).
+    target_radius = float(radii_pc[np.argmin(np.abs(radii_pc - 11.70))])
     target_rows = [
         row
         for row in rows
@@ -628,7 +644,7 @@ def run_self_test(output_prefix: Path):
         final,
         0.30,
         2.50,
-        np.array([2.0, 4.0, 8.0, 12.09, 20.0]),
+        DEFAULT_RADII_PC,
         n_projections=32,
     )
     delta = summary["delta_alpha"]
