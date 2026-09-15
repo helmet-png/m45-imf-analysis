@@ -1,5 +1,32 @@
 #!/usr/bin/env python
-"""Validate the M45 PeTar screening grid and render reproducible commands."""
+"""Validate the M45 PeTar screening grid and render reproducible commands.
+
+H12（2026-09-05，參數標準化，查證 mcluster 官方 README 確認）：
+
+- `mcluster_S` is mcluster's ``-S`` flag: "degree of mass segregation
+  (0.0-1.0, 0.0=no segregation)" -- the SAME physical quantity as
+  Converse & Stahler (2010) Table 1's segregation parameter beta
+  (0.5 +/- 0.3), not a fractal dimension. mcluster's fractal dimension
+  is a *different* flag, ``-D`` (1.6-3.0, 3.0=no fractalization), which
+  this grid does not expose as a column and never passes -- do not
+  confuse the two when reading mcluster's own docs, the flag letters
+  are easy to mix up.
+- ``profile`` (mcluster's ``-P``): 0=Plummer, 2=Subr et al. (2007)
+  mass-segregated profile (this grid never uses 1=King or 3=EFF/Nuker).
+  This is a *different* modeling choice from the King/Woolley/Wilson
+  dynamical-equilibrium models compared in
+  ``scripts/diagnostics/limepy_multimass.py`` (route D, LIMITATIONS.md
+  B5) -- the two are unrelated axes answering different questions
+  (initial density-profile shape for an N-body IC vs. present-day
+  equilibrium-model fit to observed density), not something that needs
+  to agree with each other.
+- Virial ratio (mcluster's ``-Q``) was never set, so every run silently
+  used whatever mcluster's compiled-in default is -- mcluster's own
+  README documents no default value for ``-Q``. C&S's initial state is
+  explicitly virial equilibrium (Q=0.5), so ``render_commands()`` now
+  passes ``-Q 0.50`` explicitly instead of relying on an unverified
+  default.
+"""
 from __future__ import annotations
 
 import argparse
@@ -90,6 +117,12 @@ def render_commands(row: dict) -> str:
         "-B", str(row["n_binaries"]),
         "-P", str(row["profile"]),
         "-R", f"{row['half_mass_radius_pc']:.2f}",
+        # H12: mcluster's README documents no default for -Q, so leaving
+        # it unset means every run silently used whatever the compiled
+        # binary's own internal default happens to be. C&S's initial
+        # state is explicitly virial equilibrium (Q=0.5), so pass it
+        # explicitly instead of relying on an unverified default.
+        "-Q", "0.50",
         "-f", "1",
         "-C", "5",
         "-u", "1",
@@ -98,7 +131,10 @@ def render_commands(row: dict) -> str:
         "-o", row["run_id"],
     ]
     if row["profile"] == 2:
-        command[9:9] = ["-S", f"{row['mcluster_S']:.2f}"]
+        # -S is mass segregation degree (not a fractal dimension --
+        # see module docstring), only meaningful for the Subr et al.
+        # (2007) mass-segregated profile (-P 2). Insert right before -f.
+        command[11:11] = ["-S", f"{row['mcluster_S']:.2f}"]
     mcluster = " ".join(shlex.quote(part) for part in command)
     return "\n".join(
         [
