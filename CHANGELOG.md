@@ -134,6 +134,13 @@
 - 2026-08-19～20：D12（亮端完整度）用 HIPPARCOS 交叉查證，發現範圍
   比原問題描述更大（G=4.0–5.2 之間的星也整批消失），根因追查卡在
   缺少原始 Gaia 查詢檔案。
+- 2026-09-17：D12 結案，搬到 `RESOLVED.md`——本機其實已有原始 Gaia
+  查詢檔案與 `results/baseline.dat`，先前的阻塞不成立；重新跑通已寫好
+  未執行的 `diagnose_m45_bright_end_loss.py`，逐顆核對既有的 HIPPARCOS
+  與 HR23 交叉查證資料，17 顆候選亮星裡每一顆「消失」都有非 bug 的
+  解釋（刻意的 `g_bright_limit` 截斷、真正非成員、或 Gaia 本身無解），
+  沒有證據支持真成員被誤刪。副產物：量到 pyUPMASK 機率系統性高於
+  HR23（已知的 KDE 概似比飽和效應，非新 bug）。
 - 2026-08-21：D14（system MF vs stellar MF）核對 `JointModel.
   synthesise()` 抽樣順序，確認並寫進文件；同日用蒙地卡羅實算出兩種
   定義差多少。
