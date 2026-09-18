@@ -404,6 +404,55 @@ kaggle_accounts.json／access token，還沒送出雲端長跑。先前的探索
 smoke test（3 個 3k paired seeds）顯示 alpha 差仍不穩定，不能下科學
 結論；目前規劃使用 40k、至少 5 個 paired seeds，正式需求仍待完整驗證。耗時未查證。
 
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| membership_probability_weighted_imf（D2） | 進行中 | 開始：2026-09-15 | `baseline.dat` 的逐星 P_member；現行 P≥0.7 樣本；相同質量範圍與前向設定 | 機率校準檢查、加權估計器與硬門檻的 alpha 差及不確定度 |
+
+membership_probability_weighted_imf：Codex 認領。先只做現有資料的
+可行性與機率校準檢查，再建立與現行 P≥0.7 完全同口徑的最小 A/B 對照；
+若 pyUPMASK 的輸出機率未通過校準檢查，就停止在診斷層級，不把加權結果
+升格為正式 IMF。這不是重新跑已完成的 membership-threshold sweep，耗時未查證。
+見 `docs/planning/M45_OPTIMIZATION_GAP_AUDIT_2026-09-15.md`（2026-09-15
+優化建議缺口稽核；下列四項同一次稽核產生，只列 GitHub 尚未完整涵蓋的
+部分，潮汐尾／核心分離、低質量質光關係、初始質量分層及既有質量相依
+雙星工作不重複新增）。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| gaia_astrometric_covariance_validation | 尚未進行 | 指派時間：2026-09-15 | Gaia DR3 天體測量誤差與相關係數；現行 pyUPMASK 輸入介面 | 欄位覆蓋率、協方差正定性、可行的最小 A/B 驗證設計 |
+
+gaia_astrometric_covariance_validation：尚未認領。先確認 Gaia 的相關係數欄位
+是否存在於可重建的原始資料、pyUPMASK 是否能接受逐星完整協方差，以及現行
+「相關抽樣」實際包含哪些維度；沒有介面證據前不得宣稱完整協方差已被使用。
+本任務先做欄位與介面驗證，不直接重跑正式 IMF，耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| m45_orbit_jacobi_history（A5） | 尚未進行 | 指派時間：2026-09-15 | M45 六維相空間、Galpy 銀河位能、年齡區間 0–125 Myr、星團質量假設 | r_J(t) 曲線、現在值交叉檢查、軌道與質量假設敏感度 |
+
+m45_orbit_jacobi_history：尚未認領。只積分 M45 的非圓軌道並沿軌道計算
+Jacobi 半徑，不重跑正式 PeTar 網格；需先確認 PR #205 或等價 Galpy 環境
+可用，並把真實相空間來源與銀河位能版本寫進 manifest。結果只約束潮汐場
+假設，不等於 LIMEPY 截斷半徑，也不直接產生 IMF，耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| binary_population_observable_bridge（D14） | 尚未進行 | 指派時間：2026-09-15 | 主星質量、q_gamma／質量相依 f_bin、週期與軌道先驗、RUWE 與 Gaia RV 覆蓋 | 可識別性、缺值／選擇偏差稽核、最小聯合模型規格 |
+
+binary_population_observable_bridge：尚未認領。既有質量相依 f_bin 與 q_gamma
+結果不重跑；本任務只評估如何把質量相依 q、週期／軌道分布映射到 RUWE、
+RV 與 CMD 可觀測量。RUWE 或 RV 未觀測不能直接當成單星，且通過資料覆蓋率
+與注入回收前不得擴充正式 headline 模型，耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| nbody_gas_remnant_preregistration | 尚未進行 | 指派時間：2026-09-15 | 已完成 10-run PeTar grid；氣體逸散時標／效率候選；殘骸 kick／保留率候選 | 參數範圍、可觀測量、最低可辨識效應、停止條件與算力預算 |
+
+nbody_gas_remnant_preregistration：尚未認領。正式網格已包含初始質量分層，
+所以本任務不得重做該軸；只針對尚缺的早期氣體逸散與殘骸保留率先寫
+預註冊。若現有觀測無法分辨這些物理，應記為暫不排長跑，而不是為了增加
+模型數量直接啟動新 N-body 網格，耗時未查證。
+
 ## 未來規劃與分工建議（2026-08-26，依 LIMITATIONS.md 現役缺陷優先度排序）
 
 這節是**建議的執行順序跟資源分配**，不是新的待辦項目——所有提到的任務
