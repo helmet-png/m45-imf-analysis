@@ -365,4 +365,7 @@ m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--r
 # 300 顆星的子集輸入已版控於 data/m45_g20_feasibility_subset.dat，
 # SSH worker 的 git pull 會帶到；腳本再複製進 prepared/ 給 run_variant.py。
 # 只派 gcp1（SSH）：Kaggle 打包器目前無法處理巢狀腳本及 setup/ 相依檔。
-d19_pyupmask_feasibility|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1
+# 首次派工在 gcp1 的系統 Python 安裝 scikit-learn 時碰到 PEP 668，
+# 尚未進入聚類。修正成專用 venv 後用新標籤重派（舊標籤已記為 error）。
+# d19_pyupmask_feasibility|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1
+d19_pyupmask_feasibility_r2|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1

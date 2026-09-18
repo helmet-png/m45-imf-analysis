@@ -469,7 +469,7 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| pyupmask_cloud_feasibility（D19／D2） | 進行中 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | 待雲端 worker 跑完 |
+| pyupmask_cloud_feasibility（D19／D2） | 進行中 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | 首次建置因 PEP 668 失敗；專用 venv 修正後待重跑 |
 
 pyupmask_cloud_feasibility：認領人：Codex session（PR #213 審核與派工）。
 D19 Stage 2（成員判定閘門）要先重跑
@@ -486,7 +486,7 @@ CLOUD_WORKERS.md` 補了 2.1 節（含另一個發現：worker venv 清單缺
 scikit-learn，pyUPMASK 的 PCA/Scaler 需要它）。
 
 `scripts/diagnostics/pyupmask_feasibility.py` 排進 `cloud_queue.txt`
-（`d19_pyupmask_feasibility`），用 300 顆星的子集＋OL_runs=3 做端到端
+（重派標籤 `d19_pyupmask_feasibility_r2`），用 300 顆星的子集＋OL_runs=3 做端到端
 驗證（provisioning → 實際跑一次聚類 → 產出檔案），過了才排完整的
 G<20 9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
 腳本會把耗時粗略外推到正式規模（N² × OL_runs 線性外推，量級參考）。

@@ -13,7 +13,8 @@
 #   bash setup/setup_pyupmask.sh
 #
 # 前置：worker 已經照 docs/reference/CLOUD_WORKERS.md 第 2 節裝好
-# Python/venv。本腳本檢查 scikit-learn，缺少時會從 wheel 安裝。
+# Python、python3-venv 與 git。pyUPMASK 使用 repo 內的獨立 venv；
+# 不改系統 Python（Ubuntu/Debian 的 PEP 668 會拒絕直接安裝套件）。
 
 set -euo pipefail
 
@@ -21,6 +22,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIN_COMMIT="3602293059f42141b402215525d1d408c3360487"
 TARGET="$HERE/pyUPMASK"
 PYTHON_BIN="${1:-python3}"
+VENV="$HERE/.venv_pyupmask"
+VENV_PY="$VENV/bin/python3"
 
 if [ -d "$TARGET" ]; then
     echo "pyUPMASK/ 已存在（$TARGET），不重新 clone。"
@@ -48,14 +51,18 @@ else
     exit 1
 fi
 
-if ! "$PYTHON_BIN" -c 'import sklearn' 2>/dev/null; then
-    echo "安裝 pyUPMASK 需要的 scikit-learn（僅接受 wheel）..."
-    "$PYTHON_BIN" -m pip install --only-binary=:all: scikit-learn
+if [ ! -x "$VENV_PY" ]; then
+    echo "建立 pyUPMASK 專用 venv（沿用 worker 既有科學套件）..."
+    "$PYTHON_BIN" -m venv --system-site-packages "$VENV"
+fi
+if ! "$VENV_PY" -c 'import numpy, scipy, astropy, sklearn' 2>/dev/null; then
+    echo "在 pyUPMASK 專用 venv 補齊科學套件（僅接受 wheel）..."
+    "$VENV_PY" -m pip install --only-binary=:all: numpy scipy astropy scikit-learn
 fi
 
 echo ""
 echo "驗證：匯入 dataIO/outer 兩個模組（不執行 pyUPMASK 本體）..."
-"$PYTHON_BIN" -c "
+"$VENV_PY" -c "
 import sys
 sys.path.insert(0, '$TARGET')
 from modules import dataIO, outer
