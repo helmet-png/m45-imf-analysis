@@ -370,3 +370,14 @@ m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--r
 # 已在同一台 gcp1 直接完成 300 顆／OL_runs=3 實測（聚類 2.6 秒），因此不重派。
 # d19_pyupmask_feasibility|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1
 # d19_pyupmask_feasibility_r2|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1
+
+# 2026-09-18：D19 Stage 2 正式規模——G<20 全樣本（9,278 顆星）pyUPMASK
+# 重跑，OL_runs=25（產線設定）。可行性測試已在 gcp1 通過（300 顆星、
+# OL_runs=3，聚類 2.6 秒），外推正式規模約 5.8 小時，僅供排程量級參考。
+# 只派 gcp1（SSH，跟可行性測試同一台，provisioning 已驗證過）；Kaggle
+# 打包器目前無法處理巢狀腳本及 setup/ 相依檔，不派 Kaggle。輸入檔
+# data/m45_g20_full.dat 已版控（prepared/ 整個被 gitignore 排除，SSH
+# worker 的 git pull 不會帶到，比照 pyupmask_feasibility 子集檔的做法）。
+# 跑完的 results/d19_g20_full.dat 是下一步（P(member) 可靠度 vs G 分析）
+# 的輸入，那一步依賴這裡的輸出，是獨立工作，不在這支腳本範圍內。
+d19_full_membership_run|scripts/diagnostics/d19_full_membership_run.py|||false|gcp1

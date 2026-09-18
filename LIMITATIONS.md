@@ -848,10 +848,28 @@ worker 直接 clone 原版，第一步匯入就會崩潰**，不是運氣問題�
 上實測套用成功、`strtobool`／`outer` 模組都能正常匯入。另外發現
 `scikit-learn` 不在現有 worker venv 的套件清單裡（`docs/reference/
 CLOUD_WORKERS.md` 第 2 節），pyUPMASK 的 PCA／Scaler 需要它，也一併補進
-該文件第 2.1 節。小子集資料的可行性測試已排到 `cloud_queue.txt` 的
-`gcp1`（測試輸入已版控、依賴套件由 setup 腳本檢查與安裝），要驗證
-provisioning 腳本在真實 worker 上真的成立；過了才排完整的 G<20
-9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
+該文件第 2.1 節。
+
+**可行性測試通過（2026-09-18，PR #213-215）**：300 顆星子集＋OL_runs=3
+在 gcp1 上實測——provisioning 12.6 秒、聚類 2.6 秒並產出檔案。過程中
+又發現兩個環境坑：PEP 668 鎖住系統 Python（改用專用 venv）、gcp1 缺
+`python3.12-venv`（補裝）。都已修好並記進 `CLOUD_WORKERS.md`／
+`setup_pyupmask.sh`。以 N² × OL_runs 線性外推，完整 G<20 9,278 顆、
+OL_runs=25 約 5.8 小時（量級參考，非正式估時）。
+
+**完整規模重跑已派工（`scripts/diagnostics/d19_full_membership_run.py`，
+排入 `cloud_queue.txt` 的 `d19_full_membership_run`，見
+`WORK_BOARD.md`）**：輸入 `data/m45_g20_full.dat` 版控（複製自
+`prepared/m45_g20.dat`，與 `data/m45_r5_g20_plx4.csv` 的 source_id
+逐一核對完全吻合），只派 gcp1。跑完的 `results/d19_g20_full.dat` 是
+下一步的輸入，**但下一步（P(member) 可靠度 vs G 曲線）還需要兩個
+目前都還沒有的東西**：(1) M45 自己的 control field——現有的
+`fetch_control_field()`（`scripts/multicluster/prepare_cluster_tier2.py`）
+只服務 NGC 2632／NGC 3532 兩個 Tier 2 對照星團，M45 本身完全沒有；
+(2) C21 的星雲汙染定量檢查（用 `phot_bp_rp_excess_factor` 分組比較
+G−RP 與 BP−RP 對星雲位置的散布敏感度），Stage 0 閘門的判準之一，
+目前也還沒實作。這兩項不依賴 `d19_full_membership_run` 的結果，可以
+平行進行。
 
 **低質量段的等時線選擇（2026-09-18，`scripts/diagnostics/compare_lowmass_isochrones.py`，
 結果檔 `results/d19_isochrone_compare.npz`）**：同一年齡 logAge=8.00、MH=0

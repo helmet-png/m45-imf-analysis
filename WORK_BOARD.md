@@ -481,27 +481,19 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| pyupmask_cloud_feasibility（D19／D2） | 已完成 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | gcp1 實測 provisioning 成功、聚類 2.6 秒；正式規模粗估 5.8 小時 |
+| d19_full_membership_run（D19） | 進行中 | 開始日期：2026-09-18 | 星數 N = 9,278 顆（G<20）；外圈重複次數 OL_runs = 25（產線設定） | 待 gcp1 跑完，預估約 5.8 小時（N² × OL_runs 外推，量級參考） |
 
-pyupmask_cloud_feasibility：認領人：Codex session（PR #213 審核與派工）。
-D19 Stage 2（成員判定閘門）要先重跑
-pyUPMASK 到 G<20，但全專案至今沒有任何 worker 驗證過 pyUPMASK 能跑
-（`sensitivity_sweep.py --target stars_per_cluster` 的可行性檢查一直
-卡在這裡，見 D2）。查出比「沒驗證過」更具體的原因：本機
-`pyUPMASK/`（獨立 clone，被 `.gitignore` 排除）帶三處從未進版控的
-本機修改，其中 Python 3.12+ 相容性補丁是必要的（`distutils.strtobool`
-在 3.12 被移除，原版直接 clone 到現代 Python 的 worker 上會在第一步
-匯入就崩潰）。已把差異存成 `setup/pyupmask_local.patch`、寫
-`setup/setup_pyupmask.sh` 做 clone＋套 patch＋驗證匯入，在本機一份
-乾淨的 pin commit（`3602293`）checkout 上實測套用成功。`docs/reference/
-CLOUD_WORKERS.md` 補了 2.1 節（含另一個發現：worker venv 清單缺
-scikit-learn，pyUPMASK 的 PCA/Scaler 需要它）。
-
-`scripts/diagnostics/pyupmask_feasibility.py` 以 300 顆星的子集＋OL_runs=3 完成
-端到端驗證（provisioning → 實際跑一次聚類 → 產出檔案）。首次派工因 PEP 668
-失敗；專用 venv 的重派又發現 gcp1 缺 `python3.12-venv`。補齊該既有文件列出的
-前置套件後，同一台 gcp1 的實測 provisioning 耗時 12.6 秒、聚類 2.6 秒且產出檔案。
-以腳本的 N² × OL_runs 線性外推，完整 G<20 9,278 顆、OL_runs=25 約 5.8 小時；
-此值只供排程量級參考。可行性閘門已通過，才可評估排入完整規模重跑。
-子集檔已版控於 `data/m45_g20_feasibility_subset.dat`，指定 SSH worker
-`gcp1`（Kaggle 打包器尚不支援巢狀腳本），已完成直接實測。
+d19_full_membership_run：認領人：Claude session（分支
+`claude/d19-g20-full-run`）。`pyupmask_cloud_feasibility`（見
+`WORK_BOARD_DONE.md`）已在 gcp1 通過可行性測試，這是下一步——用
+完整 9,278 顆星、產線的 `OL_runs=25` 真的重跑一次。新增
+`scripts/diagnostics/d19_full_membership_run.py`，沿用已驗證過的
+provisioning（冪等，重跑安全跳過）＋`run_variant.py` 的標準呼叫。
+輸入檔比照可行性測試子集的做法：`data/m45_g20_full.dat` 版控（複製自
+本機已驗證過的 `prepared/m45_g20.dat`，跟 `data/m45_r5_g20_plx4.csv`
+逐一核對 source_id 完全吻合 9,278/9,278），因為 `prepared/` 整個被
+`.gitignore` 排除，SSH worker 的 `git pull` 不會帶到。只派 gcp1（同一台
+provisioning 已驗證過的機器；Kaggle 打包器目前無法處理巢狀腳本）。
+**這支腳本只負責跑聚類，不做分析**——跑完的 `results/d19_g20_full.dat`
+是下一步（P(member) 可靠度 vs G、跟 control field 比對，決定 Stage 2
+閘門通不通過）的輸入，那是獨立的後續工作，見 `LIMITATIONS.md` D19。
