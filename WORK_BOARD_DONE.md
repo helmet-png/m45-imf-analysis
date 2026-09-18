@@ -528,3 +528,24 @@ p6b_inject_lowmass_v2：9 次正式注入回收全部通過完整性與邊界檢
 但斜率低於 1 顯示約 20% 的向中間壓縮；每個真值只有三次試驗，
 bootstrap 只描述這 9 個假星團條件下的不確定度。這項結果支持把 p
 保留為自由參數，但不取代仍待完成的 p6_lowmass_v3 α 對 p 輪廓。
+
+| 任務名稱 | 完成日期 | 輸入參數 | 輸出參數 |
+|---|---|---|---|
+| pyupmask_cloud_feasibility（D19／D2） | 2026-09-18 | 300 顆星子集；外圈重複次數 OL_runs = 3 | gcp1 實測 provisioning 成功（12.6 秒）、聚類 2.6 秒並產出檔案；正式規模粗估約 5.8 小時 |
+
+pyupmask_cloud_feasibility：認領人：Codex session（PR #213-215）。D19
+Stage 2（成員判定閘門）要先重跑 pyUPMASK 到 G<20，但全專案至今沒有
+任何 worker 驗證過 pyUPMASK 能跑（`sensitivity_sweep.py --target
+stars_per_cluster` 的可行性檢查一直卡在這裡，見 D2）。查出比「沒驗證
+過」更具體的原因：本機 `pyUPMASK/`（獨立 clone，被 `.gitignore` 排除）
+帶三處從未進版控的本機修改，其中 Python 3.12+ 相容性補丁是必要的
+（`distutils.strtobool` 在 3.12 被移除，原版直接 clone 到現代 Python
+的 worker 上會在第一步匯入就崩潰）。差異存成
+`setup/pyupmask_local.patch`，`setup/setup_pyupmask.sh` 做 clone＋套
+patch＋驗證匯入。首次派工因 PEP 668 系統 Python 鎖住而失敗；專用 venv
+的重派又發現 gcp1 缺 `python3.12-venv`。補齊前置套件後，同一台 gcp1
+的實測 provisioning 耗時 12.6 秒、聚類 2.6 秒且產出檔案，以 N² ×
+OL_runs 線性外推完整規模（9,278 顆、OL_runs=25）約 5.8 小時（量級
+參考）。子集檔版控於 `data/m45_g20_feasibility_subset.dat`（`prepared/`
+整個被 `.gitignore` 排除）。閘門通過，下一步是 `d19_full_membership_run`
+（見 `WORK_BOARD.md`）。
