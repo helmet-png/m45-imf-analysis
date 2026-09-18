@@ -26,6 +26,40 @@ S 範圍、half_mass_radius 為正…），並把該列組裝成 mcluster_sse ->
 對應物理慣例 dN/dm ∝ m^-1.3）；這裡 `imf_alpha_low`／`imf_alpha_high`
 欄位維持本專案一貫的**正數**慣例（跟 `step5_imf.py` 的 α 同號），
 `render_commands()` 內部轉負號才傳給 `-a`。
+
+H12（2026-09-05，參數標準化，查證 mcluster 官方 README 確認）：
+
+- `mcluster_S` is mcluster's ``-S`` flag: "degree of mass segregation
+  (0.0-1.0, 0.0=no segregation)", not a fractal dimension. mcluster's
+  fractal dimension is a *different* flag, ``-D`` (1.6-3.0, 3.0=no
+  fractalization), which this grid does not expose as a column and
+  never passes -- do not confuse the two when reading mcluster's own
+  docs, the flag letters are easy to mix up.
+  2026-09-18 correction (Codex review): ``-S`` and Converse & Stahler
+  (2010) Table 1's segregation parameter beta (0.5 +/- 0.3) both
+  *control* mass segregation, but they are not the same physical
+  quantity -- C&S Sec 2.1 Eq. (24) defines beta through a Gaussian
+  mass/energy-rank-ordering width parameter (sigma_E = -N_tot*ln(beta)/2),
+  while mcluster's ``-S``/``-P 2`` implements the Subr/PLUMIX
+  segregation model (see mcluster's own README). No numeric mapping
+  between the two has been verified; treat ``mcluster_S`` as its own
+  independent parameter, not a stand-in for beta, until someone
+  actually compares the two models' output mass-segregation profiles.
+- ``profile`` (mcluster's ``-P``): 0=Plummer, 2=Subr et al. (2007)
+  mass-segregated profile (this grid never uses 1=King or 3=EFF/Nuker).
+  This is a *different* modeling choice from the King/Woolley/Wilson
+  dynamical-equilibrium models compared in
+  ``scripts/diagnostics/limepy_multimass.py`` (route D, LIMITATIONS.md
+  B5) -- the two are unrelated axes answering different questions
+  (initial density-profile shape for an N-body IC vs. present-day
+  equilibrium-model fit to observed density), not something that needs
+  to agree with each other.
+- Virial ratio (mcluster's ``-Q``) was never set, so every run silently
+  used whatever mcluster's compiled-in default is -- mcluster's own
+  README documents no default value for ``-Q``. C&S's initial state is
+  explicitly virial equilibrium (Q=0.5), so ``render_commands()`` now
+  passes ``-Q 0.50`` explicitly instead of relying on an unverified
+  default.
 """
 from __future__ import annotations
 
@@ -149,6 +183,12 @@ def render_commands(row: dict) -> str:
         # 2026-09-18：跟 -S 同一個 review 一起修——訓練網格存 4 位小數
         # （如 4.1641），`.2f` 會截掉一半精度，改跟 alpha/S 統一用 `.4f`。
         "-R", f"{row['half_mass_radius_pc']:.4f}",
+        # H12: mcluster's README documents no default for -Q, so leaving
+        # it unset means every run silently used whatever the compiled
+        # binary's own internal default happens to be. C&S's initial
+        # state is explicitly virial equilibrium (Q=0.5), so pass it
+        # explicitly instead of relying on an unverified default.
+        "-Q", "0.50",
         "-f", "2",
         "-m", "0.08", "-m", "0.5", "-m", "150",
         "-a", f"{mcluster_alpha_low:.4f}", "-a", f"{mcluster_alpha_high:.4f}",
@@ -159,11 +199,17 @@ def render_commands(row: dict) -> str:
         "-o", row["run_id"],
     ]
     if row["profile"] == 2:
+        # -S is mass segregation degree (not a fractal dimension --
+        # see module docstring), only meaningful for the Subr et al.
+        # (2007) mass-segregated profile (-P 2).
+        #
         # 2026-09-18 修正（Codex review）：`.2f` 會把 0.4984 這類貼近
         # profile 2 上界（validate_grid() 要求 S<0.5）的值四捨五入成
         # "0.50"，實際傳給 mcluster_sse 的就是不合法的 S=0.50，悄悄
         # 蓋掉網格記錄的真實值。跟 alpha（142-152 行）用同樣的 `.4f`
-        # 精度，網格本身存的就是 4 位小數，不會再有這個邊界問題。
+        # 精度，網格本身存的就是 4 位小數，不會再有這個邊界問題。用
+        # 相對結尾的索引（而不是寫死的絕對位置）插入，前面加了 -Q 之後
+        # 陣列長度會變，固定索引會插到錯的位置。
         command[-2:-2] = ["-S", f"{row['mcluster_S']:.4f}"]
     mcluster = " ".join(shlex.quote(part) for part in command)
 
