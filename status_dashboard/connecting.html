@@ -1,0 +1,68 @@
+<!-- 桌面捷徑本機啟動器（open_dashboard.py）用的過渡頁——2026-09-02 使用者
+     反映「從按下捷徑到真正打開，時間過久」：原本 open_dashboard.py 是
+     同步等 IAP tunnel 連上（最多 20 秒）才開瀏覽器，這段時間畫面上
+     什麼都沒有，感覺像當掉。改成 open_dashboard.py 一開始 tunnel 建立
+     指令就立刻開這個本機靜態頁（file:// 開，不用等），這裡用純 JS
+     每秒自己戳一次 localhost:8866，連上了就自動跳過去——跟主控板
+     本身「頁面先開、探測結果背景補上」（app.py 的 _PROBE_SCRIPT）
+     同一個設計精神，只是這裡探測的是「tunnel 通了沒」而不是「工作
+     跑完了沒」。零外部依賴、純內嵌 HTML/CSS/JS，跟主控板本身的設計
+     原則一致。 -->
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<title>M45 IMF 主控板 — 連線中</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Microsoft JhengHei", sans-serif;
+        max-width: 480px; margin: 4em auto; padding: 0 1.5em; line-height: 1.7;
+        text-align: center; }
+  h1 { font-size: 1.15em; }
+  .spinner { width: 2em; height: 2em; margin: 1.2em auto; border-radius: 50%;
+            border: 3px solid rgba(128,128,128,0.25);
+            border-top-color: rgba(70,120,200,0.9);
+            animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .note { color: #777; font-size: 0.85em; }
+  #slow { display: none; margin-top: 1.5em; padding: 0.8em 1em;
+         border: 1px solid #c33; border-radius: 4px; font-size: 0.85em;
+         text-align: left; }
+</style></head><body>
+<h1>正在連線協調 VM…</h1>
+<div class="spinner"></div>
+<p class="note">IAP tunnel 正在建立（通常幾秒內完成），連上後這頁會自動
+跳到主控板，不用手動整理頁面。</p>
+<p class="note" id="elapsed">已等待 0 秒</p>
+<div id="slow">
+  <p><strong>等超過 20 秒了。</strong>可能原因：</p>
+  <ul>
+    <li>這台機器沒裝 <code>gcloud</code>（Google Cloud SDK）</li>
+    <li>沒有網路，或這個 Google 帳號沒有連協調 VM 的權限</li>
+    <li>協調 VM 本身沒開機</li>
+  </ul>
+  <p>可以直接檢查 <code>status_dashboard/open_dashboard.log</code>
+  裡的錯誤訊息，或手動執行
+  <code>gcloud compute start-iap-tunnel …</code>（指令見
+  CONTRIBUTING.md）看實際卡在哪一步。</p>
+</div>
+<script>
+(function () {
+  var target = "http://127.0.0.1:8866/";
+  var start = Date.now();
+  var elapsedEl = document.getElementById("elapsed");
+  var slowEl = document.getElementById("slow");
+  function tick() {
+    var secs = Math.round((Date.now() - start) / 1000);
+    elapsedEl.textContent = "已等待 " + secs + " 秒";
+    if (secs >= 20) slowEl.style.display = "block";
+  }
+  function poll() {
+    fetch(target, { mode: "no-cors", cache: "no-store" })
+      .then(function () { location.href = target; })
+      .catch(function () { /* 還沒通，繼續等下一輪 */ });
+  }
+  setInterval(tick, 1000);
+  setInterval(poll, 1000);
+  poll();
+})();
+</script>
+</body></html>

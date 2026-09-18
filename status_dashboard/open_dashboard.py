@@ -33,7 +33,6 @@ import http.client
 import shutil
 import subprocess
 import sys
-import time
 import webbrowser
 from pathlib import Path
 
@@ -95,15 +94,13 @@ def main() -> None:
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
-    # 等 tunnel 真的連上再開瀏覽器，不要開一個連不到的空頁面——IAP
-    # tunnel 首次建立通常幾秒內完成，20 秒是留給網路較慢或協調 VM
-    # 剛好在忙的寬裕上限。
-    for _ in range(20):
-        time.sleep(1)
-        if _port_alive():
-            break
-
-    webbrowser.open(f"http://127.0.0.1:{PORT}/")
+    # 2026-09-02 使用者反映「從按下捷徑到真正打開時間過久」——原本這裡
+    # 同步等 tunnel 連上（最多 20 秒）才開瀏覽器，等待期間畫面上什麼都
+    # 沒有，感覺像當掉。改成 tunnel 指令一送出就立刻開本機的過渡頁
+    # （connecting.html），輪詢＋自動跳轉交給那頁的 JS 做，跟主控板
+    # 本身「頁面先開、探測結果背景補上」（app.py 的 _PROBE_SCRIPT）
+    # 同一個設計精神——這裡不用再自己 sleep-poll 一輪。
+    webbrowser.open((Path(__file__).resolve().parent / "connecting.html").as_uri())
 
 
 if __name__ == "__main__":
