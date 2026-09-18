@@ -348,8 +348,27 @@ def main():
         )
     model = fit_emulators(X, Y, stat_names)
     print(f"Trained emulators on {len(X)} runs, {len(stat_names)} statistics")
-    # 完整的訓練/取樣/SBC/輸出流程留給有真實資料時再接上——這裡先確保
-    # load_training_data 與 fit_emulators 的介面正確。
+
+    # 2026-09-18 修正（Codex review）：以前 --targets/--output 兩個旗標
+    # 完全沒被讀寫——訓練資料足夠時呼叫者會拿到 exit 0，看起來像是
+    # 完整跑完了「訓練→推論→輸出」，實際上只做了訓練，取樣／SBC／
+    # 寫 --output 全部沒有實作。完整推論 CLI（讀 targets、真的執行
+    # 推論、保存結果）留給有真實 N-body 網格資料時再接上；在那之前，
+    # 只要偵測到呼叫者真的想做推論（--targets 指到的檔案存在），就
+    # 明確用非零碼拒絕，不能悄悄只做訓練檢查卻裝作推論完成。
+    if args.targets.exists():
+        parser.error(
+            f"{args.targets} 存在，但這個版本的 emulator_fit.py 還沒有"
+            "實作正式推論（讀 targets、取樣、SBC、寫 --output 都還沒接"
+            "上，見上面的訓練/取樣/SBC/輸出流程註解）。目前只能做訓練"
+            "資料是否足夠、fit_emulators() 介面是否正確這兩件事——如果"
+            "你要的是正式推論結果，這個版本還不能提供，不要把上面的"
+            "exit 0 當成推論已完成"
+        )
+    print(
+        "訓練檢查完成（--self-test 之外的正式訓練也一樣）；沒有寫任何"
+        f"檔案到 {args.output}——正式推論尚未實作，見上面訊息。"
+    )
 
 
 if __name__ == "__main__":

@@ -47,6 +47,11 @@ from petar_m45_grid import load_grid  # noqa: E402
 
 
 def already_complete(run_dir: Path) -> bool:
+    """2026-09-18 修正（Codex review）：以前只看 status=='complete'，沒
+    排除 smoke 跑完留下的 result.json——smoke 用縮短的積分時間跑，拿它
+    的 result.json 當「這個 run_id 已經用正式設定跑完」會整批漏跑。這
+    支程式從不傳 --smoke（見上方模組說明），所以任何 smoke=true 的舊
+    結果一定是別的用途（手動測試）留下的殘留，不能算數。"""
     result_path = run_dir / "result.json"
     if not result_path.exists():
         return False
@@ -54,7 +59,7 @@ def already_complete(run_dir: Path) -> bool:
         data = json.loads(result_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
-    return data.get("status") == "complete"
+    return data.get("status") == "complete" and not data.get("smoke", False)
 
 
 def main():

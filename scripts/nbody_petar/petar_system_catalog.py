@@ -17,6 +17,18 @@ definition, so the command records every supplied path and requires an explicit
 這兩個欄位用 ``getattr`` 保護性讀取——沒有 ``star`` 屬性（例如
 ``interrupt_mode='none'`` 或自我測試用的假資料）就退回
 ``star_type=1``、``current_mass=mass``，不會因為缺欄位而炸掉。
+
+2026-09-18 新增 ``--external-mode``：``petar_m45_grid.render_commands()``
+固定用 ``petar.data.process -t galpy`` 產檔（見該檔案）。PeTar 的
+``Particle`` 建構子在 ``external_mode`` 不是 ``'none'`` 時，會在 soft
+particle 的欄位定義多插入 ``pot_ext`` 這一欄（見 PeTar
+``tools/analysis/data.py`` 的 ``Particle.__init__``，pinned commit
+84b81a8c339c49291de53f7a72829dd80e188182 逐字核對過）。如果這裡讀檔時
+沒有傳同一個 ``external_mode``，讀出來的欄位 schema 會跟寫檔時少一欄，
+後面的欄位全部錯位——尤其是巢狀 binary/triple/quadruple 的內層粒子，
+``star.type``／``mass``／``pos`` 會讀到別的欄位的數值而不自知。因此
+``--external-mode`` 必須跟產生輸入檔那次 ``petar.data.process -t`` 用的
+值完全一致，預設 ``none`` 只適用於沒有加 Galpy 銀河潮汐的舊快照。
 """
 from __future__ import annotations
 
@@ -34,8 +46,12 @@ def _load_ascii(data, path: Path):
     return data
 
 
-def _particle(petar, interrupt_mode: str):
-    kwargs = {} if interrupt_mode == "none" else {"interrupt_mode": interrupt_mode}
+def _particle(petar, interrupt_mode: str, external_mode: str = "none"):
+    kwargs = {}
+    if interrupt_mode != "none":
+        kwargs["interrupt_mode"] = interrupt_mode
+    if external_mode != "none":
+        kwargs["external_mode"] = external_mode
     return petar.Particle(**kwargs)
 
 
@@ -111,7 +127,7 @@ def export_catalog(args) -> dict:
     categories = []
     offset = 0
 
-    single = _load_ascii(_particle(petar, args.interrupt_mode), args.single)
+    single = _load_ascii(_particle(petar, args.interrupt_mode, args.external_mode), args.single)
     n_single = int(single.size)
     single_mass = np.asarray(single.mass, float)
     particle_ids.append(np.asarray(single.id))
@@ -134,29 +150,29 @@ def export_catalog(args) -> dict:
     specs = [
         ("binary", args.binary, lambda: _binary(
             petar,
-            _particle(petar, args.interrupt_mode),
-            _particle(petar, args.interrupt_mode),
+            _particle(petar, args.interrupt_mode, args.external_mode),
+            _particle(petar, args.interrupt_mode, args.external_mode),
         )),
         ("triple", args.triple, lambda: _binary(
             petar,
-            _particle(petar, args.interrupt_mode),
+            _particle(petar, args.interrupt_mode, args.external_mode),
             _binary(
                 petar,
-                _particle(petar, args.interrupt_mode),
-                _particle(petar, args.interrupt_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
             ),
         )),
         ("quadruple", args.quadruple, lambda: _binary(
             petar,
             _binary(
                 petar,
-                _particle(petar, args.interrupt_mode),
-                _particle(petar, args.interrupt_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
             ),
             _binary(
                 petar,
-                _particle(petar, args.interrupt_mode),
-                _particle(petar, args.interrupt_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
             ),
         )),
     ]
@@ -212,6 +228,7 @@ def export_catalog(args) -> dict:
         "output": str(args.output),
         "time_myr": args.time_myr,
         "interrupt_mode": args.interrupt_mode,
+        "external_mode": args.external_mode,
         "confirmed_complete": bool(args.confirm_complete),
         "n_components": int(len(particle_id)),
         "n_systems": int(offset),
@@ -276,6 +293,12 @@ def main():
     parser.add_argument("--time-myr", type=float)
     parser.add_argument(
         "--interrupt-mode", choices=("none", "bse", "mobse", "bseEmp"), default="bse"
+    )
+    parser.add_argument(
+        "--external-mode", choices=("none", "galpy"), default="none",
+        help="必須跟產生這批輸入檔那次 `petar.data.process -t` 用的值完全"
+             "一致（petar_m45_grid.render_commands() 固定用 -t galpy），"
+             "否則 pot_ext 欄位錯位會讓後面所有欄位讀到錯的值",
     )
     parser.add_argument("--petar-package-path", type=Path)
     parser.add_argument("--output", type=Path)
