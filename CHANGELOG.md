@@ -141,7 +141,7 @@
   非 bug 的解釋（刻意的 `g_bright_limit` 截斷、運動學確認的真正非
   成員、或 Gaia 本身無解），沒有證據支持真成員被誤刪；另外 4 顆
   （HIP 17531／17608／17954／19038）在錐形搜尋內找不到對應 Gaia
-  來源，維持未配對狀態，改記為新的 `LIMITATIONS.md` D19（未完整
+  來源，維持未配對狀態，改記為新的 `LIMITATIONS.md` D20（未完整
   解決，不能跟著移進 RESOLVED.md）。副產物：量到 pyUPMASK 機率系統性
   高於 HR23（已知的 KDE 概似比飽和效應，非新 bug）。
 - 2026-08-21：D14（system MF vs stellar MF）核對 `JointModel.

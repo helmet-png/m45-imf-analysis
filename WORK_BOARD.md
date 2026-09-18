@@ -304,6 +304,32 @@ LIMITATIONS.md D11）。查證前兩道 gate：Gate 1（Gaia→Johnson V 紅端
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| lowmass_depth_extension（D19） | 進行中 | 開始日期：2026-09-17 | 質量下限目標 0.10 M☉、顏色誤差門檻 54 mmag、G 範圍 16–20 星等 | Stage 0：通過（分段顏色，質量下限 0.090 M☉、sigma_M 最差 0.0394 M☉）。等時線比較：產線全段 PARSEC，BHAC15 拼接版當系統誤差檢驗（低質量段質量差 14.6–34.4%）。Stage 2 未跑 |
+
+lowmass_depth_extension：認領人：Claude session（分支
+`claude/d19-lowmass-colour`）。把資料下限從 0.173 M☉ 推到約 0.09 M☉，
+估計多 165 顆成員（上限 227），把低質量段冪次的統計誤差從約 0.13 壓到約
+0.07（見 LIMITATIONS.md D19）。**訂正**：初版寫「目標是消掉 0.248 系統誤差」
+不對——那件事用現有深度就做得到（A3：跑完 `p2_free_lowmass`，P6b v2 已證實
+可辨識），不需要等 D19；D19 是讓誤差棒更短。
+**Stage 0 顏色閘門已完成**：判準在跑之前就寫死（質量下限 ≤0.15 M☉、
+sigma_M ≤0.05 M☉、假匹配率 ≤2%、逐分箱完整度 ≥85%），結論是分段顏色
+（亮端 BP−RP、暗端 G−RP）通過，質量下限 0.090 M☉、sigma_M 中位 0.0199／
+最差 0.0394 M☉。**關鍵結論：不需要任何近紅外交叉比對**——需要的 RP
+測光已經在 `data/m45_r5_g20_plx4.csv` 裡，過去是因為堅持用 BP−RP 才
+丟掉的；依成本由低到高的原則，UKIDSS／2MASS／PanSTARRS 路線不必啟動。
+新瓶頸換成等時線（PARSEC 最低質量 0.0900 M☉ = G 19.80，比資料深度
+G 20.0 還淺）。
+
+**下一步是 Stage 2 成員判定閘門，不是直接改 pipeline**：pyUPMASK 吃 5D
+Gaia 天測，G≈20 的天測品質能不能撐住 P>0.7 還沒驗證。**退出判準先寫在
+這裡，讓它的時間戳早於結果**——若延伸段的成員完整度無法表達成 (G, colour)
+的單一函數並給出特徵化的不確定度，D19 就產出診斷圖與書面限制，**不產出
+alpha 數字**（否則只是把 C8 的未建模完整度問題做大）。Stage 0 尚未結算的
+兩項：ΔN_members 要等成員重跑，C21 星雲汙染檢查未實作。耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
 | mass_dependent_fbin（D14 衍生） | 尚未進行 | 指派時間：2026-08-19 | 雙星比例對比度 contrast = 0.0、0.15、0.30（三組）；質量斷點 m_break = 0.5 M☉ | α 偏移量對 contrast 的關係 |
 
 mass_dependent_fbin：雙星比例是否隨主星質量變化，目前模型假設是
@@ -440,3 +466,29 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 排時間投入——優先度排序見 LIMITATIONS.md 本身的分級（C 類是「修不掉、
 論文必須聲明」，D 類是「已知風險、尚未驗證但沒有污染現有結果的證據」），
 等第一、二階段的現役缺陷都解決、或有人主動想認領才處理。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| pyupmask_cloud_feasibility（D19／D2） | 進行中 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | 待雲端 worker 跑完 |
+
+pyupmask_cloud_feasibility：認領人：Codex session（PR #213 審核與派工）。
+D19 Stage 2（成員判定閘門）要先重跑
+pyUPMASK 到 G<20，但全專案至今沒有任何 worker 驗證過 pyUPMASK 能跑
+（`sensitivity_sweep.py --target stars_per_cluster` 的可行性檢查一直
+卡在這裡，見 D2）。查出比「沒驗證過」更具體的原因：本機
+`pyUPMASK/`（獨立 clone，被 `.gitignore` 排除）帶三處從未進版控的
+本機修改，其中 Python 3.12+ 相容性補丁是必要的（`distutils.strtobool`
+在 3.12 被移除，原版直接 clone 到現代 Python 的 worker 上會在第一步
+匯入就崩潰）。已把差異存成 `setup/pyupmask_local.patch`、寫
+`setup/setup_pyupmask.sh` 做 clone＋套 patch＋驗證匯入，在本機一份
+乾淨的 pin commit（`3602293`）checkout 上實測套用成功。`docs/reference/
+CLOUD_WORKERS.md` 補了 2.1 節（含另一個發現：worker venv 清單缺
+scikit-learn，pyUPMASK 的 PCA/Scaler 需要它）。
+
+`scripts/diagnostics/pyupmask_feasibility.py` 排進 `cloud_queue.txt`
+（`d19_pyupmask_feasibility`），用 300 顆星的子集＋OL_runs=3 做端到端
+驗證（provisioning → 實際跑一次聚類 → 產出檔案），過了才排完整的
+G<20 9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
+腳本會把耗時粗略外推到正式規模（N² × OL_runs 線性外推，量級參考）。
+子集檔已版控於 `data/m45_g20_feasibility_subset.dat`，指定 SSH worker
+`gcp1`（Kaggle 打包器尚不支援巢狀腳本）。耗時未查證。
