@@ -119,7 +119,12 @@ def build_payload(script: str, extra_files: list[str], work_dir: Path,
         shutil.rmtree(work_dir)
     work_dir.mkdir(parents=True)
 
-    shutil.copy(HERE / script, work_dir / script)
+    # 目的地一律拍平成檔名（跟 extra_files 的處理一致）——`script` 帶
+    # 子目錄路徑（如 `scripts/nbody_petar/foo.py`）時，`work_dir / script`
+    # 會需要 work_dir 底下先有對應的子目錄才能寫入，而 work_dir 剛清空
+    # 重建，一定不存在，直接 FileNotFoundError（2026-09 實測踩到）。
+    # 讀取端仍用 `HERE / script`（完整路徑，讀原始檔案位置不受影響）。
+    shutil.copy(HERE / script, work_dir / Path(script).name)
     for f in extra_files:
         src = HERE / f
         if src.exists():
@@ -212,6 +217,12 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
                 slug: str, extra_files: list[str], work_dir: Path,
                 minimal: bool = False):
     """建一個對應的 notebook：安裝依賴、掛上資料、跑腳本、印出結果。"""
+    # 2026-09：kernel 端的檔名一律用拍平後的檔名——build_payload() 已經把
+    # 主腳本存成 work_dir/<檔名>（不含子目錄），dataset 上傳的內容跟著
+    # work_dir 的結構走，所以 kernel 端複製與啟動都要用同一個拍平後的
+    # 名字，不能用 `script` 原始傳入值（可能帶 `scripts/xxx/foo.py` 這種
+    # 子目錄，Kaggle 掛載路徑下沒有這層子目錄）。
+    script_name = Path(script).name
     # **2026-08-12 修正真正的根因**：Kaggle 現在把 dataset 掛載在
     # /kaggle/input/datasets/<擁有者帳號>/<dataset-slug>/，比這裡原本假設的
     # /kaggle/input/<dataset-slug>/ 多兩層（`datasets/` 與擁有者帳號）。
@@ -247,7 +258,7 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
         "                f'waited {timeout}s, Kaggle has not mounted dataset at "
         "{path} yet (platform-side mount delay, not a script bug)')\n",
         "        time.sleep(interval)\n",
-        f"_wait_input('{base}{'pipeline' if not minimal else script}')\n",
+        f"_wait_input('{base}{'pipeline' if not minimal else script_name}')\n",
     ]
     # **2026-08-13 修正**：本機的 results/ 是 git 版控目錄，本來就存在，
     # 所有分析腳本（fit_real.py、inject_lowmass.py、profile_lowmass.py 等）
@@ -256,7 +267,7 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
     # 實測 p9a_redo_v2 跑了 10.5 小時才在這裡炸掉，等於全部白算。統一在這裡
     # 補一行建立 results/，不逐一修每支分析腳本（單點修正，以後新腳本也受益）。
     copy_lines = ["os.makedirs('results', exist_ok=True)\n",
-                 f"shutil.copy('{base}{script}', '{script}')\n"]
+                 f"shutil.copy('{base}{script_name}', '{script_name}')\n"]
     for f in extra_files:
         name = Path(f).name
         copy_lines.append(f"shutil.copy('{base}{name}', '{name}')\n")
@@ -310,7 +321,7 @@ def make_kernel(script: str, args: str, dataset_id: str, username: str,
                 + copy_lines
                 + ([pip_line] if pip_line else [])
                 + [env_line,
-                   f"subprocess.run([sys.executable, '-u', '{script}'] + "
+                   f"subprocess.run([sys.executable, '-u', '{script_name}'] + "
                    f"'{args}'.split(), check=True, env=env)\n"]
             ),
         }],

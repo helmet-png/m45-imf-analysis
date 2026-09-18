@@ -248,7 +248,7 @@ def synthetic_catalogs(seed=20260813, n_systems=8000):
 def run_self_test(output: Path) -> dict:
     initial, final = synthetic_catalogs()
     summary = analyze_definition_bridge(
-        initial, final, 0.3, 2.5, 12.09, 32, (2.0, 3.0, 4.0)
+        initial, final, 0.3, 2.5, 11.68, 32, (2.0, 3.0, 4.0)
     )
     definitions = summary["definitions"]
     checks = {
@@ -280,7 +280,9 @@ def main():
     parser.add_argument("--final", type=Path)
     parser.add_argument("--mass-min", type=float, default=0.3)
     parser.add_argument("--mass-max", type=float, default=2.5)
-    parser.add_argument("--aperture-pc", type=float, default=12.09)
+    # 11.68 pc（2026-09 訂正，取代 12.09）：與 petar_pdmf_analysis.py 同一個
+    # 樣本實際孔徑，見該檔 DEFAULT_RADII_PC 旁的推導。
+    parser.add_argument("--aperture-pc", type=float, default=11.68)
     parser.add_argument("--n-projections", type=int, default=32)
     parser.add_argument("--betas", type=float, nargs="+", default=(2.0, 3.0, 4.0))
     parser.add_argument(

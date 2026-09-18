@@ -29,7 +29,12 @@ import numpy as np
 
 
 HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
-DEFAULT_RADII_PC = np.array([2.0, 4.0, 8.0, 12.09, 20.0])
+# 11.68 pc（2026-09 訂正，取代先前的 12.09）：舊值是 tan(5.1 度)*135.48 pc，
+# 而 5.1 度是 config.toml 徑向分箱的外緣註記（"M45 潮汐半徑"），不是樣本
+# 實際涵蓋的範圍——data/cmd_members.csv 用樣本自身中位 ra/dec 當中心量出
+# 的最大角距只有 4.928 度。11.68 = tan(4.928 度)*135.48 pc，是樣本實際
+# 孔徑，模擬端的比較基準要用這個而不是查詢半徑或分箱外緣。
+DEFAULT_RADII_PC = np.array([2.0, 4.0, 8.0, 11.68, 20.0])
 
 
 @dataclass(frozen=True)
@@ -468,7 +473,7 @@ def analyze(initial, final, mass_min, mass_max, radii_pc, n_projections=32):
     initial_alpha = rows[0]["alpha"]
     survivor_birth_alpha = rows[1]["alpha"]
     survivor_current_alpha = rows[2]["alpha"]
-    target_radius = float(radii_pc[np.argmin(np.abs(radii_pc - 12.09))])
+    target_radius = float(radii_pc[np.argmin(np.abs(radii_pc - 11.68))])
     target_rows = [
         row
         for row in rows
@@ -628,7 +633,7 @@ def run_self_test(output_prefix: Path):
         final,
         0.30,
         2.50,
-        np.array([2.0, 4.0, 8.0, 12.09, 20.0]),
+        np.array([2.0, 4.0, 8.0, 11.68, 20.0]),
         n_projections=32,
     )
     delta = summary["delta_alpha"]
