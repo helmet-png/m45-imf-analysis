@@ -498,6 +498,19 @@ provisioning 已驗證過的機器；Kaggle 打包器目前無法處理巢狀腳
 是下一步（P(member) 可靠度 vs G、跟 control field 比對，決定 Stage 2
 閘門通不通過）的輸入，那是獨立的後續工作，見 `LIMITATIONS.md` D19。
 
+**Codex review 抓到的兩個阻塞問題，已修正（2026-09-18）**：(1) 原版
+呼叫 `run_variant.py` 用 `sys.executable`（gcp1 的系統 Python），PR #214
+已確認這會讓 `run_variant.py` 內層跑 `pyUPMASK.py` 時一樣用系統
+Python，重現 PEP 668／缺依賴的失敗——改成跟 `pyupmask_feasibility.py`
+一致，用 `.venv_pyupmask/bin/python3`。(2) `data/m45_g20_full.dat` 有
+151 列（`BP_RP` 缺值）被 astropy ascii writer 寫成字面 `""` 而不是
+`nan`，可行性子集當初就是為了避開這個問題才正規化過，完整檔案沒有
+同步處理——已正規化成 `nan`（9,278/9,278 source_id 仍與
+`data/m45_r5_g20_plx4.csv` 完全吻合），並在腳本裡加了
+`validate_input()`，比照子集腳本檢查 header／12 欄／無字面 `""`，
+下次同類問題會在複製進 `prepared/` 前就擋下來，不會再無聲流進
+pyUPMASK。
+
 **平行完成的兩項前置工作（不依賴這次重跑的結果）**：
 `scripts/diagnostics/build_m45_control_field.py` 建出
 `data/m45_control_field.csv`（7,228 顆運動學上確定非成員的場星，10σ

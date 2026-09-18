@@ -15,7 +15,17 @@ provisioning＋聚類的完整路徑能跑（300 顆星、OL_runs=3，耗時 2.6
 `.gitignore` 排除，SSH worker 的 `git pull` 不會帶到裡面的檔案。
 `data/m45_g20_full.dat` 是 `prepared/m45_g20.dat` 的版本化副本（跟
 `pyupmask_feasibility.py` 對 300 顆星子集的做法一致），source_id 跟
-`data/m45_r5_g20_plx4.csv` 逐一核對過完全吻合（9,278/9,278）。
+`data/m45_r5_g20_plx4.csv` 逐一核對過完全吻合（9,278/9,278）。原始
+`prep.py` 輸出把缺值寫成字面 `""`（astropy ascii writer 的行為），已
+正規化成 `nan`（`pyupmask_feasibility.py` 的子集檔也是這樣處理），
+下方 `validate_input()` 會在複製進 `prepared/` 前重新檢查一次。
+
+**為什麼一定要用 `.venv_pyupmask/bin/python3` 呼叫 `run_variant.py`**：
+gcp1 的系統 Python 被 PEP 668 鎖住，PR #214 已經確認直接用系統 Python
+跑會讓 `run_variant.py` 內層呼叫 `pyUPMASK.py` 時同樣用系統 Python，
+重現 PEP 668／缺依賴的失敗。`setup/setup_pyupmask.sh` 建的專用 venv
+才有裝好的 scikit-learn 等依賴，`pyupmask_feasibility.py` 已經這樣做，
+這裡照做。
 
 用法（在 worker 上，repo 根目錄執行）：
     python scripts/diagnostics/d19_full_membership_run.py
@@ -34,12 +44,44 @@ INPUT_SOURCE = HERE / "data" / "m45_g20_full.dat"
 INPUT_NAME = "m45_g20_full.dat"
 OUT = HERE / "results" / "d19_full_membership_run.json"
 RUN_NAME = "d19_g20_full"
+PYUPMASK_PYTHON = HERE / ".venv_pyupmask" / "bin" / "python3"
+EXPECTED_HEADER = ("source_id _x _y pmRA pmDE Plx e_pmRA e_pmDE "
+                   "e_Plx Gmag BP_RP RUWE")
 
 
-def run(cmd):
+def run(cmd, **kw):
     print(f"  $ {' '.join(cmd)}")
     return subprocess.run(cmd, cwd=HERE, text=True,
-                          capture_output=True)
+                          capture_output=True,
+                          creationflags=(subprocess.CREATE_NO_WINDOW
+                                         if sys.platform == "win32" else 0),
+                          **kw)
+
+
+def validate_input(path: Path) -> tuple[bool, int, str]:
+    """比照 pyupmask_feasibility.py 對子集檔的檢查：header 逐字比對、
+    每列 12 欄、且不能有 `""` 這種 astropy ascii writer 留下的缺值字面量
+    （必須是 `nan`，pyUPMASK 才讀得懂）。回傳 (通過, 星數, 說明)。
+    """
+    if not path.is_file():
+        return False, 0, f"找不到 {path}"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0] != EXPECTED_HEADER:
+        return False, 0, f"header 不符，實際：{lines[0] if lines else '(空檔)'}"
+    n = len(lines) - 1
+    bad_cols = 0
+    bad_quotes = 0
+    for row in lines[1:]:
+        toks = row.split()
+        if len(toks) != 12:
+            bad_cols += 1
+        elif any(t == '""' for t in toks):
+            bad_quotes += 1
+    if bad_cols:
+        return False, n, f"{bad_cols} 列欄數不是 12"
+    if bad_quotes:
+        return False, n, f"{bad_quotes} 列含字面 \"\"（缺值未正規化成 nan）"
+    return True, n, f"{n} 顆星，格式檢查通過"
 
 
 def main():
@@ -51,13 +93,11 @@ def main():
               f"{'：' + detail if detail else ''}")
         return ok
 
-    if not INPUT_SOURCE.is_file():
-        record("輸入檔存在", False, f"找不到 {INPUT_SOURCE}")
+    valid, n_rows, detail = validate_input(INPUT_SOURCE)
+    if not record("輸入檔格式（header／12 欄／無字面 \"\"）", valid, detail):
         OUT.write_text(json.dumps(report, ensure_ascii=False, indent=2),
                        encoding="utf-8")
         sys.exit(1)
-    n_rows = sum(1 for _ in INPUT_SOURCE.open(encoding="utf-8")) - 1
-    record("輸入檔存在", True, f"{INPUT_SOURCE.name}，{n_rows} 顆星")
 
     prepared = HERE / "prepared"
     prepared.mkdir(exist_ok=True)
@@ -79,9 +119,11 @@ def main():
 
     # OL_runs=25：產線設定（見 pyUPMASK/params.ini 預設值，README.md
     # 的 baseline 呼叫沒有覆寫這個旗標，也就是用它的預設 25）。
+    # 必須用專用 venv 的直譯器，不能用 sys.executable（=系統 Python，
+    # 會被 PEP 668 擋，PR #214 已經確認過），理由見檔頭說明。
     t0 = time.time()
-    r = run([sys.executable, str(HERE / "scripts" / "drivers" /
-                                 "run_variant.py"),
+    r = run([str(PYUPMASK_PYTHON), str(HERE / "scripts" / "drivers" /
+                                       "run_variant.py"),
              "--name", RUN_NAME,
              "--input", INPUT_NAME,
              "--ol-runs", "25"])
