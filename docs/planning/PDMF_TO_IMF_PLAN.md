@@ -139,7 +139,7 @@ N=1215、b=0.95、β=0.5、r_v=4.0 pc 是起點，不是照抄的終點——讓
 （本專案第 2 步的 α(<r) 觀測基準線）決定要不要在這組先驗附近調整，跟
 本專案「分支規則是資料的函數，不是對特定天體既有認知的函數」的原則
 一致（見 `CLAUDE.md`）。完整的執行計劃見
-`docs/planning/NBODY_PREREGISTRATION.md`（規劃中）。
+`docs/planning/NBODY_PREREGISTRATION.md`。
 
 ### 文獻對 M45 意外地有利
 
