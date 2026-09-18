@@ -304,7 +304,7 @@ LIMITATIONS.md D11）。查證前兩道 gate：Gate 1（Gaia→Johnson V 紅端
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| lowmass_depth_extension（D19） | 進行中 | 開始日期：2026-09-17 | 質量下限目標 0.10 M☉、顏色誤差門檻 54 mmag、G 範圍 16–20 星等 | Stage 0：通過（分段顏色，質量下限 0.090 M☉、sigma_M 最差 0.0394 M☉）。Stage 2 未跑 |
+| lowmass_depth_extension（D19） | 進行中 | 開始日期：2026-09-17 | 質量下限目標 0.10 M☉、顏色誤差門檻 54 mmag、G 範圍 16–20 星等 | Stage 0：通過（分段顏色，質量下限 0.090 M☉、sigma_M 最差 0.0394 M☉）。等時線比較：產線全段 PARSEC，BHAC15 拼接版當系統誤差檢驗（低質量段質量差 14.6–34.4%）。Stage 2 未跑 |
 
 lowmass_depth_extension：認領人：Claude session（分支
 `claude/d19-lowmass-colour`）。把質量下限從 0.30 M☉ 推到 0.10 M☉，
