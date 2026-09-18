@@ -125,6 +125,18 @@ Tailscale 連線（不需要固定對外 IP，也不用改路由器）。**`proc
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| professor_report_preparation | 進行中 | 開始：2026-09-13 | M45 觀測分析、正式 10-run PeTar grid、既有限制與 GitHub 結果紀錄 | 教授討論簡報分工、報告流程、待確認科學問題 |
+
+professor_report_preparation：Codex 認領，為下週與教授的線上討論整理共同報告。先以已合併的 `docs/planning/NBODY_M45_FORMAL_RESULTS_20260913.md` 與現有結果為準，安排各成員負責觀測資料、前向模型、N-body、限制與下一步，並列出希望教授協助判斷的問題。這是報告準備工作，不會把 N-body component-star 修正誤寫成最終 IMF 結論；詳細草案見 `docs/planning/M45_PROFESSOR_REPORT_PLAN_2026-09-13.md`。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| m45_system_definition_bridge | 進行中 | 開始：2026-09-14 | 10 組 PeTar run 的 t = 0、125 Myr processed 多重星目錄；質量範圍 0.30–2.50 M☉；孔徑 11.68 pc | component、primary、system-total 與 photometric-system 的動力學斜率修正 |
+
+m45_system_definition_bridge：Codex 認領，將已完成的 10-run screening grid 做 definition-matched 後處理，不重新積分 N-body。每個 run 必須確認 `petar.data.process` 輸出的 single/binary/triple/quadruple 目錄完整，再同時匯出 t=0 和 t=125 Myr 的 system catalog；任何必要目錄遺失時腳本會停止，不用 component-star 修正冒充 primary/system 修正。工作由 `cloud_queue.txt` 派往 senior24，完成後先驗收 manifest 和 10 份 bridge JSON，才可把結果記入 `results/RESULTS_LOG.md`。耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
 | p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | 合成星數 N = 40,000 顆；重複次數 = 3；精修階數 = 2 階；低質量段冪次 p 的掃描點 5 個 | 低質量段冪次 p 對 α 的關係曲線（斜率 d(alpha)/d(p)） |
 
 p6_lowmass_v3：量低質量段冪次 d(alpha)/d(p) 的斜率，這是目前最大的
@@ -144,9 +156,9 @@ radial_r1_final（5 次重複、355 顆核心切片、實測 72,814 秒即約 4 
 |---|---|---|---|---|
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| nbody_prior_from_radial（A5） | 尚未進行 | 指派時間：2026-08-12 | 恆星數 N = 400 顆；質量分層度 S = 0.3、0.5、0.7（三組）；virial 比 Q = 0.5，圍繞 pilot 參數小幅擾動 | 3–5 組模擬跑完的 α(r) 曲線，跟觀測 α(<r) 的擬合優度比較 |
+| nbody_prior_from_radial（A5） | 進行中 | 開始：2026-09-16 | 恆星數 N = 400 顆；質量分層度 S = 0.3、0.5、0.7（三組）；virial 比 Q = 0.5，圍繞 pilot 參數小幅擾動 | 3–5 組模擬跑完的 α(r) 曲線，跟觀測 α(<r) 的擬合優度比較 |
 
-nbody_prior_from_radial：N-body 模擬（第 5 步）的初步校準方向，不是
+nbody_prior_from_radial：Codex 認領。這是 N-body 模擬（第 5 步）的初步校準方向，不是
 正式版本。指令基礎：mcluster_sse -N 400 -S 0.3/0.5/0.7 -P 0 -R 2.3
 -Q 0.5（各跑數組）。前置的三個定義不一致（分箱方式、半徑維度、
 質量範圍與估計量）已經解決並寫進 analyze_alpha_r.py，下一步是真正
