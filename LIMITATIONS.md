@@ -827,7 +827,7 @@ provisioning 腳本在真實 worker 上真的成立；過了才排完整的 G<20
 發生在同一段。所以接縫放在 0.8 M☉ 以上；接縫以下的 BHAC15 部分（全在慢速
 收縮或已在主序）做年齡內插是安全的，這個測試跨 0.176 dex，比實際需要的
 0.079 dex（8.000 到 8.079）寬一倍多。
-### D20 亮端 HIPPARCOS／HR23 交叉查證裡有 4 顆星在錐形搜尋內找不到對應的 Gaia 來源（現役缺陷．優先度低；其餘候選已查證無 bug，見 RESOLVED.md 舊 D12）
+### D21 亮端 HIPPARCOS／HR23 交叉查證裡有 4 顆星在錐形搜尋內找不到對應的 Gaia 來源（現役缺陷．優先度低；其餘候選已查證無 bug，見 RESOLVED.md 舊 D12）
 
 **問題**：`RESOLVED.md` 記錄的亮端完整度交叉查證（原 D12）核對了 20 顆
 Hipparcos／候選亮星，其中 13 顆＋3 顆有明確解釋（刻意的 `g_bright_limit`
@@ -843,7 +843,7 @@ J2016.0，中間 25 年自行位移）與自行修正的實際做法，不能排
 下一步是用考慮自行的正確曆元轉換重做這 4 顆的交叉比對，或用更大的
 搜尋半徑逐顆人工核對。
 
-### D20 Δα 加性修正的線性假設從未檢驗，且模擬端與觀測端的雙星解析定義不對齊（H4.1／H4.3，2026-09-05 使用者回報；孔徑數值分歧見 H4.4，已在 petar_pdmf_analysis.py／pdmf_system_definition_bridge.py 直接修正；星等選擇缺口見 H4.2，即 H7，另一則 PR 合併後查證對應的 D 編號）
+### D22 Δα 加性修正的線性假設從未檢驗，且模擬端與觀測端的雙星解析定義不對齊（H4.1／H4.3，2026-09-05 使用者回報；孔徑數值分歧見 H4.4，已在 petar_pdmf_analysis.py／pdmf_system_definition_bridge.py 直接修正；星等選擇缺口見 H4.2，即 H7，見 D23）
 
 **問題**：路線 C（N-body）打算把 Δα（現時 PDMF 減初始 IMF 的差）當成
 加到觀測 α 上的修正量，這個做法隱含兩個從未檢驗的假設：(1) Δα 與輸入
@@ -866,6 +866,54 @@ J2016.0，中間 25 年自行位移）與自行修正的實際做法，不能排
 Δα——這件事本身還沒被排進任何佇列。等 `NBODY_PREREGISTRATION.md`
 （H13）合併後，這兩項要加進正式模擬前的必要檢查清單，不能等看到
 `priority=1` 的結果才決定要不要驗證。
+
+### D23 N-body 分析只套用空間孔徑選擇，沒有套用 Gaia 星等相關的召回率（H7，2026-09-05 使用者回報；已用 results/hr23_cmd_recall_by_magnitude.json 驗算確認數字，尚無認領工作）
+
+**問題**：`scripts/nbody_petar/petar_pdmf_analysis.py` 的 `analyze()`
+把 PeTar 模擬快照轉成「可觀測」樣本時，只做空間孔徑篩選（3D 半徑或
+投影半徑 <= aperture_pc），完全沒有套用 Gaia 星等相關的偵測完整度——
+函式自己輸出的 `"limitations"` 清單裡其實已經寫了「Uniform sky
+projections quantify orientation sensitivity but not Gaia selection」，
+只是這個自承的缺口從沒被提升到這份權威清單。實際查驗
+`results/hr23_cmd_recall_by_magnitude.json`（2026-08-22 量的，
+`threshold=0.5`）：`16 <= G < 18` 這個星等區間，432 顆 HR23 外部目錄
+成員裡只有 344 顆出現在 `cmd_members.csv`（比值 0.7963），對照
+`8 <= G < 12` 的 0.950 與 `12 <= G < 16` 的 0.924，明顯在低質量端
+（G 越暗對應質量越小）額外流失約 15–20%。**這個 0.7963 是目錄到最終
+CMD 的重疊率（`hr23_cmd_recall_by_magnitude.json` 自己的 status 欄位
+標成 `catalogue_overlap_diagnostic_not_membership_truth`），不是已校準
+的純接受機率**——分子 344 是最終 `cmd_members.csv` 成員數，已經包含
+測光品質切選（BP/RP 訊噪比、excess 等）造成的流失，跟成員判定演算法
+本身漏掉的星混在一起沒有拆開（見 `docs/planning/M45_HR23_LOST_QUALITY_
+REPLAY_2026-08-22.md`：已追蹤的另一批類似流失星裡，62 顆全部能用現行
+品質切割重播解釋）。不能把這個比值直接當成「純 Gaia 偵測完整度」或
+獨立的 membership 接受率，尤其不能再跟 `analyze()` 已經做的孔徑選擇
+或未來若接上的測光品質選擇疊乘——那會把同一批流失算兩次。
+
+**後果**：N-body 模擬產生的「合成觀測樣本」目前完全不會複製這個星等
+相關的流失——`analyze()` 只有空間選擇，沒有星等選擇，等於假設 PeTar
+快照裡每一顆星只要落在孔徑內就一定會被「觀測到」。這會讓 N-body 預測
+的 PDMF→IMF 修正量系統性低估低質量端的額外損失，跟真實觀測（會受
+星等相關召回率影響）不是同一個可觀測量，比較起來會有偏差，但偏差
+方向與量級目前未知——`petar_m45_grid.csv` 還在校準階段，尚未產生任何
+已引用的 N-body 結果，所以還沒有污染既有主張。
+
+正確修法需要一支類似「observe_snapshot」的轉換：用
+`pipeline.step5_imf.main_sequence_mass_luminosity()`（已有、已在生產
+用的質量-光度反查函式）把粒子質量換算成表觀 G 星等（需要跟前向模型
+一致的 isochrone／距離模數／消光），再對每顆星套用上面量到的星等-召回
+曲線當成接受機率，跟現有的孔徑選擇疊加。這牽涉到跨模組整合（`pipeline`
+用的是真正的 `astropy.table.Table`，`scripts/nbody_petar/` 目前完全
+沒有這個相依套件）與「星等選擇要不要跟空間孔徑選擇疊乘」這個方法學
+決定，沒有把握能一次做對，這裡先誠實記錄查證過的數字與缺口位置，
+不在這個 PR 匆促接上一個沒驗證過的轉換。**2026-09-18 更新**：
+`scripts/nbody_petar/observe_snapshot.py`（另一個已合併的 PR）已經
+實作了這支轉換，且已經處理了本條後半段點出的「星等選擇不能跟孔徑
+選擇無條件疊乘」問題（見該檔案 `observe()` 對 `selection_model`／
+`recall_curve` 互斥的檢查與註解）——但那支腳本走的是 `observe_snapshot`
+這條新管線，不是直接修改這裡討論的 `petar_pdmf_analysis.analyze()`；
+`analyze()` 本身仍然只做孔徑選擇，這個缺口對 `analyze()` 的直接呼叫端
+還是成立，兩支程式的定位差異與是否該合併，留給之後決定。
 
 ---
 
