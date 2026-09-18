@@ -51,9 +51,13 @@ else
     exit 1
 fi
 
-if [ ! -x "$VENV_PY" ]; then
-    echo "建立 pyUPMASK 專用 venv（沿用 worker 既有科學套件）..."
-    "$PYTHON_BIN" -m venv --system-site-packages "$VENV"
+if ! "$VENV_PY" -m pip --version >/dev/null 2>&1; then
+    if [ -e "$VENV" ]; then
+        echo "既有 pyUPMASK venv 不完整，重新建立..."
+    else
+        echo "建立 pyUPMASK 專用 venv（沿用 worker 既有科學套件）..."
+    fi
+    "$PYTHON_BIN" -m venv --clear --system-site-packages "$VENV"
 fi
 if ! "$VENV_PY" -c 'import numpy, scipy, astropy, sklearn' 2>/dev/null; then
     echo "在 pyUPMASK 專用 venv 補齊科學套件（僅接受 wheel）..."

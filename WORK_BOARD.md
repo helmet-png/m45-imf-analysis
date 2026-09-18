@@ -469,7 +469,7 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| pyupmask_cloud_feasibility（D19／D2） | 進行中 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | 首次建置因 PEP 668 失敗；專用 venv 修正後待重跑 |
+| pyupmask_cloud_feasibility（D19／D2） | 已完成 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | gcp1 實測 provisioning 成功、聚類 2.6 秒；正式規模粗估 5.8 小時 |
 
 pyupmask_cloud_feasibility：認領人：Codex session（PR #213 審核與派工）。
 D19 Stage 2（成員判定閘門）要先重跑
@@ -485,10 +485,11 @@ pyUPMASK 到 G<20，但全專案至今沒有任何 worker 驗證過 pyUPMASK 能
 CLOUD_WORKERS.md` 補了 2.1 節（含另一個發現：worker venv 清單缺
 scikit-learn，pyUPMASK 的 PCA/Scaler 需要它）。
 
-`scripts/diagnostics/pyupmask_feasibility.py` 排進 `cloud_queue.txt`
-（重派標籤 `d19_pyupmask_feasibility_r2`），用 300 顆星的子集＋OL_runs=3 做端到端
-驗證（provisioning → 實際跑一次聚類 → 產出檔案），過了才排完整的
-G<20 9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
-腳本會把耗時粗略外推到正式規模（N² × OL_runs 線性外推，量級參考）。
+`scripts/diagnostics/pyupmask_feasibility.py` 以 300 顆星的子集＋OL_runs=3 完成
+端到端驗證（provisioning → 實際跑一次聚類 → 產出檔案）。首次派工因 PEP 668
+失敗；專用 venv 的重派又發現 gcp1 缺 `python3.12-venv`。補齊該既有文件列出的
+前置套件後，同一台 gcp1 的實測 provisioning 耗時 12.6 秒、聚類 2.6 秒且產出檔案。
+以腳本的 N² × OL_runs 線性外推，完整 G<20 9,278 顆、OL_runs=25 約 5.8 小時；
+此值只供排程量級參考。可行性閘門已通過，才可評估排入完整規模重跑。
 子集檔已版控於 `data/m45_g20_feasibility_subset.dat`，指定 SSH worker
-`gcp1`（Kaggle 打包器尚不支援巢狀腳本）。耗時未查證。
+`gcp1`（Kaggle 打包器尚不支援巢狀腳本），已完成直接實測。
