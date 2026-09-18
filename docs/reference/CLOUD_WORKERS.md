@@ -82,12 +82,9 @@ worker 真的重跑過 pyUPMASK 聚類本身——`scripts/diagnostics/
 sensitivity_sweep.py` 的 `stars_per_cluster` 可行性檢查就卡在「本機
 沒有 `pyUPMASK/` 目錄，沒有驗證過能不能跑」，一直沒有解決。
 
-**額外要裝**：`scikit-learn`（pyUPMASK 用它做 PCA 與
-MinMax/StandardScaler，不在上面 venv 清單裡）：
-
-```bash
-<python_bin> -m pip install scikit-learn
-```
+pyUPMASK 用 `scikit-learn` 做 PCA 與 MinMax/StandardScaler。
+`setup/setup_pyupmask.sh` 會先檢查 worker 的 Python 環境；缺少時只從 wheel
+安裝這個套件，安裝失敗就停止測試。
 
 **pyUPMASK 本身不能直接 `git clone` 原版**：本機這份是獨立 clone 自
 `https://github.com/msolpera/pyUPMASK`（釘在 commit `3602293`），但帶有
@@ -96,7 +93,7 @@ MinMax/StandardScaler，不在上面 venv 清單裡）：
 `distutils.util` import `strtobool`，但 `distutils` 在 Python 3.12
 被移除——**任何跑 3.12 以上的 worker 直接 clone 原版，第一步匯入就會
 崩潰**，不是機率性失敗。用 `setup/setup_pyupmask.sh <python_bin>` 一次
-做完 clone＋套用這三處修改（patch 存在 `setup/pyupmask_local.patch`，
+做完相依套件檢查、clone＋套用這三處修改（patch 存在 `setup/pyupmask_local.patch`，
 已驗證在乾淨的 pin commit 上套用成功），不要手動 clone 原版。
 
 ## 3. 設定唯讀 Deploy Key（讓 VM 能 `git pull`，但不能 `git push`）

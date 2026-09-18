@@ -362,11 +362,7 @@ m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--r
 # 內跑完。**過了才把下面完整規模的 G<20 重跑排進來**（目前還沒排，
 # 故意留到這次測試結果回來、確認 provisioning 真的在乾淨環境成立
 # 之後才排，避免正式規模因環境問題失敗浪費額度）。
-# 依賴：scripts/data_prep/prep.py 只需要用到 prepared/
-# m45_g20_feasibility_subset.dat（gitignore 排除，300 行，本機隨機抽樣
-# 產生），本身不是靠 git 同步過去的——SSH worker 需要這個檔案存在於
-# 該 worker 的 repo 副本裡，Kaggle worker 則要列進下面的額外檔案欄位。
-# 兩種情況都需要先手動把這個檔案放到目標 worker（例如透過
-# ssh_sync.py push 或等效機制），這步不在 cloud_queue.py 自動同步的
-# 範圍內，派工前要記得確認。
-d19_pyupmask_feasibility|scripts/diagnostics/pyupmask_feasibility.py||prepared/m45_g20_feasibility_subset.dat,setup/setup_pyupmask.sh,setup/pyupmask_local.patch|false|
+# 300 顆星的子集輸入已版控於 data/m45_g20_feasibility_subset.dat，
+# SSH worker 的 git pull 會帶到；腳本再複製進 prepared/ 給 run_variant.py。
+# 只派 gcp1（SSH）：Kaggle 打包器目前無法處理巢狀腳本及 setup/ 相依檔。
+d19_pyupmask_feasibility|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1

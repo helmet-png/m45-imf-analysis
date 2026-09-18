@@ -471,8 +471,8 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 |---|---|---|---|---|
 | pyupmask_cloud_feasibility（D19／D2） | 進行中 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | 待雲端 worker 跑完 |
 
-pyupmask_cloud_feasibility：認領人：Claude session（分支
-`claude/d19-lowmass-colour`）。D19 Stage 2（成員判定閘門）要先重跑
+pyupmask_cloud_feasibility：認領人：Codex session（PR #213 審核與派工）。
+D19 Stage 2（成員判定閘門）要先重跑
 pyUPMASK 到 G<20，但全專案至今沒有任何 worker 驗證過 pyUPMASK 能跑
 （`sensitivity_sweep.py --target stars_per_cluster` 的可行性檢查一直
 卡在這裡，見 D2）。查出比「沒驗證過」更具體的原因：本機
@@ -490,4 +490,5 @@ scikit-learn，pyUPMASK 的 PCA/Scaler 需要它）。
 驗證（provisioning → 實際跑一次聚類 → 產出檔案），過了才排完整的
 G<20 9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
 腳本會把耗時粗略外推到正式規模（N² × OL_runs 線性外推，量級參考）。
-worker 欄位留空給有空的節點。耗時未查證（小子集預期幾分鐘內）。
+子集檔已版控於 `data/m45_g20_feasibility_subset.dat`，指定 SSH worker
+`gcp1`（Kaggle 打包器尚不支援巢狀腳本）。耗時未查證。

@@ -20,20 +20,24 @@ Python 3.12+ 相容性補丁（`distutils.strtobool` 在 3.12 被移除）——
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent.parent
-SUBSET = HERE / "prepared" / "m45_g20_feasibility_subset.dat"
+SUBSET_SOURCE = HERE / "data" / "m45_g20_feasibility_subset.dat"
+SUBSET = HERE / "prepared" / SUBSET_SOURCE.name
 OUT = HERE / "results" / "d19_pyupmask_feasibility.json"
 
 
 def run(cmd, **kw):
     print(f"  $ {' '.join(cmd)}")
     return subprocess.run(cmd, cwd=HERE, text=True,
-                          capture_output=True, **kw)
+                          capture_output=True,
+                          creationflags=(subprocess.CREATE_NO_WINDOW
+                                         if sys.platform == "win32" else 0), **kw)
 
 
 def main():
@@ -45,12 +49,23 @@ def main():
               f"{'：' + detail if detail else ''}")
         return ok
 
-    if not SUBSET.exists():
-        record("子集輸入檔存在", False, f"找不到 {SUBSET}")
+    if not SUBSET_SOURCE.is_file():
+        record("版本化子集輸入檔存在", False, f"找不到 {SUBSET_SOURCE}")
         OUT.write_text(json.dumps(report, ensure_ascii=False, indent=2),
                        encoding="utf-8")
         sys.exit(1)
-    record("子集輸入檔存在", True, f"{SUBSET.name}")
+    lines = SUBSET_SOURCE.read_text(encoding="utf-8").splitlines()
+    expected = "source_id _x _y pmRA pmDE Plx e_pmRA e_pmDE e_Plx Gmag BP_RP RUWE"
+    if (len(lines) != 301 or lines[0] != expected
+            or any(len(row.split()) != 12 for row in lines[1:])):
+        record("子集輸入格式", False,
+               f"預期 300 顆星、每列 12 欄，實際 {max(0, len(lines)-1)} 顆")
+        OUT.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+        sys.exit(1)
+    SUBSET.parent.mkdir(exist_ok=True)
+    shutil.copyfile(SUBSET_SOURCE, SUBSET)
+    record("子集輸入格式", True, f"{SUBSET_SOURCE.name}，300 顆星")
 
     t0 = time.time()
     r = run(["bash", str(HERE / "setup" / "setup_pyupmask.sh"), sys.executable])
@@ -66,7 +81,7 @@ def main():
     t0 = time.time()
     r = run([sys.executable, str(HERE / "scripts" / "drivers" /
                                  "run_variant.py"),
-             "--name", "d19_feasibility",
+             "--name", "d19_pyupmask_feasibility",
              "--input", SUBSET.name,
              "--ol-runs", "3"])
     elapsed = time.time() - t0
@@ -76,7 +91,7 @@ def main():
         print(r.stdout[-3000:])
         print(r.stderr[-3000:])
 
-    out_dat = HERE / "results" / "d19_feasibility.dat"
+    out_dat = HERE / "results" / "d19_pyupmask_feasibility.dat"
     record("輸出檔產生", out_dat.exists(),
           f"{out_dat.name}" if out_dat.exists() else "沒有產出檔案")
 

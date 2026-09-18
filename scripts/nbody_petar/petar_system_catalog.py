@@ -7,6 +7,28 @@ triple and binary-binary quadruple files all become component rows sharing one
 ``system_id``.  Omitting a non-empty multiplicity catalog changes the scientific
 definition, so the command records every supplied path and requires an explicit
 ``--confirm-complete`` acknowledgement.
+
+2026-09 新增（供 observe_snapshot.py 使用）：當 ``--interrupt-mode`` 含
+``bse`` 時，PeTar 的 ``Particle`` 物件會多帶一個 ``star``
+(``SSEStarParameter``) 子物件，內含 ``star.type``（SSE 恆星型態編號，
+1=主序星，>=10 為白矮星／中子星／黑洞等演化終態，見 PeTar
+``tools/analysis/bse.py`` 的 ``SSEStarParameter`` 定義，本次已逐字核對
+過欄位存在）與 ``star.mass``（恆星演化後的目前質量，可能小於出生質量）。
+這兩個欄位用 ``getattr`` 保護性讀取——沒有 ``star`` 屬性（例如
+``interrupt_mode='none'`` 或自我測試用的假資料）就退回
+``star_type=1``、``current_mass=mass``，不會因為缺欄位而炸掉。
+
+2026-09-18 新增 ``--external-mode``：``petar_m45_grid.render_commands()``
+固定用 ``petar.data.process -t galpy`` 產檔（見該檔案）。PeTar 的
+``Particle`` 建構子在 ``external_mode`` 不是 ``'none'`` 時，會在 soft
+particle 的欄位定義多插入 ``pot_ext`` 這一欄（見 PeTar
+``tools/analysis/data.py`` 的 ``Particle.__init__``，pinned commit
+84b81a8c339c49291de53f7a72829dd80e188182 逐字核對過）。如果這裡讀檔時
+沒有傳同一個 ``external_mode``，讀出來的欄位 schema 會跟寫檔時少一欄，
+後面的欄位全部錯位——尤其是巢狀 binary/triple/quadruple 的內層粒子，
+``star.type``／``mass``／``pos`` 會讀到別的欄位的數值而不自知。因此
+``--external-mode`` 必須跟產生輸入檔那次 ``petar.data.process -t`` 用的
+值完全一致，預設 ``none`` 只適用於沒有加 Galpy 銀河潮汐的舊快照。
 """
 from __future__ import annotations
 
@@ -24,8 +46,12 @@ def _load_ascii(data, path: Path):
     return data
 
 
-def _particle(petar, interrupt_mode: str):
-    kwargs = {} if interrupt_mode == "none" else {"interrupt_mode": interrupt_mode}
+def _particle(petar, interrupt_mode: str, external_mode: str = "none"):
+    kwargs = {}
+    if interrupt_mode != "none":
+        kwargs["interrupt_mode"] = interrupt_mode
+    if external_mode != "none":
+        kwargs["external_mode"] = external_mode
     return petar.Particle(**kwargs)
 
 
@@ -41,6 +67,22 @@ def _leaves(node):
         yield node
 
 
+def _leaf_star_type(leaf, n: int) -> np.ndarray:
+    """SSE 恆星型態編號，沒有 `.star` 屬性（非 bse 模式）就當全部主序星。"""
+    star = getattr(leaf, "star", None)
+    if star is None:
+        return np.ones(n, np.int64)
+    return np.asarray(star.type, np.int64)
+
+
+def _leaf_current_mass(leaf, mass: np.ndarray) -> np.ndarray:
+    """恆星演化後的目前質量，沒有 `.star` 屬性就等於出生質量。"""
+    star = getattr(leaf, "star", None)
+    if star is None:
+        return mass.copy()
+    return np.asarray(star.mass, float)
+
+
 def _append_category(
     node,
     category: str,
@@ -49,6 +91,8 @@ def _append_category(
     masses: list,
     positions: list,
     system_ids: list,
+    star_types: list,
+    current_masses: list,
 ):
     leaves = list(_leaves(node))
     if not leaves:
@@ -58,10 +102,13 @@ def _append_category(
         raise ValueError(f"{category} leaf arrays have inconsistent sizes: {sizes}")
     n_systems = sizes.pop()
     for leaf in leaves:
+        leaf_mass = np.asarray(leaf.mass, float)
         particle_ids.append(np.asarray(leaf.id))
-        masses.append(np.asarray(leaf.mass, float))
+        masses.append(leaf_mass)
         positions.append(np.asarray(leaf.pos, float))
         system_ids.append(np.arange(system_offset, system_offset + n_systems))
+        star_types.append(_leaf_star_type(leaf, n_systems))
+        current_masses.append(_leaf_current_mass(leaf, leaf_mass))
     return system_offset + n_systems, {
         "category": category,
         "n_systems": n_systems,
@@ -76,15 +123,19 @@ def export_catalog(args) -> dict:
     import petar
 
     particle_ids, masses, positions, system_ids = [], [], [], []
+    star_types, current_masses = [], []
     categories = []
     offset = 0
 
-    single = _load_ascii(_particle(petar, args.interrupt_mode), args.single)
+    single = _load_ascii(_particle(petar, args.interrupt_mode, args.external_mode), args.single)
     n_single = int(single.size)
+    single_mass = np.asarray(single.mass, float)
     particle_ids.append(np.asarray(single.id))
-    masses.append(np.asarray(single.mass, float))
+    masses.append(single_mass)
     positions.append(np.asarray(single.pos, float))
     system_ids.append(np.arange(offset, offset + n_single))
+    star_types.append(_leaf_star_type(single, n_single))
+    current_masses.append(_leaf_current_mass(single, single_mass))
     categories.append(
         {
             "category": "single",
@@ -99,29 +150,29 @@ def export_catalog(args) -> dict:
     specs = [
         ("binary", args.binary, lambda: _binary(
             petar,
-            _particle(petar, args.interrupt_mode),
-            _particle(petar, args.interrupt_mode),
+            _particle(petar, args.interrupt_mode, args.external_mode),
+            _particle(petar, args.interrupt_mode, args.external_mode),
         )),
         ("triple", args.triple, lambda: _binary(
             petar,
-            _particle(petar, args.interrupt_mode),
+            _particle(petar, args.interrupt_mode, args.external_mode),
             _binary(
                 petar,
-                _particle(petar, args.interrupt_mode),
-                _particle(petar, args.interrupt_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
             ),
         )),
         ("quadruple", args.quadruple, lambda: _binary(
             petar,
             _binary(
                 petar,
-                _particle(petar, args.interrupt_mode),
-                _particle(petar, args.interrupt_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
             ),
             _binary(
                 petar,
-                _particle(petar, args.interrupt_mode),
-                _particle(petar, args.interrupt_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
+                _particle(petar, args.interrupt_mode, args.external_mode),
             ),
         )),
     ]
@@ -137,6 +188,8 @@ def export_catalog(args) -> dict:
             masses,
             positions,
             system_ids,
+            star_types,
+            current_masses,
         )
         accounting["path"] = str(path)
         categories.append(accounting)
@@ -145,6 +198,8 @@ def export_catalog(args) -> dict:
     mass = np.concatenate(masses)
     position = np.concatenate(positions)
     system_id = np.concatenate(system_ids)
+    star_type = np.concatenate(star_types)
+    current_mass = np.concatenate(current_masses)
     if len(np.unique(particle_id)) != len(particle_id):
         unique, count = np.unique(particle_id, return_counts=True)
         duplicate = unique[count > 1][:10].tolist()
@@ -165,12 +220,15 @@ def export_catalog(args) -> dict:
         pos=position,
         system_id=system_id,
         time_myr=np.array([args.time_myr]),
+        star_type=star_type,
+        current_mass=current_mass,
     )
     metadata = {
         "status": "physical_system_catalog",
         "output": str(args.output),
         "time_myr": args.time_myr,
         "interrupt_mode": args.interrupt_mode,
+        "external_mode": args.external_mode,
         "confirmed_complete": bool(args.confirm_complete),
         "n_components": int(len(particle_id)),
         "n_systems": int(offset),
@@ -205,8 +263,10 @@ def run_self_test() -> dict:
         ),
     )
     particle_ids, masses, positions, system_ids = [], [], [], []
+    star_types, current_masses = [], []
     offset, accounting = _append_category(
-        tree, "triple", 10, particle_ids, masses, positions, system_ids
+        tree, "triple", 10, particle_ids, masses, positions, system_ids,
+        star_types, current_masses,
     )
     ids = np.concatenate(particle_ids)
     groups = np.concatenate(system_ids)
@@ -233,6 +293,12 @@ def main():
     parser.add_argument("--time-myr", type=float)
     parser.add_argument(
         "--interrupt-mode", choices=("none", "bse", "mobse", "bseEmp"), default="bse"
+    )
+    parser.add_argument(
+        "--external-mode", choices=("none", "galpy"), default="none",
+        help="必須跟產生這批輸入檔那次 `petar.data.process -t` 用的值完全"
+             "一致（petar_m45_grid.render_commands() 固定用 -t galpy），"
+             "否則 pot_ext 欄位錯位會讓後面所有欄位讀到錯的值",
     )
     parser.add_argument("--petar-package-path", type=Path)
     parser.add_argument("--output", type=Path)

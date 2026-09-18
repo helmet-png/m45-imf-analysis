@@ -13,16 +13,14 @@
 #   bash setup/setup_pyupmask.sh
 #
 # 前置：worker 已經照 docs/reference/CLOUD_WORKERS.md 第 2 節裝好
-# Python/venv，且 requirements 額外要裝 scikit-learn（pyUPMASK 用它做
-# PCA 跟 MinMax/StandardScaler，不在本專案既有的 numpy/scipy/astropy/
-# emcee 清單裡，是這次盤點才發現的缺口）：
-#   <python_bin> -m pip install scikit-learn
+# Python/venv。本腳本檢查 scikit-learn，缺少時會從 wheel 安裝。
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIN_COMMIT="3602293059f42141b402215525d1d408c3360487"
 TARGET="$HERE/pyUPMASK"
+PYTHON_BIN="${1:-python3}"
 
 if [ -d "$TARGET" ]; then
     echo "pyUPMASK/ 已存在（$TARGET），不重新 clone。"
@@ -31,6 +29,11 @@ else
     echo "Clone pyUPMASK @ $PIN_COMMIT ..."
     git clone https://github.com/msolpera/pyUPMASK.git "$TARGET"
     git -C "$TARGET" checkout "$PIN_COMMIT"
+fi
+
+if [ "$(git -C "$TARGET" rev-parse HEAD)" != "$PIN_COMMIT" ]; then
+    echo "錯誤：pyUPMASK/ 不在釘選的 commit $PIN_COMMIT，拒絕套用 patch。" >&2
+    exit 1
 fi
 
 echo "套用本機修改 patch（Python 3.12+ 相容性 + 專案設定）..."
@@ -45,9 +48,13 @@ else
     exit 1
 fi
 
+if ! "$PYTHON_BIN" -c 'import sklearn' 2>/dev/null; then
+    echo "安裝 pyUPMASK 需要的 scikit-learn（僅接受 wheel）..."
+    "$PYTHON_BIN" -m pip install --only-binary=:all: scikit-learn
+fi
+
 echo ""
 echo "驗證：匯入 dataIO/outer 兩個模組（不執行 pyUPMASK 本體）..."
-PYTHON_BIN="${1:-python3}"
 "$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '$TARGET')
