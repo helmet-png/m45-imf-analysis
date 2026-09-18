@@ -1,0 +1,84 @@
+{
+  "status": "petar_ensemble",
+  "n_runs": 10,
+  "mass_range_msun": [
+    0.3,
+    2.5
+  ],
+  "delta_alpha": {
+    "survival_selection": {
+      "n": 10,
+      "median": 0.0,
+      "q16": 0.0,
+      "q84": 0.0,
+      "sd": 0.0
+    },
+    "stellar_evolution_after_survival": {
+      "n": 10,
+      "median": -0.1635000000000001,
+      "q16": -0.18012000000000028,
+      "q84": -0.1326399999999999,
+      "sd": 0.023718019403914197
+    },
+    "finite_aperture": {
+      "n": 10,
+      "median": 0.03500000000000003,
+      "q16": -0.07122000000000003,
+      "q84": 0.11027999999999995,
+      "sd": 0.11868638647011426
+    },
+    "total_pdmf_minus_imf": {
+      "n": 10,
+      "median": -0.13800000000000012,
+      "q16": -0.1972400000000002,
+      "q84": -0.0694400000000001,
+      "sd": 0.11745142021751423
+    },
+    "correction_to_add_to_pdmf_for_imf": {
+      "n": 10,
+      "median": 0.13800000000000012,
+      "q16": 0.0694400000000001,
+      "q84": 0.1972400000000002,
+      "sd": 0.11745142021751423
+    }
+  },
+  "priority_1_seed_scatter": {
+    "survival_selection": {
+      "n": 3,
+      "median": 0.0,
+      "q16": 0.0,
+      "q84": 0.0,
+      "sd": 0.0
+    },
+    "stellar_evolution_after_survival": {
+      "n": 3,
+      "median": -0.1299999999999999,
+      "q16": -0.16332000000000016,
+      "q84": -0.12115999999999996,
+      "sd": 0.0326955654485438
+    },
+    "finite_aperture": {
+      "n": 3,
+      "median": -0.043500000000000094,
+      "q16": -0.07716,
+      "q84": 0.011580000000000024,
+      "sd": 0.06588057376799329
+    },
+    "total_pdmf_minus_imf": {
+      "n": 3,
+      "median": -0.1735,
+      "q16": -0.19831999999999997,
+      "q84": -0.15174000000000012,
+      "sd": 0.03427462618322762
+    },
+    "correction_to_add_to_pdmf_for_imf": {
+      "n": 3,
+      "median": 0.1735,
+      "q16": 0.15174000000000012,
+      "q84": 0.19831999999999997,
+      "sd": 0.03427462618322762
+    }
+  },
+  "rejected_inputs": [],
+  "interpretation": "Add correction_to_add_to_pdmf_for_imf to the matched PDMF alpha; do not combine with unresolved-binary corrections until sample definitions match."
+}

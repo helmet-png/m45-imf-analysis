@@ -312,3 +312,67 @@ mass_dependent_fbin_v2|inject_massdep_fbin.py|--procs 24 --n-syn 40000 --trials 
 # 之後就沒有新工作。這行純粹驗證派工機制現在還正常：kaggle_smoketest.py
 # 幾秒內跑完，不佔用 24 核太久，只是眼見為憑。
 senior24_dispatch_smoketest|kaggle_smoketest.py|||true|senior24
+
+# 2026-09-14：已完成的 M45 10-run PeTar screening grid 的 definition bridge。
+# 這是純後處理，不會重新積分；輸入是 senior24 上既有的 processed snapshots。
+# 以完整 10-run 為 gate，避免只挑中央模型就把 primary/system 修正當完整敏感度。
+m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20260914 --require-run-count 10||false|senior24
+
+# 2026-09-18：p2_free_lowmass 剩下 9 次重複（A3／D19）。第 1 次重複
+# （repeat_offset=0，2026-08-14 手動保存於
+# results/p2_free_lowmass_rep1_preserved.npz：p_lowmass=1.322、
+# alpha=2.389、logage=8.033、A_V=0.333、f_bin=0.617、MH=-0.017、
+# q_gamma=-0.867、dav=0.500、lnP=1334.3）耗時 158,545 秒（44 小時），
+# 是全專案第二重的單次擬合（--free-lowmass 在 config C/D 上多追加一維
+# p_lowmass 搜尋軸，見 fit_real.py --free-lowmass 旁的註解）。
+#
+# **拆法**：不排「--repeats 9」單一工作（一台 worker 序列跑會鎖住
+# 約 16.5 天），改拆成 9 個各跑 1 次的獨立工作，用 --repeat-offset
+# 1-9 保證跟已完成的 repeat_offset=0 用不同種子（種子公式見
+# fit_real.py 的 SEED_SCHEME："2000+13*(rep+repeat_offset)"，
+# --repeats 1 時 rep 恆為 0，所以種子完全由 repeat_offset 決定：
+# 2013/2026/.../2117，9 個都跟已完成那次的 2000 不同），可以分散到
+# 不同 worker 平行跑。跟 2026-09-01 那批 bp15/bp20 五組配對比較用
+# --repeat-offset {0,1,2,3,4} 拆分是同一個手法。
+#
+# **完成後合併方式**：`fit_real.py` 的 checkpoint 機制
+# （scripts/tools/checkpoint.py）認的是同一個 --tag 對應的單一
+# out_path（results/fit_real<tag>.npz），這 9 個工作各自用不同 tag
+# 輸出到不同檔案，**不會自動合併**，也不會被 checkpoint 自動接續
+# 到 rep1_preserved.npz（那份是加上逐次重複即時存檔功能之前手動
+# 包出來的，格式跟 checkpoint.py 現在認的 manifest 格式不同，見
+# results/RESULTS_LOG.md 2026-08-14 那行）。9 個工作全部跑完後，
+# 需要另外寫一支小腳本把 9 個 fit_real_free_lowmass_r{1..9}.npz 的
+# 單行結果，跟 p2_free_lowmass_rep1_preserved.npz 的那一行，合併
+# 成一份 10 次重複的結果再算平均與散布——這一步留給 9 個工作全部
+# 回收之後再做，不在這次排隊範圍內。
+#
+# worker 欄位留空，讓 cloud_queue.py 派給當下有空的節點（見上方
+# 格式說明「留空最後一欄就是誰有空給誰」）。
+# 2026-09-18 停用（使用者要求）：先讓 D19 Stage 2（成員判定閘門）完成，
+# 兩批一起排比分開排更有效率、也避免佔用 worker 排隊順位。D19 完成後
+# 把下面 9 行的 # 拿掉即可重新排入，內容未變。
+# p2_free_lowmass_r1|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 1 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r1|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r2|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 2 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r2|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r3|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 3 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r3|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r4|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 4 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r4|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r5|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 5 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r5|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r6|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 6 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r6|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r7|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 7 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r7|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r8|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 8 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r8|measure_overconfidence.py,injection_recovery.py|false|
+# p2_free_lowmass_r9|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 9 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r9|measure_overconfidence.py,injection_recovery.py|false|
+
+# 2026-09-18：D19 Stage 2 第一步——pyUPMASK 能不能在雲端 worker 上跑
+# 起來的小規模可行性測試（見 LIMITATIONS.md D19、WORK_BOARD.md
+# pyupmask_cloud_feasibility）。300 顆星子集＋OL_runs=3，預期幾分鐘
+# 內跑完。**過了才把下面完整規模的 G<20 重跑排進來**（目前還沒排，
+# 故意留到這次測試結果回來、確認 provisioning 真的在乾淨環境成立
+# 之後才排，避免正式規模因環境問題失敗浪費額度）。
+# 300 顆星的子集輸入已版控於 data/m45_g20_feasibility_subset.dat，
+# SSH worker 的 git pull 會帶到；腳本再複製進 prepared/ 給 run_variant.py。
+# 只派 gcp1（SSH）：Kaggle 打包器目前無法處理巢狀腳本及 setup/ 相依檔。
+# 首次派工在 gcp1 的系統 Python 安裝 scikit-learn 時碰到 PEP 668，
+# 尚未進入聚類。r2 補上專用 venv 後發現 worker 缺 python3.12-venv；補齊後
+# 已在同一台 gcp1 直接完成 300 顆／OL_runs=3 實測（聚類 2.6 秒），因此不重派。
+# d19_pyupmask_feasibility|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1
+# d19_pyupmask_feasibility_r2|scripts/diagnostics/pyupmask_feasibility.py|||false|gcp1
