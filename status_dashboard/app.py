@@ -801,7 +801,14 @@ def gather_timeline() -> list[dict]:
         entries.append({"label": label, "source": "雲端", **rec,
                         **index.get(label, {})})
     for label, rec in local_done.items():
-        if label in cloud_done:
+        # 2026-09-18 修正（Codex review）：以前只看 label 是否存在於
+        # cloud_done 就跳過本機紀錄，但上面雲端那個迴圈已經把
+        # push_failed 排除在 entries 之外——同一個 label 雲端
+        # push_failed、本機真的成功時，兩邊都不會出現在時間軸裡。
+        # 只有雲端紀錄真的被採納（不是 push_failed）才該蓋過本機紀錄，
+        # 跟 classify_label() 的優先序判準一致。
+        cloud_rec = cloud_done.get(label)
+        if cloud_rec is not None and cloud_rec["status"] != "push_failed":
             continue
         if rec["status"] in ("stalled_giveup", "preflight_fail"):
             continue
