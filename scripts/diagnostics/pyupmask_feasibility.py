@@ -30,6 +30,7 @@ HERE = Path(__file__).resolve().parent.parent.parent
 SUBSET_SOURCE = HERE / "data" / "m45_g20_feasibility_subset.dat"
 SUBSET = HERE / "prepared" / SUBSET_SOURCE.name
 OUT = HERE / "results" / "d19_pyupmask_feasibility.json"
+PYUPMASK_PYTHON = HERE / ".venv_pyupmask" / "bin" / "python3"
 
 
 def run(cmd, **kw):
@@ -79,8 +80,8 @@ def main():
         sys.exit(1)
 
     t0 = time.time()
-    r = run([sys.executable, str(HERE / "scripts" / "drivers" /
-                                 "run_variant.py"),
+    r = run([str(PYUPMASK_PYTHON), str(HERE / "scripts" / "drivers" /
+                                        "run_variant.py"),
              "--name", "d19_pyupmask_feasibility",
              "--input", SUBSET.name,
              "--ol-runs", "3"])

@@ -83,8 +83,8 @@ sensitivity_sweep.py` 的 `stars_per_cluster` 可行性檢查就卡在「本機
 沒有 `pyUPMASK/` 目錄，沒有驗證過能不能跑」，一直沒有解決。
 
 pyUPMASK 用 `scikit-learn` 做 PCA 與 MinMax/StandardScaler。
-`setup/setup_pyupmask.sh` 會先檢查 worker 的 Python 環境；缺少時只從 wheel
-安裝這個套件，安裝失敗就停止測試。
+`setup/setup_pyupmask.sh` 在 repo 內建立 `.venv_pyupmask/`，可沿用 worker
+已安裝的科學套件，缺少時只從 wheel 安裝到此 venv。系統 Python 不會被修改。
 
 **pyUPMASK 本身不能直接 `git clone` 原版**：本機這份是獨立 clone 自
 `https://github.com/msolpera/pyUPMASK`（釘在 commit `3602293`），但帶有
