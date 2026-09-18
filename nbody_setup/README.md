@@ -1,5 +1,12 @@
 # N-body（PeTar + mcluster）Windows 原生編譯設定
 
+**2026-09 起，正式模擬改在 Linux 上跑**（`setup_linux_nbody.sh`）：
+`--with-external=galpy`（銀河潮汐）需要 galpy，而 galpy 對 Windows ARM64
+沒有 wheel、對 Windows x64 也只到 Python 3.13（本機是 3.14），裝不起來。
+這個檔案的內容（Windows/MSYS2 編譯）繼續保留給協作者 Windows 機使用，
+但**不含銀河潮汐**，只用於管線通暢與能量守恆等級的驗證（smoke test
+S0-S2），不是正式網格的執行環境。
+
 PDMF→IMF 第 5 步（N-body 重建 M45 初始狀態）的環境設定，記錄如何在
 **沒有 WSL** 的 Windows 機器上用 MSYS2/MinGW-w64 編譯 PeTar（含 BSE 恆星
 演化）與 mcluster。背景見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節。
@@ -74,6 +81,48 @@ Linux 版**不套用任何 patch**——`petar_configure_mingw.patch` 與
 
 腳本會**先檢查編譯工具齊不齊、缺什麼就列出來並停下**，不會未經確認就
 對別人提供的機器 `sudo apt install`。
+
+## 為什麼是 shell 腳本，不是 Dockerfile（H14，2026-09-05 考慮過後的決定）
+
+`setup_linux_nbody.sh`／`setup_windows_nbody.sh` 已經做到 H14 真正要的
+東西——**釘選 commit（見上表）＋可重現的建置流程**，而且是實測跑過、
+真的編出可用執行檔的版本，不是紙上談兵。沒有另外包一層 Dockerfile：
+這批運算節點是隊友／學長借用的既有機器（見 `WORK_BOARD.md` 的
+`senior24`／`gcp1`），不是我們自己申請的乾淨容器環境，臨時要求對方
+先裝 Docker、把工作流程改成容器化，成本比維持現有 shell 腳本高，且
+腳本本身已經內建「先檢查、缺什麼列出來、不擅自 `sudo apt install`」
+這個對借用機器的禮貌——直接用 Docker 反而繞不過這個限制（容器化通常
+需要更高權限或至少要能裝 Docker daemon）。如果未來運算節點換成我們
+能完全控制的雲端 VM（例如比照 `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`
+的協調 VM 模式），再回頭評估 Dockerfile 值不值得投資。
+
+**版本鎖定缺口：galpy**——`petar_m45_grid.py` 目前還沒有任何指令用到
+galpy（見 D19／H3，銀河潮汐場還沒接上），但兩支 setup 腳本都已經預先
+加了鎖版本的安裝路徑（`INSTALL_GALPY=1` 觸發，`pip install
+"galpy<=1.10.2"`），理由是 PeTar 官方文件明講只支援 galpy 到 1.10.2
+（1.11.0 改了 `PowerSphericalPotentialwCutoff`，跟 PeTar 現在對
+`MWPotential2014` 的參數設定不相容，且不一定會直接報錯，是「跑起來但
+結果不對」這種最難發現的失敗模式）。**2026-09-18 修正（Codex
+review）**：原本 `INSTALL_GALPY=1` 只 `pip install` galpy，沒有同步在
+`./configure` 加 `--with-external=galpy`——PeTar 的 external 預設
+關閉，只裝套件不改 configure 選項，編出來的執行檔還是不含銀河潮汐場
+支援。已修好並補上驗證（`--help` 檢查有沒有 `--galpy-set` 選項），等
+H3 真的把銀河潮汐場接上 PeTar 時，直接設這個環境變數重跑腳本即可。
+
+### 已經編過、事後才需要 Galpy 支援時
+
+如果 PeTar 已經用 `setup_linux_nbody.sh`（沒設 `INSTALL_GALPY=1`）編過、
+不想整個重跑，可以用另一支腳本補裝：
+
+```bash
+bash nbody_setup/add_galpy_support_linux.sh
+```
+
+這支腳本會另外裝 Galpy（版本鎖在 <=1.10.2，PeTar 官方文件說更新版本不
+相容）並重新編譯出 `petar.omp.avx512.bse.galpy`，跟原本沒有 galpy 的
+`petar.omp.avx512.bse` **同時保留**在 `install/bin/` 底下，不會互相覆蓋。
+腳本裡有註解記錄一個實測踩到的編譯坑（conda 新版 GCC 的 `omp.h` 跟
+Galpy 標頭檔的 `extern "C"` 衝突），已經自動處理，不需要手動介入。
 
 ## 驗證（2026-08-12 已跑過，結果正常）
 
