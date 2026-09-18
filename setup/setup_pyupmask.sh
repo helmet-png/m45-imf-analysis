@@ -39,17 +39,35 @@ if [ "$(git -C "$TARGET" rev-parse HEAD)" != "$PIN_COMMIT" ]; then
     exit 1
 fi
 
-echo "套用本機修改 patch（Python 3.12+ 相容性 + 專案設定）..."
-if git -C "$TARGET" apply --check "$HERE/setup/pyupmask_local.patch" 2>/dev/null; then
-    git -C "$TARGET" apply "$HERE/setup/pyupmask_local.patch"
+echo "套用本機程式碼 patch（Python 3.12+ 相容性）..."
+# run_variant.py 會在每次執行時改寫 params.ini 的 OL_runs 等參數；把它
+# 排除在 patch 的冪等檢查外，避免前一次成功執行反而讓下一次 setup 失敗。
+if git -C "$TARGET" apply --exclude=params.ini --check \
+    "$HERE/setup/pyupmask_local.patch" 2>/dev/null; then
+    git -C "$TARGET" apply --exclude=params.ini "$HERE/setup/pyupmask_local.patch"
     echo "patch 套用成功。"
-elif git -C "$TARGET" apply --reverse --check "$HERE/setup/pyupmask_local.patch" 2>/dev/null; then
+elif git -C "$TARGET" apply --exclude=params.ini --reverse --check \
+    "$HERE/setup/pyupmask_local.patch" 2>/dev/null; then
     echo "patch 已經套用過（reverse-apply 檢查通過），跳過。"
 else
     echo "錯誤：patch 套不上去（既不是全新也不是已套用狀態）。" >&2
     echo "可能是 pyUPMASK 上游更新過，pin 的 commit 需要跟著換。" >&2
     exit 1
 fi
+
+ensure_ini_value() {
+    local key="$1" value="$2"
+    local ini="$TARGET/params.ini"
+    if ! grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$ini"; then
+        echo "錯誤：params.ini 找不到 ${key}，拒絕猜測設定格式。" >&2
+        exit 1
+    fi
+    sed -i -E "s|^([[:space:]]*${key}[[:space:]]*=[[:space:]]*).*|\\1${value}|" "$ini"
+}
+
+# 這兩項不由 run_variant.py 覆寫，故每次 setup 都明確恢復成產線設定。
+ensure_ini_value "rnd_seed" "99"
+ensure_ini_value "ID" "source_id"
 
 if ! "$VENV_PY" -m pip --version >/dev/null 2>&1; then
     if [ -e "$VENV" ]; then
