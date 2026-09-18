@@ -707,10 +707,19 @@ docstring 記載的另一個已知限制，時間戳無法分辨是哪個 label 
 projections quantify orientation sensitivity but not Gaia selection」，
 只是這個自承的缺口從沒被提升到這份權威清單。實際查驗
 `results/hr23_cmd_recall_by_magnitude.json`（2026-08-22 量的，
-`threshold=0.5`）：`16 <= G < 18` 這個星等區間的 recall 只有
-**0.7963**（432 顆 HR23 外部目錄成員裡，只有 344 顆出現在
-`cmd_members.csv`），對照 `8 <= G < 12` 的 0.950 與 `12 <= G < 16` 的
-0.924，明顯在低質量端（G 越暗對應質量越小）額外流失約 15–20%。
+`threshold=0.5`）：`16 <= G < 18` 這個星等區間，432 顆 HR23 外部目錄
+成員裡只有 344 顆出現在 `cmd_members.csv`（比值 0.7963），對照
+`8 <= G < 12` 的 0.950 與 `12 <= G < 16` 的 0.924，明顯在低質量端
+（G 越暗對應質量越小）額外流失約 15–20%。**這個 0.7963 是目錄到最終
+CMD 的重疊率（`hr23_cmd_recall_by_magnitude.json` 自己的 status 欄位
+標成 `catalogue_overlap_diagnostic_not_membership_truth`），不是已校準
+的純接受機率**——分子 344 是最終 `cmd_members.csv` 成員數，已經包含
+測光品質切選（BP/RP 訊噪比、excess 等）造成的流失，跟成員判定演算法
+本身漏掉的星混在一起沒有拆開（見 `docs/planning/M45_HR23_LOST_QUALITY_
+REPLAY_2026-08-22.md`：已追蹤的另一批類似流失星裡，62 顆全部能用現行
+品質切割重播解釋）。不能把這個比值直接當成「純 Gaia 偵測完整度」或
+獨立的 membership 接受率，尤其不能再跟 `analyze()` 已經做的孔徑選擇
+或未來若接上的測光品質選擇疊乘——那會把同一批流失算兩次。
 
 **後果**：N-body 模擬產生的「合成觀測樣本」目前完全不會複製這個星等
 相關的流失——`analyze()` 只有空間選擇，沒有星等選擇，等於假設 PeTar
