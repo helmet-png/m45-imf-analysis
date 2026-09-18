@@ -355,3 +355,18 @@ m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--r
 # p2_free_lowmass_r7|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 7 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r7|measure_overconfidence.py,injection_recovery.py|false|
 # p2_free_lowmass_r8|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 8 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r8|measure_overconfidence.py,injection_recovery.py|false|
 # p2_free_lowmass_r9|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 9 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r9|measure_overconfidence.py,injection_recovery.py|false|
+
+# 2026-09-18：D19 Stage 2 第一步——pyUPMASK 能不能在雲端 worker 上跑
+# 起來的小規模可行性測試（見 LIMITATIONS.md D19、WORK_BOARD.md
+# pyupmask_cloud_feasibility）。300 顆星子集＋OL_runs=3，預期幾分鐘
+# 內跑完。**過了才把下面完整規模的 G<20 重跑排進來**（目前還沒排，
+# 故意留到這次測試結果回來、確認 provisioning 真的在乾淨環境成立
+# 之後才排，避免正式規模因環境問題失敗浪費額度）。
+# 依賴：scripts/data_prep/prep.py 只需要用到 prepared/
+# m45_g20_feasibility_subset.dat（gitignore 排除，300 行，本機隨機抽樣
+# 產生），本身不是靠 git 同步過去的——SSH worker 需要這個檔案存在於
+# 該 worker 的 repo 副本裡，Kaggle worker 則要列進下面的額外檔案欄位。
+# 兩種情況都需要先手動把這個檔案放到目標 worker（例如透過
+# ssh_sync.py push 或等效機制），這步不在 cloud_queue.py 自動同步的
+# 範圍內，派工前要記得確認。
+d19_pyupmask_feasibility|scripts/diagnostics/pyupmask_feasibility.py||prepared/m45_g20_feasibility_subset.dat,setup/setup_pyupmask.sh,setup/pyupmask_local.patch|false|
