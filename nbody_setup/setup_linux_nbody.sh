@@ -167,13 +167,23 @@ fi
 # --with-interrupt=bse：把 BSE 恆星演化編進去。第 5 步要比較的是
 #   「動力學演化 + 恆星演化」之後的質量函數，少了 BSE 就少一個真實效應。
 # 用上面解析出來的 $CC／$CXX／$FC，不寫死 gcc／g++／gfortran——conda
-# 環境下那些純名稱不存在（見前面檢查段落的說明）。galpy 若已用上面的
-# 區塊裝好，configure 會自動偵測到（pip 裝的話不需要額外傳
-# --with-galpy-prefix）。
-echo "=== 編譯 PeTar（含 BSE 恆星演化）==="
+# 環境下那些純名稱不存在（見前面檢查段落的說明）。
+#
+# **external（galpy）預設關閉，一定要明確傳 --with-external=galpy**
+# （2026-09-18 修正，Codex review）：以前這裡的註解說「pip 裝的話
+# configure 會自動偵測到」是錯的——PeTar 的 configure.ac（釘選 commit
+# 84b81a8c339c49291de53f7a72829dd80e188182 第 355 行）external 預設
+# `off`，不管 galpy 有沒有裝，不傳這個旗標編出來的執行檔就是不含
+# 銀河潮汐場支援；按 README 設 INSTALL_GALPY=1 重跑這支腳本，pip 裝了
+# galpy 但 configure 選項沒變，還是得不到可用的執行檔。
+CONFIGURE_EXTERNAL_FLAG=""
+if [ "${INSTALL_GALPY:-0}" = "1" ]; then
+    CONFIGURE_EXTERNAL_FLAG="--with-external=galpy"
+fi
+echo "=== 編譯 PeTar（含 BSE 恆星演化${CONFIGURE_EXTERNAL_FLAG:+、Galpy 銀河潮汐場}）==="
 cd "$NBODY_DIR/PeTar"
 CXX="$CXX" CC="$CC" FC="$FC" ./configure --prefix="$NBODY_DIR/install" \
-    --with-mpi=no --with-interrupt=bse
+    --with-mpi=no --with-interrupt=bse $CONFIGURE_EXTERNAL_FLAG
 
 # **FCLIBS 要自己補**（2026-09-03 實測第三關）：BSE 是 Fortran 寫的，
 # bse-interface/Makefile 連結時用 `$(CXX) ... -lbse $(FCLIBS)`，靠
@@ -234,6 +244,19 @@ export OMP_STACKSIZE=128M
 "$NBODY_DIR/install/bin/petar" -h > /dev/null && echo "petar: OK"
 "$NBODY_DIR/mcluster/mcluster_sse" -N 10 -b 0.5 -C 5 -u 1 > /dev/null 2>&1 \
     && echo "mcluster_sse: OK"
+if [ "${INSTALL_GALPY:-0}" = "1" ]; then
+    # 2026-09-18 新增（Codex review）：只裝了 galpy 套件、configure 沒
+    # 帶 --with-external=galpy 也能編成功（只是編出來的執行檔不含銀河
+    # 潮汐場支援），make 不會失敗，唯一能事後確認的辦法是看 --help
+    # 有沒有印出只有 external 模式才會出現的 --galpy-set 旗標。
+    if "$NBODY_DIR/install/bin/petar" -h 2>&1 | grep -q -- "--galpy-set"; then
+        echo "petar galpy support: OK（--help 找得到 --galpy-set）"
+    else
+        echo "petar galpy support: 缺少！INSTALL_GALPY=1 但編出來的執行檔" >&2
+        echo "  --help 沒有 --galpy-set 選項，銀河潮汐場沒有真的編進去。" >&2
+        exit 1
+    fi
+fi
 
 echo
 echo "=== 完成 ==="
