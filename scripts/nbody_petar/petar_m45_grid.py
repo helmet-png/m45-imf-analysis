@@ -4,13 +4,21 @@
 H12（2026-09-05，參數標準化，查證 mcluster 官方 README 確認）：
 
 - `mcluster_S` is mcluster's ``-S`` flag: "degree of mass segregation
-  (0.0-1.0, 0.0=no segregation)" -- the SAME physical quantity as
-  Converse & Stahler (2010) Table 1's segregation parameter beta
-  (0.5 +/- 0.3), not a fractal dimension. mcluster's fractal dimension
-  is a *different* flag, ``-D`` (1.6-3.0, 3.0=no fractalization), which
-  this grid does not expose as a column and never passes -- do not
-  confuse the two when reading mcluster's own docs, the flag letters
-  are easy to mix up.
+  (0.0-1.0, 0.0=no segregation)", not a fractal dimension. mcluster's
+  fractal dimension is a *different* flag, ``-D`` (1.6-3.0, 3.0=no
+  fractalization), which this grid does not expose as a column and
+  never passes -- do not confuse the two when reading mcluster's own
+  docs, the flag letters are easy to mix up.
+  2026-09-18 correction (Codex review): ``-S`` and Converse & Stahler
+  (2010) Table 1's segregation parameter beta (0.5 +/- 0.3) both
+  *control* mass segregation, but they are not the same physical
+  quantity -- C&S Sec 2.1 Eq. (24) defines beta through a Gaussian
+  mass/energy-rank-ordering width parameter (sigma_E = -N_tot*ln(beta)/2),
+  while mcluster's ``-S``/``-P 2`` implements the Subr/PLUMIX
+  segregation model (see mcluster's own README). No numeric mapping
+  between the two has been verified; treat ``mcluster_S`` as its own
+  independent parameter, not a stand-in for beta, until someone
+  actually compares the two models' output mass-segregation profiles.
 - ``profile`` (mcluster's ``-P``): 0=Plummer, 2=Subr et al. (2007)
   mass-segregated profile (this grid never uses 1=King or 3=EFF/Nuker).
   This is a *different* modeling choice from the King/Woolley/Wilson
