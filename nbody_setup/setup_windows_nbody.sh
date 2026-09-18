@@ -50,9 +50,29 @@ cd "$NBODY_DIR/mcluster"
 cp "$HERE/mingw_compat.c" "$HERE/mingw_compat.h" .
 patch -p1 --forward -r - < "$HERE/mcluster_main_mingw.patch" || echo "  （mcluster main.c patch 已套用過，跳過）"
 
-echo "=== 編譯 PeTar（含 BSE 恆星演化）==="
+# galpy（可選，銀河潮汐場）——跟 setup_linux_nbody.sh 同一段邏輯與理由
+# （H14／LIMITATIONS.md D19）：預設不裝（還沒有指令用得到），要裝一定
+# 要鎖 <=1.10.2（PeTar 官方文件明講只支援到這個版本，1.11.0 改了
+# PowerSphericalPotentialwCutoff，跟 PeTar 現在的 MWPotential2014 設定
+# 不相容，不鎖版本會裝到不相容版、且不一定會直接報錯）。
+if [ "${INSTALL_GALPY:-0}" = "1" ]; then
+    echo "=== 安裝 galpy（銀河潮汐場，鎖版本 <=1.10.2）==="
+    pip install "galpy<=1.10.2"
+else
+    echo "=== 跳過 galpy（未設 INSTALL_GALPY=1；銀河潮汐場尚未接上 PeTar，見 D19） ==="
+fi
+
+# external（galpy）預設關閉，一定要明確傳 --with-external=galpy
+# （2026-09-18 修正，Codex review；完整原因見 setup_linux_nbody.sh
+# 同一段註解——PeTar configure.ac 的 external 預設 off，pip 裝了 galpy
+# 不代表 configure 會自動偵測到）。
+CONFIGURE_EXTERNAL_FLAG=""
+if [ "${INSTALL_GALPY:-0}" = "1" ]; then
+    CONFIGURE_EXTERNAL_FLAG="--with-external=galpy"
+fi
+echo "=== 編譯 PeTar（含 BSE 恆星演化${CONFIGURE_EXTERNAL_FLAG:+、Galpy 銀河潮汐場}）==="
 cd "$NBODY_DIR/PeTar"
-CXX=g++ CC=gcc FC=gfortran ./configure --prefix="$NBODY_DIR/install" --with-mpi=no --with-interrupt=bse
+CXX=g++ CC=gcc FC=gfortran ./configure --prefix="$NBODY_DIR/install" --with-mpi=no --with-interrupt=bse $CONFIGURE_EXTERNAL_FLAG
 make
 make install
 
@@ -65,5 +85,14 @@ echo "=== 驗證 ==="
 export OMP_STACKSIZE=128M
 "$NBODY_DIR/install/bin/petar" -h > /dev/null && echo "petar: OK"
 "$NBODY_DIR/mcluster/mcluster_sse.exe" -N 10 -b 0.5 -C 5 -u 1 > /dev/null 2>&1 && echo "mcluster_sse: OK"
+if [ "${INSTALL_GALPY:-0}" = "1" ]; then
+    if "$NBODY_DIR/install/bin/petar" -h 2>&1 | grep -q -- "--galpy-set"; then
+        echo "petar galpy support: OK（--help 找得到 --galpy-set）"
+    else
+        echo "petar galpy support: 缺少！INSTALL_GALPY=1 但編出來的執行檔" >&2
+        echo "  --help 沒有 --galpy-set 選項，銀河潮汐場沒有真的編進去。" >&2
+        exit 1
+    fi
+fi
 
 echo "=== 完成。安裝路徑：$NBODY_DIR/install/bin ==="
