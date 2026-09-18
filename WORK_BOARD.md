@@ -125,6 +125,18 @@ Tailscale 連線（不需要固定對外 IP，也不用改路由器）。**`proc
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| professor_report_preparation | 進行中 | 開始：2026-09-13 | M45 觀測分析、正式 10-run PeTar grid、既有限制與 GitHub 結果紀錄 | 教授討論簡報分工、報告流程、待確認科學問題 |
+
+professor_report_preparation：Codex 認領，為下週與教授的線上討論整理共同報告。先以已合併的 `docs/planning/NBODY_M45_FORMAL_RESULTS_20260913.md` 與現有結果為準，安排各成員負責觀測資料、前向模型、N-body、限制與下一步，並列出希望教授協助判斷的問題。這是報告準備工作，不會把 N-body component-star 修正誤寫成最終 IMF 結論；詳細草案見 `docs/planning/M45_PROFESSOR_REPORT_PLAN_2026-09-13.md`。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| m45_system_definition_bridge | 進行中 | 開始：2026-09-14 | 10 組 PeTar run 的 t = 0、125 Myr processed 多重星目錄；質量範圍 0.30–2.50 M☉；孔徑 11.68 pc | component、primary、system-total 與 photometric-system 的動力學斜率修正 |
+
+m45_system_definition_bridge：Codex 認領，將已完成的 10-run screening grid 做 definition-matched 後處理，不重新積分 N-body。每個 run 必須確認 `petar.data.process` 輸出的 single/binary/triple/quadruple 目錄完整，再同時匯出 t=0 和 t=125 Myr 的 system catalog；任何必要目錄遺失時腳本會停止，不用 component-star 修正冒充 primary/system 修正。工作由 `cloud_queue.txt` 派往 senior24，完成後先驗收 manifest 和 10 份 bridge JSON，才可把結果記入 `results/RESULTS_LOG.md`。耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
 | p6_lowmass_v3（A1、A3） | 尚未進行 | 指派時間：2026-08-21 | 合成星數 N = 40,000 顆；重複次數 = 3；精修階數 = 2 階；低質量段冪次 p 的掃描點 5 個 | 低質量段冪次 p 對 α 的關係曲線（斜率 d(alpha)/d(p)） |
 
 p6_lowmass_v3：量低質量段冪次 d(alpha)/d(p) 的斜率，這是目前最大的
@@ -144,9 +156,9 @@ radial_r1_final（5 次重複、355 顆核心切片、實測 72,814 秒即約 4 
 |---|---|---|---|---|
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| nbody_prior_from_radial（A5） | 尚未進行 | 指派時間：2026-08-12 | 恆星數 N = 400 顆；質量分層度 S = 0.3、0.5、0.7（三組）；virial 比 Q = 0.5，圍繞 pilot 參數小幅擾動 | 3–5 組模擬跑完的 α(r) 曲線，跟觀測 α(<r) 的擬合優度比較 |
+| nbody_prior_from_radial（A5） | 進行中 | 開始：2026-09-16 | 恆星數 N = 400 顆；質量分層度 S = 0.3、0.5、0.7（三組）；virial 比 Q = 0.5，圍繞 pilot 參數小幅擾動 | 3–5 組模擬跑完的 α(r) 曲線，跟觀測 α(<r) 的擬合優度比較 |
 
-nbody_prior_from_radial：N-body 模擬（第 5 步）的初步校準方向，不是
+nbody_prior_from_radial：Codex 認領。這是 N-body 模擬（第 5 步）的初步校準方向，不是
 正式版本。指令基礎：mcluster_sse -N 400 -S 0.3/0.5/0.7 -P 0 -R 2.3
 -Q 0.5（各跑數組）。前置的三個定義不一致（分箱方式、半徑維度、
 質量範圍與估計量）已經解決並寫進 analyze_alpha_r.py，下一步是真正
@@ -292,6 +304,32 @@ LIMITATIONS.md D11）。查證前兩道 gate：Gate 1（Gaia→Johnson V 紅端
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| lowmass_depth_extension（D19） | 進行中 | 開始日期：2026-09-17 | 質量下限目標 0.10 M☉、顏色誤差門檻 54 mmag、G 範圍 16–20 星等 | Stage 0：通過（分段顏色，質量下限 0.090 M☉、sigma_M 最差 0.0394 M☉）。等時線比較：產線全段 PARSEC，BHAC15 拼接版當系統誤差檢驗（低質量段質量差 14.6–34.4%）。Stage 2 未跑 |
+
+lowmass_depth_extension：認領人：Claude session（分支
+`claude/d19-lowmass-colour`）。把資料下限從 0.173 M☉ 推到約 0.09 M☉，
+估計多 165 顆成員（上限 227），把低質量段冪次的統計誤差從約 0.13 壓到約
+0.07（見 LIMITATIONS.md D19）。**訂正**：初版寫「目標是消掉 0.248 系統誤差」
+不對——那件事用現有深度就做得到（A3：跑完 `p2_free_lowmass`，P6b v2 已證實
+可辨識），不需要等 D19；D19 是讓誤差棒更短。
+**Stage 0 顏色閘門已完成**：判準在跑之前就寫死（質量下限 ≤0.15 M☉、
+sigma_M ≤0.05 M☉、假匹配率 ≤2%、逐分箱完整度 ≥85%），結論是分段顏色
+（亮端 BP−RP、暗端 G−RP）通過，質量下限 0.090 M☉、sigma_M 中位 0.0199／
+最差 0.0394 M☉。**關鍵結論：不需要任何近紅外交叉比對**——需要的 RP
+測光已經在 `data/m45_r5_g20_plx4.csv` 裡，過去是因為堅持用 BP−RP 才
+丟掉的；依成本由低到高的原則，UKIDSS／2MASS／PanSTARRS 路線不必啟動。
+新瓶頸換成等時線（PARSEC 最低質量 0.0900 M☉ = G 19.80，比資料深度
+G 20.0 還淺）。
+
+**下一步是 Stage 2 成員判定閘門，不是直接改 pipeline**：pyUPMASK 吃 5D
+Gaia 天測，G≈20 的天測品質能不能撐住 P>0.7 還沒驗證。**退出判準先寫在
+這裡，讓它的時間戳早於結果**——若延伸段的成員完整度無法表達成 (G, colour)
+的單一函數並給出特徵化的不確定度，D19 就產出診斷圖與書面限制，**不產出
+alpha 數字**（否則只是把 C8 的未建模完整度問題做大）。Stage 0 尚未結算的
+兩項：ΔN_members 要等成員重跑，C21 星雲汙染檢查未實作。耗時未查證。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
 | mass_dependent_fbin（D14 衍生） | 尚未進行 | 指派時間：2026-08-19 | 雙星比例對比度 contrast = 0.0、0.15、0.30（三組）；質量斷點 m_break = 0.5 M☉ | α 偏移量對 contrast 的關係 |
 
 mass_dependent_fbin：雙星比例是否隨主星質量變化，目前模型假設是
@@ -428,3 +466,29 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 排時間投入——優先度排序見 LIMITATIONS.md 本身的分級（C 類是「修不掉、
 論文必須聲明」，D 類是「已知風險、尚未驗證但沒有污染現有結果的證據」），
 等第一、二階段的現役缺陷都解決、或有人主動想認領才處理。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| pyupmask_cloud_feasibility（D19／D2） | 進行中 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | 首次建置因 PEP 668 失敗；專用 venv 修正後待重跑 |
+
+pyupmask_cloud_feasibility：認領人：Codex session（PR #213 審核與派工）。
+D19 Stage 2（成員判定閘門）要先重跑
+pyUPMASK 到 G<20，但全專案至今沒有任何 worker 驗證過 pyUPMASK 能跑
+（`sensitivity_sweep.py --target stars_per_cluster` 的可行性檢查一直
+卡在這裡，見 D2）。查出比「沒驗證過」更具體的原因：本機
+`pyUPMASK/`（獨立 clone，被 `.gitignore` 排除）帶三處從未進版控的
+本機修改，其中 Python 3.12+ 相容性補丁是必要的（`distutils.strtobool`
+在 3.12 被移除，原版直接 clone 到現代 Python 的 worker 上會在第一步
+匯入就崩潰）。已把差異存成 `setup/pyupmask_local.patch`、寫
+`setup/setup_pyupmask.sh` 做 clone＋套 patch＋驗證匯入，在本機一份
+乾淨的 pin commit（`3602293`）checkout 上實測套用成功。`docs/reference/
+CLOUD_WORKERS.md` 補了 2.1 節（含另一個發現：worker venv 清單缺
+scikit-learn，pyUPMASK 的 PCA/Scaler 需要它）。
+
+`scripts/diagnostics/pyupmask_feasibility.py` 排進 `cloud_queue.txt`
+（重派標籤 `d19_pyupmask_feasibility_r2`），用 300 顆星的子集＋OL_runs=3 做端到端
+驗證（provisioning → 實際跑一次聚類 → 產出檔案），過了才排完整的
+G<20 9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
+腳本會把耗時粗略外推到正式規模（N² × OL_runs 線性外推，量級參考）。
+子集檔已版控於 `data/m45_g20_feasibility_subset.dat`，指定 SSH worker
+`gcp1`（Kaggle 打包器尚不支援巢狀腳本）。耗時未查證。

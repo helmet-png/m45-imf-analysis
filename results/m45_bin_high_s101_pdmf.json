@@ -1,0 +1,102 @@
+{
+  "status": "component_star_dynamical_correction",
+  "definition": "delta_alpha = measured_PDMF_alpha - birth_IMF_alpha",
+  "mass_range_msun": [
+    0.3,
+    2.5
+  ],
+  "initial_time_myr": 0.0,
+  "final_time_myr": 125.0,
+  "particle_accounting": {
+    "n_initial": 2418,
+    "n_final": 2404,
+    "n_matched": 2404,
+    "n_lost_from_initial": 14,
+    "n_final_not_in_initial": 0
+  },
+  "reader_accounting": {
+    "initial": {
+      "raw_particle_count": 2418,
+      "physical_particle_count": 2418,
+      "artificial_removed": 0,
+      "unused_removed": 0,
+      "member_masses_restored": 1762
+    },
+    "final": {
+      "raw_particle_count": 2404,
+      "physical_particle_count": 2404,
+      "artificial_removed": 0,
+      "unused_removed": 0,
+      "member_masses_restored": 1720
+    }
+  },
+  "center": {
+    "method": "shrinking_sphere_mass_weighted",
+    "position_pc": [
+      -3.222221528335894,
+      2.8511289382920624,
+      -5.195115362829816
+    ],
+    "final_center_sample_size": 128
+  },
+  "alpha": {
+    "initial_global_birth_mass": 2.2150000000000003,
+    "final_survivors_birth_mass": 2.2150000000000003,
+    "final_survivors_current_mass": 2.056,
+    "final_projected_aperture_median": 2.034,
+    "final_projected_aperture_values": [
+      2.042,
+      2.007,
+      2.073,
+      1.941,
+      2.052,
+      1.975,
+      2.033,
+      2.049,
+      1.9560000000000002,
+      2.009,
+      2.026,
+      2.056,
+      2.089,
+      1.9360000000000002,
+      2.044,
+      2.072,
+      2.081,
+      1.9820000000000002,
+      2.038,
+      2.073,
+      2.085,
+      2.035,
+      1.953,
+      2.058,
+      2.023,
+      1.925,
+      1.975,
+      1.9820000000000002,
+      1.9900000000000002,
+      2.095,
+      1.945,
+      2.054
+    ],
+    "n_projections": 32,
+    "projection_standard_deviation": 0.04965250339862024,
+    "aperture_radius_pc": 11.68
+  },
+  "delta_alpha": {
+    "survival_selection": 0.0,
+    "stellar_evolution_after_survival": -0.15900000000000025,
+    "finite_aperture": -0.02200000000000024,
+    "total_pdmf_minus_imf": -0.1810000000000005,
+    "correction_to_add_to_pdmf_for_imf": 0.1810000000000005
+  },
+  "limitations": [
+    "Component-star mass functions; unresolved observational systems are not synthesized.",
+    "Missing IDs combine escape, removal and merger unless event catalogs are supplied.",
+    "Uniform sky projections quantify orientation sensitivity but not Gaia selection.",
+    "A production inference needs an ensemble over initial conditions and random seeds."
+  ],
+  "inputs": {
+    "initial": "/home/estopic/m45_membership/runs/m45_bin_high_s101_formal_125myr_20260913/data.0",
+    "final": "/home/estopic/m45_membership/runs/m45_bin_high_s101_formal_125myr_20260913/data.25"
+  }
+}

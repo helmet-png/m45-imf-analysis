@@ -1,0 +1,96 @@
+diff --git a/modules/dataIO.py b/modules/dataIO.py
+index 4d70e86..8f9e99d 100644
+--- a/modules/dataIO.py
++++ b/modules/dataIO.py
+@@ -6,11 +6,20 @@ from astropy.table import Column
+ from astropy.table import Table, vstack
+ import configparser
+ import warnings
+-from distutils.util import strtobool
+ from sklearn.preprocessing import MinMaxScaler
+ from .outlierRjct import stdRegion, sklearnMethod
+ 
+ 
++def strtobool(val):
++    """distutils 在 Python 3.12 被移除，補一個等效實作（原本 import 自 distutils.util）。"""
++    val = val.strip().lower()
++    if val in ('y', 'yes', 't', 'true', 'on', '1'):
++        return 1
++    if val in ('n', 'no', 'f', 'false', 'off', '0'):
++        return 0
++    raise ValueError("invalid truth value {!r}".format(val))
++
++
+ def readINI():
+     """
+     Read .ini config file
+diff --git a/modules/outer.py b/modules/outer.py
+index 1a820f9..58665ec 100644
+--- a/modules/outer.py
++++ b/modules/outer.py
+@@ -1,4 +1,6 @@
+ 
++import os
++
+ import numpy as np
+ from sklearn.preprocessing import StandardScaler
+ from sklearn.decomposition import PCA
+@@ -108,8 +110,16 @@ def reSampleData(resampleFlag, data, data_err, prfl, standard_scale=True):
+     """
+     if resampleFlag:
+         # Gaussian random sample
+-        grs = np.random.normal(0., 1., data.shape[0])
+-        sampled_data = data + grs[:, np.newaxis] * data_err
++        #
++        # 原始 pyUPMASK 每顆星只抽「一個」亂數，再套用到所有資料維度上，等於
++        # pmRA/pmDE/Plx 的擾動完全相關。設環境變數 PYUPMASK_INDEP_RESAMPLE=1
++        # 改成每個維度各自獨立抽樣。保留原行為當預設，才不會偏離已發表的方法。
++        if os.environ.get("PYUPMASK_INDEP_RESAMPLE") == "1":
++            grs = np.random.normal(0., 1., data.shape)
++            sampled_data = data + grs * data_err
++        else:
++            grs = np.random.normal(0., 1., data.shape[0])
++            sampled_data = data + grs[:, np.newaxis] * data_err
+     else:
+         sampled_data = np.array(list(data))
+ 
+diff --git a/params.ini b/params.ini
+index d519085..92c7a36 100644
+--- a/params.ini
++++ b/params.ini
+@@ -3,7 +3,7 @@
+ 
+ # Random seed integer for reproducibility. If 'None', a seed will be randomly
+ # selected.
+-rnd_seed     =  None
++rnd_seed     =  99
+ 
+ # A value of '0' will hide most of the output. A value of '1' will print all
+ # output to screen.
+@@ -36,7 +36,7 @@ numpy_multi  = True
+ #             'Outer loop' parameters below. Otherwise, this parameter can be
+ #             commented out.
+ #
+-ID           = None
++ID           = source_id
+ xy_coords    = _x  _y
+ data         = pmRA  pmDE  Plx
+ uncert       = e_pmRA e_pmDE e_Plx
+@@ -54,16 +54,12 @@ stdRegion_nstd = 5.
+ 
+ # Number of outer loop (OL) runs.
+ OL_runs      = 25
+-
+ # Re-sample using uncertainties?
+-resampleFlag = False
+-
++resampleFlag = True
+ # Apply PCA dimensionality reduction?
+ PCAflag      = True
+-
+ # Number of dimensions to keep
+ PCAdims      = 2
+-
+ # Apply Gaussian-Uniform Mixture Model cleaning?
+ GUMM_flag    = True
+ 
