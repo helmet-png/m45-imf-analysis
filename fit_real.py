@@ -114,6 +114,7 @@ sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
 from pipeline import joint_fit, selection as selmod           # noqa: E402
+from pipeline.step5_imf import exclude_confirmed_non_members  # noqa: E402
 from pipeline.table_compat import Table                       # noqa: E402
 from measure_overconfidence import GRID                       # noqa: E402
 from injection_recovery import COARSE, multi_stage_best       # noqa: E402
@@ -319,6 +320,15 @@ def main():
     color = np.asarray(clean["bp_rp"], float)
     mag = np.asarray(clean["phot_g_mean_mag"], float)
     ok = np.isfinite(color) & np.isfinite(mag)
+    # H8（2026-09 審視）：headline 樣本曾直接讀 cmd_members.csv，從未排除
+    # step5_imf.CONFIRMED_NON_MEMBER_IDS 裡兩顆已確認非成員（RV 偏離
+    # bulk_rv 達 19.5σ／350σ，見該常數旁的查證紀錄）。run_pipeline.py
+    # 第 5 步一直有排除，這裡補齊，兩條路徑才用同一個樣本定義。
+    if "source_id" in clean.colnames:
+        excluded = exclude_confirmed_non_members(clean["source_id"])
+        if excluded.any():
+            print(f"排除已確認非成員：{int(excluded.sum())} 顆", flush=True)
+        ok &= ~excluded
     if args.radius_range:
         # 中心與角距離的算法跟 run_pipeline.py 第 5 步完全一致（樣本中位
         # ra/dec + 球面角距），兩邊的 alpha(r) 才比得起來。

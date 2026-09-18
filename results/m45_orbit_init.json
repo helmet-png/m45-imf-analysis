@@ -1,0 +1,53 @@
+{
+  "status": "orbit_init",
+  "inputs": {
+    "ra_deg": 56.59137547202889,
+    "dec_deg": 24.119615396509012,
+    "distance_pc": 135.48436417649728,
+    "pmra_masyr": 19.950813723186265,
+    "pmdec_masyr": -45.45648384518233,
+    "rv_kms": 5.343,
+    "t_myr": 125.0
+  },
+  "frame_assumptions": {
+    "galcen_distance_kpc": 8.0,
+    "z_sun_pc": 15.0,
+    "galcen_v_sun_kms": [
+      10.0,
+      235.0,
+      7.0
+    ],
+    "source": "PeTar tools/analysis/data.py toSkyCoord() \u9810\u8a2d\u53c3\u6578\uff0c\u9010\u5b57\u5c0d\u7167"
+  },
+  "result": {
+    "position_pc": [
+      -6186.28928406272,
+      4603.943192447958,
+      -32.276476355761375
+    ],
+    "velocity_kms": [
+      -114.57512052188754,
+      -185.99820097441173,
+      7.538376463936508
+    ],
+    "galactocentric_radius_kpc": 7.711450448871284,
+    "z_kpc": -0.03227647635576138,
+    "galactocentric_radius_now_kpc": 8.120822372314576
+  },
+  "petar_init_c_flag": "-c -6186.289284,4603.943192,-32.276476,-114.575121,-185.998201,7.538376",
+  "plausibility_check": {
+    "galactocentric_radius_now_kpc": 8.120822372314576,
+    "expected_range_now_kpc": [
+      7.5,
+      8.7
+    ],
+    "galactocentric_radius_past_kpc": 7.711450448871284,
+    "expected_range_past_kpc": [
+      6.0,
+      10.0
+    ],
+    "z_offset_pc": -32.276476355761375,
+    "expected_abs_max_pc": 100.0,
+    "passed": true
+  }
+}
