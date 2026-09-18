@@ -21,12 +21,14 @@ Codex review): the ``12.09`` pc constant used below (and in
 predates a direct measurement.  Computing the great-circle distance for
 all 1,078 real members of ``data/cmd_members.csv`` (same formula as
 ``run_pipeline.py`` step 5 and ``PDMF_TO_IMF_PLAN.md`` section 2, M45
-distance = 136 pc) gives a maximum radius of 4.9277 deg = 11.70 pc.
+distance = 136 pc, sample's own median ra/dec as center) gives a maximum
+radius of 4.928 deg = 11.68 pc (see ``DEFAULT_RADII_PC`` below for the
+derivation).
 
 This is NOT the same thing as the survey selection boundary, and calling
-it "the aperture that matches the real sample" (as an earlier version of
-this docstring did) overstates what was actually measured. Three
-distinct radii are in play here, and they must not be conflated:
+it "the aperture that matches the real sample" without qualification
+overstates what was actually measured. Three distinct radii are in play
+here, and they must not be conflated:
 
 1. **Query footprint**: the actual cone search radius used to pull the
    Gaia sample in the first place -- ``config.toml``'s ``radius_deg``
@@ -38,28 +40,25 @@ distinct radii are in play here, and they must not be conflated:
    *and* mock target statistics must be recomputed at that exact radius
    with the same center/distance/selection rule -- not just substituted
    as a constant on one side.
-3. **Observed max member radius**: 11.70 pc, the outermost surviving
+3. **Observed max member radius**: 11.68 pc, the outermost surviving
    member of the *current* ``cmd_members.csv``. This number drifts every
    time a non-member gets pruned from the sample (it is a property of
    the current membership list, not a fixed survey boundary), so it is
    not interchangeable with (1) or (2) without re-deriving it after every
    membership-list change.
 
-11.70 pc is used below (``DEFAULT_RADII_PC``) as radius #3 above, i.e.
+11.68 pc is used below (``DEFAULT_RADII_PC``) as radius #3 above, i.e.
 "the radius containing the currently-known real sample", which is a
 reasonable choice for *some* analyses -- but anyone who adopts it as (2)
 must re-cut both the observed sample and any mock/simulation targets with
 this same center/distance/rule and regenerate the comparison targets, not
 silently swap the simulation-side constant while leaving observed-side
-statistics computed under a different footprint. Note that other
-branches in this repository have independently landed *different* values
-for essentially the same "M45 analysis aperture" question (11.87 pc in
-``PDMF_TO_IMF_PLAN.md``, 11.68 pc in ``docs/planning/
-NBODY_PREREGISTRATION.md`` from a parallel branch) -- these have not been
-reconciled with 11.70 pc here; do not assume any one of them is settled
-until that reconciliation happens. 12.09 pc is kept only where changing
-it would silently reshuffle an existing default's position in a list
-(see ``DEFAULT_RADII_PC`` below).
+statistics computed under a different footprint. Note that
+``PDMF_TO_IMF_PLAN.md`` independently uses 11.87 pc (radius #1, the exact
+5.00 deg query cone) for a different purpose -- do not assume the two are
+interchangeable just because they are both called "the M45 aperture".
+12.09 pc is kept only where changing it would silently reshuffle an
+existing default's position in a list (see ``DEFAULT_RADII_PC`` below).
 """
 from __future__ import annotations
 
@@ -75,9 +74,14 @@ import numpy as np
 
 
 HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
-# 11.70 pc = the real sample's outermost member (see module docstring,
-# H4.4); replaces the earlier unmeasured 12.09 pc.
-DEFAULT_RADII_PC = np.array([2.0, 4.0, 8.0, 11.70, 20.0])
+# 11.68 pc（2026-09 訂正，取代先前的 12.09）：舊值是 tan(5.1 度)*135.48 pc，
+# 而 5.1 度是 config.toml 徑向分箱的外緣註記（"M45 潮汐半徑"），不是樣本
+# 實際涵蓋的範圍——data/cmd_members.csv 用樣本自身中位 ra/dec 當中心量出
+# 的最大角距只有 4.928 度。11.68 = tan(4.928 度)*135.48 pc，是樣本實際
+# 孔徑，模擬端的比較基準要用這個而不是查詢半徑或分箱外緣。這是下面
+# docstring 說的「radius #3（觀測到的目前樣本最大半徑）」，不是查詢
+# footprint 本身，會隨成員名單變動而改變，見模組開頭的完整說明。
+DEFAULT_RADII_PC = np.array([2.0, 4.0, 8.0, 11.68, 20.0])
 
 
 @dataclass(frozen=True)
@@ -516,8 +520,8 @@ def analyze(initial, final, mass_min, mass_max, radii_pc, n_projections=32):
     initial_alpha = rows[0]["alpha"]
     survivor_birth_alpha = rows[1]["alpha"]
     survivor_current_alpha = rows[2]["alpha"]
-    # 11.70 pc = the real sample's outermost member (H4.4, module docstring).
-    target_radius = float(radii_pc[np.argmin(np.abs(radii_pc - 11.70))])
+    # 11.68 pc = the real sample's outermost member (H4.4, module docstring).
+    target_radius = float(radii_pc[np.argmin(np.abs(radii_pc - 11.68))])
     target_rows = [
         row
         for row in rows
