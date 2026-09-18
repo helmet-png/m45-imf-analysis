@@ -869,7 +869,42 @@ OL_runs=25 約 5.8 小時（量級參考，非正式估時）。
 (2) C21 的星雲汙染定量檢查（用 `phot_bp_rp_excess_factor` 分組比較
 G−RP 與 BP−RP 對星雲位置的散布敏感度），Stage 0 閘門的判準之一，
 目前也還沒實作。這兩項不依賴 `d19_full_membership_run` 的結果，可以
-平行進行。
+平行進行——以下兩項都已完成。
+
+**(1) M45 control field 已建（2026-09-18，
+`scripts/diagnostics/build_m45_control_field.py`，輸出
+`data/m45_control_field.csv`）**：不需要新的 TAP 查詢——M45 自己的場星樣本
+`data/m45_r5_g20_plx4.csv`（5° 錐，G<20，9,278 顆）已經覆蓋 Stage 2
+需要的全部深度，裡面 8,200 顆本來就不是成員。作法：算現有 1,078 顆成員的
+(pmra, pmdec, parallax) 中心與離散度，取場星裡任一維度偏離中心超過
+**10 倍成員自己標準差**的星，當「運動學上絕對不可能是成員」的已知
+非成員，寫入 `data/m45_control_field.csv`（7,228 顆，每個 0.5 星等分箱
+都有 448–628 顆，遠超最低需求 100 顆）。10σ 是刻意保守的門檻，代價是
+犧牲樣本數，換取不混進任何運動學邊緣真成員的把握。**用法**：
+`d19_full_membership_run` 跑完後，這份表裡的 source_id 在
+`results/d19_g20_full.dat` 裡查到的 `probs_final` 就是「pyUPMASK 給
+已知非成員多高的機率」，按 G 分箱看這個機率會不會隨星等變暗系統性
+升高，就是 Stage 2 要的可靠度曲線。
+
+**(2) C21 星雲汙染定量檢查已完成（2026-09-18，
+`scripts/diagnostics/check_nebula_colour_robustness.py`，結果檔
+`results/d19_nebula_colour_robustness.npz`）**：用 Gaia 官方 BP/RP
+超額流量基準曲線（`bp_rp_excess_expected()`，Riello et al. 2021）算出
+每顆成員的汙染訊噪比 `(實測 excess − 基準期望值) / 基準散布`，依中位數
+分成低／高汙染兩組，比較兩組各自對等時線主序的顏色殘差散布（MAD 估計）：
+
+| 顏色 | 低汙染組散布 | 高汙染組散布 | 高／低比值 |
+|---|---|---|---|
+| BP−RP | 0.0791 | 0.0877 | 1.11 |
+| G−RP | 0.0206 | 0.0190 | 0.92 |
+
+方向支持「G−RP 對星雲汙染更穩健」——BP−RP 從低汙染組到高汙染組散布
+增加 11%，G−RP 反而略降。**但這只是邊緣證據，不是明確顯著**：兩個比值
+差（BP−RP 比值 − G−RP 比值）的 2,000 次 bootstrap 95% CI 是
+[−0.021, 0.375]，窄幅涵蓋 0（96.2% 的重抽為正）。這是 D19 Stage 0
+選 G−RP 當暗端顏色的第三個獨立理由（前兩個是深度延伸不需要交叉比對、
+對等時線模型選擇更穩健，見上方），但引用時要帶著「方向一致、統計上
+邊緣」這個但書，不能講成「已證實」。
 
 **低質量段的等時線選擇（2026-09-18，`scripts/diagnostics/compare_lowmass_isochrones.py`，
 結果檔 `results/d19_isochrone_compare.npz`）**：同一年齡 logAge=8.00、MH=0

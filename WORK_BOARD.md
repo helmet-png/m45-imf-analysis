@@ -497,3 +497,14 @@ provisioning 已驗證過的機器；Kaggle 打包器目前無法處理巢狀腳
 **這支腳本只負責跑聚類，不做分析**——跑完的 `results/d19_g20_full.dat`
 是下一步（P(member) 可靠度 vs G、跟 control field 比對，決定 Stage 2
 閘門通不通過）的輸入，那是獨立的後續工作，見 `LIMITATIONS.md` D19。
+
+**平行完成的兩項前置工作（不依賴這次重跑的結果）**：
+`scripts/diagnostics/build_m45_control_field.py` 建出
+`data/m45_control_field.csv`（7,228 顆運動學上確定非成員的場星，10σ
+門檻，每個 0.5 星等分箱都有 448–628 顆）；
+`scripts/diagnostics/check_nebula_colour_robustness.py` 量化 C21——
+G−RP 對星雲汙染的散布比值 0.92，BP−RP 是 1.11，方向支持 G−RP 更穩健，
+但 bootstrap 95% CI 窄幅涵蓋 0，只是邊緣證據。細節見 `LIMITATIONS.md`
+D19。`d19_full_membership_run` 一跑完，`results/d19_g20_full.dat` 對照
+`data/m45_control_field.csv` 的 source_id 就能直接算 P(member) 可靠度
+vs G。
