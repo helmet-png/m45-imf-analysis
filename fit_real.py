@@ -114,7 +114,7 @@ sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402
 from pipeline import joint_fit, selection as selmod           # noqa: E402
-from pipeline.step5_imf import exclude_confirmed_non_members  # noqa: E402
+from pipeline import step5_imf                                # noqa: E402
 from pipeline.table_compat import Table                       # noqa: E402
 from measure_overconfidence import GRID                       # noqa: E402
 from injection_recovery import COARSE, multi_stage_best       # noqa: E402
@@ -313,6 +313,18 @@ def main():
     cfg = cfgmod.load()
     c3 = cfg.step3_age
     clean = Table.read(HERE / args.members_file, format="csv")
+    # 已確認的非成員天體（RV+logg 雙訊號，見 LIMITATIONS.md A6）——顏色跟
+    # 真成員無異，assign_masses() 的顏色檢查抓不到，只能靠這份獨立名單
+    # 排除。run_pipeline.py（第 4/5 步）與 traditional_accounting.py 都
+    # 已經接上這個機制，這支腳本（headline 前向模型數字的來源）先前漏接
+    # （2026-09-05 使用者回報查出），會讓 p2_final 系列等既有結果混入這
+    # 兩顆已確認非成員。
+    excl = step5_imf.exclude_confirmed_non_members(
+        np.asarray(clean["source_id"], np.int64))
+    if excl.any():
+        print(f"排除 {int(excl.sum())} 顆已確認非成員天體（見 "
+              f"LIMITATIONS.md A6）")
+    clean = clean[~excl]
     errmodel = dict(np.load(HERE / args.errmodel_file))
     grid = isomod.load_grid(isomod.CACHE / args.grid)
     plx = np.asarray(clean["parallax"], float)
@@ -320,15 +332,6 @@ def main():
     color = np.asarray(clean["bp_rp"], float)
     mag = np.asarray(clean["phot_g_mean_mag"], float)
     ok = np.isfinite(color) & np.isfinite(mag)
-    # H8（2026-09 審視）：headline 樣本曾直接讀 cmd_members.csv，從未排除
-    # step5_imf.CONFIRMED_NON_MEMBER_IDS 裡兩顆已確認非成員（RV 偏離
-    # bulk_rv 達 19.5σ／350σ，見該常數旁的查證紀錄）。run_pipeline.py
-    # 第 5 步一直有排除，這裡補齊，兩條路徑才用同一個樣本定義。
-    if "source_id" in clean.colnames:
-        excluded = exclude_confirmed_non_members(clean["source_id"])
-        if excluded.any():
-            print(f"排除已確認非成員：{int(excluded.sum())} 顆", flush=True)
-        ok &= ~excluded
     if args.radius_range:
         # 中心與角距離的算法跟 run_pipeline.py 第 5 步完全一致（樣本中位
         # ra/dec + 球面角距），兩邊的 alpha(r) 才比得起來。
