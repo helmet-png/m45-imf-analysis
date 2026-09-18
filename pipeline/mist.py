@@ -11,10 +11,20 @@
 `output_option=photometry`，不論怎麼送都回傳理論輸出（79 欄、無 Gaia 星等）。
 改用官方的打包檔（靜態檔案，152 MB），可靠得多也不必反覆打擾服務。
 
-**必須記錄的兩個差異**（會混進「模型差異」裡）：
+**必須記錄的差異**（會混進「模型差異」裡）：
 1. MIST v1.2 用的是 **Gaia DR2** 濾光片，PARSEC 那份用的是 EDR3。
    兩者的 G 星等差約 0.01–0.03 星等，遠小於我們要找的模型差異，但不是零。
 2. MIST 的金屬量格點是 0.25 dex 一階，比 PARSEC 那份的 0.05 粗五倍。
+3. **自轉設定**（H10，2026-09-05 使用者回報查出，見 `LIMITATIONS.md` A7）：
+   `pipeline/isochrones.py` 的 PARSEC 設定固定 `track_omegai=0.00`（不
+   自轉），這裡原本下載的卻是 `vvcrit0.4`（自轉）版本的 MIST 打包檔——
+   兩套等時線的自轉設定不一致，會混進「換恆星演化模型」這個系統誤差項
+   裡卻沒被注意到。MIST 官方也提供 `vvcrit0.0`（不自轉）版本，改用它
+   才是跟 PARSEC 同基準比較。已改成用 `vvcrit0.0`；輸出的 `.dat` 檔名
+   也改成把 `vvcrit0.0` 編進去（原本沒有），避免跟舊的、用 `vvcrit0.4`
+   建出、同一組 logage/MH 範圍卻同名的檔案互相覆蓋——那種情況下新舊
+   檔案分不出來，會讓已經跑過的 P9c／`fit_real_mist.npz` 等結果混進
+   不確定是哪一版 MIST 建出的等時線。
 """
 from __future__ import annotations
 
@@ -28,9 +38,12 @@ from . import net
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "isochrones"
+# H10：改用 vvcrit0.0（不自轉），跟 pipeline/isochrones.py 的 PARSEC 設定
+# （track_omegai=0.00）同基準——原本的 vvcrit0.4 是自轉版本，見上方
+# docstring「必須記錄的差異」第 3 點與 LIMITATIONS.md A7。
 TARBALL_URL = ("https://waps.cfa.harvard.edu/MIST/data/tarballs_v1.2/"
-               "MIST_v1.2_vvcrit0.4_UBVRIplus.txz")
-TARBALL = CACHE / "MIST_v1.2_vvcrit0.4_UBVRIplus.txz"
+               "MIST_v1.2_vvcrit0.0_UBVRIplus.txz")
+TARBALL = CACHE / "MIST_v1.2_vvcrit0.0_UBVRIplus.txz"
 
 # 我們的程式其餘部分沿用 PARSEC 的欄位名，所以轉檔時直接改成同樣的名字，
 # 下游一行都不用改。
@@ -136,10 +149,12 @@ def build_grid(logage_lo: float, logage_hi: float,
     data = np.vstack(chunks)
 
     if out is None:
-        out = CACHE / (f"mist_v1.2_gaiaDR2_logt{logage_lo:g}-{logage_hi:g}"
-                       f"_feh{mh_lo:g}-{mh_hi:g}.dat")
+        # H10：檔名加上 vvcrit0.0，避免跟舊的 vvcrit0.4 版本（相同
+        # logage/MH 範圍會撞同一個檔名）互相覆蓋、事後分不出是哪一版。
+        out = CACHE / (f"mist_v1.2_vvcrit0.0_gaiaDR2_logt{logage_lo:g}-"
+                       f"{logage_hi:g}_feh{mh_lo:g}-{mh_hi:g}.dat")
     with open(out, "w", encoding="utf-8") as f:
-        f.write("# MIST v1.2 vvcrit0.4 UBVRIplus，由官方打包檔轉出\n")
+        f.write("# MIST v1.2 vvcrit0.0（不自轉）UBVRIplus，由官方打包檔轉出\n")
         f.write("# 注意：Gaia 濾光片是 DR2 版，PARSEC 那份是 EDR3\n")
         f.write("# " + " ".join(OUT_COLS) + "\n")
         for r in data:

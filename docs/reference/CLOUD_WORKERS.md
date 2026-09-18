@@ -74,6 +74,28 @@ Ubuntu 24.04+／Debian 12+ 都預設鎖住系統 Python（PEP 668），
 （`emcee` 只有跑 MCMC 相關腳本才需要，先裝起來比較省事，裝不起來也不
 影響網格搜尋類的腳本。）
 
+### 2.1 要跑 pyUPMASK（重新聚類，不是套用現成成員表）才需要（2026-09-18 新增）
+
+過去所有排進雲端的工作都是用**已經算好的** `data/cmd_members.csv`
+（`fit_real.py`／`inject_lowmass.py`／`profile_lowmass.py`），從沒有
+worker 真的重跑過 pyUPMASK 聚類本身——`scripts/diagnostics/
+sensitivity_sweep.py` 的 `stars_per_cluster` 可行性檢查就卡在「本機
+沒有 `pyUPMASK/` 目錄，沒有驗證過能不能跑」，一直沒有解決。
+
+pyUPMASK 用 `scikit-learn` 做 PCA 與 MinMax/StandardScaler。
+`setup/setup_pyupmask.sh` 在 repo 內建立 `.venv_pyupmask/`，可沿用 worker
+已安裝的科學套件，缺少時只從 wheel 安裝到此 venv。系統 Python 不會被修改。
+
+**pyUPMASK 本身不能直接 `git clone` 原版**：本機這份是獨立 clone 自
+`https://github.com/msolpera/pyUPMASK`（釘在 commit `3602293`），但帶有
+三處本機修改，從未進過任何版控（因為 `pyUPMASK/` 整個被本 repo 的
+`.gitignore` 排除）。最關鍵的一處：原版 `modules/dataIO.py` 從
+`distutils.util` import `strtobool`，但 `distutils` 在 Python 3.12
+被移除——**任何跑 3.12 以上的 worker 直接 clone 原版，第一步匯入就會
+崩潰**，不是機率性失敗。用 `setup/setup_pyupmask.sh <python_bin>` 一次
+做完相依套件檢查、clone＋套用這三處修改（patch 存在 `setup/pyupmask_local.patch`，
+已驗證在乾淨的 pin commit 上套用成功），不要手動 clone 原版。
+
 ## 3. 設定唯讀 Deploy Key（讓 VM 能 `git pull`，但不能 `git push`）
 
 VM 上只需要**讀取**這個 repo，不需要寫入權限——刻意不把任何能推送的
