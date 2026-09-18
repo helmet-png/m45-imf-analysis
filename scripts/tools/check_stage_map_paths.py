@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
-"""驗證 `status_dashboard/stage_map.py` 裡列的每支 script 路徑，在 repo
-裡真的存在——2026-08-31 發現的問題：`scripts/tools/reorganize.py` 之類
-的搬檔案／改名 commit 完全不會動到 `stage_map.py`（兩者沒有程式層級的
-關聯，只是同一批人手動維護），檔案搬走後主控板會一直顯示「本機找不到」
-卻沒有人會主動發現，直到有人剛好點開那個步驟才踩到。
+"""驗證 `status_dashboard/categorization.json` 裡列的每支 script 路徑，
+在 repo 裡真的存在——2026-08-31 發現的問題：`scripts/tools/
+reorganize.py` 之類的搬檔案／改名 commit 完全不會動到這份分類檔（兩者
+沒有程式層級的關聯，只是同一批人手動維護／透過主控板管理 UI 更新），
+檔案搬走後主控板會一直顯示「本機找不到」卻沒有人會主動發現，直到有人
+剛好點開那個步驟才踩到。
+
+2026-09-18：結構 2026-08-31 已經從 `stage_map.py` 的 `STAGES` 常數搬進
+`categorization.json`，這支腳本改讀 `stage_map.load_stage_structure()`
+（跟 `status_dashboard/app.py` 共用同一個 loader，不重寫一份平行邏輯）。
 
 這支腳本補上自動化的那一道檢查：CI 每次 PR 都跑一次，路徑對不上就讓
 建置失敗，逼搬檔案的人順手更新 `stage_map.py`（跟 `git mv` 忘記更新
@@ -25,12 +30,12 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 
 sys.path.insert(0, str(REPO_ROOT / "status_dashboard"))
-from stage_map import STAGES  # noqa: E402
+from stage_map import load_stage_structure  # noqa: E402
 
 
 def main() -> int:
     missing: list[tuple[str, str, str]] = []
-    for stage in STAGES:
+    for stage in load_stage_structure():
         for step in stage["steps"]:
             external = step.get("external", {})
             for script in step.get("scripts", []):

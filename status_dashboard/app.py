@@ -34,10 +34,12 @@ from __future__ import annotations
 
 import ast
 import ctypes
+import hmac
 import html
 import json
 import os
 import re
+import secrets
 import shlex
 import subprocess
 import sys
@@ -105,6 +107,17 @@ import stage_map  # noqa: E402  STEP_EXTRAS（人工整理的教學說明，見 
 
 CATEGORIZATION_PATH = HERE / "categorization.json"
 
+# CSRF 防護（2026-09-18 新增，Codex review）：`/manage/action` 是整個
+# 主控板唯一會修改檔案的寫入端點，以前完全沒有驗證 Origin/Host 或
+# token——只綁 127.0.0.1 或透過 IAP tunnel 連線，不代表瀏覽器送來的
+# 跨站表單可以被當成已授權操作：使用者只要在同一個瀏覽器開著這個
+# 分頁，同時瀏覽的任何惡意頁面都能對 http://127.0.0.1:PORT/manage/action
+# 送出跨站表單，瀏覽器預設不會擋這種對 localhost 的跨站 POST。每次
+# 啟動行程時產生一個隨機、不可猜測的 token，嵌進 `/manage` 頁面自己
+# 產生的表單裡；第三方頁面看不到、也猜不到這個值，缺少或不match就
+# 拒絕寫入。
+_CSRF_TOKEN = secrets.token_urlsafe(32)
+
 
 def get_stages() -> list[dict]:
     """回傳跟舊版 `stage_map.STAGES` 一模一樣形狀的清單，但即時組出來，
@@ -116,10 +129,14 @@ def get_stages() -> list[dict]:
     每次都重新讀，UI 操作完立刻反映在頁面上。「教學內容」（重點／公式／
     文獻出處／核心程式碼／備註）留在 `stage_map.py` 的 `STEP_EXTRAS`，
     用步驟名稱對應，UI 完全不碰這塊——那是大段手寫散文，機器沒辦法
-    安全地自動生成或編輯，管理 UI 也刻意不提供編輯這塊的功能。"""
-    data = json.loads(CATEGORIZATION_PATH.read_text(encoding="utf-8"))
+    安全地自動生成或編輯，管理 UI 也刻意不提供編輯這塊的功能。
+
+    2026-09-18：JSON 讀取本身搬到 `stage_map.load_stage_structure()`，
+    這裡只疊 `STEP_EXTRAS`——`scripts/tools/check_stage_map_paths.py`
+    也要讀同一份結構，但不想拖進這支檔案的 Flask／ssh_sync 相依，
+    所以共用邏輯放在依賴最輕的 `stage_map.py`。"""
     stages = []
-    for stage in data["stages"]:
+    for stage in stage_map.load_stage_structure():
         new_stage = {"name": stage["name"], "steps": []}
         for step in stage["steps"]:
             merged = dict(step)  # name, scripts, queue_labels?, external?
@@ -1413,8 +1430,23 @@ def _load_categorization() -> dict:
 
 
 def _save_categorization(data: dict) -> None:
-    CATEGORIZATION_PATH.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    """2026-09-18 修正（Codex review）：以前直接 `write_text()`，那個
+    呼叫會先截斷原檔再寫入——寫到一半的任何失敗（磁碟滿、行程被砍、
+    停電）都會把 `categorization.json` 留在壞掉的半份狀態，且
+    `_MANAGE_LOCK` 只保護管理頁面自己的讀-改-寫，不會擋住同時間別的
+    分頁純讀取（`get_stages()`／`load_stage_structure()`）在寫入過程中
+    讀到這份半完成的檔案。改成寫到同目錄下的暫存檔、`fsync` 確保真的
+    落盤，再用 `os.replace()` 原子換名——`os.replace()` 在 POSIX 跟
+    Windows（NTFS 的 `MOVEFILE_REPLACE_EXISTING`）都保證是原子操作，
+    任何時間點讀到的都只會是完整的舊版或完整的新版，失敗時原檔案
+    完全不受影響。"""
+    payload = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    tmp_path = CATEGORIZATION_PATH.with_suffix(".json.tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
+        f.write(payload)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, CATEGORIZATION_PATH)
 
 
 def _find_step(data: dict, stage_name: str, step_name: str) -> dict | None:
@@ -1449,6 +1481,17 @@ def handle_manage_action(action: str, fields: dict[str, str]) -> str | None:
         if action == "move_script" or action == "add_script":
             script = fields.get("script", "").strip()
             to_stage, to_step = fields.get("to_stage", ""), fields.get("to_step", "")
+            # 2026-09-18 修正（Codex review）：move_script 表單的隱藏
+            # to_stage/to_step 欄位只靠 <select> 的 onchange 事件填值——
+            # 如果使用者不動下拉選單、直接按「搬到」用畫面上預選的第一個
+            # 目的地，onchange 從沒觸發過，這兩個隱藏欄位送出時還是空的。
+            # <select name="to_stage_step"> 本身的值不管有沒有 onchange
+            # 都會正常送出，後端直接解析這個結構明確的值當備援，不依賴
+            # 前端 JS 有沒有真的跑過。
+            if not to_stage and not to_step:
+                to_stage_step = fields.get("to_stage_step", "")
+                if "|" in to_stage_step:
+                    to_stage, to_step = to_stage_step.split("|", 1)
             if not script:
                 return "程式路徑不能空白。"
             target = _find_step(data, to_stage, to_step)
@@ -1688,7 +1731,16 @@ git commit -m "整理分類" &amp;&amp; git push -u origin claude/reorganize-sta
 </section>""")
 
     parts.append("</body></html>")
-    return "".join(parts)
+    html_out = "".join(parts)
+    # 每個寫入表單（method="post" action="/manage/action"...>）的開頭
+    # 標籤結束後插入 csrf_token 隱藏欄位（2026-09-18，Codex review）——
+    # 用正則統一處理這裡九處各自手寫的表單，不用一個一個改字串組裝，
+    # 也不會漏掉之後新增的表單（只要都遵守同一個 method/action 慣例）。
+    return re.sub(
+        r'(<form method="post" action="/manage/action"[^>]*>)',
+        lambda m: m.group(1) + f'<input type="hidden" name="csrf_token" value="{_CSRF_TOKEN}">',
+        html_out,
+    )
 
 
 def _worker_label_html(w: dict) -> str:
@@ -2065,6 +2117,18 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length).decode("utf-8", errors="replace")
         fields = {k: v[0] for k, v in parse_qs(body).items()}
+        # CSRF 防護（2026-09-18，Codex review）：同源表單一定會帶對的
+        # csrf_token（render_manage_html() 嵌進去的那個），跨站表單
+        # 或缺 token 的請求一律拒絕，回 403 而不是照樣執行寫入。
+        # hmac.compare_digest 避免逐字元比較洩漏 timing side channel。
+        if not hmac.compare_digest(fields.get("csrf_token", ""), _CSRF_TOKEN):
+            self.send_response(403)
+            body = "CSRF token 缺失或不符，拒絕這次寫入。".encode("utf-8")
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         action = fields.get("action", "")
         try:
             error = handle_manage_action(action, fields)

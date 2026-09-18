@@ -13,12 +13,38 @@ core／note，意義跟舊版 stage_map.py 檔頭說明的一樣。
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 # 本專案自己的教學／參考文件路徑，給 refs 的 doc 欄位用（點進去會落在
 # GitHub 上對應的行）。抽成常數是因為同一份文件會被很多筆文獻引用，
 # 檔名之後若搬動只要改這裡一處。
 TRAD = "docs/teaching/教學_傳統法誤差核算.md"
 FWD = "docs/teaching/教學_前向模型.md"
 MET = "docs/reference/METHODS.md"
+
+CATEGORIZATION_PATH = Path(__file__).resolve().parent / "categorization.json"
+
+
+def load_stage_structure() -> list[dict]:
+    """讀 `categorization.json`，回傳跟舊版 `STAGES` 常數一模一樣形狀
+    的清單（只有結構：name／scripts／queue_labels／external，不含
+    `STEP_EXTRAS` 的教學內容）。
+
+    2026-09-18 新增（Codex review）：以前只有 `status_dashboard/app.py`
+    自己的 `get_stages()` 知道怎麼讀這份 JSON，`scripts/tools/
+    check_stage_map_paths.py` 還在 `from stage_map import STAGES`——
+    2026-08-31 把結構搬進 `categorization.json` 後，`STAGES` 這個常數
+    就不存在了，那支檢查腳本一執行就 ImportError。這支函式是 app.py
+    跟 checker 共用的唯一讀取入口，不依賴 Flask／ssh_sync 這類重量級
+    相依套件，checker 才能繼續獨立執行。`app.get_stages()` 疊上
+    `STEP_EXTRAS` 教學內容那層還是留在 app.py，這裡只管結構。
+    """
+    data = json.loads(CATEGORIZATION_PATH.read_text(encoding="utf-8"))
+    return [
+        {"name": stage["name"], "steps": [dict(step) for step in stage["steps"]]}
+        for stage in data["stages"]
+    ]
 
 STEP_EXTRAS: dict[str, dict] = {'質量指定 + MLE 冪次律擬合（5 個二元星修正變體）': {'key_points': ['**要回答的問題**：星團裡「輕的星」跟「重的星」數量比例是多少？==重星永遠比輕星少，我們要量的就是「少得多快」這個速率==，這個數字叫 '
                                                  'alpha。',
