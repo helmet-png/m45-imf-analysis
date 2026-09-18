@@ -146,7 +146,9 @@ def render_commands(row: dict) -> str:
         "-N", str(row["n_stars"]),
         "-B", str(row["n_binaries"]),
         "-P", str(row["profile"]),
-        "-R", f"{row['half_mass_radius_pc']:.2f}",
+        # 2026-09-18：跟 -S 同一個 review 一起修——訓練網格存 4 位小數
+        # （如 4.1641），`.2f` 會截掉一半精度，改跟 alpha/S 統一用 `.4f`。
+        "-R", f"{row['half_mass_radius_pc']:.4f}",
         "-f", "2",
         "-m", "0.08", "-m", "0.5", "-m", "150",
         "-a", f"{mcluster_alpha_low:.4f}", "-a", f"{mcluster_alpha_high:.4f}",
@@ -157,7 +159,12 @@ def render_commands(row: dict) -> str:
         "-o", row["run_id"],
     ]
     if row["profile"] == 2:
-        command[-2:-2] = ["-S", f"{row['mcluster_S']:.2f}"]
+        # 2026-09-18 修正（Codex review）：`.2f` 會把 0.4984 這類貼近
+        # profile 2 上界（validate_grid() 要求 S<0.5）的值四捨五入成
+        # "0.50"，實際傳給 mcluster_sse 的就是不合法的 S=0.50，悄悄
+        # 蓋掉網格記錄的真實值。跟 alpha（142-152 行）用同樣的 `.4f`
+        # 精度，網格本身存的就是 4 位小數，不會再有這個邊界問題。
+        command[-2:-2] = ["-S", f"{row['mcluster_S']:.4f}"]
     mcluster = " ".join(shlex.quote(part) for part in command)
 
     # -t / -c 在 petar.init 這裡是必要旗標，不是只有 galactic_tide=true
@@ -203,12 +210,72 @@ def render_commands(row: dict) -> str:
     )
 
 
+def run_self_test() -> dict:
+    """迴歸測試（2026-09-18 Codex review）：`-S` 格式化精度不夠會把
+    貼近 profile 2 上界（S<0.5）的值四捨五入成不合法的 "0.50"，悄悄
+    蓋掉網格記錄的真實值。對兩份網格檔（校準用小網格 + 430 列正式
+    訓練網格，後者存在才測）逐列做 render→parse round trip：從渲染出
+    的指令字串正則抓回 `-S` 後面的數字，跟 CSV 的原始值比對，且確認
+    真的小於 0.5（不是被夾到剛好等於邊界）。
+    """
+    import re
+
+    grid_paths = [HERE / "petar_m45_grid.csv", HERE / "petar_m45_training_grid.csv"]
+    checked = 0
+    mismatches = []
+    for grid_path in grid_paths:
+        if not grid_path.exists():
+            continue
+        for raw in load_grid(grid_path):
+            row = parse_row(raw)
+            mcluster_line = render_commands(raw).split("\n")[2]
+
+            r_match = re.search(r"-R\s+([0-9.]+)", mcluster_line)
+            if r_match is None or abs(float(r_match.group(1)) - row["half_mass_radius_pc"]) > 1e-9:
+                mismatches.append({
+                    "run_id": row["run_id"], "field": "half_mass_radius_pc",
+                    "grid_value": row["half_mass_radius_pc"],
+                    "rendered_value": r_match.group(1) if r_match else None,
+                })
+
+            if row["profile"] != 2:
+                continue
+            m = re.search(r"-S\s+([0-9.]+)", mcluster_line)
+            if m is None:
+                mismatches.append({"run_id": row["run_id"], "reason": "no -S flag rendered"})
+                continue
+            parsed_s = float(m.group(1))
+            checked += 1
+            if abs(parsed_s - row["mcluster_S"]) > 1e-9 or not (parsed_s < 0.5):
+                mismatches.append({
+                    "run_id": row["run_id"], "field": "mcluster_S",
+                    "grid_value": row["mcluster_S"],
+                    "rendered_value": parsed_s,
+                })
+
+    summary = {
+        "status": "synthetic_validation_only",
+        "n_profile2_rows_checked": checked,
+        "mismatches": mismatches,
+    }
+    if checked == 0:
+        summary["status"] = "skipped_no_grid_files"
+    elif mismatches:
+        raise AssertionError(f"petar_m45_grid -S round-trip failed: {mismatches}")
+    return summary
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--grid", type=Path, default=HERE / "petar_m45_grid.csv")
     parser.add_argument("--run-id")
     parser.add_argument("--output-json", type=Path)
+    parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
+
+    if args.self_test:
+        print(json.dumps(run_self_test(), indent=2))
+        return
 
     rows = load_grid(args.grid)
     for row in rows:

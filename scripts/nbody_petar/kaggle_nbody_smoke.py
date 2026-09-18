@@ -77,10 +77,16 @@ MCLUSTER_COMMIT = "a147bb5f1c0186a2d2d5b513ed112992929dd12a"
 GALPY_VERSION = "1.10.2"
 
 SMOKE_GRID_CSV = (
+    # 2026-09-18 修正（Codex review）：漏帶 petar_m45_grid.parse_row()
+    # 必要的 imf_alpha_low/imf_alpha_high 兩欄，讓這份常數直接交給正式
+    # parse_row 會炸 KeyError('imf_alpha_low')，S1/S2 在真正跑 PeTar
+    # 之前就會失敗。imf_alpha_low/high 用跟主網格 m45_ref_s101 一樣的
+    # Kroupa 標準值（1.30/2.30），smoke 不驗證科學數字，只求 schema 合法。
     "run_id,n_systems,binary_system_fraction,n_stars,n_binaries,profile,"
-    "mcluster_S,half_mass_radius_pc,seed,galactic_tide,priority,status\n"
-    "smoke_s1,200,0.0,200,0,0,0.00,3.10,1,false,1,ready\n"
-    "smoke_s2,1000,0.0,1000,0,0,0.00,3.10,2,false,1,ready\n"
+    "mcluster_S,half_mass_radius_pc,imf_alpha_low,imf_alpha_high,seed,"
+    "galactic_tide,priority,status\n"
+    "smoke_s1,200,0.0,200,0,0,0.00,3.10,1.30,2.30,1,false,1,ready\n"
+    "smoke_s2,1000,0.0,1000,0,0,0.00,3.10,1.30,2.30,2,false,1,ready\n"
 )
 
 results: dict = {"steps": {}}
@@ -121,6 +127,85 @@ def run_step(name: str, cmd, cwd=None, env=None, timeout=1800) -> dict:
     if entry["returncode"] != 0:
         log(f"  stderr tail:\n{entry['stderr_tail'][-1500:]}")
     return entry
+
+
+def check_run_nbody_case_result(returncode: int | None, runs_dir: Path, run_id: str) -> tuple[dict | None, str | None]:
+    """判斷一次 run_nbody_case.py 子行程呼叫算不算真的成功。
+
+    2026-09-18 修正（Codex review）：以前只看子行程 stdout 最後 4000
+    字元裡猜 JSON 起點，pretty-printed JSON 混雜前面的進度 log 時常常
+    抓錯，而且完全沒看 returncode——子行程真的失敗也只印一行警告就
+    繼續，最後一律回報 smoke_complete。改直接讀 run_nbody_case.py 自己
+    寫的權威來源 result.json（不猜 stdout 格式），returncode、
+    result.json 存在與否、JSON 可解析、status、run_id 任一項不對都
+    回傳失敗原因。抽成獨立函式方便不啟動真正 PeTar 子行程也能單元
+    測試「子程序非零」「result 缺失」「energy_check_failed」三種情境。
+    回傳 (payload, failure_reason)；failure_reason 是 None 代表成功。
+    """
+    result_path = runs_dir / run_id / "result.json"
+    if returncode != 0:
+        return None, f"returncode={returncode}"
+    if not result_path.exists():
+        return None, f"result.json missing at {result_path}"
+    try:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return None, f"result.json unreadable: {exc}"
+    if payload.get("run_id") != run_id:
+        return payload, f"result.json run_id mismatch: {payload.get('run_id')!r}"
+    if payload.get("status") != "complete":
+        return payload, f"status={payload.get('status')!r}"
+    return payload, None
+
+
+def run_self_test() -> dict:
+    """迴歸測試（2026-09-18 Codex review）：子程序非零、result.json
+    缺失、result.json 裡 status 是 energy_check_failed 這三種情境都要
+    被判定為失敗，不能被誤判成成功繼續往下跑。不需要真的建置 PeTar
+    或連 Kaggle，純粹測 check_run_nbody_case_result() 這個判斷函式。
+    """
+    import tempfile
+
+    checks = {}
+    with tempfile.TemporaryDirectory() as tmpdir:
+        runs_dir = Path(tmpdir)
+
+        # 情境 1：子程序非零，即使 result.json 剛好留著舊的 complete 也不能算數
+        run_dir = runs_dir / "case_nonzero"
+        run_dir.mkdir()
+        (run_dir / "result.json").write_text(
+            json.dumps({"run_id": "case_nonzero", "status": "complete"}), encoding="utf-8"
+        )
+        _, reason = check_run_nbody_case_result(1, runs_dir, "case_nonzero")
+        checks["nonzero_returncode_fails"] = reason is not None
+
+        # 情境 2：returncode 是 0 但 result.json 沒寫出來（例如子行程中途被砍）
+        (runs_dir / "case_missing").mkdir()
+        _, reason = check_run_nbody_case_result(0, runs_dir, "case_missing")
+        checks["missing_result_json_fails"] = reason is not None
+
+        # 情境 3：result.json 存在、returncode=0，但內容是 energy_check_failed
+        run_dir = runs_dir / "case_energy"
+        run_dir.mkdir()
+        (run_dir / "result.json").write_text(
+            json.dumps({"run_id": "case_energy", "status": "energy_check_failed"}),
+            encoding="utf-8",
+        )
+        _, reason = check_run_nbody_case_result(0, runs_dir, "case_energy")
+        checks["energy_check_failed_fails"] = reason is not None
+
+        # 對照組：真的成功的情況不該被誤判成失敗
+        run_dir = runs_dir / "case_ok"
+        run_dir.mkdir()
+        (run_dir / "result.json").write_text(
+            json.dumps({"run_id": "case_ok", "status": "complete"}), encoding="utf-8"
+        )
+        payload, reason = check_run_nbody_case_result(0, runs_dir, "case_ok")
+        checks["genuine_success_not_flagged"] = reason is None and payload is not None
+
+    if not all(checks.values()):
+        raise AssertionError(f"kaggle_nbody_smoke self-test failed: {checks}")
+    return {"status": "synthetic_validation_only", "checks": checks}
 
 
 def save_and_exit(status: str, code: int) -> None:
@@ -265,18 +350,20 @@ def main() -> None:
         if energy_threshold is not None:
             cmd += ["--energy-threshold", str(energy_threshold)]
         r = run_step(label, cmd, env=bin_env, timeout=900)
-        try:
-            payload = json.loads(r["stdout_tail"].strip().rsplit("\n", 1)[-1]
-                                 if r["stdout_tail"].strip().startswith("{")
-                                 else r["stdout_tail"])
-        except Exception:
-            payload = None
-        results.setdefault("run_nbody_case", {})[label] = payload
-        if payload is None or payload.get("status") not in ("complete",):
-            log(f"  {label}: could not confirm success from output, see stdout_tail above")
+        payload, failure_reason = check_run_nbody_case_result(r["returncode"], runs_dir, run_id)
+        results.setdefault("run_nbody_case", {})[label] = {
+            "result_json": payload, "failure_reason": failure_reason,
+        }
+        if failure_reason is not None:
+            log(f"  {label}: FAILED ({failure_reason})")
+            save_and_exit(f"{label}_failed", 1)  # 不會回來，sys.exit(1)
+        log(f"  {label}: confirmed complete via {runs_dir / run_id / 'result.json'}")
 
     save_and_exit("smoke_complete", 0)
 
 
 if __name__ == "__main__":
-    main()
+    if "--self-test" in sys.argv:
+        print(json.dumps(run_self_test(), indent=2))
+    else:
+        main()

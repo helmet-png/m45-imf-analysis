@@ -215,6 +215,31 @@ def parse_energy_log(petar_log: Path) -> dict:
     return result
 
 
+def resolve_resume_state(run_dir: Path, runs_dir: Path, run_id: str, manifest: dict) -> dict:
+    """讀既有 stage.json；manifest 跟上次留下的不一致就搬走舊目錄、回傳
+    空 stage（強迫整個 run 重跑），一致就照舊回傳 stage.json 內容續跑。
+    抽成獨立函式方便不啟動真正 PeTar 子行程也能單元測試這條判斷邏輯。
+    """
+    stage_path = run_dir / "stage.json"
+    manifest_path = run_dir / "manifest.json"
+    stage = json.loads(stage_path.read_text(encoding="utf-8")) if stage_path.exists() else {}
+    prior_manifest = (
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_path.exists() else None
+    )
+    if stage and prior_manifest != manifest:
+        stale_dir = runs_dir / f"{run_id}.stale-{int(time.time())}"
+        run_dir.rename(stale_dir)
+        print(
+            f"[{run_id}] 偵測到 manifest 跟上次不一致（grid 參數、smoke 開關或"
+            f"執行檔換了），不能沿用舊的 stage.json 續跑。舊結果保留在 "
+            f"{stale_dir}，這次從頭開始。",
+            flush=True,
+        )
+        return {}
+    return stage
+
+
 def run_case(
     run_id: str,
     grid_path: Path,
@@ -251,12 +276,23 @@ def run_case(
             "commands": commands,
         }
 
+    # 2026-09-18 修正（Codex review）：resume 判斷以前只看 stage.json
+    # 的 done 旗標，沒有核對這次要求的到底是不是同一件事——smoke 跑完
+    # 留下的 stage.json，換成正式跑（甚至換 seed／IC）會被誤判成「這幾
+    # 步已經做完」直接跳過，得到 status=complete 但其實是 smoke 的殘留。
+    # manifest 用「實際會執行的指令序列」當指紋（已經套用 smoke override
+    # 與 petar_bin override，能同時涵蓋 grid 參數、smoke 開關、執行檔
+    # 三個維度），跟上次留下的比對，不一致就整個當作沒跑過重新開始，
+    # 舊的 run 目錄先搬到旁邊保留，不直接覆寫。
+    manifest = {"run_id": run_id, "smoke": smoke, "commands": commands}
     run_dir = runs_dir / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    stage = resolve_resume_state(run_dir, runs_dir, run_id, manifest)
+
     stage_path = run_dir / "stage.json"
     timing_path = run_dir / "timing.json"
-
-    stage = json.loads(stage_path.read_text(encoding="utf-8")) if stage_path.exists() else {}
+    manifest_path = run_dir / "manifest.json"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     timing = json.loads(timing_path.read_text(encoding="utf-8")) if timing_path.exists() else {
         "cpu": platform.processor() or platform.machine(),
         "platform": platform.platform(),
@@ -374,6 +410,34 @@ def run_self_test() -> dict:
     checks["angular_momentum_ratio_correct"] = abs(
         energy.get("angular_momentum_error_relative", -1) - (187484.2 / 1.267974e9)
     ) < 1e-9
+
+    # 迴歸測試（2026-09-18 Codex review）：以前 resume 只看 stage.json
+    # 的 done 旗標，不核對是不是同一份 manifest（grid 參數／smoke 開關／
+    # 執行檔）。用已完成 smoke 的 stage/result fixture 重現「再呼叫正式
+    # run，卻被誤判成已完成」的情境——照 reviewer 的重現方式：先留一份
+    # 全部步驟 done 的 stage.json（沒有 manifest.json，模擬升級前或
+    # smoke／正式混用留下的舊狀態），再用正式（非 smoke）manifest 問
+    # resolve_resume_state()，正確答案是空 stage（強迫重跑），不能沿用
+    # 舊的 done 狀態。
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fake_runs_dir = Path(tmpdir)
+        fake_run_dir = fake_runs_dir / "m45_ref_s101"
+        fake_run_dir.mkdir()
+        (fake_run_dir / "stage.json").write_text(
+            json.dumps({name: "done" for name in STEP_NAMES}), encoding="utf-8"
+        )
+        (fake_run_dir / "result.json").write_text(
+            json.dumps({"status": "complete", "smoke": True}), encoding="utf-8"
+        )
+        formal_manifest = {"run_id": "m45_ref_s101", "smoke": False, "commands": commands}
+        resumed_stage = resolve_resume_state(
+            fake_run_dir, fake_runs_dir, "m45_ref_s101", formal_manifest
+        )
+        checks["smoke_residue_not_reused_for_formal_run"] = resumed_stage == {}
+        checks["stale_run_dir_preserved_not_deleted"] = any(
+            p.name.startswith("m45_ref_s101.stale-") for p in fake_runs_dir.iterdir()
+        )
 
     summary = {
         "status": "synthetic_validation_only",
