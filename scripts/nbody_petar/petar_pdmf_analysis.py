@@ -15,18 +15,51 @@ optional.  Results here are component-star mass functions.  Do not add the
 result to a separately inferred unresolved-binary correction unless the two
 selection definitions have explicitly been reconciled.
 
-H4.4 (2026-09-05, aperture reconciliation): the ``12.09`` pc constant used
-below (and in ``pdmf_system_definition_bridge.py``'s ``--aperture-pc``
-default) predates a direct measurement.  Computing the great-circle
-distance for all 1,078 real members of ``data/cmd_members.csv`` (same
-formula as ``run_pipeline.py`` step 5 and ``PDMF_TO_IMF_PLAN.md`` section 2,
-M45 distance = 136 pc) gives a maximum radius of 4.9277 deg = 11.70 pc, not
-12.09 or the 11.87 pc quoted in ``PDMF_TO_IMF_PLAN.md`` (which assumed an
-exact 5.00 deg cone rather than the actual outermost member).  11.70 pc is
-now the authoritative "matches the real sample" aperture; 12.09 pc is kept
-only where changing it would silently reshuffle an existing default's
-position in a list (see ``DEFAULT_RADII_PC`` below) -- new code should use
-11.70, not 12.09.
+H4.4 (2026-09-05, aperture reconciliation; corrected 2026-09-18 per
+Codex review): the ``12.09`` pc constant used below (and in
+``pdmf_system_definition_bridge.py``'s ``--aperture-pc`` default)
+predates a direct measurement.  Computing the great-circle distance for
+all 1,078 real members of ``data/cmd_members.csv`` (same formula as
+``run_pipeline.py`` step 5 and ``PDMF_TO_IMF_PLAN.md`` section 2, M45
+distance = 136 pc) gives a maximum radius of 4.9277 deg = 11.70 pc.
+
+This is NOT the same thing as the survey selection boundary, and calling
+it "the aperture that matches the real sample" (as an earlier version of
+this docstring did) overstates what was actually measured. Three
+distinct radii are in play here, and they must not be conflated:
+
+1. **Query footprint**: the actual cone search radius used to pull the
+   Gaia sample in the first place -- ``config.toml``'s ``radius_deg``
+   (currently 5.0 deg, i.e. ~11.87 pc at 136 pc), independent of which
+   stars later get flagged as members or non-members.
+2. **Analyst-chosen common aperture**: whatever fixed radius an analysis
+   deliberately picks to compare real vs. mock samples on equal footing.
+   This can legitimately differ from (1), but if chosen, both the real
+   *and* mock target statistics must be recomputed at that exact radius
+   with the same center/distance/selection rule -- not just substituted
+   as a constant on one side.
+3. **Observed max member radius**: 11.70 pc, the outermost surviving
+   member of the *current* ``cmd_members.csv``. This number drifts every
+   time a non-member gets pruned from the sample (it is a property of
+   the current membership list, not a fixed survey boundary), so it is
+   not interchangeable with (1) or (2) without re-deriving it after every
+   membership-list change.
+
+11.70 pc is used below (``DEFAULT_RADII_PC``) as radius #3 above, i.e.
+"the radius containing the currently-known real sample", which is a
+reasonable choice for *some* analyses -- but anyone who adopts it as (2)
+must re-cut both the observed sample and any mock/simulation targets with
+this same center/distance/rule and regenerate the comparison targets, not
+silently swap the simulation-side constant while leaving observed-side
+statistics computed under a different footprint. Note that other
+branches in this repository have independently landed *different* values
+for essentially the same "M45 analysis aperture" question (11.87 pc in
+``PDMF_TO_IMF_PLAN.md``, 11.68 pc in ``docs/planning/
+NBODY_PREREGISTRATION.md`` from a parallel branch) -- these have not been
+reconciled with 11.70 pc here; do not assume any one of them is settled
+until that reconciliation happens. 12.09 pc is kept only where changing
+it would silently reshuffle an existing default's position in a list
+(see ``DEFAULT_RADII_PC`` below).
 """
 from __future__ import annotations
 
