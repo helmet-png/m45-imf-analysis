@@ -466,3 +466,28 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 排時間投入——優先度排序見 LIMITATIONS.md 本身的分級（C 類是「修不掉、
 論文必須聲明」，D 類是「已知風險、尚未驗證但沒有污染現有結果的證據」），
 等第一、二階段的現役缺陷都解決、或有人主動想認領才處理。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| pyupmask_cloud_feasibility（D19／D2） | 進行中 | 開始日期：2026-09-18 | 300 顆星子集、OL_runs=3 | 待雲端 worker 跑完 |
+
+pyupmask_cloud_feasibility：認領人：Claude session（分支
+`claude/d19-lowmass-colour`）。D19 Stage 2（成員判定閘門）要先重跑
+pyUPMASK 到 G<20，但全專案至今沒有任何 worker 驗證過 pyUPMASK 能跑
+（`sensitivity_sweep.py --target stars_per_cluster` 的可行性檢查一直
+卡在這裡，見 D2）。查出比「沒驗證過」更具體的原因：本機
+`pyUPMASK/`（獨立 clone，被 `.gitignore` 排除）帶三處從未進版控的
+本機修改，其中 Python 3.12+ 相容性補丁是必要的（`distutils.strtobool`
+在 3.12 被移除，原版直接 clone 到現代 Python 的 worker 上會在第一步
+匯入就崩潰）。已把差異存成 `setup/pyupmask_local.patch`、寫
+`setup/setup_pyupmask.sh` 做 clone＋套 patch＋驗證匯入，在本機一份
+乾淨的 pin commit（`3602293`）checkout 上實測套用成功。`docs/reference/
+CLOUD_WORKERS.md` 補了 2.1 節（含另一個發現：worker venv 清單缺
+scikit-learn，pyUPMASK 的 PCA/Scaler 需要它）。
+
+`scripts/diagnostics/pyupmask_feasibility.py` 排進 `cloud_queue.txt`
+（`d19_pyupmask_feasibility`），用 300 顆星的子集＋OL_runs=3 做端到端
+驗證（provisioning → 實際跑一次聚類 → 產出檔案），過了才排完整的
+G<20 9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
+腳本會把耗時粗略外推到正式規模（N² × OL_runs 線性外推，量級參考）。
+worker 欄位留空給有空的節點。耗時未查證（小子集預期幾分鐘內）。

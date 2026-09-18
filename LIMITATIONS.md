@@ -774,6 +774,26 @@ P>0.7 的門檻還沒驗證過；這項不過的話，深度延伸拿到的是�
 是不是成員」的星，會讓 C8（成員完整度未建模）實質惡化。待認領工作
 見 `WORK_BOARD.md`。
 
+**Stage 2 卡在一個更底層的基礎設施缺口（2026-09-18）**：要驗證 G<20 的
+天測能不能撐住 P>0.7，得先真的重跑一次 pyUPMASK——但**全專案至今沒有
+任何雲端 worker 跑過 pyUPMASK 本身**（過去所有排雲端的工作都是用現成的
+`data/cmd_members.csv`，只有 `sensitivity_sweep.py` 的 `stars_per_cluster`
+可行性檢查卡在「本機沒有 `pyUPMASK/`」，見 D2，一直沒解決）。深入查發現
+比「沒驗證過」更具體：本機的 `pyUPMASK/` 是獨立 clone 自
+`github.com/msolpera/pyUPMASK`（釘在 commit `3602293`），帶三處**從未
+進版控**的本機修改（`pyUPMASK/` 整個被 `.gitignore` 排除）。其中一處是
+必要的：原版 `modules/dataIO.py` 從 `distutils.util` import
+`strtobool`，`distutils` 在 Python 3.12 被移除——**任何用現代 Python 的
+worker 直接 clone 原版，第一步匯入就會崩潰**，不是運氣問題。已經把這份
+差異存成 `setup/pyupmask_local.patch`，寫了 `setup/setup_pyupmask.sh`
+（clone＋套 patch＋驗證匯入一次做完），並在一份乾淨的 pin commit checkout
+上實測套用成功、`strtobool`／`outer` 模組都能正常匯入。另外發現
+`scikit-learn` 不在現有 worker venv 的套件清單裡（`docs/reference/
+CLOUD_WORKERS.md` 第 2 節），pyUPMASK 的 PCA／Scaler 需要它，也一併補進
+該文件第 2.1 節。**下一步**：先排一個用小子集資料的可行性測試（驗證
+provisioning 腳本在真實 worker 上真的成立），過了才排完整的 G<20
+9,278 顆星重跑，避免正式規模因環境問題失敗、浪費雲端額度。
+
 **低質量段的等時線選擇（2026-09-18，`scripts/diagnostics/compare_lowmass_isochrones.py`，
 結果檔 `results/d19_isochrone_compare.npz`）**：同一年齡 logAge=8.00、MH=0
 比較 PARSEC 與 BHAC15，固定視星等時兩者指派的質量差：M ≥ 0.5 M☉ 最多
