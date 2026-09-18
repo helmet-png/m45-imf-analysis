@@ -164,6 +164,10 @@ def validate_grid(rows: list[dict]) -> dict:
 
 
 def render_commands(row: dict) -> str:
+    # H3：row["galactic_tide"] 目前刻意沒有使用——validate_grid() 已經擋掉
+    # 任何 galactic_tide=true 的列（galpy 外部潮汐場還沒接上 PeTar），所以
+    # 走到這裡的一定是 false，這支函式本來就不用做任何事。真的接上 galpy
+    # 之後，這裡要照真值產生對應的 PeTar 旗標，不能再直接忽略這個欄位。
     row = parse_row(row)
     run_id = shlex.quote(row["run_id"])
     # H5：mcluster 官方 main.c（pin 版 a147bb5）`case 'f'` 只是設定
