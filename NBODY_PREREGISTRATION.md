@@ -3,6 +3,18 @@
 **狀態**：預先註冊，2026-09-05 凍結，**在 `petar_m45_grid.csv` 任何一列
 從「校準／pilot」升格成「正式模擬」之前簽署**。
 
+**2026-09-18 修正（Codex review）——跟另一份文件的關係，尚待唯一化**：
+另一支並行分支（PR #198）獨立新增了 `docs/planning/NBODY_PREREGISTRATION.md`，
+同樣自稱是 N-body 正式模擬的預先註冊，但凍結了不同的孔徑數字
+（11.68 pc，取代這份文件第二節的 11.87/12.09 pc）與不同的比較方法
+（透過 `observe_snapshot.py` 的完整退化鏈把模擬端推過跟觀測端相同的
+選樣，而不是像這份文件第一節那樣直接拿 `petar_pdmf_analysis.analyze()`
+的 component-star 真實質量斜率去比較 `radial_final_reruns` 的觀測前向
+模型 α）。兩份文件不能同時當「必須遵守」的凍結規格——在任何
+`priority=1` 正式模擬真正開始、兩邊合併之前，**這份文件的第一、二節
+視為暫定，不是最終凍結版**；哪一份文件是 canonical、怎麼合併，留給
+兩個分支都合併進 main 之後再處理，不在這裡搶著定案。
+
 **為什麼需要這份文件（H13）**：A5 的徑向分析（`radial_final_reruns`）
 是先跑出四組結果，才回頭決定要用 Holm 校正處理多重比較——這個順序本身
 沒有錯（那組實驗設計得早，沒有預先想到會需要修正這麼多次比較），但
@@ -28,9 +40,23 @@
 A5 已經用過、且已知有效的做法（`radial_final_reruns` 的配對比較法），
 不重新發明一套：
 
-- 對每個 N-body 模擬（`petar_pdmf_analysis.py` 的 `analyze()`），在
-  固定的孔徑清單（見第二節）上算出投影 α，同一個模擬內用同一組隨機
-  投影方向（`n_projections=32`，函式預設值，不臨時改動）。
+- **2026-09-18 修正（Codex review）**：不能直接拿
+  `petar_pdmf_analysis.analyze()` 算出的 component-star 真實質量斜率去
+  跟 `radial_final_reruns` 的觀測前向模型 α 比較——固定 0.5–2.5 M☉
+  質量段與孔徑只統一了兩個維度，雙星解析（觀測端有未解析雙星合併、
+  模擬端 `analyze()` 沒有）跟觀測選擇函數（觀測端有測光雜訊／品質
+  選擇／召回率三層退化，模擬端 raw 質量函數沒有）這兩個定義差異還沒
+  統一，量到的 α 差異可能只是定義不一致，不是動力學效應。主統計量必須
+  先把模擬快照推過跟觀測端相同的退化鏈，才能拿去跟觀測基準線做配對
+  比較——用 `scripts/nbody_petar/observe_snapshot.py`（每個投影方向
+  各跑一次模擬→觀測退化），輸出的假星表再用觀測端同一支估計器
+  （`step5_imf.mle_powerlaw`／`petar_pdmf_analysis.mle_powerlaw`，同一
+  個實作）算 α，這樣兩邊比的才是同一個量。在這條鏈驗證前，直接比較
+  `analyze()` 跟 `radial_final_reruns` 的作法只能當診斷用途，不能當
+  主要驗收依據。
+- 對每個 N-body 模擬，在固定的孔徑清單（見第二節）上算出投影 α，
+  同一個模擬內用同一組隨機投影方向（`n_projections=32`，函式預設值，
+  不臨時改動）。
 - 跟觀測基準線比較時，用**配對比較**而非「誤差棒是否重疊」——因為
   不同孔徑的樣本互為子集，不獨立，A5 已經證明用重疊誤差棒判斷會
   誤導。
@@ -106,12 +132,17 @@ Stahler (2010) Table 1 查證過的初始條件：`n_systems=1215`、
    - 初始雙星比例（0.95，原初）跟前向模型 headline 的 `f_bin`
      （0.568，現時觀測）是不同量，不能互相驗證（`LIMITATIONS.md`
      D13／H6）；
-   - 產出的質量函數在完成 Δα 修正前只能稱 system PDMF，且要標明
-     post-gas-expulsion（`PDMF_TO_IMF_PLAN.md`「路線 C 的用詞規範」／
-     H15）。
+   - 產出的質量函數在完成 Δα 修正前不能稱 IMF，命名還要標明是四種
+     相容定義（component／primary／system_total／photometric_beta_N，
+     見 `pdmf_system_definition_bridge.py`）裡的哪一種，不能一律簡稱
+     system PDMF（`petar_pdmf_analysis.analyze()` 目前輸出的是
+     component-star，不是 system），且要標明 post-gas-expulsion
+     （`PDMF_TO_IMF_PLAN.md`「路線 C 的用詞規範」／H15，2026-09-18
+     同步修正）。
 
 ## 六、修改記錄（不要刪除舊行，只加新行）
 
 | 日期 | 修改內容 | 修改時是否已有正式模擬結果 |
 |---|---|---|
 | 2026-09-05 | 初版凍結 | 否——`petar_m45_grid.csv` 仍在校準階段，尚無 `priority=1` 的完整輸出 |
+| 2026-09-18 | Codex review：第一節主統計量改為必須先透過 `observe_snapshot.py` 退化鏈才能跟觀測比較（不能直接比 component-star 真實質量斜率跟觀測前向模型 α）；第五節「system PDMF」用詞改成要求標明四種相容定義；文首加註跟另一分支（#198）`docs/planning/NBODY_PREREGISTRATION.md` 的孔徑／方法衝突尚未唯一化 | 否——同上，尚無 `priority=1` 的完整輸出，這次修正是在看到任何正式結果之前 |
