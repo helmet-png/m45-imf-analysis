@@ -307,9 +307,11 @@ LIMITATIONS.md D11）。查證前兩道 gate：Gate 1（Gaia→Johnson V 紅端
 | lowmass_depth_extension（D19） | 進行中 | 開始日期：2026-09-17 | 質量下限目標 0.10 M☉、顏色誤差門檻 54 mmag、G 範圍 16–20 星等 | Stage 0：通過（分段顏色，質量下限 0.090 M☉、sigma_M 最差 0.0394 M☉）。等時線比較：產線全段 PARSEC，BHAC15 拼接版當系統誤差檢驗（低質量段質量差 14.6–34.4%）。Stage 2 未跑 |
 
 lowmass_depth_extension：認領人：Claude session（分支
-`claude/d19-lowmass-colour`）。把質量下限從 0.30 M☉ 推到 0.10 M☉，
-讓低質量段冪次從外部固定值升格成資料擬合出來的參數，目標是消掉 P6
-量到的 0.248 系統誤差（全專案最大的單一誤差項，見 LIMITATIONS.md D19）。
+`claude/d19-lowmass-colour`）。把資料下限從 0.173 M☉ 推到約 0.09 M☉，
+估計多 165 顆成員（上限 227），把低質量段冪次的統計誤差從約 0.13 壓到約
+0.07（見 LIMITATIONS.md D19）。**訂正**：初版寫「目標是消掉 0.248 系統誤差」
+不對——那件事用現有深度就做得到（A3：跑完 `p2_free_lowmass`，P6b v2 已證實
+可辨識），不需要等 D19；D19 是讓誤差棒更短。
 **Stage 0 顏色閘門已完成**：判準在跑之前就寫死（質量下限 ≤0.15 M☉、
 sigma_M ≤0.05 M☉、假匹配率 ≤2%、逐分箱完整度 ≥85%），結論是分段顏色
 （亮端 BP−RP、暗端 G−RP）通過，質量下限 0.090 M☉、sigma_M 中位 0.0199／

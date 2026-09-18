@@ -96,9 +96,33 @@ def slope_shift(rows, p=1.3, lo=0.10, hi=0.50):
     return (p - 1.0) / (1.0 + k) + 1.0
 
 
+def age_interp_leave_one_out(grid):
+    """BHAC15 年齡內插準不準：用 7.903 與 8.079 內插出 8.000，跟真的 8.000 比。
+
+    C14 不做年齡內插的理由是「演化快速階段線性內插會造出假特徵」——同一個
+    初始質量在兩個年齡落在不同演化階段時，平均出來的位置不對應任何真實
+    星體。這裡直接量 BHAC15 在低質量段是否也有這種階段：跨 0.176 dex 內插
+    （比實際需要的 0.079 dex 寬），誤差大的質量就是不能拿來內插或當接縫的。
+    """
+    ages = np.unique(np.asarray(grid["logAge"], float))
+    lo, mid, hi = ages[2], ages[3], ages[4]
+    w = (mid - lo) / (hi - lo)
+    rows = []
+    for M in MASSES:
+        v = []
+        for a in (lo, hi, mid):
+            m, g, bp, rp = sorted_cols(isomod.isochrone_at(grid, a, 0.0),
+                                       "G_BP_fSBmag")
+            gi, bpi, rpi = (np.interp(M, m, x) for x in (g, bp, rp))
+            v.append((gi, gi - rpi, bpi - rpi))
+        v = np.array(v)
+        rows.append((M, *((1 - w) * v[0] + w * v[1] - v[2])))
+    return (lo, mid, hi), np.array(rows)
+
+
 def main():
-    B = isomod.isochrone_at(isomod.load_grid(isomod.CACHE / BHAC_GRID),
-                            LOGAGE, 0.0)
+    grid_b = isomod.load_grid(isomod.CACHE / BHAC_GRID)
+    B = isomod.isochrone_at(grid_b, LOGAGE, 0.0)
     bhac = sorted_cols(B, "G_BP_fSBmag")
     out = {}
     for tag, (fn, bp_col) in PARSEC_GRIDS.items():
@@ -133,10 +157,19 @@ def main():
     print(f"  質量換算單獨造成的低質量段冪次位移（粗估）：1.30 -> {p_new:.2f}"
           f"（位移 {p_new - 1.3:+.2f}；對照 Kroupa 外部不確定度 ±0.5）")
 
+    (lo, mid, hi), loo = age_interp_leave_one_out(grid_b)
+    print(f"\n=== BHAC15 年齡內插測試：由 {lo:.3f}、{hi:.3f} 內插到 {mid:.3f}"
+          f"，對照真實格點 ===")
+    print(f"{'M':>6}{'誤差 G':>9}{'誤差 G-RP':>11}{'誤差 BP-RP':>12}")
+    for M, eg, egr, ebr in loo:
+        flag = "  <- 不可內插" if abs(eg) > 0.05 else ""
+        print(f"{M:6.2f}{eg:+9.3f}{egr:+11.3f}{ebr:+12.3f}{flag}")
+
     np.savez(HERE / "results" / "d19_isochrone_compare.npz",
              logage=LOGAGE, cols=np.array(["M", "dG", "dBPRP", "dGRP",
                                            "dM_over_M"]),
-             edr3=out["EDR3"], dr2=out["DR2"], slope_shift=p_new)
+             edr3=out["EDR3"], dr2=out["DR2"], slope_shift=p_new,
+             age_interp_loo=loo, loo_ages=np.array([lo, mid, hi]))
     print("\n寫入 results/d19_isochrone_compare.npz")
 
 
