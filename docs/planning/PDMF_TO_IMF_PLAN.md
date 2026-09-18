@@ -209,11 +209,19 @@ r=5° 擴到 8–17°，重抓 Gaia、重跑成員判定、重建選擇函數。
    原初雙星族群、或觀測選擇函數。引用它的輸出時只能說「驗證了分析鏈的
    演算法邏輯」，不能拿來支持任何跟 M45 本身有關的科學主張——這條界線
    要延續到所有未來的 N-body smoke test，不是這一支腳本專屬。
-2. **在套用 Δα 修正之前，路線 C 產出的任何質量函數只能稱為「system
-   PDMF」，不能稱為 IMF**——這是 A5 的直接延伸：即使 N-body 模擬了完整
-   的動力學演化，`petar_pdmf_analysis.py` 輸出的仍是模擬終止時刻（見
-   H11）的現時質量函數，要先完成 Δα（現時 vs 初始）的修正、且修正本身
-   通過驗證，才能改口叫 IMF。
+2. **在套用 Δα 修正之前，路線 C 產出的任何質量函數不能稱為 IMF；名稱
+   還要標明是四種相容定義（component／primary／system_total／
+   photometric_beta_N，見 `pdmf_system_definition_bridge.py`）裡的
+   哪一種，不能一律簡稱「system PDMF」**（2026-09-18 修正，Codex
+   review）——`petar_pdmf_analysis.py` 目前實際輸出的是
+   **component-star** 質量函數，沒有把未解析雙星合併成 system 總質量；
+   把它直接改稱「system」會掩蓋這個定義差異，導致不可比的 α／Δα
+   被拿來互相引用。這是 A5 的直接延伸：即使 N-body 模擬了完整的動力學
+   演化，輸出的仍是模擬終止時刻（見 H11）的現時質量函數，要先完成 Δα
+   （現時 vs 初始）的修正、且修正本身通過驗證，才能改口叫 IMF。行文
+   規範：同時標明時間點（initial／current）與定義（component／system／
+   photometric），只有實際完成對應合併與選樣的結果才能稱為 system
+   PDMF。
 3. **初始條件本身要標明是「氣體驅散後（post-gas expulsion）」的狀態**——
    直接查證 arXiv:1002.2229 原文確認：Converse & Stahler (2010) 的
    Table 1 初始條件是「起始狀態是氣體驅離後、已達 virial 平衡」（論文
