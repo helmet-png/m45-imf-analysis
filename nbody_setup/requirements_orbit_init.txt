@@ -1,0 +1,32 @@
+# scripts/nbody_petar/m45_orbit_init.py 的獨立環境（2026-09 驗證過，本機 x64
+# Python 3.12，Snapdragon X ARM64 走 x64 模擬）。
+#
+# 走過的錯路，記下來避免重踩：
+# 1. galpy 1.10.2 對 Windows 完全沒有 ARM64 wheel，對 Windows x64 也只到
+#    cp313——本機主環境是 Python 3.14，裝不進去，必須另開一個 Python
+#    3.12/3.13 的 venv。
+# 2. 直接 `pip install galpy==1.10.2 astropy numpy` 會裝到最新的
+#    astropy（實測 8.0.1），galpy 1.10.2 的 `Orbit(SkyCoord)` 初始化
+#    路徑呼叫 `vxvv.galcen_v_sun.d_xyz`，但新版 astropy 的
+#    `Galactocentric.galcen_v_sun` 回傳型別已經沒有 `d_xyz` 屬性（改用
+#    `CartesianRepresentation` 而非 `CartesianDifferential`），直接
+#    `AttributeError` 崩潰。降到 astropy<7（實測 6.1.7）解決。
+# 3. astropy 6.1.7 配新版 numpy（實測 2.1+ 的某個版本）會在
+#    `astropy.units.quantity_helper.function_helpers` 匯入時撞
+#    `AttributeError: module 'numpy' has no attribute 'in1d'`
+#    （`np.in1d` 在 numpy 2.x 某版被移除，astropy 6.1.7 還在用）。
+#    降到 numpy<2.1（實測 2.0.2）解決。
+#
+# 建立方式：
+#   py install 3.12-64   # 若尚未安裝
+#   py -3.12-64 -m venv .venv_nbody_tools
+#   .venv_nbody_tools/Scripts/pip install -r nbody_setup/requirements_orbit_init.txt
+#
+# 這組版本只保證 m45_orbit_init.py 這一支能跑；N-body 主鏈本身
+# （mcluster_sse/petar.init/petar）是 Linux 上的獨立 galpy venv
+# （見 setup_linux_nbody.sh），跟這裡是兩個分開的環境，互不影響。
+
+galpy==1.10.2
+astropy==6.1.7
+numpy==2.0.2
+pandas==3.0.5
