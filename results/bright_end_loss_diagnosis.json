@@ -4,7 +4,7 @@
     "baseline": "results\\baseline.dat",
     "cmd_members": "data\\cmd_members.csv"
   },
-  "raw_gaia_table_available": false,
+  "raw_gaia_table_available": true,
   "bright_interval_baseline_rows": [
     {
       "source_id": 53164002842376832,
