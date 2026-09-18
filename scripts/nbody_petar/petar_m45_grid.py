@@ -189,6 +189,13 @@ def render_commands(row: dict) -> str:
         # state is explicitly virial equilibrium (Q=0.5), so pass it
         # explicitly instead of relying on an unverified default.
         "-Q", "0.50",
+        # H5（2026-09-05 使用者回報，本項 PR）：原本用 -f 1（mcluster 內建
+        # Kroupa (2001) 三段冪次），低質量段（0.08-0.5 Msun）鎖死在官方
+        # 預設 -1.3，沒有 CLI 參數可覆寫（README 只說要改原始碼或改用
+        # -f 2）。已改用 -f 2 兩段自訂冪律，斷點固定 0.5 M☉，
+        # imf_alpha_low/imf_alpha_high 兩欄位決定兩段斜率（見模組檔頭
+        # H5 修復說明），PeTar 網格因此真的能獨立驗證前向模型懷疑的
+        # 低質量段冪次假設，不再鎖死在 Kroupa 值。
         "-f", "2",
         "-m", "0.08", "-m", "0.5", "-m", "150",
         "-a", f"{mcluster_alpha_low:.4f}", "-a", f"{mcluster_alpha_high:.4f}",
