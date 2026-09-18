@@ -306,3 +306,8 @@ p6_lowmass_v3_s17|profile_lowmass.py|--procs 4 --n-syn 40000 --repeats 3 --refin
 # 單一行程內依序跑，抓的資料集一致、比較邏輯天然正確，預期一小時內
 # 可以跑完，不需要再冒風險拆分。
 mass_dependent_fbin_v2|inject_massdep_fbin.py|--procs 24 --n-syn 40000 --trials 3 --refines 3,3||false|senior24
+
+# 2026-09-14：已完成的 M45 10-run PeTar screening grid 的 definition bridge。
+# 這是純後處理，不會重新積分；輸入是 senior24 上既有的 processed snapshots。
+# 以完整 10-run 為 gate，避免只挑中央模型就把 primary/system 修正當完整敏感度。
+m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20260914 --require-run-count 10||false|senior24
