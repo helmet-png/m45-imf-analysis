@@ -71,7 +71,15 @@ def summarize(samples: list[tuple[float, float]], lo: float, hi: float) -> dict[
     probabilities = [p for g, p in samples if lo <= g < hi]
     high = sum(p >= P_THRESHOLD for p in probabilities)
     lower, upper = wilson_interval(high, len(probabilities))
+    # probs_final = -1 是 pyUPMASK 的未分類哨兵值，不是機率；分母含它們會把
+    # 「沒被分類」誤當成「被分類為非成員」，另外回報僅已分類星的比率。
+    classified = [p for p in probabilities if p >= 0.0]
+    high_c = sum(p >= P_THRESHOLD for p in classified)
+    lower_c, upper_c = wilson_interval(high_c, len(classified))
     return {
+        "n_unclassified": len(probabilities) - len(classified),
+        "fpr_classified_only": high_c / len(classified) if classified else math.nan,
+        "wilson_95_classified_only": [lower_c, upper_c],
         "g_lo": lo,
         "g_hi": hi,
         "n_control": len(probabilities),
@@ -129,12 +137,13 @@ def main() -> None:
     OUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(f"control match: {len(control)}/{len(control)}")
-    print("G bin       N    P>=0.7   FPR      Wilson 95%")
+    print("G bin       N    P>=0.7   FPR      Wilson 95%      P<0(未分類)")
     for row in bins:
         print(f"{row['g_lo']:>4.1f}-{row['g_hi']:<4.1f} "
               f"{row['n_control']:>5} {row['n_p_ge_0p7']:>8} "
               f"{row['false_positive_rate']:>7.4f} "
-              f"[{row['wilson_95_lo']:.4f}, {row['wilson_95_hi']:.4f}]")
+              f"[{row['wilson_95_lo']:.4f}, {row['wilson_95_hi']:.4f}]"
+              f"  {row['n_unclassified']:>5}")
     print(f"\nStage 2 probability seam: {report['stage2_decision']['probability_seam']}")
     print("Stage 2 alpha: do not report; completeness(G, colour) is still unmeasured.")
     print(f"wrote {OUT.relative_to(HERE)}")
