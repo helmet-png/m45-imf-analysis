@@ -3,7 +3,7 @@
 
 `scripts/diagnostics/pyupmask_feasibility.py` 已經在 gcp1 上驗證過
 provisioning＋聚類的完整路徑能跑（300 顆星、OL_runs=3，耗時 2.6 秒，
-外推正式規模約 5.8 小時，見 `WORK_BOARD.md` pyupmask_cloud_feasibility）。
+當時外推正式規模約 5.8 小時，實測完整規模只要 222.6 秒，外推不可用）。
 這支程式是可行性測試通過後的下一步：用完整的 9,278 顆星（G<20）、
 產線的 `OL_runs=25` 真的跑一次。
 
