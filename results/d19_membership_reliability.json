@@ -1,0 +1,109 @@
+{
+  "purpose": "extreme-kinematic-control false-positive rate versus G",
+  "inputs": {
+    "full_result": "results\\d19_g20_full.dat",
+    "control_field": "data\\m45_control_field.csv",
+    "n_result_rows": 9278,
+    "n_control_rows": 7228,
+    "n_control_matched": 7228
+  },
+  "probability_threshold": 0.7,
+  "bins": [
+    {
+      "g_lo": 16.0,
+      "g_hi": 16.5,
+      "n_control": 496,
+      "n_p_ge_0p7": 1,
+      "false_positive_rate": 0.0020161290322580645,
+      "wilson_95_lo": 0.0003559849786538881,
+      "wilson_95_hi": 0.011330638284802946
+    },
+    {
+      "g_lo": 16.5,
+      "g_hi": 17.0,
+      "n_control": 567,
+      "n_p_ge_0p7": 0,
+      "false_positive_rate": 0.0,
+      "wilson_95_lo": 0.0,
+      "wilson_95_hi": 0.006729467107435093
+    },
+    {
+      "g_lo": 17.0,
+      "g_hi": 17.5,
+      "n_control": 628,
+      "n_p_ge_0p7": 1,
+      "false_positive_rate": 0.0015923566878980893,
+      "wilson_95_lo": 0.0002811453797230048,
+      "wilson_95_hi": 0.008963988410004826
+    },
+    {
+      "g_lo": 17.5,
+      "g_hi": 18.0,
+      "n_control": 581,
+      "n_p_ge_0p7": 0,
+      "false_positive_rate": 0.0,
+      "wilson_95_lo": 0.0,
+      "wilson_95_hi": 0.006568376374069393
+    },
+    {
+      "g_lo": 18.0,
+      "g_hi": 18.5,
+      "n_control": 554,
+      "n_p_ge_0p7": 0,
+      "false_positive_rate": 0.0,
+      "wilson_95_lo": 0.0,
+      "wilson_95_hi": 0.006886291364602354
+    },
+    {
+      "g_lo": 18.5,
+      "g_hi": 19.0,
+      "n_control": 528,
+      "n_p_ge_0p7": 0,
+      "false_positive_rate": 0.0,
+      "wilson_95_lo": 0.0,
+      "wilson_95_hi": 0.007222939763312511
+    },
+    {
+      "g_lo": 19.0,
+      "g_hi": 19.5,
+      "n_control": 475,
+      "n_p_ge_0p7": 0,
+      "false_positive_rate": 0.0,
+      "wilson_95_lo": 8.673617379884035e-19,
+      "wilson_95_hi": 0.008022402300241486
+    },
+    {
+      "g_lo": 19.5,
+      "g_hi": 20.0,
+      "n_control": 448,
+      "n_p_ge_0p7": 1,
+      "false_positive_rate": 0.002232142857142857,
+      "wilson_95_lo": 0.0003941367539069228,
+      "wilson_95_hi": 0.012533979306846616
+    }
+  ],
+  "bright_g16_18": {
+    "g_lo": 16.0,
+    "g_hi": 18.0,
+    "n_control": 2272,
+    "n_p_ge_0p7": 2,
+    "false_positive_rate": 0.0008802816901408451,
+    "wilson_95_lo": 0.00024143819228044402,
+    "wilson_95_hi": 0.0032040824920810448
+  },
+  "dark_g18_20": {
+    "g_lo": 18.0,
+    "g_hi": 20.0,
+    "n_control": 2005,
+    "n_p_ge_0p7": 1,
+    "false_positive_rate": 0.0004987531172069825,
+    "wilson_95_lo": 8.804759810939378e-05,
+    "wilson_95_hi": 0.0028198268859842383
+  },
+  "stage2_decision": {
+    "probability_seam": "not observed in this extreme control at P>=0.7",
+    "alpha_reportable": false,
+    "alpha_reason": "This control constrains false positives only. It does not establish membership completeness as a function of (G, colour), which is the predeclared D19 gate before reporting alpha."
+  },
+  "scope_limit": "The 10-sigma control is deliberately far from M45 kinematics. These rates must not be interpreted as a calibration of P(member) near the cluster boundary."
+}

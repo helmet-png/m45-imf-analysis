@@ -886,6 +886,21 @@ G−RP 與 BP−RP 對星雲位置的散布敏感度），Stage 0 閘門的判�
 已知非成員多高的機率」，按 G 分箱看這個機率會不會隨星等變暗系統性
 升高，就是 Stage 2 要的可靠度曲線。
 
+**Stage 2 結果（2026-09-19，`d19_full_membership_run_r2`）**：gcp1 成功
+跑完 9,278 顆、OL_runs=25 的完整聚類（222.6 秒），輸出
+`results/d19_g20_full.dat`；7,228 顆 control field 星全部按 source_id
+對應。`scripts/diagnostics/analyze_d19_membership_reliability.py` 的 0.5
+等分箱結果顯示，在 G=16–20 的每個分箱中 P≥0.7 偽陽性率是 **0–0.22%**
+（Wilson 95% 區間上界 0.66–1.25%）。亮端 G=16–18 為 2/2,272（0.088%），
+暗端 G=18–20 為 1/2,005（0.050%），沒有觀察到暗端偽陽性上升的接縫。
+
+這不是 P(member) 的完整校準：10σ control 刻意遠離星團運動學，只能量
+極端已知非成員被誤判的機率，不能量靠近成員邊界者的校準、也不能量真成員
+的召回率。**Stage 2 最終判定**：沒有在這個 control 看到偽陽性接縫；但
+成員完整度仍無法表達成 (G, colour) 的函數並給出不確定度，因此依
+`WORK_BOARD.md` 事前退出判準，D19 只交付診斷與限制，**不產出 alpha**。
+完整分箱與區間見 `results/d19_membership_reliability.json`。
+
 **(2) C21 星雲汙染定量檢查已完成（2026-09-18，
 `scripts/diagnostics/check_nebula_colour_robustness.py`，結果檔
 `results/d19_nebula_colour_robustness.npz`）**：用 Gaia 官方 BP/RP

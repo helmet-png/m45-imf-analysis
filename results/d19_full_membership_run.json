@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "step": "輸入檔格式（header／12 欄／無字面 \"\"）",
+      "ok": true,
+      "detail": "9278 顆星，格式檢查通過"
+    },
+    {
+      "step": "複製進 prepared/",
+      "ok": true,
+      "detail": "/home/yutunglan/m45_membership/prepared/m45_g20_full.dat"
+    },
+    {
+      "step": "provisioning（冪等，已套用時安全跳過）",
+      "ok": true,
+      "detail": "耗時 3.2s"
+    },
+    {
+      "step": "跑聚類（9278 顆星、OL_runs=25）",
+      "ok": true,
+      "detail": "耗時 0.06 小時"
+    },
+    {
+      "step": "輸出檔產生",
+      "ok": true,
+      "detail": "d19_g20_full.dat"
+    }
+  ],
+  "ok": true,
+  "elapsed_sec": 222.5979413986206,
+  "n_stars": 9278
+}
