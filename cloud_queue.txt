@@ -391,3 +391,14 @@ m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--r
 # 用新標籤重派，因 cloud_queue 對原標籤已記為 error。
 # d19_full_membership_run|scripts/diagnostics/d19_full_membership_run.py|||false|gcp1
 d19_full_membership_run_r2|scripts/diagnostics/d19_full_membership_run.py|||false|gcp1
+
+# 2026-09-19：D19 Stage 2／C8——pyUPMASK 完整度（召回率）注入回收測試。
+# PR #219 只量了偽陽性（極端 control，≈0% 是設計出來的），真成員被誤丟
+# 完全沒測。這批把 1,520 顆合成成員（每個 0.5 等分箱 190 顆，誤差取自
+# G／BP−RP 最接近的真實場星）混進 G<20 場星、移除現有 1,078 顆真成員後
+# 重跑 pyUPMASK，量各 G 分箱的 P>=0.7 召回率。實測 G<20 全樣本重跑只要
+# 222.6 秒（不是外推的 5.8 小時），所以 3 個獨立種子串行放 gcp1 也只要
+# 十幾分鐘。只派 gcp1（provisioning 與 .venv_pyupmask 已在該機驗證）。
+d19_completeness_injection_s1|scripts/diagnostics/d19_completeness_injection.py|--seed 1||false|gcp1
+d19_completeness_injection_s2|scripts/diagnostics/d19_completeness_injection.py|--seed 2||false|gcp1
+d19_completeness_injection_s3|scripts/diagnostics/d19_completeness_injection.py|--seed 3||false|gcp1

@@ -570,3 +570,20 @@ G−RP 對星雲汙染的散布比值 0.92，BP−RP 是 1.11，方向支持 G�
 D19。`d19_full_membership_run` 一跑完，`results/d19_g20_full.dat` 對照
 `data/m45_control_field.csv` 的 source_id 就能直接算 P(member) 可靠度
 vs G。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
+| d19_completeness_injection（D19／C8） | 進行中 | 開始日期：2026-09-19 | 合成成員 N = 1,520 顆（G 16–20 每 0.5 等分箱 190 顆）；3 個獨立種子；外圈重複次數 OL_runs = 25 | 各 G 分箱 P≥0.7 召回率與 Wilson 95% 區間（樂觀上限，非完整度校準） |
+
+d19_completeness_injection：認領人：Claude session（分支
+`claude/d19-completeness-injection`）。補 D19 Stage 2 缺的一半：PR #219 的
+極端 control 只量偽陽性，且因為 control 在分群用的三個維度上偏離 10σ，
+≈0% 是設計出來的；「暗端真成員被誤丟」沒被測到。本測試把 1,520 顆合成
+成員（運動學＝G<17 真成員的中心與**本質**離散度〔觀測變異數減平均誤差
+平方〕，各星誤差取自 G 與 BP−RP 最接近的真實場星，位置由真成員 (x,y)
+重抽加 0.05° 抖動）注入 G<20 場星、同時移除現有 1,078 顆真成員，用產線
+設定重跑 pyUPMASK。`scripts/diagnostics/d19_completeness_injection.py`
+（`--build-only`／`--analyze-only` 已在本機驗證建構與分析邏輯，未跑
+pyUPMASK）。**限制**：合成星按定義服從我們給的高斯運動學，所以這是
+樂觀上限；真實暗端成員若運動學不同（質量分層、潮汐尾）不在其中。Stage 2
+仍以此結果為準判定能不能報 alpha。
