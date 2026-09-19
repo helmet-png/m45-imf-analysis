@@ -316,7 +316,7 @@ LIMITATIONS.md D11）。查證前兩道 gate：Gate 1（Gaia→Johnson V 紅端
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| lowmass_depth_extension（D19） | 進行中 | 開始日期：2026-09-17 | 質量下限目標 0.10 M☉、顏色誤差門檻 54 mmag、G 範圍 16–20 星等 | Stage 0：通過（分段顏色，質量下限 0.090 M☉、sigma_M 最差 0.0394 M☉）。等時線比較：產線全段 PARSEC，BHAC15 拼接版當系統誤差檢驗（低質量段質量差 14.6–34.4%）。Stage 2 未跑 |
+| lowmass_depth_extension（D19） | 完成（不產出 α） | 開始日期：2026-09-17 | 質量下限目標 0.10 M☉、顏色誤差門檻 54 mmag、G 範圍 16–20 星等 | Stage 0 通過。Stage 2 完成：極端 control field 未見暗端 P≥0.7 偽陽性接縫，但無法量完整度 (G, colour)，依退出判準不產出 α |
 
 lowmass_depth_extension：認領人：Claude session（分支
 `claude/d19-lowmass-colour`）。把資料下限從 0.173 M☉ 推到約 0.09 M☉，
@@ -337,8 +337,11 @@ G 20.0 還淺）。
 Gaia 天測，G≈20 的天測品質能不能撐住 P>0.7 還沒驗證。**退出判準先寫在
 這裡，讓它的時間戳早於結果**——若延伸段的成員完整度無法表達成 (G, colour)
 的單一函數並給出特徵化的不確定度，D19 就產出診斷圖與書面限制，**不產出
-alpha 數字**（否則只是把 C8 的未建模完整度問題做大）。Stage 0 尚未結算的
-兩項：ΔN_members 要等成員重跑，C21 星雲汙染檢查未實作。耗時未查證。
+alpha 數字**（否則只是把 C8 的未建模完整度問題做大）。**2026-09-19 結算**：
+完整 9,278 顆星重跑與極端運動學 control field 都已完成；G=16–20 每 0.5 等
+分箱的 P≥0.7 偽陽性率為 0–0.22%，沒有暗端上升的接縫。但這個 10σ control
+只能量偽陽性、不能量成員召回率或完整度 (G, colour)，故退出判準成立，D19
+不產出 alpha 數字。詳見 `results/d19_membership_reliability.json`。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
@@ -530,7 +533,7 @@ D3、D4、D13）：這些是已知但沒有列優先度的結構性限制，不�
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| d19_full_membership_run（D19） | 進行中 | 開始日期：2026-09-18 | 星數 N = 9,278 顆（G<20）；外圈重複次數 OL_runs = 25（產線設定） | 待 gcp1 跑完，預估約 5.8 小時（N² × OL_runs 外推，量級參考） |
+| d19_full_membership_run（D19） | 已完成 | 開始日期：2026-09-18 | 星數 N = 9,278 顆（G<20）；外圈重複次數 OL_runs = 25（產線設定） | gcp1 成功，聚類 222.6 秒；7,228 顆 control 全數對應，暗端未見 P≥0.7 偽陽性接縫 |
 
 d19_full_membership_run：認領人：Claude session（分支
 `claude/d19-g20-full-run`）。`pyupmask_cloud_feasibility`（見
@@ -569,4 +572,8 @@ G−RP 對星雲汙染的散布比值 0.92，BP−RP 是 1.11，方向支持 G�
 但 bootstrap 95% CI 窄幅涵蓋 0，只是邊緣證據。細節見 `LIMITATIONS.md`
 D19。`d19_full_membership_run` 一跑完，`results/d19_g20_full.dat` 對照
 `data/m45_control_field.csv` 的 source_id 就能直接算 P(member) 可靠度
-vs G。
+vs G。已完成的 `analyze_d19_membership_reliability.py` 顯示 G=16–20 各
+0.5 等分箱的 P≥0.7 偽陽性率為 0–0.22%，沒有暗端升高；但 control field
+只含極端運動學非成員，不能量成員完整度 (G, colour)，依 D19 的既定退出
+判準不產出 alpha。結果與分箱 Wilson 區間見
+`results/d19_membership_reliability.json`。
