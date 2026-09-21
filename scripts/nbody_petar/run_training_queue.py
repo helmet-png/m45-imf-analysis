@@ -80,6 +80,11 @@ def main():
     progress_path = args.runs_dir / "queue_progress.json"
 
     todo = [rid for rid in run_ids if not already_complete(args.runs_dir / rid)]
+    # 2026-09-21：沒跑過的排前面、失敗過的排後面（sorted 是穩定排序，各組
+    # 內維持 CSV 原順序）。派工佇列把同一個 `--limit N` 重複排很多次，
+    # 若某個 run 每次都失敗又永遠排在最前面，會吃掉每一批的名額、讓後面
+    # 沒跑過的 run 永遠輪不到。
+    todo = sorted(todo, key=lambda rid: (args.runs_dir / rid / "stage.json").exists())
     if args.limit is not None:
         todo = todo[: args.limit]
 
