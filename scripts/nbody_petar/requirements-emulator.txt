@@ -1,0 +1,5 @@
+# Isolated environment for emulator_fit.py (方法 B：GP 模擬器 + MCMC 貝氏反推)。
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+emcee>=3.1

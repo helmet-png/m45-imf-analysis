@@ -80,10 +80,16 @@ def main():
     progress_path = args.runs_dir / "queue_progress.json"
 
     todo = [rid for rid in run_ids if not already_complete(args.runs_dir / rid)]
+    # 2026-09-21：沒跑過的排前面、失敗過的排後面（sorted 是穩定排序，各組
+    # 內維持 CSV 原順序）。派工佇列把同一個 `--limit N` 重複排很多次，
+    # 若某個 run 每次都失敗又永遠排在最前面，會吃掉每一批的名額、讓後面
+    # 沒跑過的 run 永遠輪不到。
+    todo = sorted(todo, key=lambda rid: (args.runs_dir / rid / "stage.json").exists())
+    n_pending = len(todo)  # 截斷前的未完成數，已完成數要用這個算（CodeRabbit #223）
     if args.limit is not None:
         todo = todo[: args.limit]
 
-    print(f"總共 {len(run_ids)} 筆，已完成 {len(run_ids) - len(todo)} 筆，"
+    print(f"總共 {len(run_ids)} 筆，已完成 {len(run_ids) - n_pending} 筆，"
           f"本次要跑 {len(todo)} 筆", flush=True)
 
     for i, run_id in enumerate(todo, 1):

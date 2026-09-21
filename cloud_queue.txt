@@ -402,3 +402,30 @@ d19_full_membership_run_r2|scripts/diagnostics/d19_full_membership_run.py|||fals
 d19_completeness_injection_s1|scripts/diagnostics/d19_completeness_injection.py|--seed 1||false|gcp1
 d19_completeness_injection_s2|scripts/diagnostics/d19_completeness_injection.py|--seed 2||false|gcp1
 d19_completeness_injection_s3|scripts/diagnostics/d19_completeness_injection.py|--seed 3||false|gcp1
+
+# 2026-09-21：方法 B（GP 模擬器 + 貝氏反推）訓練網格 petar_m45_training_grid.csv，
+# 430 筆（350 個拉丁超立方設計點 + 20 點 x 4 個額外 seed 量模擬雜訊）派給 senior24。
+# 為什麼切 16 行：MAX_WAIT_HOURS=20，單一工作超過 20 小時會被砍；430 筆估計 100+
+# 小時。每行是同一條指令（--limit 30 = 本批最多跑下 30 筆尚未完成的 run，估計
+# 8-12 小時），run_training_queue.py 會跳過已完成的 run，所以第 k 批自然接著第
+# k-1 批做；16 x 30 = 480 > 430，多的名額留給被砍掉而中斷的 run 續跑。
+# 每批結束會寫 results/nbody_training_status.json（完成/失敗統計＋每筆能量誤差），
+# 這是派工主機能看到的進度管道；原始 run 資料留在 senior24 的 runs_training/。
+# 包裝腳本開跑前會健檢（--galpy-set、mcluster_sse、numpy/astropy），失敗就當批
+# 直接結束、看 logs/<標籤>.out。--nbody-dir 寫死 senior24 的實際安裝位置。
+nbody_train_b01|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b02|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b03|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b04|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b05|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b06|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b07|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b08|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b09|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b10|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b11|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b12|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b13|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b14|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b15|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+nbody_train_b16|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
