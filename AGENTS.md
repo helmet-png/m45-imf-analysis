@@ -16,6 +16,9 @@
 - commit 訊息結尾加 `Co-Authored-By: Codex <noreply@openai.com>`。
 - 開 PR 貼 `by:codex` 標籤。
 - 產出新結果檔案要記進 `results/RESULTS_LOG.md`。
+- 只改派工清單（`cloud_queue.txt` 等）的 PR，標題要以 `[派工]` 開頭，
+  CodeRabbit 才會跳過、不耗審查額度；還改了其他檔案就不可以帶（見
+  `CONTRIBUTING.md` 零之一）。
 - 碰 `LIMITATIONS.md`：先讀 `CONTRIBUTING.md` 第五、六節的格式與教訓，
   再讀 `LIMITATIONS.md` 目前的完整版本（不是只看自己這次的 diff）。
 - 開始新工作前先查 `WORK_BOARD.md`（正在做／還沒做）與
