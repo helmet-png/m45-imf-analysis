@@ -175,6 +175,9 @@ LOCK = HERE / "dashboard.lock"  # 見 acquire_lock()——防止雙擊桌面捷�
                                 # 舊行程還沒真的死透就又被啟動一次）疊出
                                 # 多個行程搶同一個埠（2026-08-31，使用者
                                 # 實際遇到 4 個殘留行程、其中一個殺不掉）
+LOG_TAIL_LINES = 5           # 每台 worker 卡片顯示遠端 log 末幾行
+LOG_TAIL_MAX_CHARS = 200     # 單行截斷，避免一行進度條洗版
+_TAIL_MARK = "---M45TAIL---"  # 分隔「已耗時」跟「log 末行」兩段遠端輸出
 PROBE_CACHE_TTL = 15  # 秒；同一個 label 這段時間內重複整理不重打 SSH
 PROBE_MAX_WORKERS = 4    # 同時最多幾個 worker 一起探測
 PROBE_DEADLINE_S = 25    # 這次整理頁面，即時探測合計最多等這麼久——
@@ -449,12 +452,20 @@ def _format_timedelta(td: timedelta) -> str:
     return f"{h} 小時 {m} 分"
 
 
-def _ssh_elapsed(worker: str, label: str) -> str | None:
-    """讀遠端 `results/.start_<label>` 標記檔的 mtime 算已耗時（這個標記檔
+def _ssh_remote_info(worker: str, label: str) -> dict:
+    """回傳 `{"elapsed": str|None, "tail": [str]}`。
+
+    已耗時：讀遠端 `results/.start_<label>` 標記檔的 mtime 算已耗時（這個標記檔
     本來是 ssh_sync.py 的 pull() 用來分辨新結果的，見該檔案說明，這裡借用
     同一個檔案取得帶日期的正確開始時間——本機 log 只印 HH:MM:SS 沒有日期，
-    沒辦法用來算耗時）。連不上、逾時、或標記檔還沒建立就回傳 None，畫面
+    沒辦法用來算耗時）。連不上、逾時、或標記檔還沒建立時 elapsed 為 None，畫面
     上顯示「未知」，不硬湊數字。
+
+    log 末幾行：遠端 `logs/<label>.out`（見 `ssh_sync.run()`，用
+    `python -u` 啟動所以是即時輸出）。各腳本印進度的格式不統一
+    （「第 2 次」「trial1」「p=1.1 第3次」…），刻意不解析成「第 N/M
+    輪」，直接給原文讓人自己讀（2026-09-21 使用者選的做法：認錯輪次
+    比不顯示更糟）。
 
     **一定要用 `ssh_sync._get_worker()`，不能直接用
     `ssh_workers.load_workers()`**：後者的 `remote_dir` 可能是 `~/...`
@@ -465,18 +476,26 @@ def _ssh_elapsed(worker: str, label: str) -> str | None:
     try:
         w = ssh_sync._get_worker(worker)
     except Exception:  # noqa: BLE001 — worker 沒登記之類，優雅退回未知
-        return None
-    cmd = (f"cd {shlex.quote(w['remote_dir'])} 2>/dev/null && "
-          f"stat -c %Y {shlex.quote('results/.start_' + label)} 2>/dev/null")
+        return {"elapsed": None, "tail": []}
+    q_dir = shlex.quote(w["remote_dir"])
+    # 已耗時跟 log 末幾行放同一次 SSH：經 IAP tunnel 每開一條連線就要
+    # 好幾秒，兩個資訊分兩次問會吃掉一倍的探測時間預算（PROBE_DEADLINE_S）。
+    cmd = (f"cd {q_dir} 2>/dev/null && {{ "
+          f"stat -c %Y {shlex.quote('results/.start_' + label)} 2>/dev/null; "
+          f"echo {_TAIL_MARK}; "
+          f"tail -n {LOG_TAIL_LINES} {shlex.quote('logs/' + label + '.out')} 2>/dev/null; }}")
+    info: dict = {"elapsed": None, "tail": []}
     try:
         r = ssh_workers.remote_run(w, cmd, timeout=15)
     except subprocess.TimeoutExpired:
-        return None
-    out = r.stdout.strip()
-    if not out.isdigit():
-        return None
-    started = datetime.fromtimestamp(int(out))
-    return _format_timedelta(datetime.now() - started)
+        return info
+    head, _, tail = r.stdout.partition(_TAIL_MARK)
+    if head.strip().isdigit():
+        started = datetime.fromtimestamp(int(head.strip()))
+        info["elapsed"] = _format_timedelta(datetime.now() - started)
+    info["tail"] = [ln.rstrip()[:LOG_TAIL_MAX_CHARS]
+                    for ln in tail.splitlines() if ln.strip()]
+    return info
 
 
 def _ssh_ping(worker: str) -> dict:
@@ -514,7 +533,9 @@ def probe_live(worker: str, kind: str, item: dict) -> dict:
         result["error"] = f"探測失敗：{e}"
 
     if kind == "ssh" and result["status"] in ("running", "complete", "error"):
-        result["elapsed"] = _ssh_elapsed(worker, label)
+        info = _ssh_remote_info(worker, label)
+        result["elapsed"] = info["elapsed"]
+        result["tail"] = info["tail"]
     # kind == "kaggle" 目前沒有對應的耗時來源（Kaggle 端沒有同一套標記檔
     # 機制），已知限制，先留空不硬湊。
 
@@ -684,6 +705,39 @@ def gather_status(probe: bool = True) -> dict:
     }
 
 
+def _build_queue_groups(cloud_workers: dict[str, str], cloud_items: dict[str, dict],
+                        unfinished: Callable[[str], bool],
+                        assigned: dict[str, dict]) -> list[dict]:
+    """把 cloud_queue.txt 裡「還沒完成」的項目依 worker 分組，給『雲端服務』
+    頁的排隊清單用（2026-09-21 使用者要求）。範圍是使用者選的：只列
+    還沒完成的（已完成的是「時間軸」頁的事）；被 `#` 註解掉暫停的項目
+    `read_queue()` 本來就不會回傳，所以不會出現在這裡。
+
+    每組 `items` 的順序就是佇列檔裡的順序（`cloud_queue.py` 也是照這個
+    順序撿）；`running` 標的是 `gather_worker_status()` 認定「這個 worker
+    現在在跑」的那一筆（同一個 `assigned`，不另外再推一次，避免兩邊
+    對「誰在跑」說法不一致）。沒指定 worker 的獨立成最後一組（誰有空給
+    誰）；指定了但沒登記的 worker 名稱照樣列出來並標 `registered=False`，
+    這種通常是打錯字，藏起來反而找不到。"""
+    groups: dict[str | None, list[dict]] = {}
+    for label, item in cloud_items.items():
+        if not unfinished(label):
+            continue
+        worker = item["worker"]
+        groups.setdefault(worker, []).append({
+            "label": label, "script": item.get("script") or None,
+            "args": item.get("args") or None,
+            "running": worker is not None and assigned.get(worker) is item,
+        })
+    ordered = [n for n in sorted(cloud_workers) if n in groups]
+    ordered += sorted(n for n in groups if n is not None and n not in cloud_workers)
+    if None in groups:
+        ordered.append(None)
+    return [{"worker": n, "kind": cloud_workers.get(n) if n else None,
+             "registered": n is None or n in cloud_workers, "items": groups[n]}
+            for n in ordered]
+
+
 def gather_worker_status(probe: bool = True) -> dict:
     """以雲端服務（worker）為單位，不是以步驟為單位——單純回答「這個
     worker 現在是不是真的在跑」（2026-08-25 使用者要求新增的第二種
@@ -718,6 +772,8 @@ def gather_worker_status(probe: bool = True) -> dict:
         if worker and worker not in assigned and _unfinished(label):
             assigned[worker] = item
 
+    queue = _build_queue_groups(cloud_workers, cloud_items, _unfinished, assigned)
+
     to_probe = {name: {"worker": name, "kind": kind, "item": assigned[name]}
                for name, kind in cloud_workers.items() if name in assigned}
     idle_ssh = [name for name, kind in cloud_workers.items()
@@ -742,7 +798,7 @@ def gather_worker_status(probe: bool = True) -> dict:
             else:
                 workers_out.append({"name": name, "kind": kind, "assigned": False,
                                     "reachable": None})
-        return {"workers": workers_out}
+        return {"workers": workers_out, "queue": queue}
 
     # 已派工的 worker（要探測工作狀態）跟閒置的 SSH worker（只要 ping）
     # 併成同一次 _run_concurrent() 呼叫，共用同一份 PROBE_DEADLINE_S——
@@ -799,7 +855,7 @@ def gather_worker_status(probe: bool = True) -> dict:
             # 的 kernel 執行環境，沒有工作在跑就沒有東西可以 ping。
             workers_out.append({"name": name, "kind": kind, "assigned": False,
                                 "reachable": None})
-    return {"workers": workers_out}
+    return {"workers": workers_out, "queue": queue}
 
 
 def _build_label_index() -> dict[str, dict]:
@@ -2015,7 +2071,67 @@ def _worker_badge(w: dict) -> str:
     else:
         cls, text, detail = "pending", "閒置中", "Kaggle 沒有常駐機器，沒有工作時無法探測連線"
     return (f'<span class="badge {cls}">{text}</span>'
-           f'<span class="detail">{detail}</span>')
+           f'<span class="detail">{detail}</span>{_worker_tail_html(w)}')
+
+
+def _worker_tail_html(w: dict) -> str:
+    """執行中的 worker 卡片底下放遠端 log 末幾行原文（使用者要看「這台 VM
+    現在跑到哪」）。只有 `live` 狀態才有意義；Kaggle 沒有可即時讀的 log
+    （見 `probe_live()`），明講出來，不要讓人以為是壞了。"""
+    if not (w.get("assigned") and w.get("state") == "live"):
+        return ""
+    if w.get("kind") == "kaggle":
+        return '<div class="detail">Kaggle 工作沒有可即時讀取的 log</div>'
+    tail = w.get("tail") or []
+    if not tail:
+        return '<div class="detail">（遠端 log 目前還沒有輸出）</div>'
+    return ('<details class="worker-tail" open><summary>最新輸出（遠端 log 末 '
+            f'{len(tail)} 行）</summary><pre>{html.escape(chr(10).join(tail))}</pre></details>')
+
+
+_QUEUE_MAX_ROWS = 30     # 每組最多列幾筆，其餘折成「另 N 筆」（佇列可能上百筆）
+_QUEUE_ARGS_CHARS = 110  # 參數字串截斷長度，完整內容放 title
+
+
+def _queue_html(groups: list[dict]) -> str:
+    """排隊清單（見 `_build_queue_groups()`）。程式名稱連 GitHub，跟其他
+    頁面同一個 `_doc_url()`——這頁的目的就是「點得進去」。"""
+    total_waiting = sum(1 for g in groups for it in g["items"] if not it["running"])
+    if not groups:
+        return '<p class="note">佇列裡沒有還沒完成的工作。</p>'
+    out = []
+    for gi, g in enumerate(groups):
+        name = g["worker"]
+        if name is None:
+            title = "未指定 worker（誰有空給誰）"
+        else:
+            kind = f"（{html.escape(g['kind'])}）" if g["kind"] else ""
+            warn = "" if g["registered"] else "　<span class=\"badge fail\">未登記的 worker 名稱</span>"
+            title = f"{html.escape(name)}{kind}{warn}"
+        rows = []
+        waiting_no = 0
+        for it in g["items"][:_QUEUE_MAX_ROWS]:
+            if it["running"]:
+                pill = '<span class="badge live">執行中</span>'
+            else:
+                waiting_no += 1
+                pill = f'<span class="badge pending">#{waiting_no}</span>'
+            script = it["script"]
+            link = (f'<a class="script-link" href="{html.escape(_doc_url(script))}">'
+                    f'<code>{html.escape(script)}</code> ↗</a>' if script else "")
+            args = it["args"] or ""
+            args_html = (f'<code class="worker-args" title="{html.escape(args)}">'
+                         f'{html.escape(args[:_QUEUE_ARGS_CHARS])}'
+                         f'{"…" if len(args) > _QUEUE_ARGS_CHARS else ""}</code>' if args else "")
+            rows.append(f'<li>{pill}<code>{html.escape(it["label"])}</code> {link}{args_html}</li>')
+        hidden = len(g["items"]) - _QUEUE_MAX_ROWS
+        if hidden > 0:
+            rows.append(f'<li class="detail">…另 {hidden} 筆（見 cloud_queue.txt）</li>')
+        out.append(
+            f'<details class="queue-group" open data-search-item="queue-{gi}">'
+            f'<summary>{title}　<span class="detail">共 {len(g["items"])} 筆</span></summary>'
+            f'<ol>{"".join(rows)}</ol></details>')
+    return "".join(out)
 
 
 def render_workers_html(status: dict) -> str:
@@ -2025,6 +2141,8 @@ def render_workers_html(status: dict) -> str:
     workers = status["workers"]
     running_n = sum(1 for w in workers if w["assigned"] and w.get("state") == "live")
     reachable_n = sum(1 for w in workers if not w["assigned"] and w.get("reachable"))
+    queue = status.get("queue", [])
+    waiting_n = sum(1 for g in queue for it in g["items"] if not it["running"])
 
     parts = [f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8">
@@ -2043,6 +2161,7 @@ ping 一下確認連得上；Kaggle 帳號閒置時沒有常駐機器可以探�
   <div class="pill {'live' if running_n else ''}">正在跑 {running_n}</div>
   <div class="pill">閒置且連得上 {reachable_n}</div>
   <div class="pill">worker 總數 {len(workers)}</div>
+  <div class="pill">排隊中 {waiting_n}</div>
 </div>
 """]
 
@@ -2056,7 +2175,12 @@ ping 一下確認連得上；Kaggle 帳號閒置時沒有常駐機器可以探�
             f'data-search-item="worker-{html.escape(w["name"])}">'
             f'<strong>{html.escape(w["name"])}</strong>'
             f'<span class="kind">（{html.escape(w["kind"])}）</span>'
-            f'<span class="worker-badge-slot">{_worker_badge(w)}</span></div>')
+            f'<div class="worker-badge-slot">{_worker_badge(w)}</div></div>')
+
+    parts.append('<h2>排隊清單</h2>'
+                 '<p class="note">cloud_queue.txt 裡還沒完成的工作，依 worker 分組、'
+                 '照佇列檔順序（派工器也是照這個順序撿）；已完成的看「時間軸」頁。</p>')
+    parts.append(_queue_html(queue))
 
     parts.append(_WORKERS_PROBE_SCRIPT)
     parts.append(_SEARCH_SCRIPT)
@@ -2215,6 +2339,16 @@ _CSS = """
 .task-io { font-size: 0.85em; margin: 0.4em 0; line-height: 1.6; }
 .worker-row { border: 1px solid #999; border-radius: 4px; padding: 0.6em 0.9em;
              margin-bottom: 0.6em; }
+.worker-tail { margin-top: 0.5em; }
+.worker-tail summary { cursor: pointer; font-size: 0.8em; color: #777; }
+.worker-tail pre { margin: 0.3em 0 0; padding: 0.5em 0.8em; font-size: 0.78em;
+                  background: rgba(128,128,128,0.10); border-radius: 3px;
+                  white-space: pre-wrap; word-break: break-all; }
+.queue-group { border: 1px solid #999; border-radius: 4px; padding: 0.5em 0.9em;
+              margin-bottom: 0.6em; }
+.queue-group summary { cursor: pointer; font-weight: 600; }
+.queue-group ol { list-style: none; margin: 0.4em 0 0; padding: 0; font-size: 0.85em; }
+.queue-group li { margin: 0.25em 0; }
 .worker-row .kind { color: #777; font-size: 0.85em; margin-right: 0.6em; }
 :root { color-scheme: light dark; }
 body { font-family: -apple-system, "Microsoft JhengHei", sans-serif;
