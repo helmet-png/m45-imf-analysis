@@ -58,7 +58,10 @@ REPO_ROOT = HERE.parent.parent
 
 
 def find_petar_bin(nbody_dir: Path) -> str:
-    """回傳 install/bin 底下唯一一個 petar.omp.*.bse.galpy 的完整檔名。"""
+    """回傳 install/bin 底下唯一一個 petar.omp.*.bse.galpy 的**絕對路徑**。
+
+    不能只回傳檔名（CodeRabbit #223）：檔名會被 PATH 解析，`--env-bin`
+    目錄若剛好有同名的舊 PeTar 就會先被找到，健檢與訓練會跑錯版本。"""
     bin_dir = nbody_dir / "install" / "bin"
     hits = sorted(glob.glob(str(bin_dir / "petar.omp.*.bse.galpy")))
     if len(hits) != 1:
@@ -66,7 +69,7 @@ def find_petar_bin(nbody_dir: Path) -> str:
             f"{bin_dir} 底下找到 {len(hits)} 個 petar.omp.*.bse.galpy（要恰好 1 個）："
             f"{[os.path.basename(h) for h in hits]}"
         )
-    return os.path.basename(hits[0])
+    return str(Path(hits[0]).resolve())
 
 
 def build_env(nbody_dir: Path, env_bin: str, n_threads: int) -> dict:
@@ -113,11 +116,17 @@ def write_status(runs_dir: Path, out_path: Path) -> dict:
     complete, failed, energy = [], [], {}
     for d in sorted(runs_dir.glob("mb_train_*")):
         rp = d / "result.json"
+        # 沒有 result.json＝這個 run 中途失敗或被中斷（run_nbody_case 步驟失敗
+        # 只寫 stage.json、不寫 result.json），要算進 failed，不能悄悄略過
+        # （CodeRabbit #223）。本函式只在 run_training_queue 子行程結束後呼叫，
+        # 所以不會誤把「正在跑」的 run 當失敗。
         if not rp.exists():
+            failed.append({"run_id": d.name, "status": "missing_result"})
             continue
         try:
             data = json.loads(rp.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
+            failed.append({"run_id": d.name, "status": "invalid_result"})
             continue
         if data.get("status") == "complete" and not data.get("smoke", False):
             complete.append(d.name)
@@ -140,7 +149,7 @@ def run_self_test() -> dict:
         fake = bin_dir / "petar.omp.avx512.bse.galpy"
         fake.write_text("#!/bin/sh\necho '--galpy-set'\n")
         fake.chmod(0o755)
-        checks["glob_single_ok"] = find_petar_bin(nb) == "petar.omp.avx512.bse.galpy"
+        checks["glob_single_ok"] = find_petar_bin(nb) == str(fake.resolve())
 
         (bin_dir / "petar.omp.avx2.bse.galpy").write_text("x")
         try:
@@ -173,7 +182,14 @@ def run_self_test() -> dict:
         (rd / "mb_train_0002_s2" / "result.json").write_text(
             json.dumps({"status": "complete", "smoke": True}))
         s = write_status(rd, Path(tmp) / "st.json")
-        checks["status_counts_smoke_excluded"] = s["n_complete"] == 1 and len(s["failed"]) == 1
+        (rd / "mb_train_0003_s3").mkdir()  # 只有目錄、沒有 result.json
+        (rd / "mb_train_0004_s4").mkdir()
+        (rd / "mb_train_0004_s4" / "result.json").write_text("{not json")
+        s = write_status(rd, Path(tmp) / "st.json")
+        st = {f["run_id"]: f["status"] for f in s["failed"]}
+        checks["status_counts_smoke_excluded"] = s["n_complete"] == 1 and st.get("mb_train_0002_s2") == "complete"
+        checks["status_missing_and_invalid_result_are_failed"] = (
+            st.get("mb_train_0003_s3") == "missing_result" and st.get("mb_train_0004_s4") == "invalid_result")
 
     if not all(checks.values()):
         raise AssertionError(f"queue_training_batch self-test failed: {checks}")
