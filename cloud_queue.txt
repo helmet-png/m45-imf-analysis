@@ -413,19 +413,22 @@ d19_completeness_injection_s3|scripts/diagnostics/d19_completeness_injection.py|
 # 這是派工主機能看到的進度管道；原始 run 資料留在 senior24 的 runs_training/。
 # 包裝腳本開跑前會健檢（--galpy-set、mcluster_sse、numpy/astropy），失敗就當批
 # 直接結束、看 logs/<標籤>.out。--nbody-dir 寫死 senior24 的實際安裝位置。
-nbody_train_b01|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b02|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b03|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b04|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b05|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b06|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b07|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b08|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b09|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b10|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b11|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b12|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b13|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b14|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b15|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
-nbody_train_b16|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# 2026-09-21 暫停：senior24 正在跑別人的紅外線低質量區間工作，使用者要求把
+# 方法 B 訓練網格改派其他主機。這 16 行原樣註解保留（不刪），senior24 空下來
+# 想用時拿掉行首 '# ' 即可。訓練網格改在專用 GCP VM 上直接跑（不走佇列）。
+# nbody_train_b01|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b02|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b03|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b04|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b05|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b06|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b07|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b08|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b09|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b10|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b11|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b12|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b13|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b14|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b15|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+# nbody_train_b16|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
