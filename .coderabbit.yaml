@@ -10,6 +10,10 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # 純派工 PR（只改 cloud_queue.txt 這類派工清單）標題帶 [派工]，
+    # 沒有程式可審，不耗審查額度。規則見 CONTRIBUTING.md 零之一。
+    ignore_title_keywords:
+      - "[派工]"
   # 2026-08-21 新增：查過 42 個 PR 裡有 41 個 CodeRabbit 留言完全沒人
   # 回覆，只是「沒人記得去檢查」——開啟後 CodeRabbit 會用真正的 GitHub
   # 「Request changes」審查狀態卡住 PR，等到 (1) 全部留言都 resolved、
