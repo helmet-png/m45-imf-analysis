@@ -16,6 +16,8 @@
 - commit 訊息結尾加 `Co-Authored-By: Codex <noreply@openai.com>`。
 - 開 PR 貼 `by:codex` 標籤。
 - 產出新結果檔案要記進 `results/RESULTS_LOG.md`。
+- 派工不開 PR：在私有 repo `helmet-png/m45-dispatch` 的 `queue/cloud_queue.txt`
+  加一行、直接 push（見 `CONTRIBUTING.md` 零之六）。
 - 只改派工清單（`cloud_queue.txt` 等）的 PR，標題要以 `[派工]` 開頭，
   CodeRabbit 才會跳過、不耗審查額度；還改了其他檔案就不可以帶（見
   `CONTRIBUTING.md` 零之一）。

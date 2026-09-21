@@ -74,6 +74,12 @@
   真正需要審的 PR 被額度用完擋下；`.coderabbit.yaml` 同步加
   `ignore_title_keywords`。
 
+- 2026-09-21：新增零之六「派工走私有 repo `m45-dispatch`」。起因是每次
+  派工都要為一行 `cloud_queue.txt` 開公開 PR，每條都吃一次 CodeRabbit
+  免費額度、還要人工合併；佇列檔搬到私有 repo 後派工直接 push，不再
+  觸發審查，也讓之後協調 VM 回報狀態、log 的寫入憑證只綁這個不含
+  程式碼的 repo。舊佇列封存在 `docs/archive/cloud_queue_archived.txt`。
+
 ## AGENTS.md
 
 - 2026-08-11：建立，作為給 Codex 與其他非 Claude agent 的進入點，
