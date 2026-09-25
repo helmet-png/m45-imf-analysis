@@ -21,9 +21,32 @@ commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`�
 2026-09-11 起）**：agent 自己沒有 senior24／協調 VM 的 SSH 金鑰，只能靠
 使用者在瀏覽器 SSH 分頁裡貼指令、貼結果來間接操作，細節與指令寫法
 （避免多行指令裡混中文）見 `CONTRIBUTING.md` 該節。**另外（`CONTRIBUTING.md`
-零之一）**：只改派工清單（`cloud_queue.txt` 等）的 PR，標題要以
-`[派工]` 開頭，CodeRabbit 會跳過、不耗審查額度；還改了其他任何檔案就
-不可以帶這個標記。
+零之一）**：你自己判斷不需要 CodeRabbit 審的 PR（純派工、驗證流程是否
+正常的 smoke test、一次性的驗證／理解），標題以 `[免審]` 開頭，
+CodeRabbit 會跳過、不耗審查額度；會留在主線或影響結論的程式／文件不可以
+帶，描述裡要寫一句判斷理由。
+
+## 給使用者貼的遠端指令：一律以「協調 VM」為執行位置（2026-09-21 起）
+
+使用者所有遠端操作都是在瀏覽器 SSH 分頁登入**協調 VM**（`control-center`，
+帳號 `yutunglan11_gmail_com`）執行，再從那裡連 senior24。所以：
+
+- 交給使用者貼的指令，**預設就是在協調 VM 上執行**，不要叫使用者「先
+  SSH 進 senior24 再貼」。
+- 要在 senior24 上跑的指令，**整條包成一行 ssh**，從協調 VM 直接貼：
+
+  ```
+  ssh -i ~/.ssh/senior24_key -o StrictHostKeyChecking=accept-new $(python3 -c "import json;w=json.load(open('$HOME/m45_membership/ssh_workers.json'))['senior24'];print('-p %s %s@%s'%(w.get('port',22),w['user'],w['host']))") '<要在 senior24 上跑的指令>'
+  ```
+
+  `<...>` 用單引號包住，所以裡面不能再出現單引號（要引號就用雙引號）；
+  變數與 `$(...)` 會在 senior24 上才展開。其餘格式限制（單行、`&&` 串接、
+  指令本身不夾中文）見 `CONTRIBUTING.md` 零之五。
+- 每次交指令前先在訊息裡標明「在協調 VM 貼」；若指令是要在協調 VM 自己
+  的 `~/m45_membership`（派工服務用的那份）上動作，先確認不會覆蓋
+  `cloud_queue.txt` 等即時狀態，**不要在那份上 `git checkout`／`reset --hard`**。
+- 協調 VM 上 `~/m45_membership` 只會同步 `cloud_queue.txt`，其餘檔案的
+  `git log` 停在舊 commit 是正常的。
 
 ## 教學者角色（僅當使用者明確指派時適用，不是每個 session 的預設角色）
 

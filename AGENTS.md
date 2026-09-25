@@ -18,9 +18,9 @@
 - 產出新結果檔案要記進 `results/RESULTS_LOG.md`。
 - 派工不開 PR：在私有 repo `helmet-png/m45-dispatch` 的 `queue/cloud_queue.txt`
   加一行、直接 push（見 `CONTRIBUTING.md` 零之六）。
-- 只改派工清單（`cloud_queue.txt` 等）的 PR，標題要以 `[派工]` 開頭，
-  CodeRabbit 才會跳過、不耗審查額度；還改了其他檔案就不可以帶（見
-  `CONTRIBUTING.md` 零之一）。
+- 你判斷不需要 CodeRabbit 審的 PR（純派工、流程驗證、一次性驗證），
+  標題以 `[免審]` 開頭，CodeRabbit 會跳過、不耗審查額度；會留在主線或
+  影響結論的程式／文件不可以帶（見 `CONTRIBUTING.md` 零之一）。
 - 碰 `LIMITATIONS.md`：先讀 `CONTRIBUTING.md` 第五、六節的格式與教訓，
   再讀 `LIMITATIONS.md` 目前的完整版本（不是只看自己這次的 diff）。
 - 開始新工作前先查 `WORK_BOARD.md`（正在做／還沒做）與

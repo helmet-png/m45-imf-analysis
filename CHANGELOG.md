@@ -68,11 +68,12 @@
 - 2026-08-16：新增 `docs/PROJECT_TIMELINE.md` 定期更新規則（零之三）。
 - 2026-08-24：新增本節規則——所有規則類文件禁止「因為 X 所以改 Y」
   這種帶日期的脈絡敘事，脈絡統一搬進這份 `CHANGELOG.md`。
-- 2026-09-21：新增「純派工 PR 標題帶 `[派工]`」規則（零之一）。起因是
-  CodeRabbit 免費方案的審查額度全 repo 共用，每次派工都要開一條只改
-  `cloud_queue.txt` 的 PR，這類 PR 沒有東西可審卻照樣吃掉額度，導致
-  真正需要審的 PR 被額度用完擋下；`.coderabbit.yaml` 同步加
-  `ignore_title_keywords`。
+- 2026-09-21：新增「不需要審查的 PR 標題帶 `[免審]`」規則（零之一）。
+  起因是 CodeRabbit 免費方案的審查額度全 repo 共用，每次派工都要開一條
+  只改 `cloud_queue.txt` 的 PR，這類 PR 與流程驗證用的 smoke test 沒有
+  東西可審卻照樣吃掉額度，導致真正需要審的 PR 被額度用完擋下；
+  `.coderabbit.yaml` 同步加 `ignore_title_keywords`。標記原訂 `[派工]`，
+  後來範圍擴大到「作者自己判斷不需要審」，改名 `[免審]`。
 
 - 2026-09-21：新增零之六「派工走私有 repo `m45-dispatch`」。起因是每次
   派工都要為一行 `cloud_queue.txt` 開公開 PR，每條都吃一次 CodeRabbit
