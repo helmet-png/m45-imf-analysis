@@ -94,24 +94,30 @@ comments。所以它只適合「所有留言都已經處理完、只是要一次
 指令——否則會把其他還沒處理的留言一起關掉，正好製造這整個機制要防的
 「看起來處理過了、其實沒有」。
 
-### 純派工 PR 標題要帶 `[派工]`——CodeRabbit 會跳過
+### 不需要審查的 PR，標題帶 `[免審]`——CodeRabbit 會跳過
 
-CodeRabbit 的審查額度是全 repo 共用、有上限的。**只改派工清單**
-（`cloud_queue.txt`、`kaggle_queue.txt`、`queue.txt` 這類，沒有任何
-程式、文件、設定變動）的 PR 沒有東西可審，卻會照樣吃掉一次額度，
-擠掉真正需要審的 PR。所以：
+CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得審的 PR
+照樣吃掉一次額度，會擠掉真正需要審的 PR。**開 PR 的人（人類或 agent）
+自己判斷這個 PR 不需要審，就在標題最前面加 `[免審]`**，
+`.coderabbit.yaml` 的 `ignore_title_keywords` 會讓 CodeRabbit 跳過標題
+含這個標記的 PR。例如 `[免審] cloud_queue：方法 B 訓練網格切 16 批`。
 
-- **這類 PR 的標題一律以 `[派工]` 開頭**，例如
-  `[派工] cloud_queue：方法 B 訓練網格切 16 批派給 senior24`。
-  `.coderabbit.yaml` 的 `ignore_title_keywords` 會讓 CodeRabbit 跳過
-  標題含 `[派工]` 的 PR。
-- **只有純派工 PR 才能帶這個標記。** 只要同一個 PR 還改了程式、
-  `WORK_BOARD.md`、`LIMITATIONS.md`、`results/` 或任何其他檔案，就不是
-  純派工，標題不可以帶 `[派工]`，照常讓 CodeRabbit 審。不確定就不要帶。
-- 跟身分前綴並用時，`[派工]` 放在最前面：`[派工] [Claude] ...`。
+**可以帶的情況**（判斷權在開 PR 的人，這幾類是常見例子）：
+
+- 只改派工清單（`cloud_queue.txt`、`kaggle_queue.txt`、`queue.txt`）。
+- 只是驗證某個流程（派工機制、CI、部署）有沒有正常運作的 smoke test。
+- 為了取得某個驗證結果或理解某件事而做的一次性程式，不會被別的
+  程式依賴、也不會產出被引用的結論。
+
+**不可以帶的情況**：這個 PR 的程式、設定或文件會留在主線、被別人或
+別的程式依賴，或改動了會被引用的結論（`results/`、`LIMITATIONS.md`、
+`PAPER_OUTLINE.md`、`pipeline/` 與各生產腳本）。不確定就不要帶。
+
+- 跟身分前綴並用時，`[免審]` 放在最前面：`[免審] [Claude] ...`。
+- PR 描述要用一句話寫明為什麼判斷不需要審。
 - 被跳過的 PR 不會有正式 Review，`scripts/tools/coderabbit_status.sh`
   會對它顯示「⚠ 還沒有針對目前這個 commit 的正式 review」，這是預期
-  結果；合併純派工 PR 不需要 CodeRabbit 核准。
+  結果；合併帶 `[免審]` 的 PR 不需要 CodeRabbit 核准。
 - 標題漏帶而已經被審了的 PR，不用補救，下次記得帶即可。
 
 ---
@@ -589,8 +595,9 @@ token 去猜**，先看 `git log`／PR 紀錄能不能查到；真的看不出�
 ## 七、快速檢查清單（開 PR 前）
 
 - [ ] 分支名稱有標明是誰／哪個 agent
-- [ ] 若這個 PR 只改派工清單（`cloud_queue.txt` 等）：標題以 `[派工]` 開頭；
-      只要還改了其他任何檔案就不可以帶（見零之一）
+- [ ] 若判斷這個 PR 不需要 CodeRabbit 審（純派工、流程驗證、一次性驗證）：
+      標題以 `[免審]` 開頭並在描述寫明理由；會留在主線或影響結論的
+      程式／文件不可以帶（見零之一）
 - [ ] 新結果檔案已經在 `results/RESULTS_LOG.md` 加了一行
 - [ ] commit message 有正確的身分標示
 - [ ] 若碰到 `LIMITATIONS.md`／`PAPER_OUTLINE.md`：已經重讀過 main
