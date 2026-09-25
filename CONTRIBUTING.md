@@ -286,6 +286,23 @@ PR 描述、甚至跟使用者的對話回覆）裡寫的「結論」「判斷�
 
 ---
 
+## 零之六、派工走私有 repo `m45-dispatch`
+
+派工清單（`queue/cloud_queue.txt`）在私有 repo `helmet-png/m45-dispatch`，
+不在這個公開 repo。派工的人（含 agent）：
+
+- 在私有 repo 的 `queue/cloud_queue.txt` 加一行，commit 後**直接 push
+  `main`**，不開 PR、不需要審查。格式見 `cloud_queue.py` 開頭說明。
+- 佇列項目引用的腳本必須已經合併進這個公開 repo 的 `main`，否則派下去
+  找不到腳本。
+- 私有 repo 寫入權限只有擁有者；協作者要派工請擁有者或 agent 代為提交。
+- 公開 repo 的 `docs/archive/cloud_queue_archived.txt` 是舊佇列的封存，
+  不會被任何程式讀取，不要往裡面加工作。
+- 協調 VM 與本機 clone 的位置、deploy key 設定見
+  `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`。
+
+---
+
 ## 一、分支與 Pull Request——所有人都要走 PR，沒有例外
 
 `main` 分支設了保護規則：**任何人（含 repo 擁有者）都不能直接 push 到

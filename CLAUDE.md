@@ -15,7 +15,9 @@ commit 要標明身分。開始任何新工作前先開分支 `claude/<主題>`�
 預設只代表寫下當下的想法，不是定案——語氣用「初步判讀」而非「結論是」，
 但推理過程跟數字要完整交代；發現別人（或自己稍早）的判斷站不住腳，
 直接改，不用先問。這條不影響 `LIMITATIONS.md` 的 A–D 分級或引用可信度
-標記這類已經在用的結構化信心表達方式。**另外（`CONTRIBUTING.md` 零之五，
+標記這類已經在用的結構化信心表達方式。**另外（`CONTRIBUTING.md` 零之六）**：派工不開 PR，在私有 repo
+`helmet-png/m45-dispatch` 的 `queue/cloud_queue.txt` 加一行、直接 push
+（本機 clone 在 `../m45-dispatch`）。**另外（`CONTRIBUTING.md` 零之五，
 2026-09-11 起）**：agent 自己沒有 senior24／協調 VM 的 SSH 金鑰，只能靠
 使用者在瀏覽器 SSH 分頁裡貼指令、貼結果來間接操作，細節與指令寫法
 （避免多行指令裡混中文）見 `CONTRIBUTING.md` 該節。**另外（`CONTRIBUTING.md`

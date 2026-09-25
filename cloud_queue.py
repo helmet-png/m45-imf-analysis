@@ -33,16 +33,16 @@ worker 名稱可以是 `kaggle_accounts.json` 裡的帳號、也可以是
 用量（見 `CLOUD_WORKERS.md` 的 e2-highcpu-8 記憶體尖峰說明），不要
 一開始就派滿載工作。
 
-**集中式團隊派工（2026-08-23 新增）**：真實憑證（`kaggle_accounts.json`／
+**集中式團隊派工**：真實憑證（`kaggle_accounts.json`／
 `ssh_workers.json`）只放在跑這支程式的機器上，不會、也不需要分給每個
-隊員。隊員自己的機器完全不需要拿到任何 token 或 SSH 私鑰——只要對
-`cloud_queue.txt` 開分支、加一行工作、開 PR、合併（照 `CONTRIBUTING.md`
-的既有流程），這支程式**每一輪都會自動把 `cloud_queue.txt` 從
+隊員。**佇列檔放在私有 repo `helmet-png/m45-dispatch`**（`queue/cloud_queue.txt`），
+clone 在跟這個 repo 同層的 `m45-dispatch/`（環境變數 `M45_DISPATCH_DIR`
+可覆蓋位置）。派工方式是在那個私有 repo 的 `queue/cloud_queue.txt`
+加一行、直接 push `main`（沒有 PR）；這支程式**每一輪都會自動把它從
 `origin/main` 同步下來**（`sync_queue_file()`），不用手動通知、也不用
-重啟這支程式，下一輪（預設 60 秒內）就會撿到新工作開始派。反過來說，
-**這台機器上的 `cloud_queue.txt` 不要手動編輯**——下一輪同步會被
-`origin/main` 上的版本蓋掉，想加工作一律走 PR，維持「誰都可以查看
-佇列在跑什麼、誰都不用碰真實憑證」這個集中式模式的核心好處。結果
+重啟這支程式，下一輪（預設 60 秒內）就會撿到新工作開始派。
+**這台機器上的佇列檔不要手動編輯**——下一輪同步會被 `origin/main`
+上的版本蓋掉。結果
 下載下來後（`cloud_results/`／`kaggle_results/`）目前還是要靠操作這台
 機器的人手動 commit 進 `results/`／`results/RESULTS_LOG.md` 才會讓
 隊員看到——這步還沒自動化，是刻意的：自動 commit 未經檢查的結果，跟
@@ -86,7 +86,9 @@ if sys.platform == "win32":
     ctypes.windll.kernel32.SetErrorMode(0x0002)  # SEM_NOGPFAULTERRORBOX
 
 HERE = Path(__file__).resolve().parent
-QUEUE = HERE / "cloud_queue.txt"
+DISPATCH_DIR = Path(os.environ.get("M45_DISPATCH_DIR",
+                                   str(HERE.parent / "m45-dispatch")))
+QUEUE = DISPATCH_DIR / "queue" / "cloud_queue.txt"
 DONE = HERE / "logs" / "cloud_queue_done.txt"
 LOCK = HERE / "logs" / "cloud_queue.lock"
 POLL_SECS = 60
@@ -171,38 +173,36 @@ def release_lock():
 
 
 def sync_queue_file(branch: str = "main") -> None:
-    """把 `cloud_queue.txt` 從 `origin/<branch>` 同步下來，讓隊員 PR
-    合併進去的新工作不用重啟這支程式就會被撿到——集中式團隊派工模式
-    的核心機制，見檔案開頭的說明。
+    """把私有派工 repo（`DISPATCH_DIR`）的佇列檔從 `origin/<branch>`
+    同步下來，新加的工作不用重啟這支程式就會被撿到——集中式團隊派工
+    模式的核心機制，見檔案開頭的說明。
 
-    只同步這一個檔案（`git checkout origin/<branch> -- cloud_queue.txt`），
-    不對整個工作目錄跑 `git pull`：這台機器可能正在用其他檔案（例如
-    `kaggle_accounts.json`／`ssh_workers.json` 不進版控不受影響，但
-    `pipeline/`／`config.toml` 這類已經被目前這個 process 讀進記憶體的
-    模組，中途整包 pull 也不會讓已載入的程式碼重新生效，反而只會增加
-    「跟本機其他未儲存修改衝突」的風險），只精確更新這一個檔案最單純、
-    風險最小。
+    只同步佇列檔這一個檔案（`git checkout origin/<branch> -- <file>`），
+    不跑 `git pull`：這台機器上的佇列檔本來就不該有本機獨有的修改，
+    直接用遠端版本蓋過去最單純，不需要處理合併衝突的情況。
 
-    刻意用 `git checkout origin/<branch> -- <file>` 而不是 `git pull`：
-    這台機器上的 `cloud_queue.txt` 本來就不該有本機獨有的修改（見檔案
-    開頭「不要手動編輯」的說明），直接用遠端版本蓋過去最單純，不需要
-    處理合併衝突的情況。
-
-    同步失敗（離線、git 帳號憑證過期等）只印警告、不中斷派工迴圈——
-    沿用本機現有的佇列內容照常運作，只是暫時看不到新加的工作，等下次
-    同步成功再撿到，不因為輔助功能失敗就讓派工整個停擺。
+    同步失敗（離線、deploy key 失效、`DISPATCH_DIR` 沒有 clone 等）只
+    印警告、不中斷派工迴圈——沿用本機現有的佇列內容照常運作，只是暫時
+    看不到新加的工作，等下次同步成功再撿到。
     """
+    if not (DISPATCH_DIR / ".git").exists():
+        print(f"  找不到私有派工 repo：{DISPATCH_DIR}（clone "
+              f"helmet-png/m45-dispatch 到這裡，或設環境變數 "
+              f"M45_DISPATCH_DIR），這輪沿用本機現有內容", flush=True)
+        return
     try:
         r = subprocess.run(["git", "fetch", "origin", branch],
-                           cwd=str(HERE), capture_output=True, text=True,
-                           timeout=30, creationflags=ssh_workers.CREATE_NO_WINDOW)
+                           cwd=str(DISPATCH_DIR), capture_output=True,
+                           text=True, timeout=30,
+                           creationflags=ssh_workers.CREATE_NO_WINDOW)
         if r.returncode != 0:
             print(f"  同步 {QUEUE.name} 失敗（git fetch：{r.stderr.strip()[:200]}），"
                  f"這輪沿用本機現有內容", flush=True)
             return
         r = subprocess.run(
-            ["git", "checkout", f"origin/{branch}", "--", QUEUE.name],
-            cwd=str(HERE), capture_output=True, text=True, timeout=15,
+            ["git", "checkout", f"origin/{branch}", "--",
+             QUEUE.relative_to(DISPATCH_DIR).as_posix()],
+            cwd=str(DISPATCH_DIR), capture_output=True, text=True, timeout=15,
             creationflags=ssh_workers.CREATE_NO_WINDOW)
         if r.returncode != 0:
             print(f"  同步 {QUEUE.name} 失敗（git checkout："

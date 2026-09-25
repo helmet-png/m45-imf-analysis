@@ -16,8 +16,8 @@ GCP 免費試用帳號、各自的 VM，希望互相共用成一個資源池，�
 某個人的 Google 帳號登入——這台 VM 24/7 開著完全不用錢，也不依賴
 任何人記得開電腦。**架構其餘部分沒有變**：仍然是
 [集中派工](../../cloud_queue.py)——只有這一台協調 VM 真正握有連線
-憑證跟派工邏輯，隊員完全不用碰任何憑證，一樣是對 `cloud_queue.txt`
-開 PR 加工作。傳統直連的既有 worker（例如 Oracle，沒有 IAP）不受
+憑證跟派工邏輯，隊員完全不用碰任何憑證，派工是在私有 repo
+`m45-dispatch` 的 `queue/cloud_queue.txt` 加一行。傳統直連的既有 worker（例如 Oracle，沒有 IAP）不受
 影響，繼續看 [CLOUD_WORKERS.md](CLOUD_WORKERS.md)。
 
 ## 為什麼是這個設計，不是別的
@@ -294,6 +294,26 @@ cd ~/m45_membership
 Python 標準庫，**不需要 `pip install` 任何套件**——`e2-micro` 只有
 1GB 記憶體，不裝 numpy/scipy 這類重量級套件正好，這台機器本來就
 不做任何實際運算，只負責發指令、查狀態。
+
+### 4 之 1. 抓私有派工 repo
+
+佇列檔放在私有 repo `helmet-png/m45-dispatch`，clone 到跟
+`~/m45_membership` 同層的 `~/m45-dispatch`（`cloud_queue.py` 預設就找
+這個位置）。這個 repo 是私有的，要用 deploy key。**每個指令都寫成單行**
+（避免瀏覽器 SSH 分頁解析多行指令出錯，見 `CONTRIBUTING.md` 零之五）：
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/m45_dispatch_deploy -C m45-dispatch-coordinator
+cat ~/.ssh/m45_dispatch_deploy.pub
+```
+
+把印出的公鑰貼到 GitHub `m45-dispatch` → Settings → Deploy keys，
+勾選「Allow write access」（這個 repo 只放派工清單、狀態與 log，不放
+程式碼與憑證），然後：
+
+```bash
+git clone -c core.sshCommand="ssh -i ~/.ssh/m45_dispatch_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git@github.com:helmet-png/m45-dispatch.git ~/m45-dispatch && git -C ~/m45-dispatch config core.sshCommand "ssh -i ~/.ssh/m45_dispatch_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+```
 
 ### 5. 填 `ssh_workers.json`
 
