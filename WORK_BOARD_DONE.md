@@ -545,7 +545,7 @@ stars_per_cluster` 的可行性檢查一直卡在這裡，見 D2）。查出比�
 patch＋驗證匯入。首次派工因 PEP 668 系統 Python 鎖住而失敗；專用 venv
 的重派又發現 gcp1 缺 `python3.12-venv`。補齊前置套件後，同一台 gcp1
 的實測 provisioning 耗時 12.6 秒、聚類 2.6 秒且產出檔案，以 N² ×
-OL_runs 線性外推完整規模（9,278 顆、OL_runs=25）約 5.8 小時（量級
+OL_runs 線性外推完整規模（9,278 顆、OL_runs=25）約 5.8 小時〔2026-09-19 訂正：實測 222.6 秒，外推不可用〕（量級
 參考）。子集檔版控於 `data/m45_g20_feasibility_subset.dat`（`prepared/`
 整個被 `.gitignore` 排除）。閘門通過，下一步是 `d19_full_membership_run`
 （見 `WORK_BOARD.md`）。

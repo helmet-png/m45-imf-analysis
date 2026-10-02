@@ -71,21 +71,31 @@ GitHub 帳號安裝 App 並選這個 repo（帳號授權，agent 無法代勞）
   留言送出。只在所有留言都處理完、要一次收尾時用；單一誤判只在 UI
   resolve 那一個討論串，否則會把還沒處理的留言一起關掉。
 
-### 純派工 PR 標題要帶 `[派工]`——CodeRabbit 會跳過
+### 不需要審查的 PR，標題帶 `[免審]`——CodeRabbit 會跳過
 
-審查額度全 repo 共用。**只改派工清單**（`cloud_queue.txt`、
-`kaggle_queue.txt`、`queue.txt` 這類，沒有任何程式、文件、設定變動）的
-PR 沒東西可審，卻會吃掉額度。
+CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得審的 PR
+照樣吃掉一次額度，會擠掉真正需要審的 PR。**開 PR 的人（人類或 agent）
+自己判斷這個 PR 不需要審，就在標題最前面加 `[免審]`**，
+`.coderabbit.yaml` 的 `ignore_title_keywords` 會讓 CodeRabbit 跳過標題
+含這個標記的 PR。例如 `[免審] cloud_queue：方法 B 訓練網格切 16 批`。
 
-- 這類 PR 的標題以 `[派工]` 開頭，例如
-  `[派工] cloud_queue：方法 B 訓練網格切 16 批派給 senior24`。
-  `.coderabbit.yaml` 的 `ignore_title_keywords` 會讓 CodeRabbit 跳過它。
-- 只要同一個 PR 還改了程式、`WORK_BOARD.md`、`LIMITATIONS.md`、
-  `results/` 或任何其他檔案，就不可以帶這個標記。不確定就不要帶。
-- 與身分前綴並用時 `[派工]` 放最前面：`[派工] [Claude] ...`。
-- 被跳過的 PR 在 `coderabbit_status.sh` 會顯示「⚠」，這是預期結果；
-  合併純派工 PR 不需要 CodeRabbit 核准。
-- 漏帶標題而已經被審的 PR 不用補救。
+**可以帶的情況**（判斷權在開 PR 的人，這幾類是常見例子）：
+
+- 只改派工清單（`cloud_queue.txt`、`kaggle_queue.txt`、`queue.txt`）。
+- 只是驗證某個流程（派工機制、CI、部署）有沒有正常運作的 smoke test。
+- 為了取得某個驗證結果或理解某件事而做的一次性程式，不會被別的
+  程式依賴、也不會產出被引用的結論。
+
+**不可以帶的情況**：這個 PR 的程式、設定或文件會留在主線、被別人或
+別的程式依賴，或改動了會被引用的結論（`results/`、`LIMITATIONS.md`、
+`PAPER_OUTLINE.md`、`pipeline/` 與各生產腳本）。不確定就不要帶。
+
+- 跟身分前綴並用時，`[免審]` 放在最前面：`[免審] [Claude] ...`。
+- PR 描述要用一句話寫明為什麼判斷不需要審。
+- 被跳過的 PR 不會有正式 Review，`scripts/tools/coderabbit_status.sh`
+  會對它顯示「⚠ 還沒有針對目前這個 commit 的正式 review」，這是預期
+  結果；合併帶 `[免審]` 的 PR 不需要 CodeRabbit 核准。
+- 標題漏帶而已經被審了的 PR，不用補救，下次記得帶即可。
 
 ---
 
@@ -194,6 +204,23 @@ PR 沒東西可審，卻會吃掉額度。
   串接、指令字串不夾中文；說明用另一則訊息講。
 - 指令卡住沒輸出時，先請使用者開新分頁重連，不要急著假設指令或連線
   壞了。
+
+---
+
+## 零之六、派工走私有 repo `m45-dispatch`
+
+派工清單（`queue/cloud_queue.txt`）在私有 repo `helmet-png/m45-dispatch`，
+不在這個公開 repo。派工的人（含 agent）：
+
+- 在私有 repo 的 `queue/cloud_queue.txt` 加一行，commit 後**直接 push
+  `main`**，不開 PR、不需要審查。格式見 `cloud_queue.py` 開頭說明。
+- 佇列項目引用的腳本必須已經合併進這個公開 repo 的 `main`，否則派下去
+  找不到腳本。
+- 私有 repo 寫入權限只有擁有者；協作者要派工請擁有者或 agent 代為提交。
+- 公開 repo 的 `docs/archive/cloud_queue_archived.txt` 是舊佇列的封存，
+  不會被任何程式讀取，不要往裡面加工作。
+- 協調 VM 與本機 clone 的位置、deploy key 設定見
+  `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`。
 
 ---
 
@@ -435,8 +462,9 @@ D 類）寫 `（尚無認領工作）`，不要留白。
 ## 七、開 PR 前快速檢查
 
 - [ ] 分支名稱標明是誰／哪個 agent
-- [ ] 只改派工清單的 PR：標題以 `[派工]` 開頭；還改了其他檔案就不帶
-      （零之一）
+- [ ] 若判斷這個 PR 不需要 CodeRabbit 審（純派工、流程驗證、一次性驗證）：
+      標題以 `[免審]` 開頭並在描述寫明理由；會留在主線或影響結論的
+      程式／文件不可以帶（見零之一）
 - [ ] 新結果檔案已在 `results/RESULTS_LOG.md` 加一行
 - [ ] commit message 有正確的身分標示
 - [ ] 碰到 `LIMITATIONS.md`／`PAPER_OUTLINE.md`：已重讀 main 上的完整

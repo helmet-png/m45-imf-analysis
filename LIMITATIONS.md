@@ -854,8 +854,9 @@ CLOUD_WORKERS.md` 第 2 節），pyUPMASK 的 PCA／Scaler 需要它，也一併
 在 gcp1 上實測——provisioning 12.6 秒、聚類 2.6 秒並產出檔案。過程中
 又發現兩個環境坑：PEP 668 鎖住系統 Python（改用專用 venv）、gcp1 缺
 `python3.12-venv`（補裝）。都已修好並記進 `CLOUD_WORKERS.md`／
-`setup_pyupmask.sh`。以 N² × OL_runs 線性外推，完整 G<20 9,278 顆、
-OL_runs=25 約 5.8 小時（量級參考，非正式估時）。
+`setup_pyupmask.sh`。當時以 N² × OL_runs 線性外推完整 G<20 9,278 顆、
+OL_runs=25 約 5.8 小時，**該外推已被實測推翻**：實際只要 222.6 秒（約差 94
+倍，見下方 Stage 2 結果），N² × OL_runs 不能用來估 pyUPMASK 耗時。
 
 **完整規模重跑已派工（`scripts/diagnostics/d19_full_membership_run.py`，
 排入 `cloud_queue.txt` 的 `d19_full_membership_run`，見
@@ -900,6 +901,20 @@ G−RP 與 BP−RP 對星雲位置的散布敏感度），Stage 0 閘門的判�
 成員完整度仍無法表達成 (G, colour) 的函數並給出不確定度，因此依
 `WORK_BOARD.md` 事前退出判準，D19 只交付診斷與限制，**不產出 alpha**。
 完整分箱與區間見 `results/d19_membership_reliability.json`。
+
+**Stage 2 結果的補充（2026-09-19 審核 PR #219）**：(1) `probs_final = -1`
+是 pyUPMASK 的未分類哨兵值，不是機率：全檔 133 顆、control 每個 G 分箱
+0.2–1.6%，原分析把它們放進偽陽性率分母，等於當成「已分類為非成員」；
+`analyze_d19_membership_reliability.py` 已改成另外回報 `n_unclassified`
+與「僅已分類星」的偽陽性率，不改變「暗端無上升」的結論。(2) 「沒有觀察到
+接縫」只對**極端**control 成立——control 在分群用的三個維度上偏離 10σ，
+≈0% 幾乎是設計出來的，不能寫成「不存在接縫」。(3) **ΔN_members 已結算**
+（Stage 0 一直懸著的判準）：新輸出 P≥0.7 共 1,542 顆，其中 G<18 有
+1,331、G 18–20 有 **211**（18–18.5：78、18.5–19：68、19–19.5：35、
+19.5–20：30），落在先前估計 165（上限 227）之內；原 1,078 顆成員仍有
+1,077 顆 P≥0.7。G<18 的 P≥0.7 從舊 baseline（G<18 輸入）的 1,297 變成
+1,331（+2.6%）——加入暗星會小幅改變亮端分類。這 211 顆只過了偽陽性
+檢查，**完整度與近邊界汙染都還沒量**，不能直接當成可用成員數。
 
 **(2) C21 星雲汙染定量檢查已完成（2026-09-18，
 `scripts/diagnostics/check_nebula_colour_robustness.py`，結果檔

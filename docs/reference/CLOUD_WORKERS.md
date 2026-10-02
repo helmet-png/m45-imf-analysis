@@ -180,7 +180,7 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 誤判成獨立選項而報錯「expected one argument」，只有 `--args=值`
 這種等號寫法才能明確綁定。
 
-確認整輪跑得通之後，才把工作排進 `cloud_queue.txt`、跑
+確認整輪跑得通之後，才把工作排進私有 repo 的 `queue/cloud_queue.txt`、跑
 `python cloud_queue.py` 正式派工。
 
 **不要手動對同一個 worker 平行呼叫兩次 `ssh_sync.py run`**（例如開兩個
@@ -207,22 +207,22 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 `cloud_queue.py` 常駐執行的那台機器。運作方式跟這個 repo既有的協作
 流程一致：
 
-**隊員這邊要做的事**（跟平常提 PR 一樣）：
-1. `git checkout -b <你的名字>/queue-<簡短描述>`
-2. 編輯 `cloud_queue.txt`，在檔案尾端加一行（格式見檔案開頭註解，跟
-   `kaggle_queue.txt` 完全相同）：
+**派工的人這邊要做的事**（佇列檔在私有 repo `helmet-png/m45-dispatch`，
+不在這個公開 repo）：
+1. clone 私有 repo，編輯 `queue/cloud_queue.txt`，在檔案尾端加一行
+   （格式見 `cloud_queue.py` 開頭說明，跟 `kaggle_queue.txt` 完全相同）：
    ```
    我的實驗|profile_lowmass.py|--procs 4 --n-syn 40000|inject_lowmass.py|false|
    ```
    最後一欄（worker 名稱）留空，交給任何有空的帳號／worker 接；標籤
    （最前面那欄）要取一個目前佇列裡沒出現過的名字，避免跟別人或跟
    `logs/cloud_queue_done.txt`（本機、不進版控）裡已完成的標籤重複。
-3. commit、push、開 PR，照 `CONTRIBUTING.md` 的規則自行合併（低風險、
-   單純加一行資料，不用等審查）。
+2. commit、直接 push 到 `main`（沒有 PR、沒有審查）。
+3. 佇列項目引用的腳本必須已經合併進這個公開 repo 的 `main`。
 
 **接下來自動發生的事**：跑 `cloud_queue.py` 的那台機器每一輪
-（預設 60 秒）都會自動把 `cloud_queue.txt` 從 `origin/main` 同步下來，
-PR 一合併，下一輪就會偵測到新工作、找一個閒置的帳號或 worker 開始跑，
+（預設 60 秒）都會自動把私有 repo 的佇列檔從 `origin/main` 同步下來，
+push 一完成，下一輪就會偵測到新工作、找一個閒置的帳號或 worker 開始跑，
 不需要另外通知操作那台機器的人。
 
 **還沒自動化的部分**：工作跑完的結果目前還是要靠操作那台機器的人
@@ -231,8 +231,7 @@ PR 一合併，下一輪就會偵測到新工作、找一個閒置的帳號或 w
 commit 未經檢查的結果。想知道自己的工作跑得怎麼樣，目前只能問操作
 那台機器的人，還沒有隊員自己能查的狀態頁面。
 
-**這個模式的信任邊界**：能開 PR 改 `cloud_queue.txt` 的人（也就是這個
-GitHub repo 的協作者）事實上就能讓運算機器跑任意腳本＋任意參數——
-跟這個專案既有的「GitHub repo 存取權限＝信任邊界」模型一致，不是
-額外新增的風險，但值得知道：這不是對公開網路開放的系統，是對「已經
-是這個 repo 協作者」的人開放。
+**這個模式的信任邊界**：能寫入私有 repo `m45-dispatch` 的人事實上就能
+讓運算機器跑任意腳本＋任意參數，所以寫入權限只給擁有者；協作者要派工
+請擁有者或 agent 代為提交。能合併進這個公開 repo `main` 的人同樣能讓
+運算機器執行新的程式碼，這一層仍靠公開 repo 的 PR 流程把關。

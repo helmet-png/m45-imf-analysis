@@ -1,3 +1,6 @@
+# 封存：這份佇列已停用，不會被任何程式讀取。新派工在私有 repo
+# helmet-png/m45-dispatch 的 queue/cloud_queue.txt。
+#
 # cloud_queue.py 的佇列檔，格式見該檔案開頭說明：
 #   標籤|腳本.py|參數|逗號分隔額外檔案|minimal(true/false)|worker名稱
 #
