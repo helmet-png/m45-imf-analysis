@@ -81,6 +81,60 @@
 物理預期（雜訊本身不改變真實質量分布的形狀、選擇函數與召回率都是
 選掉暗端因此讓分布偏亮、冪律擬合出的 α 應該往低質量端變陡的反方向
 偏——即 α 應該變小、樣本數應該減少）。
+
+（上面的 12 個步驟就是這支程式的整體流程 (d)，以下補上 (a)(b)(c)。）
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, json, math, sys, pathlib   參數、讀召回曲線、數學函數、路徑
+  csv（write_csv 內 import）           寫輸出 CSV
+  re（load_recall_curve 內 import）    從星等區間標籤抓出數字
+第三方套件：
+  numpy（np）
+      np.linalg.norm   向量長度（投影半徑、兩星分離距離）
+      np.cross／np.dot 外積、內積（建立投影平面的兩個軸）
+      np.interp        一維內插（質量→星等、星等→誤差、星等→召回率）
+      rng.normal／rng.random  常態亂數（測光雜訊）、0–1 均勻亂數（召回抽樣）
+      np.searchsorted  在排好序的陣列裡找分界位置（切出每個系統的範圍）
+本專案其他模組：
+  pipeline/isochrones.py   load_grid()、isochrone_at()：取等時線
+  pipeline/selection.py    selmod.load()、SelectionModel.keep()：測光品質選擇函數
+  pipeline/step3_age.py    COL_G／COL_BP／COL_RP：等時線欄位名
+  scripts/nbody_petar/petar_pdmf_analysis.py
+      shrinking_sphere_center()  收縮球法找星團中心（質量加權，每輪丟掉外圍）
+      projection_directions()    在球面上均勻排出 n 個方向（黃金角螺線）
+      sample_power_law()         依冪律抽質量（只在自我測試用）
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+  --catalog            petar_system_catalog.py 產的 NPZ（必填）
+  --projection-index (0)、--n-projections (32)  用第幾個視角（共 32 個）
+  --distance-pc (135.48)  距離（pc）
+  --av (0.386)、--logage (8.026)、--mh (−0.022)  消光、年齡、金屬量：取自頭條
+                       擬合 p2_final2_v3 的 10 次平均，用來挑等時線與加消光
+  --aperture-pc (11.68)  只留投影半徑 ≤ 這個值的星（= 真實樣本最外圍成員的距離）
+  --g-bright-limit (4.0)、--g-faint-limit (18.0)  星等硬邊界，同真實查詢條件
+  --resolution-arcsec (0.6)  兩顆星投影距離小於這個角度 → 合併成一個光點
+  --isochrone-grid、--errmodel、--selection、--recall-curve   四個輸入檔
+  --no-noise／--no-selection／--no-recall   明確跳過某一步
+  ⚠ 預設同時打開選擇函數與召回曲線，但兩者量到的是同一批流失，程式會直接
+    報錯拒絕。**實際執行時必須二選一**：加 --no-selection 或 --no-recall。
+  --ra0-deg、--dec0-deg   輸出 CSV 用的假天球中心（分析不依賴它）
+  --seed (0)            亂數種子
+  --output              輸出 CSV 路徑（必填）
+模組常數：EXT_COEFF = G 0.83、BP 1.08、RP 0.63（消光係數，同 config.toml）
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 236–258 行｜masses_to_absolute_mags()：質量 → 三個波段的絕對星等
+  核心 2｜第 302–387 行｜merge_unresolved()：同系統、靠太近的星合併成一個光點
+  核心 3｜第 390–521 行｜observe()：完整觀測化（上面 12 步的步驟 2–11）
+其餘：load_catalog（讀 NPZ）、project_positions（3D 投影到平面）、
+load_recall_curve（讀召回曲線）、write_csv（寫成 cmd_members.csv 格式）。
 """
 from __future__ import annotations
 
@@ -179,6 +233,7 @@ def project_positions(position: np.ndarray, direction: np.ndarray) -> np.ndarray
     return np.column_stack([position @ e1, position @ e2])
 
 
+# ═══════════════ 核心 1：質量 → 絕對星等 ═══════════════
 def masses_to_absolute_mags(
     mass: np.ndarray, iso_grid, logage: float, mh: float
 ) -> dict:
@@ -186,6 +241,7 @@ def masses_to_absolute_mags(
     np.interp(m, Mini, band) 內插，落在等時線質量範圍外的星回傳 NaN
     （不外插——等時線在演化末端形狀變化劇烈，外插沒有物理意義）。
     """
+    # ↓ 取最接近 (logage, mh) 的等時線，依質量排序
     iso = isomod.isochrone_at(iso_grid, logage, mh)
     mi = np.asarray(iso["Mini"], float)
     order = np.argsort(mi)
@@ -194,6 +250,7 @@ def masses_to_absolute_mags(
     bpi = np.asarray(iso[COL_BP], float)[order]
     rpi = np.asarray(iso[COL_RP], float)[order]
 
+    # ↓ 質量在等時線涵蓋範圍內才內插；範圍外給 NaN（不外插）
     in_range = (mass >= mi.min()) & (mass <= mi.max())
     g = np.where(in_range, np.interp(mass, mi, gi), np.nan)
     bp = np.where(in_range, np.interp(mass, mi, bpi), np.nan)
@@ -242,6 +299,7 @@ def load_recall_curve(path: Path, threshold: float = 0.5) -> tuple[np.ndarray, n
     return np.asarray(mags)[order], np.asarray(recalls)[order]
 
 
+# ═══════════════ 核心 2：未解析的星合併成一個光點 ═══════════════
 def merge_unresolved(
     system_id: np.ndarray,
     sky_xy: np.ndarray,
@@ -258,10 +316,15 @@ def merge_unresolved(
     的標準處理，跟 step3_age.synth_populations() 的公式相同）。分離
     夠大的分量各自保留成獨立點源。連鎖未解析（A-B 未解析、B-C 未解析
     但 A-C 已解析）用並查集處理，避免只看兩兩配對漏掉遞移關係。
+
+    ⚠ 上面說「以質量最大的分量當位置代表」，但程式實際用的是群組裡
+    編號最前面的分量（members[0]），沒有依質量排序。這只影響合併後光點
+    的位置（進而影響投影半徑與孔徑判斷），不影響星等。
     """
     n = len(system_id)
     parent = list(range(n))
 
+    # ↓ 並查集：parent[i] 指向 i 所屬群組的代表；find 找代表、union 合併兩群
     def find(i):
         while parent[i] != i:
             parent[i] = parent[parent[i]]
@@ -273,7 +336,9 @@ def merge_unresolved(
         if ri != rj:
             parent[ri] = rj
 
+    # ↓ 解析極限換成實際距離：角度（弧度）× 距離。0.6″ 在 135 pc ≈ 0.0004 pc
     resolution_pc = distance_pc * math.radians(resolution_arcsec / 3600.0)
+    # ↓ 依 system_id 排序，找出每個系統在排序後陣列裡的起訖位置
     order = np.argsort(system_id)
     boundaries = np.searchsorted(system_id[order], np.unique(system_id[order]))
     boundaries = np.append(boundaries, n)
@@ -281,6 +346,7 @@ def merge_unresolved(
         idx = order[start:end]
         for a in range(len(idx)):
             for b in range(a + 1, len(idx)):
+                # ↓ 同一系統內兩兩比較投影距離，比解析極限近就併成同一群
                 sep = np.linalg.norm(sky_xy[idx[a]] - sky_xy[idx[b]])
                 if sep < resolution_pc:
                     union(idx[a], idx[b])
@@ -298,6 +364,7 @@ def merge_unresolved(
         members = members[valid]
 
         def flux_sum(mags):
+            # ↓ 星等 → 流量 10^(−0.4 m) → 群組內相加 → 換回星等
             finite = np.isfinite(mags[members])
             if not finite.any():
                 return math.nan
@@ -320,6 +387,7 @@ def merge_unresolved(
     }
 
 
+# ═══════════════ 核心 3：完整觀測化 ═══════════════
 def observe(
     catalog: dict,
     projection_index: int,
@@ -351,6 +419,7 @@ def observe(
             "REPLAY_2026-08-22.md 的 0/62 重播結果"
         )
 
+    # ↓ 用演化後的「目前質量」算光度（不是出生質量）
     mass = np.asarray(catalog["current_mass"], float)
     position = np.asarray(catalog["pos"], float)
     system_id = np.asarray(catalog["system_id"])
@@ -369,8 +438,10 @@ def observe(
     # 84b81a8c339c49291de53f7a72829dd80e188182/tools/analysis/bse.py#L115）
     # type 0（低質量主序，尚未演化到會核融合的 ZAMS）跟 type 1（一般
     # 主序）都算主序星，只排除 type >= 10 的簡併／演化終態星。
+    # ↓ ms：恆星型態 0 或 1（主序星）；只有它們能用主序等時線換星等
     ms = (star_type == 0) | (star_type == 1)
     mags = masses_to_absolute_mags(mass, iso_grid, logage, mh)
+    # ↓ 是主序星、且質量在等時線範圍內，才保留光度；其餘設成 NaN（看不到）
     keep_photometric = ms & mags["in_isochrone_range"]
 
     g_abs = np.where(keep_photometric, mags["G"], np.nan)
@@ -378,6 +449,7 @@ def observe(
     rp_abs = np.where(keep_photometric, mags["RP"], np.nan)
 
     # 步驟 6：距離模數與消光
+    # ↓ 視星等 = 絕對星等 + 距離模數 + 消光係數 × A_V
     dist_mod = 5.0 * math.log10(distance_pc) - 5.0
     g_obs = g_abs + dist_mod + EXT_COEFF["G"] * av
     bp_obs = bp_abs + dist_mod + EXT_COEFF["BP"] * av
@@ -390,11 +462,13 @@ def observe(
     g, bp, rp = merged["G"], merged["BP"], merged["RP"]
     xy = merged["sky_xy"]
 
+    # ↓ 三個波段都有星等的光點才進入後續步驟
     valid = np.isfinite(g) & np.isfinite(bp) & np.isfinite(rp)
     g, bp, rp, xy = g[valid], bp[valid], rp[valid], xy[valid]
     n = len(g)
 
     # 步驟 8：測光雜訊
+    # ↓ 每個光點加上「常態亂數 × 該星等的測光誤差」（BP、RP 誤差也用 G 查）
     if errmodel is not None:
         g = g + rng.normal(size=n) * _interp_err_like_step3(g, errmodel, "e_g")
         bp = bp + rng.normal(size=n) * _interp_err_like_step3(g, errmodel, "e_bp")
@@ -420,10 +494,13 @@ def observe(
     # 步驟 10：成員判定召回曲線
     if recall_curve is not None:
         mags_grid, recalls = recall_curve
+        # ↓ 依星等查出召回率 p（例如 16–18 等約 0.80），
+        #   每顆擲一次 0–1 亂數，小於 p 才留下
         p_recall = np.interp(g, mags_grid, recalls, left=recalls[0], right=recalls[-1])
         keep &= rng.random(n) < p_recall
 
     # 步驟 11：孔徑
+    # ↓ 投影半徑 = 平面座標到中心的距離；只留孔徑內的
     radius_pc = np.linalg.norm(xy, axis=1)
     keep &= radius_pc <= aperture_pc
 
@@ -444,6 +521,7 @@ def observe(
     }
 
 
+# ═══════════════ 輔助：輸出成 cmd_members.csv 格式 ═══════════════
 def write_csv(result: dict, output: Path, ra0_deg: float, dec0_deg: float, distance_pc: float):
     """輸出跟 cmd_members.csv 同欄位的 CSV（多一欄 projected_radius_pc）。"""
     import csv
