@@ -43,6 +43,77 @@ p(θ_初始條件 | 觀測)。只有 smoke test（S0-S4）量出單次 run 時�
 (b) SBC 的排名分布通過寬鬆的均勻性檢定（卡方檢定，p > 0.01，用寬鬆
 門檻是因為自我測試只抽有限組數，不追求嚴格統計檢定力）；(c) 用已知
 真值當觀測反推，真值要落在後驗的 95% 可信區間內。
+
+======================================================================
+【目前的狀態（請先看這段）】
+======================================================================
+⚠ **正式推論還沒實作**。main() 目前只做到「讀訓練資料 → 訓練 GP」；
+  只要 --targets 指到的檔案存在就報錯結束。而 --targets 的預設值
+  results/nbody_observed_targets.json 已經在 repo 裡，所以照預設執行時，
+  訓練完一定會以錯誤結束——這是刻意的拒絕，不是 bug。
+  run_mcmc() 與 sbc_test() 目前只在 --self-test（用解析函式當假模擬器）跑過。
+⚠ 文件與程式不一致：
+  - 上方第 2 點寫「Matern 核」，程式實際用 RBF 核（fit_emulators()）
+  - 上方第 5 點提到的 `--test-split` 參數不存在
+⚠ --runs-dir 預設 runs/，但訓練網格的 run 由 run_training_queue.py 寫在
+  runs_training/；--grid 預設是法 A 的小網格，訓練要指到
+  petar_m45_training_grid.csv。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, json, sys, pathlib   參數、讀 stats JSON、路徑
+  csv（load_training_data 內 import）   讀網格 CSV
+第三方套件：
+  numpy（np）   陣列運算、亂數、np.histogram（SBC 排名分箱）
+  sklearn.gaussian_process（fit_emulators 內 import）
+      GaussianProcessRegressor   高斯過程迴歸：給一堆 (θ, 統計量) 的例子，
+                                 學出「任意 θ 的統計量大概是多少、有多不確定」
+      kernels.RBF                核函數：θ 越接近，預測的統計量越相似；
+                                 length_scale 決定「多接近才算接近」（每一維各自學）
+      kernels.WhiteKernel        白雜訊項：吸收同一組 θ 換 seed 的隨機跳動
+  emcee（run_mcmc 內 import）    MCMC 系綜取樣器（跟 pipeline/joint_fit.py 同一套）
+  scipy.stats.chi2（sbc_test 內 import）   卡方分布，算均勻性檢定的 p 值
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+命令列參數：
+  --runs-dir   放所有 run 資料夾的地方（每個 run 要有 observed.stats.json）
+  --grid       網格 CSV（用 run_id 對回 6 個初始條件）
+  --targets    真實 M45 的 26 個統計量（nbody_summary_stats.py --from-real 產生）
+  --output     推論結果輸出路徑（目前沒有寫出任何東西）
+  --self-test  用解析函式當假模擬器，測 GP、MCMC、SBC 整條鏈
+模組常數：
+  THETA_NAMES          六個要反推的初始條件：系統數、初始雙星比例、初始半質量
+                       半徑、質量分層程度 S、高質量段斜率、低質量段斜率
+  THETA_PRIOR_LOW／HIGH  均勻先驗的上下界：
+                       1200–1700、0.30–0.95、2.4–4.5 pc、0–0.5、1.9–2.7、0.84–1.3
+run_mcmc() 預設：32 個走者、2000 步、丟掉前 500 步
+sbc_test() 預設：30 組真值、每組 16 個走者 × 400 步、丟掉前 100 步
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 135–162 行｜fit_emulators()：26 個統計量各訓練一個 GP
+  核心 2｜第 165–181 行｜predict()：用 GP 預測任一組 θ 的統計量與不確定度
+  核心 3｜第 184–207 行｜log_likelihood()：預測跟觀測差多少（含三種誤差）
+  核心 4｜第 210–238 行｜run_mcmc()：用 emcee 對 θ 取樣，得到後驗
+  核心 5｜第 241–290 行｜sbc_test()：檢驗推論鏈的統計校準
+  核心 6｜第 362–417 行｜load_training_data()：把每個 run 的 θ 與 26 個統計量組成訓練資料
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+設計上的完整流程（★ = 目前已實作）：
+  ★ 讀每個 run 的 observed.stats.json 與網格裡的 θ → X（run 數 × 6）、Y（run 數 × 26）
+  ★ 少於 20 組就拒絕（設計上要約 300 組）
+  ★ θ 標準化 → 對 Y 的每一欄各訓練一個 GP
+    讀真實 M45 的 26 個統計量（--targets）
+    → MCMC：每一步用 GP 預測統計量、跟真實值比、算概似 → 得到 θ 的後驗
+    → SBC 檢驗校準 → 寫出結果
+  （後四步目前只在 --self-test 裡用假資料跑過）
 """
 from __future__ import annotations
 
@@ -61,30 +132,40 @@ THETA_PRIOR_LOW = np.array([1200.0, 0.30, 2.4, 0.0, 1.9, 0.84])
 THETA_PRIOR_HIGH = np.array([1700.0, 0.95, 4.5, 0.5, 2.7, 1.3])
 
 
+# ═══════════════ 核心 1：訓練 GP 模擬器 ═══════════════
 def fit_emulators(X: np.ndarray, Y: np.ndarray, stat_names: list[str]) -> dict:
     """對 Y 的每一維獨立訓練一個 GP，回傳 {stat_name: fitted GP}。"""
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import RBF, WhiteKernel
 
     emulators = {}
+    # ↓ θ 標準化：每一維減平均、除標準差，讓 1200–1700 的系統數跟 0.3–0.95 的
+    #   雙星比例在同一個尺度上（標準差為 0 的維度改除 1，避免除以零）
     x_mean, x_std = X.mean(axis=0), X.std(axis=0)
     x_std[x_std == 0] = 1.0
     x_norm = (X - x_mean) / x_std
     for i, name in enumerate(stat_names):
+        # ↓ 第 i 個統計量在所有 run 的值；少於 5 個有效值就不訓練這一個
         y = Y[:, i]
         finite = np.isfinite(y)
         if finite.sum() < 5:
             emulators[name] = None
             continue
+        # ↓ 核函數 = RBF（每一維各一個長度尺度，初始 1）+ 白雜訊（初始 1）
         kernel = RBF(length_scale=np.ones(X.shape[1])) + WhiteKernel(noise_level=1.0)
+        # ↓ normalize_y：統計量先標準化再學；n_restarts_optimizer=2：
+        #   超參數最佳化多試 2 個起點，避免卡在局部最佳
         gp = GaussianProcessRegressor(kernel=kernel, normalize_y=True, n_restarts_optimizer=2)
+        # ↓ 用有效的 run 訓練：學出這些 θ 與這個統計量之間的關係
         gp.fit(x_norm[finite], y[finite])
         emulators[name] = gp
     return {"emulators": emulators, "x_mean": x_mean, "x_std": x_std, "stat_names": stat_names}
 
 
+# ═══════════════ 核心 2：用 GP 預測 ═══════════════
 def predict(model: dict, theta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """回傳 (mean, std) 各長度 = len(stat_names)，對應每個統計量。"""
+    # ↓ 用訓練時同樣的平均與標準差把 θ 標準化
     theta_norm = ((np.atleast_2d(theta) - model["x_mean"]) / model["x_std"])
     means, stds = [], []
     for name in model["stat_names"]:
@@ -93,12 +174,14 @@ def predict(model: dict, theta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
             means.append(np.nan)
             stds.append(np.nan)
             continue
+        # ↓ 預測值 mu 與預測不確定度 sd（離訓練點越遠，sd 越大）
         mu, sd = gp.predict(theta_norm, return_std=True)
         means.append(float(mu[0]))
         stds.append(float(sd[0]))
     return np.asarray(means), np.asarray(stds)
 
 
+# ═══════════════ 核心 3：概似 ═══════════════
 def log_likelihood(
     theta: np.ndarray,
     model: dict,
@@ -108,18 +191,23 @@ def log_likelihood(
     theta_lo: np.ndarray,
     theta_hi: np.ndarray,
 ) -> float:
+    # ↓ 超出先驗盒子 → 不可能
     if np.any(theta < theta_lo) or np.any(theta > theta_hi):
         return -np.inf
+    # ↓ GP 預測這組 θ 的 26 個統計量（不用真的跑 N-body）
     mu, gp_std = predict(model, theta)
     valid = np.isfinite(mu) & np.isfinite(y_obs)
     if not valid.any():
         return -np.inf
+    # ↓ 每個統計量的總變異 = 觀測誤差² + GP 預測不確定度² + seed 雜訊²
     sigma2 = y_obs_err[valid] ** 2 + gp_std[valid] ** 2 + seed_noise_std[valid] ** 2
     sigma2 = np.where(sigma2 <= 0, 1e-6, sigma2)
+    # ↓ 高斯概似的對數：−½ Σ [ (觀測 − 預測)² / 變異 + ln(2π 變異) ]
     resid2 = (y_obs[valid] - mu[valid]) ** 2
     return float(-0.5 * np.sum(resid2 / sigma2 + np.log(2 * np.pi * sigma2)))
 
 
+# ═══════════════ 核心 4：MCMC 取樣 ═══════════════
 def run_mcmc(
     model: dict,
     y_obs: np.ndarray,
@@ -136,17 +224,21 @@ def run_mcmc(
 
     rng = np.random.default_rng(seed)
     ndim = len(theta_lo)
+    # ↓ 每個走者在先驗盒子內隨機選起點
     start = theta_lo + rng.random((n_walkers, ndim)) * (theta_hi - theta_lo)
 
     def log_prob(theta):
         return log_likelihood(theta, model, y_obs, y_obs_err, seed_noise_std, theta_lo, theta_hi)
 
+    # ↓ 均勻先驗在盒子內是常數，所以對數後驗 = 對數概似（+ 常數）
     sampler = emcee.EnsembleSampler(n_walkers, ndim, log_prob)
     sampler.run_mcmc(start, n_steps, progress=False)
+    # ↓ 丟掉暖身步數，剩下所有走者的樣本攤平 = θ 的後驗樣本
     chain = sampler.get_chain(discard=n_burn, flat=True)
     return chain
 
 
+# ═══════════════ 核心 5：SBC 校準檢驗 ═══════════════
 def sbc_test(
     model: dict,
     theta_lo: np.ndarray,
@@ -167,6 +259,7 @@ def sbc_test(
     ndim = len(theta_lo)
     ranks = []
     for trial in range(n_trials):
+        # ↓ 從先驗隨機抽一組「真值」，用 GP 產生它的假觀測（加上 GP 自己的不確定度當雜訊）
         theta_true = theta_lo + rng.random(ndim) * (theta_hi - theta_lo)
         mu, gp_std = predict(model, theta_true)
         gp_std = np.where(np.isfinite(gp_std) & (gp_std > 0), gp_std, 1.0)
@@ -180,11 +273,14 @@ def sbc_test(
         )
         # 每個維度分別記 rank（真值在後驗樣本裡排名的百分位）
         for d in range(ndim):
+            # ↓ 排名 = 後驗樣本中小於真值的比例；校準正確時，這個比例在
+            #   多次試驗間應該均勻分布在 0–1
             rank = float(np.mean(chain[:, d] < theta_true[d]))
             ranks.append(rank)
 
     ranks = np.asarray(ranks)
     # 卡方均勻性檢定（10 個箱）
+    # ↓ 把排名分成 10 箱，跟「每箱一樣多」比較，算卡方值與 p 值
     hist, _ = np.histogram(ranks, bins=10, range=(0, 1))
     expected = len(ranks) / 10
     chi2 = float(np.sum((hist - expected) ** 2 / expected)) if expected > 0 else np.nan
@@ -263,6 +359,7 @@ def run_self_test() -> dict:
     return summary
 
 
+# ═══════════════ 核心 6：組訓練資料 ═══════════════
 def load_training_data(run_dirs: list[Path], grid_csv: Path) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """從一批 run 目錄的 observed.stats.json 組出設計矩陣。真正有 N-body
     run 資料之後才會被呼叫；目前 repo 裡沒有任何符合條件的 run，
@@ -270,6 +367,7 @@ def load_training_data(run_dirs: list[Path], grid_csv: Path) -> tuple[np.ndarray
     """
     import csv
 
+    # ↓ 網格讀成 {run_id: 那一列}
     grid_rows = {}
     with grid_csv.open(newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
@@ -277,6 +375,7 @@ def load_training_data(run_dirs: list[Path], grid_csv: Path) -> tuple[np.ndarray
 
     xs, ys, stat_names = [], [], None
     for run_dir in run_dirs:
+        # ↓ 每個 run 資料夾裡要有 observed.stats.json（26 個統計量）；沒有就略過
         stats_path = run_dir / "observed.stats.json"
         if not stats_path.exists():
             continue
@@ -284,11 +383,14 @@ def load_training_data(run_dirs: list[Path], grid_csv: Path) -> tuple[np.ndarray
         row = grid_rows.get(run_dir.name)
         if row is None:
             continue
+        # ↓ 依欄位名稱取出 6 個初始條件，順序同 THETA_NAMES（高質量段在前）
+        #   ⚠ 欄位缺少時會默默用 2.3／1.3 代替
         theta = [
             float(row["n_systems"]), float(row["binary_system_fraction"]),
             float(row["half_mass_radius_pc"]), float(row["mcluster_S"]),
             float(row.get("imf_alpha_high", 2.3)), float(row.get("imf_alpha_low", 1.3)),
         ]
+        # ↓ 把 26 個統計量依固定順序攤平成一列（順序見 nbody_summary_stats.py 檔頭）
         flat = []
         names = []
         for key in ("r1_1deg", "r2_2deg", "r3_3deg", "rall_aperture"):
