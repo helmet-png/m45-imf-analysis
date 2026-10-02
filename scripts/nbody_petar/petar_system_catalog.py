@@ -140,6 +140,57 @@ def _append_category(
     }
 
 
+
+def _merge_shared_components(particle_id, mass, position, system_id, star_type, current_mass):
+    """同一顆星出現在多個系統時，把那些系統合併成一個，重複的星只留一份。
+
+    2026-10-02 加入。``petar.data.process`` 配對雙星用「每顆星找最近鄰」，
+    不要求互為最近：A、C 都以 B 為最近鄰時會產生 (A,B)、(B,C) 兩對共用 B 的
+    雙星；開 ``-M`` 後這兩對再被配成一個「四合星」，B 在裡面出現兩次
+    （實測 mb_train_0005_s40006 的 ID 786、mb_train_0007_s40008 的 ID 550，
+    物理上都是一個階層式三合星）。共用成員的系統物理上本來就是同一個束縛
+    系統，所以用 union-find 合併 system_id；重複列必須在每個欄位都一致才
+    丟掉（同一張快照的同一顆星不可能不一致），不一致就報錯而不是猜。
+    """
+    order = np.argsort(particle_id, kind="stable")
+    pid_sorted = particle_id[order]
+    dup_mask = np.r_[False, pid_sorted[1:] == pid_sorted[:-1]]
+    if not dup_mask.any():
+        return particle_id, mass, position, system_id, star_type, current_mass, []
+
+    parent = {int(x): int(x) for x in np.unique(system_id)}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    keep = np.ones(len(particle_id), bool)
+    merged = []
+    for j in np.where(dup_mask)[0]:
+        a, b = order[j - 1], order[j]
+        # 往回找這個 id 第一次出現的列（可能出現 3 次以上）
+        k = j - 1
+        while k > 0 and dup_mask[k]:
+            k -= 1
+        a = order[k]
+        same = (np.isclose(mass[a], mass[b]) and np.allclose(position[a], position[b])
+                and star_type[a] == star_type[b] and np.isclose(current_mass[a], current_mass[b]))
+        if not same:
+            raise ValueError(
+                f"Component {int(particle_id[a])} appears twice with different values; "
+                "refusing to merge")
+        ra, rb = find(int(system_id[a])), find(int(system_id[b]))
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+        keep[b] = False
+        merged.append(int(particle_id[b]))
+    new_sys = np.array([find(int(x)) for x in system_id])
+    sel = keep
+    return (particle_id[sel], mass[sel], position[sel], new_sys[sel], star_type[sel],
+            current_mass[sel], sorted(set(merged)))
+
 def export_catalog(args) -> dict:
     if args.petar_package_path is not None:
         sys.path.insert(0, str(args.petar_package_path.resolve()))
@@ -199,13 +250,9 @@ def export_catalog(args) -> dict:
     system_id = np.concatenate(system_ids)
     star_type = np.concatenate(star_types)
     current_mass = np.concatenate(current_masses)
-    if len(np.unique(particle_id)) != len(particle_id):
-        unique, count = np.unique(particle_id, return_counts=True)
-        duplicate = unique[count > 1][:10].tolist()
-        raise ValueError(
-            "Components occur in more than one processed category; "
-            f"duplicate IDs include {duplicate}"
-        )
+    (particle_id, mass, position, system_id, star_type, current_mass,
+     merged_ids) = _merge_shared_components(
+        particle_id, mass, position, system_id, star_type, current_mass)
     if not np.all(np.isfinite(mass)) or np.any(mass <= 0):
         raise ValueError("Processed component masses must be finite and positive")
     if not np.all(np.isfinite(position)):
@@ -230,7 +277,8 @@ def export_catalog(args) -> dict:
         "external_mode": args.external_mode,
         "confirmed_complete": bool(args.confirm_complete),
         "n_components": int(len(particle_id)),
-        "n_systems": int(offset),
+        "n_systems": int(len(np.unique(system_id))),
+        "shared_component_ids_merged": merged_ids,
         "categories": categories,
         "warning": (
             "Scientific use is valid only if every non-empty single/binary/"
@@ -278,6 +326,21 @@ def run_self_test() -> dict:
             and sorted(ids[groups == 11].tolist()) == [4, 5, 6]
         ),
     }
+    # 共用成員合併：系統 20=(1,2)、21=(3,2) 共用 2 → 合併成一個系統、2 只留一份
+    pid = np.array([1, 2, 3, 2, 9]); sysid = np.array([20, 20, 21, 21, 22])
+    m = np.array([1.0, 2.0, 3.0, 2.0, 5.0]); pos = np.c_[pid, pid * 0, pid * 0].astype(float)
+    st = np.ones(5, int); cm = m.copy()
+    out = _merge_shared_components(pid, m, pos, sysid, st, cm)
+    checks["shared_member_merged"] = (
+        sorted(out[0].tolist()) == [1, 2, 3, 9]
+        and len(set(out[3][np.isin(out[0], [1, 2, 3])].tolist())) == 1
+        and out[6] == [2])
+    m_bad = m.copy(); m_bad[3] = 2.5
+    try:
+        _merge_shared_components(pid, m_bad, pos, sysid, st, m_bad)
+        checks["inconsistent_duplicate_rejected"] = False
+    except ValueError:
+        checks["inconsistent_duplicate_rejected"] = True
     if not all(checks.values()):
         raise AssertionError(f"System catalog self-test failed: {checks}")
     return {"status": "synthetic_validation_only", "self_test": checks}
