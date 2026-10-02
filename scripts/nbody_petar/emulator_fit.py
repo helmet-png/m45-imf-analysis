@@ -12,11 +12,11 @@ p(θ_初始條件 | 觀測)。只有 smoke test（S0-S4）量出單次 run 時�
 方法：
 1. **訓練資料**：讀一批 `<run_dir>/observed.stats.json`（`observe_snapshot.py`
    ->`nbody_summary_stats.py --from-mock` 的輸出）+ 對應的
-   `petar_m45_grid.csv` 那列的 θ（N_sys、f_bin,ini、r_h,ini、S、
+   `petar_m45_training_grid.csv` 那列的 θ（N_sys、f_bin,ini、r_h,ini、S、
    α_in,high、α_in,low），組成設計矩陣 X（n_runs × 6）與回應矩陣 Y
    （n_runs × 26）。
 2. **模擬器**：對 Y 的每一維獨立訓練一個 `sklearn.gaussian_process.
-   GaussianProcessRegressor`（Matern 核 + 白雜訊核，白雜訊核吸收
+   GaussianProcessRegressor`（RBF 核 + 白雜訊核，白雜訊核吸收
    seed-to-seed 的隨機性，不是量測誤差）。獨立訓練（不是聯合多輸出
    GP）是刻意的簡化：sklearn 沒有現成的異方差多輸出 GP，26 個獨立
    GP 實作簡單、除錯容易，代價是忽略統計量之間的協方差——這是已知
@@ -35,7 +35,8 @@ p(θ_初始條件 | 觀測)。只有 smoke test（S0-S4）量出單次 run 時�
    正確，排名應接近均勻分布（Talts et al. 2018 的標準做法）。這裡
    驗證的是「GP+MCMC 這條推論鏈本身的統計性質」，不是「GP 有沒有
    正確逼近真正的 N-body」——後者要等真的有多組 N-body run 之後才能
-   用留出測試集的 R² 檢查（`--test-split` 那條路徑）。
+   用留出測試集的 R² 檢查（這條路徑還沒實作，目前只有 --self-test
+   對解析假模擬器做留出測試）。
 
 自我測試（`--self-test`）：不需要真的跑過 N-body，用一個已知的解析
 函式（線性 + 高斯雜訊）當「假模擬器」產生訓練資料，訓練 GP、跑 SBC，
@@ -52,12 +53,6 @@ p(θ_初始條件 | 觀測)。只有 smoke test（S0-S4）量出單次 run 時�
   results/nbody_observed_targets.json 已經在 repo 裡，所以照預設執行時，
   訓練完一定會以錯誤結束——這是刻意的拒絕，不是 bug。
   run_mcmc() 與 sbc_test() 目前只在 --self-test（用解析函式當假模擬器）跑過。
-⚠ 文件與程式不一致：
-  - 上方第 2 點寫「Matern 核」，程式實際用 RBF 核（fit_emulators()）
-  - 上方第 5 點提到的 `--test-split` 參數不存在
-⚠ --runs-dir 預設 runs/，但訓練網格的 run 由 run_training_queue.py 寫在
-  runs_training/；--grid 預設是法 A 的小網格，訓練要指到
-  petar_m45_training_grid.csv。
 
 ======================================================================
 【(a) 引用的外部函式庫】
@@ -80,8 +75,10 @@ Python 標準庫：
 【(b) 用到的參數與意義】
 ======================================================================
 命令列參數：
-  --runs-dir   放所有 run 資料夾的地方（每個 run 要有 observed.stats.json）
-  --grid       網格 CSV（用 run_id 對回 6 個初始條件）
+  --runs-dir   放所有 run 資料夾的地方，預設 runs_training/（run_training_queue.py
+               的輸出位置；每個 run 要有 observed.stats.json）
+  --grid       網格 CSV（用 run_id 對回 6 個初始條件），預設
+               petar_m45_training_grid.csv（方法 B 的 LHS 訓練網格）
   --targets    真實 M45 的 26 個統計量（nbody_summary_stats.py --from-real 產生）
   --output     推論結果輸出路徑（目前沒有寫出任何東西）
   --self-test  用解析函式當假模擬器，測 GP、MCMC、SBC 整條鏈
@@ -96,12 +93,12 @@ sbc_test() 預設：30 組真值、每組 16 個走者 × 400 步、丟掉前 10
 ======================================================================
 【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
 ======================================================================
-  核心 1｜第 135–162 行｜fit_emulators()：26 個統計量各訓練一個 GP
-  核心 2｜第 165–181 行｜predict()：用 GP 預測任一組 θ 的統計量與不確定度
-  核心 3｜第 184–207 行｜log_likelihood()：預測跟觀測差多少（含三種誤差）
-  核心 4｜第 210–238 行｜run_mcmc()：用 emcee 對 θ 取樣，得到後驗
-  核心 5｜第 241–290 行｜sbc_test()：檢驗推論鏈的統計校準
-  核心 6｜第 362–417 行｜load_training_data()：把每個 run 的 θ 與 26 個統計量組成訓練資料
+  核心 1｜第 132–159 行｜fit_emulators()：26 個統計量各訓練一個 GP
+  核心 2｜第 162–178 行｜predict()：用 GP 預測任一組 θ 的統計量與不確定度
+  核心 3｜第 181–204 行｜log_likelihood()：預測跟觀測差多少（含三種誤差）
+  核心 4｜第 207–235 行｜run_mcmc()：用 emcee 對 θ 取樣，得到後驗
+  核心 5｜第 238–287 行｜sbc_test()：檢驗推論鏈的統計校準
+  核心 6｜第 359–414 行｜load_training_data()：把每個 run 的 θ 與 26 個統計量組成訓練資料
 
 ======================================================================
 【(d) 整體流程】
@@ -419,8 +416,11 @@ def load_training_data(run_dirs: list[Path], grid_csv: Path) -> tuple[np.ndarray
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs")
-    parser.add_argument("--grid", type=Path, default=REPO_ROOT / "petar_m45_grid.csv")
+    # 方法 B 的訓練資料來自 LHS 訓練網格（run_training_queue.py 寫在 runs_training/），
+    # 不是方法 A 的小網格（runs/、petar_m45_grid.csv）。
+    parser.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs_training")
+    parser.add_argument("--grid", type=Path,
+                        default=REPO_ROOT / "petar_m45_training_grid.csv")
     parser.add_argument("--targets", type=Path,
                         default=REPO_ROOT / "results" / "nbody_observed_targets.json")
     parser.add_argument("--output", type=Path,

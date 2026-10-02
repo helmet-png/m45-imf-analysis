@@ -63,7 +63,8 @@
    （含雜訊）的 G 星等上。
 9. 套測光品質選擇函數：`pipeline/selection.py` 存的 `SelectionModel`
    （讀 `data/selection.npz`），跟前向模型合成星團用的是同一份。
-10. 套**成員判定召回曲線**：真實 pyUPMASK 在不同星等會漏掉不同比例的
+10. （選用，預設不做；給 --recall-curve 才做，且必須同時加 --no-selection）
+    套**成員判定召回曲線**：真實 pyUPMASK 在不同星等會漏掉不同比例的
     真成員（`results/hr23_cmd_recall_by_magnitude.json` 量出來的，
     16-18 等只有 0.80、>=18 等是 0），這裡對每顆星依其 G 星等做
     Bernoulli 抽樣決定要不要保留——沒有這一步，模擬端會比觀測端多
@@ -118,10 +119,13 @@ Python 標準庫：
   --aperture-pc (11.68)  只留投影半徑 ≤ 這個值的星（= 真實樣本最外圍成員的距離）
   --g-bright-limit (4.0)、--g-faint-limit (18.0)  星等硬邊界，同真實查詢條件
   --resolution-arcsec (0.6)  兩顆星投影距離小於這個角度 → 合併成一個光點
-  --isochrone-grid、--errmodel、--selection、--recall-curve   四個輸入檔
-  --no-noise／--no-selection／--no-recall   明確跳過某一步
-  ⚠ 預設同時打開選擇函數與召回曲線，但兩者量到的是同一批流失，程式會直接
-    報錯拒絕。**實際執行時必須二選一**：加 --no-selection 或 --no-recall。
+  --isochrone-grid、--errmodel、--selection   輸入檔
+  --no-noise／--no-selection   明確跳過某一步
+  --recall-curve        選用：給了才套召回曲線（例如
+                        results/hr23_cmd_recall_by_magnitude.json）。它跟選擇函數
+                        量到的是同一批流失，所以必須同時加 --no-selection。
+                        預設只用選擇函數，因為它就是前向模型合成星團用的同一份，
+                        且已證實能完全解釋召回曲線量到的流失（見 main() 的註解）。
   --ra0-deg、--dec0-deg   輸出 CSV 用的假天球中心（分析不依賴它）
   --seed (0)            亂數種子
   --output              輸出 CSV 路徑（必填）
@@ -130,9 +134,9 @@ Python 標準庫：
 ======================================================================
 【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
 ======================================================================
-  核心 1｜第 236–258 行｜masses_to_absolute_mags()：質量 → 三個波段的絕對星等
-  核心 2｜第 302–387 行｜merge_unresolved()：同系統、靠太近的星合併成一個光點
-  核心 3｜第 390–521 行｜observe()：完整觀測化（上面 12 步的步驟 2–11）
+  核心 1｜第 239–261 行｜masses_to_absolute_mags()：質量 → 三個波段的絕對星等
+  核心 2｜第 305–389 行｜merge_unresolved()：同系統、靠太近的星合併成一個光點
+  核心 3｜第 392–524 行｜observe()：完整觀測化（上面 12 步的步驟 2–11）
 其餘：load_catalog（讀 NPZ）、project_positions（3D 投影到平面）、
 load_recall_curve（讀召回曲線）、write_csv（寫成 cmd_members.csv 格式）。
 """
@@ -184,7 +188,6 @@ DEFAULT_G_FAINT_LIMIT = 18.0
 DEFAULT_ISOCHRONE_GRID = (
     REPO_ROOT / "isochrones" / "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat"
 )
-DEFAULT_RECALL_CURVE = REPO_ROOT / "results" / "hr23_cmd_recall_by_magnitude.json"
 DEFAULT_ERRMODEL = REPO_ROOT / "data" / "errmodel.npz"
 DEFAULT_SELECTION = REPO_ROOT / "data" / "selection.npz"
 
@@ -308,6 +311,7 @@ def merge_unresolved(
     rp_mag: np.ndarray,
     distance_pc: float,
     resolution_arcsec: float,
+    mass: np.ndarray,
 ) -> dict:
     """同一 system_id 內，投影分離小於解析極限的分量合併成一個點源。
 
@@ -316,10 +320,7 @@ def merge_unresolved(
     的標準處理，跟 step3_age.synth_populations() 的公式相同）。分離
     夠大的分量各自保留成獨立點源。連鎖未解析（A-B 未解析、B-C 未解析
     但 A-C 已解析）用並查集處理，避免只看兩兩配對漏掉遞移關係。
-
-    ⚠ 上面說「以質量最大的分量當位置代表」，但程式實際用的是群組裡
-    編號最前面的分量（members[0]），沒有依質量排序。這只影響合併後光點
-    的位置（進而影響投影半徑與孔徑判斷），不影響星等。
+    「質量最大」只在看得到的分量（G 星等有值）之間比較。
     """
     n = len(system_id)
     parent = list(range(n))
@@ -373,7 +374,8 @@ def merge_unresolved(
         out_g.append(flux_sum(g_mag))
         out_bp.append(flux_sum(bp_mag))
         out_rp.append(flux_sum(rp_mag))
-        out_xy.append(sky_xy[members[0]])
+        # ↓ 位置代表 = 看得到的分量裡質量最大的那顆
+        out_xy.append(sky_xy[members[np.argmax(mass[members])]])
         out_n_components.append(len(members))
 
     return {
@@ -457,7 +459,8 @@ def observe(
 
     # 步驟 7：未解析合併
     merged = merge_unresolved(
-        system_id, sky_xy, g_obs, bp_obs, rp_obs, distance_pc, resolution_arcsec
+        system_id, sky_xy, g_obs, bp_obs, rp_obs, distance_pc, resolution_arcsec,
+        mass=mass,
     )
     g, bp, rp = merged["G"], merged["BP"], merged["RP"]
     xy = merged["sky_xy"]
@@ -581,8 +584,24 @@ def run_star_type_regression_test() -> dict:
         rp_mag=np.array([np.nan, np.nan]),
         distance_pc=135.48,
         resolution_arcsec=1.0,
+        mass=np.array([1.0, 1.0]),
     )
     checks["empty_merge_keeps_n_by_2_shape"] = empty["sky_xy"].shape == (0, 2)
+
+    # 未解析合併的位置代表必須是質量最大的分量（不是編號最前面的）
+    pair = merge_unresolved(
+        system_id=np.array([7, 7], np.int64),
+        sky_xy=np.array([[0.0, 0.0], [1e-6, 0.0]]),
+        g_mag=np.array([12.0, 10.0]),
+        bp_mag=np.array([12.5, 10.5]),
+        rp_mag=np.array([11.5, 9.5]),
+        distance_pc=135.48,
+        resolution_arcsec=1.0,
+        mass=np.array([0.6, 1.2]),
+    )
+    checks["merge_position_is_most_massive_component"] = bool(
+        len(pair["sky_xy"]) == 1 and pair["sky_xy"][0, 0] == 1e-6
+    )
 
     # 迴歸測試（2026-09-18 Codex review）：查詢／CMD 硬星等邊界的四個
     # 邊界值行為，對照 config.toml 的 g_bright_limit/g_mag_max。
@@ -715,10 +734,10 @@ def main():
     parser.add_argument("--isochrone-grid", type=Path, default=DEFAULT_ISOCHRONE_GRID)
     parser.add_argument("--errmodel", type=Path, default=DEFAULT_ERRMODEL)
     parser.add_argument("--selection", type=Path, default=DEFAULT_SELECTION)
-    parser.add_argument("--recall-curve", type=Path, default=DEFAULT_RECALL_CURVE)
+    # 選用：預設不套召回曲線（見下方 selection／recall 互斥檢查的註解）
+    parser.add_argument("--recall-curve", type=Path, default=None)
     parser.add_argument("--no-noise", action="store_true")
     parser.add_argument("--no-selection", action="store_true")
-    parser.add_argument("--no-recall", action="store_true")
     parser.add_argument("--ra0-deg", type=float, default=56.591)
     parser.add_argument("--dec0-deg", type=float, default=24.120)
     parser.add_argument("--seed", type=int, default=0)
@@ -740,8 +759,9 @@ def main():
     # 2026-09-18 修正（Codex review）：以前缺檔就悄悄退化成 None／全 1
     # （形同關掉那一步的退化效應），正式觀測會在沒人注意到的情況下
     # 少做測光雜訊／選擇函數／召回率三步之一，卻還是輸出一份看起來
-    # 正常的 CSV。現在只有明確傳 --no-noise/--no-selection/--no-recall
-    # 才允許省略，其餘情況缺檔就直接報錯，不猜、不退化。
+    # 正常的 CSV。現在只有明確傳 --no-noise/--no-selection 才允許省略，
+    # 其餘情況缺檔就直接報錯，不猜、不退化。召回曲線是選用的，只有給了
+    # --recall-curve 才套用，給了但檔案不存在一樣報錯。
     errmodel = None
     if not args.no_noise:
         if not args.errmodel.exists():
@@ -762,13 +782,9 @@ def main():
         selection_model = selmod.load(args.selection)
 
     recall_curve = None
-    if not args.no_recall:
+    if args.recall_curve is not None:
         if not args.recall_curve.exists():
-            parser.error(
-                f"--recall-curve 檔案不存在：{args.recall_curve}（要跳過"
-                "成員判定召回率修正，明確加 --no-recall，不要讓它悄悄退化"
-                "成處處召回率 1.0）"
-            )
+            parser.error(f"--recall-curve 檔案不存在：{args.recall_curve}")
         recall_curve = load_recall_curve(args.recall_curve)
 
     # 2026-09-18 修正（Codex review）：跟 observe() 內同一個檢查一樣
@@ -781,8 +797,8 @@ def main():
             "證實 hr23_cmd_recall_by_magnitude.json 量到的召回率流失，"
             "對已追蹤的 62 顆星而言完全可以用 selection_model 的品質"
             "切割解釋（0/62 通過重播），疊乘會把同一批流失算兩次。"
-            "用 --no-selection 只做召回曲線那層，或 --no-recall 只做"
-            "品質切選那層。"
+            "要用召回曲線就加 --no-selection；不加 --recall-curve 則只做"
+            "品質切選那層（預設）。"
         )
 
     rng = np.random.default_rng(args.seed)
@@ -801,7 +817,8 @@ def main():
     metadata["degradation_steps"] = {
         "noise": {"skipped": bool(args.no_noise), "file": str(args.errmodel)},
         "selection": {"skipped": bool(args.no_selection), "file": str(args.selection)},
-        "recall": {"skipped": bool(args.no_recall), "file": str(args.recall_curve)},
+        "recall": {"skipped": args.recall_curve is None,
+                   "file": None if args.recall_curve is None else str(args.recall_curve)},
     }
     print(json.dumps(metadata, indent=2))
     print(f"Wrote {args.output}")

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""四參數聯合擬合：年齡、消光、雙星比例、IMF 斜率一次解出。
+"""六參數聯合擬合：年齡、消光、雙星比例、IMF 斜率、金屬量、q_gamma 一次解出。
 
 **這支模組存在的理由是修正一個方法論錯誤。** 原本的流程是循序擬合：
 第 3 步固定 IMF 與雙星比例去解年齡與消光，第 4 步固定 IMF 去解雙星比例，
@@ -26,8 +26,7 @@ IMF 斜率改變主序上的星數分布、雙星比例改變主序上方的展�
   - JointModel.log_likelihood(theta)  把合成星與觀測星都切成 Hess 圖，算相似度
   - JointModel.log_posterior(theta)   相似度 + 先驗 → 擬合要最大化的分數
   - run_mcmc()                        用 emcee 在參數空間取樣（MCMC 版）
-⚠ 標題寫「四參數」，但現在的基本模型是**六個**參數（PARAM_NAMES：年齡、消光、
-  雙星比例、α、金屬量、q_gamma），另外可選擇加上差異消光 dav 與低質量段冪次。
+基本模型是六個參數（PARAM_NAMES），另外可選擇加上差異消光 dav 與低質量段冪次。
 ⚠ 用 MCMC 跑這個模型的鏈從未收斂（LIMITATIONS.md C11），所以頭條數字不是用
   run_mcmc() 得到的，而是 fit_real.py 用同一個 log_posterior() 做網格搜尋得到的。
 
@@ -93,11 +92,11 @@ config.toml 其他段落：
 ======================================================================
 【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
 ======================================================================
-  核心 1｜第 198–265 行｜__init__() 後半：設定先驗範圍、預先取出要用的每一條等時線
-  核心 2｜第 385–401 行｜log_prior()：先驗——超出範圍就是 −∞，金屬量加高斯懲罰
-  核心 3｜第 403–675 行｜synthesise()：由參數生成合成星團（整個前向模型最核心的一段）
-  核心 4｜第 677–698 行｜log_likelihood()／log_posterior()：合成 vs 觀測的相似度
-  核心 5｜第 725–773 行｜run_mcmc()：用 emcee 取樣
+  核心 1｜第 197–264 行｜__init__() 後半：設定先驗範圍、預先取出要用的每一條等時線
+  核心 2｜第 384–400 行｜log_prior()：先驗——超出範圍就是 −∞，金屬量加高斯懲罰
+  核心 3｜第 402–674 行｜synthesise()：由參數生成合成星團（整個前向模型最核心的一段）
+  核心 4｜第 676–697 行｜log_likelihood()／log_posterior()：合成 vs 觀測的相似度
+  核心 5｜第 724–770 行｜run_mcmc()：用 emcee 取樣
 
 ======================================================================
 【(d) 整體流程】
@@ -726,15 +725,13 @@ def make_pool(model, n_proc):
 def run_mcmc(model: JointModel, n_walkers: int, n_steps: int, n_burn: int,
              start: np.ndarray, seed: int, progress: bool = True,
              pool=None, moves=None):
-    """跑 emcee。start 是四個參數的起始點（通常用循序擬合的結果）。
+    """跑 emcee。start 是 PARAM_NAMES 六個參數的起始點（通常用循序擬合的結果）。
 
     pool 可傳入 multiprocessing.Pool 做平行取樣。
     moves 預設用 DEMove + DESnookerMove 的組合，比 emcee 內建的 StretchMove
-    更適合有相關性的參數（我們的 A_V 與 alpha 相關係數達 0.66）；
-    StretchMove 在強相關的後驗上接受率會很低。
-
-    ⚠ 上面引用的「相關係數 0.66」已被推翻：不同鏈長給出 +0.66／−0.05／−0.22，
-    是鏈未收斂的產物（docs/reference/REFUTED.md）。
+    更適合有相關性的參數；StretchMove 在強相關的後驗上接受率會很低。
+    （A_V 與 alpha 的相關係數目前沒有可引用的值：不同鏈長給出
+    +0.66／−0.05／−0.22，是鏈未收斂的產物，見 docs/reference/REFUTED.md。）
     """
     import emcee
 
