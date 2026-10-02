@@ -46,6 +46,97 @@
     敏感度測試
   - 差異消光：傳統法完全沒有消光自由度，這是兩個方法本質上的差異，
     不是能對齊的控制變因，不假裝一致
+
+======================================================================
+【這支程式現在的角色】
+======================================================================
+**目前傳統法 PDMF 數字的來源**：真實資料五種變體全部落在 α = 2.37–2.42
+（results/traditional_accounting_v2.npz）。執行方式：
+  python scripts/diagnostics/traditional_accounting.py [--skip-legacy]
+兩大段：
+  1. 注入回收：用前向模型生成「答案已知」的假星團（α 真值 2.35），
+     讓傳統法去量，看它偏了多少、散布多大
+  2. 真實資料：對 M45 的成員星跑五種變體，報出 α 與誤差
+⚠ 傳統法的等時線（年齡 8.033、消光 0.383）**不是自己擬合的**，是取自前向模型
+  fit_real.py 的 config C 結果（p2_final2）。兩條 PDMF 因此不是完全獨立的測量。
+⚠ 網格的年齡間距是 0.05，isochrone_at() 只取最近格點，所以 8.033 實際用的是
+  logage = 8.05 那一條（頭條 v3 的 8.026 一樣會取到 8.05）；金屬量固定 0.0。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, sys, pathlib  參數與路徑
+  types                   造一個假的 astropy 模組（見下方 ↓ 註解）
+第三方套件：
+  numpy（np）   陣列運算；np.interp（內插）、np.random.default_rng（亂數）、
+                rng.integers（bootstrap 重抽的索引）、np.savez（存檔）
+本專案其他模組：
+  pipeline/config.py       cfgmod.load()：讀 config.toml
+  pipeline/isochrones.py   load_grid()、isochrone_at()：讀網格、取一條等時線
+  pipeline/joint_fit.py    JointModel：前向模型（只用來生成假資料）
+  pipeline/selection.py    selmod.load()：選擇函數
+  pipeline/step3_age.py    COL_G／COL_BP／COL_RP（欄位名）、_Ext（消光係數盒子）
+  pipeline/step5_imf.py    assign_masses()（每顆星查質量）、mle_powerlaw()（冪律
+                           擬合）、exclude_confirmed_non_members()（非成員名單）
+  pipeline/table_compat.py Table：簡易表格
+  measure_overconfidence.py  GRID：網格檔名
+                           parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat
+  injection_recovery.py
+      THETA_TRUE   假資料的真值：logage 8.15、A_V 0.15、f_bin 0.45、
+                   alpha 2.35、MH 0.00、q_gamma −0.50
+      make_fake()  用前向模型生成 40 萬顆合成星、套選擇函數，
+                   再隨機抽出跟觀測一樣多的星，當成一批假觀測
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+命令列參數：
+  --trials (20)      每個注入情境生成幾批假資料
+  --dav-true (0.30)  假資料的差異消光散布
+  --n-boot (1000)    bootstrap 重抽次數
+  --skip-legacy      跳過附錄用的舊等時線與舊質量範圍，加快速度
+模組常數：
+  ANALYTIC_CORRECTION = 0.016   變體 E 加回去的文獻修正量（Rosen 2026）
+  CURRENT_LOGAGE = 8.033、CURRENT_AV = 0.383   主表用的等時線（見上方 ⚠）
+  LEGACY_ISOCHRONE = (8.00, 0.20)              附錄用的舊等時線
+config.toml：
+  [step5_imf] mass_min/max = 0.30/2.50（主表另外用 0.50–2.50）
+  [step4_binaries] ruwe_threshold = 1.4         RUWE 剔除門檻
+  [joint_fit] n_synthetic = 40000               生成假資料用的模型設定
+  [step2_cmd] ext_coeff_*                       消光係數
+五種變體（traditional_alpha 的 variant）：
+  ignore            A 全部當單星
+  cmd_offset        B 比同顏色的主序亮超過 0.375 星等 → 當雙星剔除
+  ruwe              C RUWE > 1.4 → 當雙星剔除
+  nss               D Gaia non_single_star ≠ 0 → 當雙星剔除
+  analytic_correct  E 不剔除，A 的結果加 0.016
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 213–268 行｜traditional_alpha()：跑一次完整傳統法（剔除 → 查質量 → 擬合）
+  核心 2｜第 271–300 行｜bootstrap_alpha_err()：重抽真實資料 1000 次量 α 的散布
+  核心 3｜第 320–371 行｜main() 讀資料、排除非成員、建立生成假資料用的模型
+  核心 4｜第 372–402 行｜main() 注入回收：4 種真實雙星比例 × 3 種變體 × 20 批假資料
+  核心 5｜第 404–440 行｜main() 真實資料：五種變體各跑一次，報 α 與誤差
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  讀 cmd_members.csv、誤差模型、網格 → 排除兩顆已確認非成員
+    → 建前向模型（只用來生成假資料）、讀選擇函數
+  注入回收（量偏差）：
+    對真實雙星比例 f_bin = 0、0.30、0.45、0.60，每個生成 20 批假星團
+      → 每批用 A、B、E 三種變體量 α（給傳統法「真的」等時線，對它有利）
+      → α 平均 − 2.35 = 偏差；α 的標準差 = 散布
+  真實資料（量 M45）：
+    取 logage 8.033（實際 8.05）、A_V 0.383、MH 0 的等時線
+      → A、B、E：直接算 α，誤差用概似曲率
+      → C、D：直接算 α，誤差用 bootstrap（因為假資料沒有 RUWE／NSS 欄位，
+        做不了注入回收）
+  → 交叉檢查 bootstrap vs 注入回收的散布 → 印出判讀說明
+  → 存 results/traditional_accounting_v2.npz
 """
 from __future__ import annotations
 
@@ -60,6 +151,9 @@ HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
 
 # step5_imf 開頭 import astropy，ARM64 上裝不起來；墊一個 table_compat 的替身。
+# ↓ 做法：先在 Python 的模組清單裡放一個假的 astropy.table（裡面的 Table 其實是
+#   table_compat 的簡易版）；之後 step5_imf 執行 from astropy.table import Table
+#   就會拿到它。setdefault：真的 astropy 已經載入過就不覆蓋
 from pipeline.table_compat import Table as _CompatTable  # noqa: E402
 _a = types.ModuleType("astropy")
 _t = types.ModuleType("astropy.table")
@@ -91,6 +185,7 @@ CURRENT_AV = 0.383
 LEGACY_ISOCHRONE = (8.00, 0.20, "step3 舊最佳(8.00,0.20)")
 
 
+# ═══════════════ 輔助：主序的「顏色 → 星等」對照（變體 B 用） ═══════════════
 def ms_colour_to_g(iso, dist_mod, av, ext):
     """單星主序的 顏色 -> 視星等 G 對應（CMD 偏移法要用）。
 
@@ -115,6 +210,7 @@ def ms_colour_to_g(iso, dist_mod, av, ext):
     return c[o], g[o]
 
 
+# ═══════════════ 核心 1：跑一次完整的傳統法 ═══════════════
 def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
                       variant="ignore", cmd_thresh=0.375,
                       ruwe=None, nss=None, ruwe_threshold=1.4,
@@ -133,37 +229,46 @@ def traditional_alpha(color, mag, iso, dm, av, ext, m_lo, m_hi,
     """
     color = np.asarray(color, float)
     mag = np.asarray(mag, float)
+    # ↓ n_rm：被當成雙星剔除的星數
     n_rm = 0
     if variant == "cmd_offset":
+        # ↓ 變體 B：查出「這個顏色的單星主序應該是幾等」
         cs, gs = ms_colour_to_g(iso, dm, av, ext)
         g_ms = np.interp(color, cs, gs)
         is_bin = (g_ms - mag) > cmd_thresh     # 比同顏色主序亮超過門檻
         n_rm = int(is_bin.sum())
+        # ↓ 只留沒被判成雙星的星（~ 是「取反」）
         color, mag = color[~is_bin], mag[~is_bin]
     elif variant == "ruwe":
         if ruwe is None:
             raise ValueError("variant='ruwe' 需要傳 ruwe 陣列")
+        # ↓ 變體 C：RUWE 大於門檻就當雙星
         is_bin = np.asarray(ruwe, float) > ruwe_threshold
         n_rm = int(is_bin.sum())
         color, mag = color[~is_bin], mag[~is_bin]
     elif variant == "nss":
         if nss is None:
             raise ValueError("variant='nss' 需要傳 nss 陣列")
+        # ↓ 變體 D：Gaia 非單星目錄有標記就當雙星
         is_bin = np.asarray(nss, bool)
         n_rm = int(is_bin.sum())
         color, mag = color[~is_bin], mag[~is_bin]
     elif variant not in ("ignore", "analytic_correct"):
         raise ValueError(f"未知的 variant：{variant!r}")
 
+    # ↓ 剩下的星全部當單星，用 G 星等查質量（step5_imf.py 核心 2）
     masses = assign_masses(mag, iso, dm, av, ext,
                            obs_color=(color if color_check else None))
+    # ↓ 對質量做截斷冪律最大概似擬合（step5_imf.py 核心 3）
     fit = mle_powerlaw(masses, m_lo, m_hi)
     alpha = fit["alpha"]
+    # ↓ 變體 E：把文獻修正量 0.016 加回去
     if variant == "analytic_correct" and np.isfinite(alpha):
         alpha = alpha + ANALYTIC_CORRECTION
     return alpha, fit["n"], n_rm, fit["alpha_err"]
 
 
+# ═══════════════ 核心 2：bootstrap 誤差 ═══════════════
 def bootstrap_alpha_err(color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
                         ruwe=None, nss=None, ruwe_threshold=1.4,
                         n_boot=1000, seed=7000, color_check=False):
@@ -180,6 +285,7 @@ def bootstrap_alpha_err(color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
     mag = np.asarray(mag, float)
     outs = []
     for _ in range(n_boot):
+        # ↓ 從 n 顆星裡「可重複地」隨機抽 n 個編號：有的星被抽到兩次、有的沒抽到
         idx = rng.integers(0, n, n)
         a, _, _, _ = traditional_alpha(
             color[idx], mag[idx], iso, dm, av, ext, m_lo, m_hi,
@@ -189,6 +295,7 @@ def bootstrap_alpha_err(color, mag, iso, dm, av, ext, m_lo, m_hi, variant,
             ruwe_threshold=ruwe_threshold, color_check=color_check)
         if np.isfinite(a):
             outs.append(a)
+    # ↓ 1000 次重抽得到的 α：平均與標準差（標準差就是誤差）
     outs = np.array(outs)
     return float(outs.mean()), float(outs.std())
 
@@ -210,6 +317,7 @@ def main():
                     help="跳過附錄用的舊 isochrone/舊質量範圍敏感度測試，加快跑完主表")
     args = ap.parse_args()
 
+    # ═══════════════ 核心 3：讀資料、建立假資料用的模型 ═══════════════
     cfg = cfgmod.load()
     c3, c2, c5 = cfg.step3_age, cfg.step2_cmd, cfg.step5_imf
     cj = cfg.joint_fit
@@ -217,8 +325,10 @@ def main():
     clean = Table.read(HERE / "data" / "cmd_members.csv", format="csv")
     errmodel = dict(np.load(HERE / "data" / "errmodel.npz"))
     grid = isomod.load_grid(isomod.CACHE / GRID)
+    # ↓ 距離模數（同 fit_real.py）
     plx = np.asarray(clean["parallax"], float)
     dm = 5.0 * np.log10(1000.0 / (np.median(plx) - c3.parallax_zero_point)) - 5.0
+    # ↓ 觀測顏色、G 星等、RUWE、非單星旗標（沒有這欄就全當 0）
     color = np.asarray(clean["bp_rp"], float)
     mag = np.asarray(clean["phot_g_mean_mag"], float)
     ruwe_all = np.asarray(clean["ruwe"], float)
@@ -235,9 +345,11 @@ def main():
     ok &= ~excl
     color, mag = color[ok], mag[ok]
     ruwe_all, nss_all = ruwe_all[ok], nss_all[ok]
+    # ↓ 非單星旗標：缺值當 0，再轉成「是不是被標記」的布林值
     nss_all = np.nan_to_num(nss_all, nan=0.0) > 0
     n_obs = len(color)
 
+    # ↓ 生成假資料用的前向模型：合成星數 40000、金屬量改用均勻先驗
     cfg._data["step3_age"]["n_synthetic"] = cj.n_synthetic
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
@@ -257,6 +369,7 @@ def main():
     # f_bin = 0 是必要的對照組：傳統法用 mle_powerlaw 在對齊範圍
     # 0.50–2.50 上擬合單一冪律，這跟前向模型 alpha 定義域一致，
     # f_bin=0 時的殘餘偏差理論上該接近 0（沒有其他已知的定義域錯位）。
+    # ═══════════════ 核心 4：注入回收 ═══════════════
     mass_ranges = [(0.50, m_hi, "0.50-2.50對齊")]
     if not args.skip_legacy:
         mass_ranges.append((m_lo, m_hi, "0.30-2.50原設定(附錄)"))
@@ -266,11 +379,13 @@ def main():
     results = {}
     for rlo, rhi, rtag in mass_ranges:
         for fbin in (0.00, 0.30, 0.45, 0.60):
+            # ↓ 真值只改雙星比例（索引 2），其餘沿用 THETA_TRUE
             th = THETA_TRUE.copy()
             th[2] = fbin
             for variant, tag in INJ_VARIANTS:
                 outs, rms = [], []
                 for t in range(args.trials):
+                    # ↓ 生成第 t 批假觀測（顏色 fc、星等 fm），星數跟真實樣本一樣
                     fc, fm = make_fake(base, th, n_obs, seed=5000 + 31 * t,
                                        dav=args.dav_true, selection=sel)
                     a, n, n_rm, _ = traditional_alpha(
@@ -280,11 +395,13 @@ def main():
                     rms.append(n_rm)
                 outs = np.array(outs)
                 results[(rtag, fbin, tag)] = outs
+                # ↓ 印出：平均、散布、偏差（平均 − 真值 2.35）、平均剔除數
                 print(f"{fbin:>10.2f}{tag:>16}{outs.mean():>11.3f}"
                       f"{outs.std():>8.3f}{outs.mean()-a_true:>+9.3f}"
                       f"{np.mean(rms):>9.1f}   {rtag}")
         print()
 
+    # ═══════════════ 核心 5：真實資料五種變體 ═══════════════
     # --- 真實資料：五種變體 x isochrone 選擇 x 質量範圍 ---
     print(f"\n真實資料（{n_obs:,} 顆，已排除已確認非成員天體）：")
     print(f"{'isochrone':>26}{'質量範圍':>16}{'變體':>16}{'alpha':>8}"
@@ -294,11 +411,13 @@ def main():
     if not args.skip_legacy:
         isochrones.append(LEGACY_ISOCHRONE)
     for la, av, note in isochrones:
+        # ↓ 取這個年齡、金屬量 0.0 的等時線（最近格點）
         iso = isomod.isochrone_at(grid, la, 0.0)
         ranges = [(0.50, m_hi, "0.50-2.50對齊")]
         if not args.skip_legacy:
             ranges.append((m_lo, m_hi, "0.30-2.50原設定(附錄)"))
         for rlo, rhi, rtag in ranges:
+            # ↓ A、B、E：誤差用 mle_powerlaw 的概似曲率
             for variant, tag in INJ_VARIANTS:
                 a, n, n_rm, err = traditional_alpha(
                     color, mag, iso, dm, av, ext, rlo, rhi, variant=variant,
@@ -306,6 +425,7 @@ def main():
                 real[(note, rtag, tag)] = (a, err, "曲率")
                 print(f"{note:>26}{rtag:>16}{tag:>16}{a:>8.3f}"
                       f"{err:>8.3f}{'曲率':>10}{n:>7}{n_rm:>6}")
+            # ↓ C、D：誤差改用 bootstrap
             for variant, tag in REAL_ONLY_VARIANTS:
                 a, n, n_rm, _ = traditional_alpha(
                     color, mag, iso, dm, av, ext, rlo, rhi, variant=variant,
@@ -319,6 +439,7 @@ def main():
                 print(f"{note:>26}{rtag:>16}{tag:>16}{a:>8.3f}"
                       f"{boot_err:>8.3f}{'bootstrap':>10}{n:>7}{n_rm:>6}")
 
+    # ═══════════════ 輔助：交叉檢查、判讀說明、存檔 ═══════════════
     print("\n交叉檢查：bootstrap vs 注入回收（只對主表 0.50-2.50、"
           "config C isochrone 做，f_bin 用未知——這裡是拿真實資料本身"
           "重抽，跟上面注入回收用假資料是不同的量，量級接近即可）：")
