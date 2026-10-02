@@ -55,8 +55,31 @@ def _particle(petar, interrupt_mode: str, external_mode: str = "none"):
     return petar.Particle(**kwargs)
 
 
-def _binary(petar, left, right):
-    return petar.Binary(left, right)
+def _multiple_reader(petar, structure: str, interrupt_mode: str, external_mode: str):
+    """建立空的 binary/triple/quadruple 讀檔物件。
+
+    2026-10-02 修正：以前用 ``petar.Binary(空實例, 空實例)`` 組巢狀結構，
+    PeTar 的 ``Binary.__init__`` 拿到兩個實例時會立刻呼叫
+    ``particleToSemiEcc`` 算軌道參數；巢狀時一邊是空 Binary（pos 形狀
+    (0,3)）、一邊是空 Particle（pos 形狀 (0,)），直接 broadcast 錯誤——
+    以前從沒餵過 triple/quadruple 檔所以沒被發現。改成跟 PeTar 自己
+    （``tools/analysis/data.py`` 的 ``findMultiple()``）一樣，用成員「型別」
+    建構：triple 是 ``member_particle_type_one=Particle``、
+    ``member_particle_type_two=[Particle, Particle]``，quadruple 是
+    ``member_particle_type=[Particle, Particle]``。``simple_mode`` 用預設
+    True，欄數對得上 ``petar.data.process -M`` 的輸出（bse+galpy：
+    單星 35、雙星 10+2×35=80、三合星 10+35+80=125、四合星 10+80+80=170 欄，
+    2026-10-02 用實際檔案逐一核對過）。
+    """
+    initargs = _particle(petar, interrupt_mode, external_mode).initargs
+    P = petar.Particle
+    if structure == "binary":
+        return petar.Binary(member_particle_type=P, **initargs)
+    if structure == "triple":
+        return petar.Binary(member_particle_type_one=P, member_particle_type_two=[P, P], **initargs)
+    if structure == "quadruple":
+        return petar.Binary(member_particle_type=[P, P], **initargs)
+    raise ValueError(structure)
 
 
 def _leaves(node):
@@ -148,33 +171,9 @@ def export_catalog(args) -> dict:
     offset += n_single
 
     specs = [
-        ("binary", args.binary, lambda: _binary(
-            petar,
-            _particle(petar, args.interrupt_mode, args.external_mode),
-            _particle(petar, args.interrupt_mode, args.external_mode),
-        )),
-        ("triple", args.triple, lambda: _binary(
-            petar,
-            _particle(petar, args.interrupt_mode, args.external_mode),
-            _binary(
-                petar,
-                _particle(petar, args.interrupt_mode, args.external_mode),
-                _particle(petar, args.interrupt_mode, args.external_mode),
-            ),
-        )),
-        ("quadruple", args.quadruple, lambda: _binary(
-            petar,
-            _binary(
-                petar,
-                _particle(petar, args.interrupt_mode, args.external_mode),
-                _particle(petar, args.interrupt_mode, args.external_mode),
-            ),
-            _binary(
-                petar,
-                _particle(petar, args.interrupt_mode, args.external_mode),
-                _particle(petar, args.interrupt_mode, args.external_mode),
-            ),
-        )),
+        (kind, getattr(args, kind),
+         lambda kind=kind: _multiple_reader(petar, kind, args.interrupt_mode, args.external_mode))
+        for kind in ("binary", "triple", "quadruple")
     ]
     for category, path, constructor in specs:
         if path is None:
