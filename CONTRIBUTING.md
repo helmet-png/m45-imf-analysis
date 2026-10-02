@@ -207,20 +207,11 @@ CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得
 
 ---
 
-## 零之六、派工走私有 repo `m45-dispatch`
+## 零之六、派工清單
 
-派工清單（`queue/cloud_queue.txt`）在私有 repo `helmet-png/m45-dispatch`，
-不在這個公開 repo。派工的人（含 agent）：
-
-- 在私有 repo 的 `queue/cloud_queue.txt` 加一行，commit 後**直接 push
-  `main`**，不開 PR、不需要審查。格式見 `cloud_queue.py` 開頭說明。
-- 佇列項目引用的腳本必須已經合併進這個公開 repo 的 `main`，否則派下去
-  找不到腳本。
-- 私有 repo 寫入權限只有擁有者；協作者要派工請擁有者或 agent 代為提交。
-- 公開 repo 的 `docs/archive/cloud_queue_archived.txt` 是舊佇列的封存，
-  不會被任何程式讀取，不要往裡面加工作。
-- 協調 VM 與本機 clone 的位置、deploy key 設定見
-  `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`。
+派工清單是公開 repo 根目錄的 `cloud_queue.txt`。新增或修改工作時走一般
+PR 流程，且佇列項目引用的腳本必須已先合併進 `main`；協調 VM 同步最新
+`main` 後才會讀到新工作。格式見 `cloud_queue.py` 檔頭說明。
 
 ---
 
