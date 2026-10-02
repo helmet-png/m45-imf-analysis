@@ -309,7 +309,7 @@ git 逐行比對。修改段落中間幾個字卻同時重排整段換行，整�
 `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`），所有人看到同一份即時狀態。連線方式：
 
 ```bash
-gcloud compute start-iap-tunnel instance-20260827-035250 8866 \
+gcloud compute start-iap-tunnel control-center 8866 \
   --local-host-port=localhost:8866 --zone=us-central1-a \
   --project=project-f6e2d0e1-cd17-4cfb-a9b
 ```
