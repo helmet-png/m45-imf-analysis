@@ -53,6 +53,77 @@
 額外驗證 `<MCLUSTER_OUTPUT>` 確實被換成 `m45_ref_s101.dat.10`，以及
 stage/timing JSON 的結構在乾跑模式下也完整產生，不需要真的裝 PeTar
 就能驗證程式邏輯本身沒有錯）。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+全部是 Python 標準庫：
+  argparse     讀命令列參數
+  json         讀寫 stage.json、timing.json、manifest.json、result.json
+  os           os.environ.copy() 複製環境變數，再設定 OpenMP 執行緒數
+  platform     記錄 CPU 型號與作業系統（寫進 timing.json）
+  re           正規表示式：解析 petar.log、去掉指令尾端的檔案重導向
+  shlex        shlex.split 把一行指令字串安全地切成「程式名＋參數」列表
+  subprocess   subprocess.run 執行外部程式並等它結束
+  sys, time, pathlib   路徑、計時
+本專案其他模組：
+  scripts/nbody_petar/petar_m45_grid.py
+      load_grid()        讀網格 CSV
+      parse_row()        把一列 CSV 的字串轉成正確型別（這個版本沒有直接用到）
+      render_commands()  把一列初始條件翻成整串 shell 指令
+外部程式（必須已安裝在執行機器上）：
+  mcluster_sse        產生初始星團（位置、速度、質量、雙星）
+  petar.init          轉成 PeTar 輸入格式與單位
+  petar               N-body 積分本體（重力＋恆星演化＋可選銀河潮汐）
+  petar.data.gether   合併各行程寫出的快照
+  petar.data.process  把快照整理成單星／雙星／多重系統檔
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+  --run-id             網格裡要跑的那一列的 run_id（必填，除非 --self-test）
+  --grid               網格 CSV，預設 petar_m45_grid.csv（法 A 小網格）
+  --runs-dir           輸出資料夾，預設 runs/（每個 run 一個子資料夾）
+  --energy-threshold (1e-3)  累積相對能量誤差的門檻
+  --smoke              縮短版測試：改積分時間、關恆星演化與潮汐
+  --smoke-t-myr (1.0)、--smoke-o-myr (0.5)  smoke 模式的終止時間與快照間隔
+  --n-threads          OpenMP 執行緒數，預設 CPU 核心數
+  --petar-bin (petar)  PeTar 執行檔名稱
+  --dry-run            只印出指令不執行
+  --self-test          自我測試
+模組常數：
+  STEP_NAMES = ["mcluster", "petar_init", "petar", "gether", "process"]
+每個 run 的輸出（runs/<run_id>/）：
+  stage.json     哪些步驟已完成（續跑用）
+  timing.json    每步耗時、執行緒數、CPU 資訊
+  manifest.json  這次實際執行的指令序列（用來判斷能不能沿用舊進度）
+  result.json    最終狀態（complete／energy_check_failed）與能量誤差
+  *.log          每一步的輸出紀錄；petar.log 是能量檢查的來源
+  data.*         PeTar 的快照與後處理檔
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 165–194 行｜parse_rendered_commands()：把指令文字拆成 5 個要執行的步驟
+  核心 2｜第 256–295 行｜parse_energy_log()：從 petar.log 讀出能量與角動量誤差
+  核心 3｜第 336–399 行｜run_case() 準備：組指令、處理續跑、設定環境變數
+  核心 4｜第 401–441 行｜run_case() 依序執行 5 個外部程式
+  核心 5｜第 443–460 行｜run_case() 能量守恆檢查、寫 result.json
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  讀網格 → 找到 run_id 那一列
+    → render_commands() 產生整串指令 → 去掉 mkdir/cd/export 與 > log 重導向，
+      把 <MCLUSTER_OUTPUT> 換成 <run_id>.dat.10 → 得到 5 個指令
+    → （smoke）改 -t／-o、關恆星演化與潮汐 →（--petar-bin）換執行檔名
+    → （dry-run）印出指令就結束
+    → 比對 manifest：跟上次不同 → 舊資料夾改名保留，從頭跑；相同 → 沿用 stage.json
+    → 依序執行 mcluster → petar.init → petar → gether → process：
+        已完成的跳過；每步輸出寫進各自的 log；記錄耗時
+        回傳碼不是 0 → 標記失敗、回報哪一步、結束
+    → 讀 petar.log 最後一筆能量誤差 → 小於門檻 = complete，否則 energy_check_failed
+    → 寫 result.json；main() 遇到非 complete 會以回傳碼 1 結束
 """
 from __future__ import annotations
 
@@ -91,6 +162,7 @@ def _resolve_mcluster_output(run_id: str) -> str:
     return f"{run_id}.dat.10"
 
 
+# ═══════════════ 核心 1：拆出 5 個要執行的指令 ═══════════════
 def parse_rendered_commands(rendered: str, run_id: str) -> list[str]:
     """把 render_commands() 的多行輸出拆成可個別執行的指令字串列表。
 
@@ -98,8 +170,10 @@ def parse_rendered_commands(rendered: str, run_id: str) -> list[str]:
     有一個持續存在的 shell session），保留 5 個真正要執行外部程式的行，
     並把 `<MCLUSTER_OUTPUT>` 換成解析後的實際檔名。
     """
+    # ↓ 把多行文字切成一行一行，去掉空行
     lines = [ln for ln in rendered.splitlines() if ln.strip()]
     commands = []
+    # ↓ mcluster_sse 的輸出檔名：<run_id>.dat.10
     mcluster_output = _resolve_mcluster_output(run_id)
     for ln in lines:
         if ln.startswith("mkdir ") or ln.startswith("cd ") or ln.startswith("export "):
@@ -109,6 +183,7 @@ def parse_rendered_commands(rendered: str, run_id: str) -> list[str]:
         # 的收集方式（subprocess.run capture_output=True），不靠 shell
         # 重導向，這樣才能在不支援 `2>&1` 語法的環境（例如某些 Windows
         # subprocess 呼叫方式）也正常運作。
+        # ↓ 正規表示式：刪掉行尾的「> 檔名」以及可能接著的「2>&1」
         ln = re.sub(r"\s*>\s*\S+(\s+2>&1)?\s*$", "", ln)
         commands.append(ln)
     if len(commands) != len(STEP_NAMES):
@@ -119,6 +194,7 @@ def parse_rendered_commands(rendered: str, run_id: str) -> list[str]:
     return commands
 
 
+# ═══════════════ 輔助：改寫指令（換執行檔、smoke 模式） ═══════════════
 def apply_petar_binary_override(command: str, petar_bin: str) -> str:
     """把 petar 那一步的執行檔換成 `petar_bin`（預設 "petar"，不做任何事）。
 
@@ -177,6 +253,7 @@ def apply_smoke_overrides(command: str, t_myr: float, o_myr: float) -> str:
     return " ".join(shlex.quote(p) if " " in p else p for p in out)
 
 
+# ═══════════════ 核心 2：從 petar.log 讀守恆誤差 ═══════════════
 def parse_energy_log(petar_log: Path) -> dict:
     """解析 petar.log 最後一筆 Physic:／Angular Momentum: 狀態輸出。
 
@@ -189,6 +266,8 @@ def parse_energy_log(petar_log: Path) -> dict:
         return {"status": "log_not_found"}
     text = petar_log.read_text(encoding="utf-8", errors="replace")
 
+    # ↓ 收集所有以 "Physic:"（能量）與 "Angular Momentum:"（角動量）開頭的行；
+    #   PeTar 每輸出一次就印一行，最後一行就是積分結束時的累積誤差
     physic_lines = [ln for ln in text.splitlines() if ln.strip().startswith("Physic:")]
     am_lines = [ln for ln in text.splitlines() if ln.strip().startswith("Angular Momentum:")]
 
@@ -203,6 +282,7 @@ def parse_energy_log(petar_log: Path) -> dict:
             result["status"] = "physic_line_parse_failed"
 
     if am_lines:
+        # ↓ 從最後一行抓出 |L|err_cum（累積角動量誤差）與 |L|（總角動量）兩個數字
         m = re.search(
             r"\|L\|err_cum:\s*([\-0-9.eE+]+).*\|L\|:\s*([\-0-9.eE+]+)",
             am_lines[-1],
@@ -215,6 +295,7 @@ def parse_energy_log(petar_log: Path) -> dict:
     return result
 
 
+# ═══════════════ 輔助：判斷能不能沿用上次的進度 ═══════════════
 def resolve_resume_state(run_dir: Path, runs_dir: Path, run_id: str, manifest: dict) -> dict:
     """讀既有 stage.json；manifest 跟上次留下的不一致就搬走舊目錄、回傳
     空 stage（強迫整個 run 重跑），一致就照舊回傳 stage.json 內容續跑。
@@ -252,12 +333,15 @@ def run_case(
     n_threads: int,
     petar_bin: str = "petar",
 ) -> dict:
+    # ═══════════════ 核心 3：準備指令與環境 ═══════════════
+    # ↓ 讀網格，找出 run_id 那一列
     rows = load_grid(grid_path)
     matches = [r for r in rows if r["run_id"] == run_id]
     if not matches:
         raise ValueError(f"grid 裡找不到 run_id={run_id!r}")
     row = matches[0]
 
+    # ↓ 這一列 → 整串指令文字 → 5 個指令
     rendered = render_commands(row)
     commands = parse_rendered_commands(rendered, run_id)
     # 順序重要：smoke override 用 `command.split()[0] != "petar"` 判斷
@@ -293,6 +377,7 @@ def run_case(
     manifest_path = run_dir / "manifest.json"
     run_dir.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    # ↓ 有舊的 timing.json 就接著用（續跑），否則建一份新的
     timing = json.loads(timing_path.read_text(encoding="utf-8")) if timing_path.exists() else {
         "cpu": platform.processor() or platform.machine(),
         "platform": platform.platform(),
@@ -300,6 +385,7 @@ def run_case(
         "steps": {},
     }
 
+    # ↓ 子程式的環境變數：OpenMP 每個執行緒的堆疊大小、執行緒數
     env = os.environ.copy()
     env["OMP_STACKSIZE"] = "128M"
     env["OMP_NUM_THREADS"] = str(n_threads)
@@ -312,7 +398,9 @@ def run_case(
         "process": "process.log",
     }
 
+    # ═══════════════ 核心 4：依序執行 5 個外部程式 ═══════════════
     for name, command in zip(STEP_NAMES, commands):
+        # ↓ 上次已完成的步驟直接跳過（續跑）
         if stage.get(name) == "done":
             print(f"[{run_id}] {name}：已完成，跳過", flush=True)
             continue
@@ -320,6 +408,11 @@ def run_case(
         log_path = run_dir / log_files[name]
         t0 = time.monotonic()
         with log_path.open("w", encoding="utf-8") as log_handle:
+            # ↓ 執行這一步：
+            #     shlex.split(command)  指令切成 [程式名, 參數1, 參數2, …]
+            #     cwd=run_dir           在這個 run 自己的資料夾裡執行
+            #     env=env               帶上 OpenMP 設定
+            #     stdout/stderr         一般輸出與錯誤訊息都寫進這一步的 log
             proc = subprocess.run(
                 shlex.split(command),
                 cwd=run_dir,
@@ -331,6 +424,7 @@ def run_case(
         timing["steps"][name] = elapsed
         timing_path.write_text(json.dumps(timing, indent=2) + "\n", encoding="utf-8")
 
+        # ↓ 回傳碼不是 0 = 這一步失敗：記下來、立刻結束，現場資料保留不清
         if proc.returncode != 0:
             stage[name] = f"failed(rc={proc.returncode})"
             stage_path.write_text(json.dumps(stage, indent=2) + "\n", encoding="utf-8")
@@ -342,9 +436,11 @@ def run_case(
                 "log": str(log_path),
                 "timing": timing,
             }
+        # ↓ 這一步成功：標記 done 並立刻存檔，之後中斷也能從下一步續跑
         stage[name] = "done"
         stage_path.write_text(json.dumps(stage, indent=2) + "\n", encoding="utf-8")
 
+    # ═══════════════ 核心 5：能量守恆檢查與結果 ═══════════════
     energy = parse_energy_log(run_dir / "petar.log")
     energy_ok = (
         energy.get("status") == "parsed"

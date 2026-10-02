@@ -7,6 +7,8 @@
 方向不同、所以可分辨。但方向不同只是必要條件不是充分條件，而且只比了雙星
 一項。現有六參數的相關矩陣本來就已經接近奇異（年齡↔金屬量 +0.96、
 年齡↔消光 −0.96、金屬量↔消光 −0.95），再往這個方向加參數風險很高。
+（⚠ 這三個相關係數算自 results/joint_fit.npz，那條 MCMC 鏈未收斂，
+LIMITATIONS.md C11 註明相關矩陣不可引用。）
 
 靠論證判斷不了，只能實測：**用模型自己生成一批「假觀測」，參數是我們指定的
 已知值，再把它當成真資料丟進整套擬合流程，看能不能把那組值找回來。**
@@ -26,6 +28,97 @@
     測到的是同義反覆而不是流程的能力。
   * 假資料的顆數要跟真觀測一樣（1,078）。顆數決定統計雜訊的量級，
     生一萬顆再擬合等於在測一個我們沒有的資料集。
+
+======================================================================
+【這支程式的兩個身分】
+======================================================================
+1. **一支可以執行的測試程式**：python injection_recovery.py --scenarios S3F --trials 9
+   輸出 results/injection_recovery<tag>.npz。α 的統計誤差 σ = 0.144
+   就是 S3F 情境（注入與擬合都有選擇函數）量出來的回收散布。
+2. **一個被別人 import 的工具箱**：fit_real.py、profile_lowmass.py、
+   traditional_accounting.py 等都從這裡拿：
+     THETA_TRUE        假資料的真值
+     make_fake()       生成一批假觀測
+     COARSE            六個參數的粗網格軸
+     multi_stage_best()  多階段網格搜尋（頭條擬合的引擎）
+     check_walls()     找出貼在邊界上的維度
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, os, sys, time, pathlib   參數、CPU 數、路徑、計時
+  copy（在 make_fake 裡 import）     淺複製模型
+第三方套件：
+  numpy（np）   陣列運算；np.arange（網格軸）、np.prod（格點總數）、
+                rng.choice（從生成的星裡隨機抽出觀測數量的星）
+本專案其他模組：
+  pipeline/config.py, isochrones.py, selection.py, table_compat.py
+                          讀設定、等時線、選擇函數、成員表
+  pipeline/joint_fit.py   JointModel（前向模型）、PARAM_NAMES
+  pipeline/step3_age.py   draw_randoms()：抽一批亂數
+  measure_overconfidence.py
+      GRID                  網格檔名
+      grid_best_parallel()  對一組網格軸上的**每一個格點**（所有維度的
+                            所有組合）算一次對數後驗，回傳最大的那一點。
+                            把全部組合攤平成一條編號、切成很多小塊分給
+                            多個行程平行算
+  scripts/tools/checkpoint.py, preflight.py   續傳與開跑前檢查（main 裡 import）
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+模組常數：
+  THETA_TRUE = [8.15, 0.15, 0.45, 2.35, 0.00, −0.50]
+      假資料真值：logage、A_V、f_bin、alpha、MH、q_gamma
+  COARSE      粗網格軸（間距）：logage 7.30–8.40（0.10）、A_V 0–1.0（0.10）、
+              f_bin 0.15–0.95（0.10）、alpha 1.50–3.20（0.20）、
+              MH −0.40–0.40（0.15）、q_gamma −1.20–0.80（0.50）
+  PHYSICAL_LIMITS  物理上不可能超過的邊界（A_V ≥ 0、0 ≤ f_bin ≤ 1、dav ≥ 0）
+  GRID_LIMITED     受等時線網格限制的維度（logage、MH）
+命令列參數（main）：
+  --scenarios (S1)   要跑的情境，逗號分隔：
+      S1  對照組：注入與擬合完全一致（量流程本身的偏差）
+      S2  注入有差異消光、擬合沒有（量漏掉它的代價）
+      S3  注入有選擇函數、擬合沒有
+      S3F 兩邊都有選擇函數（量補上之後的偏差與散布 → σ = 0.144）
+      S4  差異消光當第七個自由參數（測它可不可解）
+  --trials (3)       每個情境生成幾批假資料
+  --dav-true (0.30)  注入的差異消光
+  --dav-sweep        多個 dav 注入值，各跑一次 S2
+  --extra-scatter-sweep  多個額外亮度散布，量未建模光變的影響
+  --refines (3,3)    精修輪數與倍數
+  --n-syn            擬合模型的合成星數（預設 config [joint_fit] 的 40000）
+  --model-seed       換擬合模型的亂數種子
+  --dav-distribution 差異消光分布形式（lognormal／trunc_exp）
+  --tag、--preflight、--force
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 148–182 行｜make_fake()：生成一批跟真實觀測一樣多顆的假觀測
+  核心 2｜第 242–273 行｜check_walls()：判斷最佳解是否貼在邊界上、是哪一種邊界
+  核心 3｜第 298–459 行｜multi_stage_best()：多階段網格搜尋（全專案擬合的引擎）
+  核心 4｜第 686–757 行｜main() 每個情境 × 每次試驗：生成假資料 → 擬合 → 比對真值
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+multi_stage_best（被所有擬合程式使用）：
+  粗網格軸 → 跟模型的先驗範圍取交集（只會變窄）
+    → grid_best_parallel：每個格點都算一次對數後驗，取最大
+    → 每一輪精修：在最佳點前後各一個格距內，把格距縮小 r 倍重掃，取最大
+    → 最佳點貼邊界（不在允許清單）→ 報錯（或只印警告）
+main（注入回收測試）：
+  讀觀測資料 → 建前向模型（金屬量用均勻先驗）
+    → 對每個情境、每次試驗：
+        make_fake：用「另一批」亂數、指定的真值生成 40 萬顆，套選擇函數，
+                   再隨機抽出跟真實觀測一樣多的星
+        → 換上這批假觀測、設定擬合端的 dav 與選擇函數
+        → multi_stage_best 擬合 → 印出每個參數的真值、回收值、偏差
+        → 存檔
+    → 每個情境：偏差平均（流程偏差）與標準差（統計誤差）
+    → 若有 dav 掃描：印出 α 偏差對注入 dav 的變化
 """
 from __future__ import annotations
 
@@ -52,6 +145,7 @@ THETA_TRUE = np.array([8.15, 0.15, 0.45, 2.35, 0.00, -0.50])
 NAMES = joint_fit.PARAM_NAMES
 
 
+# ═══════════════ 核心 1：生成假觀測 ═══════════════
 def make_fake(model, theta, n_stars, seed, dav=0.0, selection=None,
               n_gen=400_000, return_binary_flag=False):
     """生成一批假觀測。
@@ -63,11 +157,14 @@ def make_fake(model, theta, n_stars, seed, dav=0.0, selection=None,
     預設 `False`、行為不變（見 `JointModel.synthesise()` 的說明）。
     """
     import copy
+    # ↓ 複製一份生成用的模型，改成：生成 n_gen 顆、用「這批假資料專屬」的亂數
+    #   （種子跟擬合模型不同）、指定的差異消光與選擇函數
     gen = copy.copy(model)
     gen.n_syn = n_gen
     gen.draws = draw_randoms(n_gen, np.random.default_rng(seed))
     gen.dav = dav
     gen.selection = selection
+    # ↓ 用真值 theta 生成合成星團（joint_fit.py 核心 3）
     out = gen.synthesise(theta, return_binary_flag=return_binary_flag)
     if out is None:
         raise RuntimeError("生成失敗：檢查 theta 是否在 isochrone 網格範圍內")
@@ -77,6 +174,7 @@ def make_fake(model, theta, n_stars, seed, dav=0.0, selection=None,
         color, mag = out
     if len(color) < n_stars:
         raise RuntimeError(f"通過選擇函數的只有 {len(color)} 顆，不足 {n_stars}")
+    # ↓ 從通過篩選的星裡不重複地隨機抽 n_stars 顆，這就是一批「假觀測」
     pick = np.random.default_rng(seed + 99).choice(len(color), n_stars,
                                                    replace=False)
     if return_binary_flag:
@@ -141,6 +239,7 @@ PHYSICAL_LIMITS = {
 GRID_LIMITED = {"logage", "MH"}
 
 
+# ═══════════════ 核心 2：貼牆偵測 ═══════════════
 def check_walls(best, bounds, names, allow=(), tol=0.02):
     """回傳貼牆的維度清單，每項是 (種類, 說明字串)。
 
@@ -151,6 +250,7 @@ def check_walls(best, bounds, names, allow=(), tol=0.02):
     for i, (lo, hi) in enumerate(bounds):
         if i in allow or hi <= lo:
             continue
+        # ↓ 離下界或上界不到「範圍寬度的 2%」就算貼牆
         span = hi - lo
         at_lo = best[i] - lo < tol * span
         at_hi = hi - best[i] < tol * span
@@ -159,6 +259,7 @@ def check_walls(best, bounds, names, allow=(), tol=0.02):
         nm = names[i] if i < len(names) else f"dim{i}"
         side, edge = ("下界", lo) if at_lo else ("上界", hi)
 
+        # ↓ 分類：碰到物理極限（角落解）、碰到等時線網格邊界、還是自己設的搜尋範圍
         plim = PHYSICAL_LIMITS.get(nm, (None, None))
         phys_edge = plim[0] if at_lo else plim[1]
         if phys_edge is not None and abs(edge - phys_edge) < 1e-9:
@@ -194,6 +295,7 @@ def wall_message(hits):
     return "\n  ".join(lines)
 
 
+# ═══════════════ 核心 3：多階段網格搜尋 ═══════════════
 def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
                      allow_wall=(), raise_on_wall=True, names=None,
                      no_refine=()):
@@ -238,7 +340,9 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
         extras = list(extra_axis)
     else:
         extras = [extra_axis]          # 單一陣列：維持舊呼叫端的行為
+    # ↓ cur：目前要掃的網格軸（六個參數 + 額外維度）
     cur = list(axes) + extras
+    # ↓ bounds：每一維搜尋軸的 [最小, 最大]
     bounds = [(a.min(), a.max()) for a in cur]
     # 2026-08-23：跟 model.bounds（真正生效的先驗）取交集，理由見
     # LIMITATIONS.md 新增條目——搜尋軸的名目邊界有時刻意開得比先驗寬
@@ -313,7 +417,9 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
                     f"grid_best_parallel() 在這一維上選不到任何合法解，"
                     f"不是貼牆，先去確認網格步距或先驗範圍是不是設錯了。")
         bounds = merged + bounds[n:]
+    # ↓ 第一階：粗網格上每一點都算，取對數後驗最大的點
     best, lp = grid_best_parallel(model, cur, n_proc)
+    # ↓ 每一輪精修（r 是這輪的格距縮小倍數）
     for r in refines:
         nxt = []
         for i, ax in enumerate(cur):
@@ -328,13 +434,17 @@ def multi_stage_best(model, axes, refines, n_proc, extra_axis=None,
             if len(ax) < 2:
                 nxt.append(ax)
                 continue
+            # ↓ 新的軸：最佳點前後各一個舊格距（不超出邊界），格距縮成 1/r
+            #   例如舊格距 0.2、r = 3 → 在最佳點 ±0.2 內每 0.0667 一格，共 7 格
             step = float(ax[1] - ax[0])
             lo = max(best[i] - step, bounds[i][0])
             hi = min(best[i] + step, bounds[i][1])
             nxt.append(np.arange(lo, hi + 1e-9, step / r))
         cur = nxt
+        # ↓ 在新的細網格上再掃一次
         best, lp = grid_best_parallel(model, cur, n_proc)
 
+    # ↓ 最終最佳點有沒有貼邊界（allow_wall 列出的維度不算）
     hits = check_walls(best, bounds, names or NAMES + ["dav"], allow_wall)
     if hits:
         msg = "最佳解落在邊界上：\n  " + wall_message(hits) + \
@@ -573,6 +683,7 @@ def main():
             SCEN[f"S1var@{v:g}"] = (f"額外亮度散布 {v:g} mag（模型沒有這一項，C19）",
                                     0.0, None, 0.0, None, None)
 
+    # ═══════════════ 核心 4：每個情境 × 每次試驗 ═══════════════
     results = {}
     for key in want:
         if key not in SCEN:
@@ -581,6 +692,8 @@ def main():
             print(f"未知情境 {key}，略過")
             continue
         skey = _store_key(key)
+        # ↓ 拆開情境設定：說明、注入端的 dav 與選擇函數、擬合端的 dav 與選擇函數、
+        #   額外第七維（S4 才有）
         desc, dav_in, sel_in, dav_fit, sel_fit, extra = SCEN[key]
         print(f"\n{'='*74}\n{key}：{desc}\n{'='*74}")
         # 截到 args.trials：理由同 inject_lowmass.py 的同一處修正
@@ -599,10 +712,12 @@ def main():
             var_in = var_inject.get(key, 0.0)
             base.extra_scatter = var_in
             try:
+                # ↓ 第 t 批假觀測：真值 THETA_TRUE、種子 1000 + 17t
                 fc, fm = make_fake(base, THETA_TRUE, n_obs, seed=1000 + 17 * t,
                                    dav=dav_in, selection=sel_in)
             finally:
                 base.extra_scatter = 0.0
+            # ↓ 擬合模型：同一個模型換上這批假觀測，再設定擬合端的 dav 與選擇函數
             m = base.with_observations(fc, fm)
             m.dav, m.selection = dav_fit, sel_fit
             m.extra_scatter = 0.0   # 擬合模型明確不帶這一項
@@ -619,6 +734,7 @@ def main():
                 raise_on_wall=False)
             truth = (list(THETA_TRUE) + [dav_in]) if extra is not None \
                 else THETA_TRUE
+            # ↓ 印出每個參數：真值、回收值、偏差、是否貼牆
             report(f"{key} 第 {t+1} 次  lnP={lp:.1f}", truth, best, bounds,
                    time.time() - t0)
             got_all.append(best)
@@ -635,10 +751,12 @@ def main():
             names = NAMES + (["dav"] if got_all.shape[1] > 6 else [])
             truth = (list(THETA_TRUE) + [dav_in]) if extra is not None \
                 else list(THETA_TRUE)
+            # ↓ 偏差的平均 = 流程的系統偏差；偏差的標準差 = 統計誤差
             for i, nm in enumerate(names):
                 b = got_all[:, i] - truth[i]
                 print(f"  {nm:<10}偏差 {b.mean():+.3f}   散布 {b.std():.3f}")
 
+    # ═══════════════ 輔助：dav 掃描總表 ═══════════════
     # dav 掃描的總表：alpha 偏差對注入的 dav
     sweep = sorted([(float(k.split("@")[1]), v)
                     for k, v in results.items() if k.startswith("S2@")])

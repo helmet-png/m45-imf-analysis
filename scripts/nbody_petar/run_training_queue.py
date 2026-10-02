@@ -30,6 +30,50 @@
 自我測試：不適用（這支程式本身沒有需要驗證的計算邏輯，全部邏輯都是
 子行程呼叫與 JSON 記錄；正確性由 `run_nbody_case.py` 自己的
 `--self-test` 保證，這裡不重複驗證一次）。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+全部是 Python 標準庫：
+  argparse     讀命令列參數
+  json         讀 result.json、寫進度紀錄
+  subprocess   subprocess.run 執行 run_nbody_case.py，等它結束再跑下一個
+  sys          sys.executable：用目前這個 Python 去執行子程式
+  time         計時（time.monotonic）與時間戳（time.strftime）
+  pathlib      路徑
+本專案其他模組：
+  scripts/nbody_petar/petar_m45_grid.py   load_grid()：讀網格 CSV
+  scripts/nbody_petar/run_nbody_case.py   被當成子程式執行（不是 import）
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+  --grid              網格 CSV，預設 petar_m45_training_grid.csv
+  --runs-dir          每個 run 的輸出資料夾，預設 runs_training/
+                      ⚠ emulator_fit.py 的 --runs-dir 預設是 runs/，
+                        訓練時要記得指到 runs_training/
+  --n-threads (8)     每個模擬用幾個執行緒（OMP_NUM_THREADS）
+  --energy-threshold (1e-3)  能量守恆門檻，原樣傳給 run_nbody_case.py
+  --petar-bin (petar)  PeTar 執行檔名，原樣傳給 run_nbody_case.py
+  --limit             這次最多跑幾個尚未完成的 run
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 93–109 行｜already_complete()：判斷一個 run 是否已用正式設定跑完
+  核心 2｜第 124–142 行｜main() 決定要跑哪些 run、排順序
+  核心 3｜第 144–175 行｜main() 逐一執行 run_nbody_case.py 並記錄結果
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  讀網格 CSV 的所有 run_id
+    → 過濾掉已完成的（result.json 的 status 是 complete、且不是 smoke）
+    → 排序：從沒開始過的排前面，開始過但失敗的排後面
+    → 有 --limit 就只取前 N 個
+    → 逐一：執行 python run_nbody_case.py --run-id … --grid … --runs-dir …
+      → 回傳碼 0 記為 complete，否則記為 failed（能量檢查沒過也會回傳 1）
+      → 在 <runs-dir>/queue_progress.json 追加一行紀錄
 """
 from __future__ import annotations
 
@@ -46,12 +90,14 @@ sys.path.insert(0, str(HERE))
 from petar_m45_grid import load_grid  # noqa: E402
 
 
+# ═══════════════ 核心 1：判斷是否已完成 ═══════════════
 def already_complete(run_dir: Path) -> bool:
     """2026-09-18 修正（Codex review）：以前只看 status=='complete'，沒
     排除 smoke 跑完留下的 result.json——smoke 用縮短的積分時間跑，拿它
     的 result.json 當「這個 run_id 已經用正式設定跑完」會整批漏跑。這
     支程式從不傳 --smoke（見上方模組說明），所以任何 smoke=true 的舊
     結果一定是別的用途（手動測試）留下的殘留，不能算數。"""
+    # ↓ run_nbody_case.py 跑完會寫 result.json；沒有就是沒跑完
     result_path = run_dir / "result.json"
     if not result_path.exists():
         return False
@@ -59,6 +105,7 @@ def already_complete(run_dir: Path) -> bool:
         data = json.loads(result_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
+    # ↓ 狀態是 complete、而且不是 smoke（縮短版測試）才算完成
     return data.get("status") == "complete" and not data.get("smoke", False)
 
 
@@ -74,11 +121,13 @@ def main():
                          help="只跑前 N 個尚未完成的 run（測試用），預設全部")
     args = parser.parse_args()
 
+    # ═══════════════ 核心 2：決定要跑哪些 run ═══════════════
     rows = load_grid(args.grid)
     run_ids = [r["run_id"] for r in rows]
     args.runs_dir.mkdir(parents=True, exist_ok=True)
     progress_path = args.runs_dir / "queue_progress.json"
 
+    # ↓ 還沒完成的 run_id（照 CSV 原順序）
     todo = [rid for rid in run_ids if not already_complete(args.runs_dir / rid)]
     # 2026-09-21：沒跑過的排前面、失敗過的排後面（sorted 是穩定排序，各組
     # 內維持 CSV 原順序）。派工佇列把同一個 `--limit N` 重複排很多次，
@@ -92,9 +141,11 @@ def main():
     print(f"總共 {len(run_ids)} 筆，已完成 {len(run_ids) - n_pending} 筆，"
           f"本次要跑 {len(todo)} 筆", flush=True)
 
+    # ═══════════════ 核心 3：逐一執行 ═══════════════
     for i, run_id in enumerate(todo, 1):
         print(f"[{i}/{len(todo)}] 開始 {run_id}", flush=True)
         t0 = time.monotonic()
+        # ↓ 開一個子行程執行 run_nbody_case.py；這個 run 當掉不會拖垮整批
         proc = subprocess.run(
             [
                 sys.executable, str(HERE / "run_nbody_case.py"),
@@ -117,6 +168,7 @@ def main():
             "elapsed_seconds": elapsed,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
+        # ↓ 用附加模式（"a"）寫一行 JSON 紀錄，不覆蓋之前的
         with progress_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
 

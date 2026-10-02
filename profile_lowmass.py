@@ -17,6 +17,78 @@
 **判讀基準**：用注入回收量到的 alpha 統計誤差 0.144（見
 injection_recovery.py 的 S3F，最乾淨的一次）。若固定低質量段冪次
 造成的 alpha 跨度遠大於 0.144，代表它跟金屬量一樣必須升格。
+
+======================================================================
+【這支程式在做什麼】
+======================================================================
+「輪廓／敏感度掃描」：把一個平常固定不動的參數（低質量段冪次 p，預設 1.3）
+依序固定在 0.9、1.1、1.3、1.5、1.7，每個值都用前向模型（config C）重新完整
+擬合一次，看 α 跟著變多少。α 變得越多，代表「把 p 固定在 1.3」這個假設對
+α 的影響越大。
+執行方式：python profile_lowmass.py [--refines 3,3,3] [--repeats 3]
+輸出：results/profile_lowmass<tag>.npz（每個 p、每次重複的最佳參數）
+⚠ 這支程式只印出「α 的跨度」與「跨度是統計誤差 0.144 的幾倍」。
+  LIMITATIONS.md A3 引用的斜率 dα/dp = −0.495 ± 0.111 與系統誤差 0.248
+  （= 0.495 × Kroupa 給的 p 不確定度 0.5）是由這裡的結果另外算出的。
+⚠ 產生 0.248 的那次執行（p6_lowmass）是在精修 bug 修好前跑的，等於完全沒有
+  精修（α 只落在 0.20 間距的粗格點上），LIMITATIONS.md A1／A3 標為
+  「待重跑確認、精確值不可引用」。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, os, sys, time, pathlib   參數、CPU 數、路徑、計時
+  copy（在迴圈裡 import）           淺複製模型
+第三方套件：
+  numpy（np）   陣列運算、存讀檔
+本專案其他模組：
+  pipeline/config.py, isochrones.py, selection.py, table_compat.py
+                         讀設定、等時線、選擇函數、成員表
+  pipeline/joint_fit.py  JointModel：前向模型；本程式改它的 low_mass_slope 屬性
+  pipeline/step3_age.py  draw_randoms()：每次重複換一批模型端亂數
+  measure_overconfidence.py  GRID：網格檔名
+  injection_recovery.py  COARSE（粗網格軸）、multi_stage_best()（多階段網格搜尋，
+                         見 fit_real.py 檔頭）
+  scripts/tools/checkpoint.py  續傳（每算完一次就存檔）
+  scripts/tools/preflight.py   開跑前檢查
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+命令列參數：
+  --procs        平行行程數
+  --n-syn (40000)  合成星數
+  --repeats (3)  每個 p 值重複幾次（每次換模型端亂數，量重現性）
+  --refines (3)  精修輪數與倍數；要可信的數字需要 3,3,3
+  --dav-max (0.6)  差異消光 dav 的搜尋上限（等同 config C）
+  --tag          輸出檔名後綴
+  --slopes       覆寫掃描點，逗號分隔
+  --preflight／--force   開跑前檢查
+模組常數：
+  ALPHA_STAT_SIGMA = 0.144   注入回收量出的 α 統計誤差，當比較基準
+  SLOPES = [0.9, 1.1, 1.3, 1.5, 1.7]   掃描點；涵蓋 Kroupa (2001) 1.3 ± 0.3～0.5
+刻意的設定：金屬量改用均勻先驗（mh_prior_sigma = 0），避免先驗干擾要測的敏感度
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 168–190 行｜讀資料、建立前向模型
+  核心 2｜第 247–303 行｜主迴圈：每個 p × 每次重複，固定 p 後做一次完整擬合
+  核心 3｜第 305–325 行｜整理：每個 p 的 α 平均、跨度、跨度是統計誤差的幾倍
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  讀 cmd_members.csv、誤差模型、網格 → 算距離模數 → 建前向模型
+    → 續傳檢查＋開跑前檢查
+    → 對每個 p（0.9…1.7）、每次重複：
+        複製模型 → 掛選擇函數 → low_mass_slope = −p（固定，不擬合）
+        → 換一批模型端亂數 → 加上 dav 維度
+        → multi_stage_best（跟頭條同一套網格搜尋，q_gamma 與 dav 允許貼牆）
+        → 存檔
+    → 印出每個 p 的 α 平均與散布
+    → 跨度 = 最大平均 − 最小平均；印出跨度 ÷ 0.144
 """
 from __future__ import annotations
 
@@ -93,6 +165,7 @@ def main():
     slopes = ([float(x) for x in args.slopes.split(",")] if args.slopes
              else SLOPES)
 
+    # ═══════════════ 核心 1：讀資料、建立前向模型 ═══════════════
     cfg = cfgmod.load()
     c3, cj = cfg.step3_age, cfg.joint_fit
     clean = Table.read(HERE / "data" / "cmd_members.csv", format="csv")
@@ -106,6 +179,7 @@ def main():
     color, mag = color[ok], mag[ok]
     n_obs = len(color)
 
+    # ↓ 合成星數改成 --n-syn；金屬量改用均勻先驗（刻意，見檔頭 (b)）
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
     cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
@@ -114,6 +188,7 @@ def main():
     # 一次，中途被砍（p6_lowmass_v2 案例：本機四天內被 Windows 強制重開機
     # 四次）就得從頭重算，即使前面已經跑完的冪次本身沒有問題。改用
     # scripts/tools/checkpoint.py 的共用續傳機制，跟 fit_real.py 同一套。
+    # ═══════════════ 輔助：續傳與開跑前檢查 ═══════════════
     out_path = HERE / "results" / f"profile_lowmass{args.tag}.npz"
     # slopes 不放進 manifest：每個掃描點各自有獨立的 scan_key
     # （f"p{p}"），互不污染，不需要靠 manifest 擋。這支腳本現在雖然有
@@ -169,6 +244,7 @@ def main():
           f"n_synthetic {args.n_syn:,}")
     print(f"掃描低質量段冪次：{slopes}\n")
 
+    # ═══════════════ 核心 2：主迴圈（每個 p × 每次重複） ═══════════════
     from pipeline.step3_age import draw_randoms
     results = {}
     for p in slopes:
@@ -193,10 +269,13 @@ def main():
             m.n_obs = n_obs
             m.selection = sel
             m.bounds = base.bounds[:6].copy()
+            # ↓ 關鍵的一行：把低質量段（0.08–0.5 M☉）冪次固定成 −p
+            #   （存的是 dN/dm 的冪次，所以加負號）
             m.low_mass_slope = -p
             if args.repeats > 1:
                 m.draws = draw_randoms(m.n_syn,
                                        np.random.default_rng(3000 + 13 * rep))
+            # ↓ dav 的搜尋軸：0 到 dav_max 等分 4 段；並把 dav 加成第七個參數
             extra = np.arange(0.0, args.dav_max + 1e-9, args.dav_max / 4)
             m.enable_dav_fit(0.0, args.dav_max)
 
@@ -207,6 +286,7 @@ def main():
             best, lp, bounds = multi_stage_best(
                 m, COARSE, refines, n_proc, extra_axis=extra,
                 allow_wall=(5, 6))
+            # ↓ best[3] 就是 alpha（第 0 欄是 logage）
             outs.append(best)
             print(f"  p={p:.1f} 第{rep+1}次  alpha={best[3]:.3f}  "
                   f"A_V={best[1]:.3f}  logage={best[0]:.3f}  "
@@ -222,6 +302,7 @@ def main():
               f"{arr[:,3].mean():.3f}，散布 {arr[:,3].std():.3f}\n",
               flush=True)
 
+    # ═══════════════ 核心 3：整理敏感度 ═══════════════
     print(f"{'='*70}\nalpha 對低質量段冪次的敏感度\n{'='*70}")
     print(f"{'冪次 p':>8}{'alpha 平均':>11}{'散布':>8}")
     means = []
@@ -230,6 +311,7 @@ def main():
         means.append(a.mean())
         print(f"{p:>8.1f}{a.mean():>11.3f}{a.std():>8.3f}")
     means = np.array(means)
+    # ↓ 跨度：不同 p 之下 α 平均的最大值 − 最小值
     span = float(means.max() - means.min())
     print(f"\nalpha 跨度（掃過 p={min(slopes)}-{max(slopes)}）= {span:.3f}")
     print(f"對照注入回收統計誤差 {ALPHA_STAT_SIGMA:.3f} "
