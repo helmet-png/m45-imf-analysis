@@ -323,6 +323,9 @@ m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--r
 # `import petar` 成功；用新標籤與新輸出目錄重派，不覆寫失敗紀錄。
 m45_system_definition_bridge_r2|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20261002 --require-run-count 10 --petar-package-path /home/estopic/nbody/install/include||false|senior24
 
+# 2026-10-02: r2 loaded formal galpy catalogs as the default none schema and failed on a false duplicate ID. PR #235 passes the matching schema; use a new label and output directory.
+m45_system_definition_bridge_r3|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20261002_r3 --require-run-count 10 --petar-package-path /home/estopic/nbody/install/include --external-mode galpy||false|senior24
+
 # 2026-09-18：p2_free_lowmass 剩下 9 次重複（A3／D19）。第 1 次重複
 # （repeat_offset=0，2026-08-14 手動保存於
 # results/p2_free_lowmass_rep1_preserved.npz：p_lowmass=1.322、
