@@ -159,18 +159,20 @@ python petar_pdmf_ensemble.py "results/m45_*_pdmf.json" \
 raw snapshot 的 `status` 只描述 PeTar 當下的積分器子系統，不是完整的物理聯星
 目錄；不能拿它重建所有 primordial binaries。每個正式 run 應先用
 `petar.data.process` 產生同一快照的 single/binary/triple/quadruple 目錄，再轉成
-標準 system catalog（沒有某種多重度時省略對應參數）：
+標準 system catalog（沒有某種多重度時省略對應參數）。`--external-mode` 必填，
+要跟 `petar.data.process -t` 一致：照上面不加 `-t` 產的是 `none`；
+`petar_m45_grid.render_commands()`（2026-09-09 之後）用 `-t galpy`，就要填 `galpy`：
 
 ```bash
 python petar_system_catalog.py \
   --single data.0.single --binary data.0.binary \
   --triple data.0.triple --quadruple data.0.quadruple \
-  --time-myr 0 --confirm-complete --output results/m45_ref_s101_t0_systems.npz
+  --time-myr 0 --external-mode none --confirm-complete --output results/m45_ref_s101_t0_systems.npz
 
 python petar_system_catalog.py \
   --single data.25.single --binary data.25.binary \
   --triple data.25.triple --quadruple data.25.quadruple \
-  --time-myr 125 --confirm-complete --output results/m45_ref_s101_t125_systems.npz
+  --time-myr 125 --external-mode none --confirm-complete --output results/m45_ref_s101_t125_systems.npz
 
 python pdmf_system_definition_bridge.py \
   --initial results/m45_ref_s101_t0_systems.npz \
