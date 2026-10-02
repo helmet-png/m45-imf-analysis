@@ -360,15 +360,19 @@ m45_system_definition_bridge_r3|scripts/nbody_petar/build_m45_system_bridges.py|
 # 2026-09-18 停用（使用者要求）：先讓 D19 Stage 2（成員判定閘門）完成，
 # 兩批一起排比分開排更有效率、也避免佔用 worker 排隊順位。D19 完成後
 # 把下面 9 行的 # 拿掉即可重新排入，內容未變。
-# p2_free_lowmass_r1|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 1 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r1|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r2|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 2 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r2|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r3|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 3 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r3|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r4|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 4 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r4|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r5|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 5 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r5|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r6|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 6 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r6|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r7|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 7 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r7|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r8|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 8 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r8|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r9|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 9 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r9|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-10-02 重新排入（使用者要求）：全部派給 senior24，--procs 8 -> 24。
+# 第 7 欄 60 = 本工作逾時小時數：第 1 次重複在 8 核筆電上 44 小時，24 核
+# 估 15–22 小時，貼著預設 20 小時上限，被砍會整次白跑（無法中途續跑），
+# 所以放寬到 60。需要協調 VM 的 cloud_queue.py 也更新到認得第 7 欄的版本。
+p2_free_lowmass_r1|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 1 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r1|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r2|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 2 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r2|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r3|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 3 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r3|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r4|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 4 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r4|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r5|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 5 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r5|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r6|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 6 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r6|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r7|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 7 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r7|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r8|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 8 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r8|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r9|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 9 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r9|measure_overconfidence.py,injection_recovery.py|false|senior24|60
 
 # 2026-09-18：D19 Stage 2 第一步——pyUPMASK 能不能在雲端 worker 上跑
 # 起來的小規模可行性測試（見 LIMITATIONS.md D19、WORK_BOARD.md
