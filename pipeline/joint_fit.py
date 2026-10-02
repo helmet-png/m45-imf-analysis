@@ -15,6 +15,110 @@ IMF 斜率改變主序上的星數分布、雙星比例改變主序上方的展�
 
 概似函數必須是**確定性**的（給定參數就給定值），否則 MCMC 的接受判準會被
 蒙地卡羅雜訊汙染。這靠 draw_randoms() 預先抽好所有亂數來達成。
+
+======================================================================
+【這支程式在做什麼】
+======================================================================
+前向模型的「本體」。它回答：「如果星團的年齡、消光、雙星比例、IMF 斜率、
+金屬量、雙星質量比分布是某一組值，生成出來的合成星團在色光圖上會長什麼樣？
+跟真正觀測到的有多像？」
+  - JointModel.synthesise(theta)      給一組參數 → 生成一整群合成星
+  - JointModel.log_likelihood(theta)  把合成星與觀測星都切成 Hess 圖，算相似度
+  - JointModel.log_posterior(theta)   相似度 + 先驗 → 擬合要最大化的分數
+  - run_mcmc()                        用 emcee 在參數空間取樣（MCMC 版）
+⚠ 標題寫「四參數」，但現在的基本模型是**六個**參數（PARAM_NAMES：年齡、消光、
+  雙星比例、α、金屬量、q_gamma），另外可選擇加上差異消光 dav 與低質量段冪次。
+⚠ 用 MCMC 跑這個模型的鏈從未收斂（LIMITATIONS.md C11），所以頭條數字不是用
+  run_mcmc() 得到的，而是 fit_real.py 用同一個 log_posterior() 做網格搜尋得到的。
+
+這個檔案**沒有 main()**，由 fit_real.py（頭條）、scripts/drivers/run_joint.py
+（MCMC）、injection_recovery.py（注入回收）等程式 import 使用。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+第三方套件：
+  numpy（np）
+      np.interp       一維線性內插（由質量查星等、由星等查誤差）
+      np.unique／np.argsort／np.argmin  去重、排序、找最小值位置
+      np.log10／np.exp／np.log1p        對數與指數（星等↔流量、對數常態分布）
+      np.clip         把值限制在範圍內
+      np.where        依條件逐元素二選一
+      np.percentile／np.corrcoef        百分位、相關係數矩陣（整理 MCMC 結果）
+  scipy.stats.norm    norm.cdf：標準常態累積分布函數（只在 trunc_exp 消光分布用）
+  emcee               MCMC 取樣器（在 run_mcmc() 裡才 import）
+                        emcee.EnsembleSampler  一群「走者」同時在參數空間移動
+                        emcee.moves.DEMove／DESnookerMove  走者決定下一步的方式
+  multiprocessing.Pool  多行程平行（在 make_pool() 裡才 import）
+本專案其他模組：
+  pipeline/isochrones.py（iso_mod）  這個版本沒有直接用到
+  pipeline/step3_age.py：
+      IMF_BREAKS      各種 IMF 的分段定義（Kroupa：0.01／0.08／0.5／200 M☉，
+                      冪次 −0.3／−1.3／−2.3）
+      sample_imf(u, …)  逆變換抽樣：把 0–1 均勻亂數 u 換成服從 IMF 的質量
+                      （每顆星只用一個亂數，跟 IMF 參數無關，共用亂數才成立）
+      draw_randoms()  一次抽好所有要用的亂數（質量、是否雙星、q、測光誤差、
+                      差異消光、選擇函數…），之後每次生成都重複使用
+      _interp_err()   依 G 星等從 errmodel 內插出測光誤差
+      hess()          把色光圖切成格子、數每格的星數（Hess 圖）
+      poisson_loglike()  觀測與模型 Hess 圖逐格比較的 Poisson 對數概似
+                      （混入 1% 均勻分布當殘留場星污染）
+      _Ext            三個消光係數的小盒子
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+六個擬合參數 theta（PARAM_NAMES 的順序）：
+  logage    log10(年齡/年)
+  A_V       V 波段消光（星等）
+  f_bin     雙星比例：一個系統帶伴星的機率
+  alpha     m > 0.5 M☉ 那段 IMF 的斜率（dN/dm ∝ m^−α）
+  MH        金屬量 [M/H]
+  q_gamma   雙星質量比 q = m2/m1 的分布 p(q) ∝ q^q_gamma（0 = 均勻）
+選配的第 7、8 個參數：dav（差異消光的星對星散布）、p_lowmass（0.08–0.5 M☉ 段冪次）
+config.toml [joint_fit]（先驗範圍與 MCMC 設定）：
+  logage 7.30–8.30、A_V 0–0.6、f_bin 0–1、alpha 1.5–3.2、MH −0.6–0.6、
+  q_gamma −1.5–1.5；金屬量高斯先驗中心 −0.03、寬度 0.10
+  n_walkers = 48、n_steps = 6000、n_burn = 2000（MCMC 用）
+config.toml 其他段落：
+  [step3_age] n_synthetic（合成星數）、hess_*（Hess 圖格數與範圍）、
+              binary_q_min = 0.1（q 的下限）、model_hess_smooth
+  [step2_cmd] ext_coeff_*（消光係數）、g_bright_limit = 4.0
+  [step1_membership] g_mag_max = 18.0、random_seed = 42
+物件屬性（預設值＝正式設定，敏感度測試會覆寫）：
+  dav = 0.0、selection = None（fit_real.py 會掛上選擇函數）、
+  low_mass_slope = −1.3、outlier_frac = 0.01、use_native_bprp_err = False、
+  extra_scatter = 0.0、dav_distribution = "lognormal"
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 198–265 行｜__init__() 後半：設定先驗範圍、預先取出要用的每一條等時線
+  核心 2｜第 385–401 行｜log_prior()：先驗——超出範圍就是 −∞，金屬量加高斯懲罰
+  核心 3｜第 403–675 行｜synthesise()：由參數生成合成星團（整個前向模型最核心的一段）
+  核心 4｜第 677–698 行｜log_likelihood()／log_posterior()：合成 vs 觀測的相似度
+  核心 5｜第 725–773 行｜run_mcmc()：用 emcee 取樣
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+建立模型（一次）：
+  觀測色光圖 → 觀測 Hess 圖；讀先驗範圍；預抽所有亂數；
+  把先驗範圍內每個 (年齡, 金屬量) 的等時線先取出來排好
+每評估一組參數 theta（擬合時重複成千上萬次）：
+  先驗檢查（超界 → −∞）
+    → synthesise：
+        取最接近的等時線
+        → 依 IMF（高質量段斜率 = α）抽 n_syn 個主星質量
+        → 由質量內插出 G、BP、RP 絕對星等
+        → 每個系統以機率 f_bin 帶伴星；伴星質量 = q × 主星質量；
+          兩顆星的流量相加，塌縮成一個光點
+        → 加距離模數與消光（可選每顆星不同的消光）
+        → 加上跟觀測同等級的測光誤差
+        → 只留 4 ≤ G ≤ 18、且通過選擇函數的星
+    → 合成星 → 合成 Hess 圖 → 跟觀測 Hess 圖逐格比 → Poisson 對數概似
+    → 加上先驗 = 對數後驗
+擬合：fit_real.py 用網格搜尋找讓對數後驗最大的 theta；run_mcmc() 則是取樣
 """
 from __future__ import annotations
 
@@ -25,6 +129,7 @@ from . import isochrones as iso_mod
 from .step3_age import (IMF_BREAKS, _Ext, _interp_err, draw_randoms, hess,
                         poisson_loglike, sample_imf)
 
+# ↓ 六個擬合參數的名稱與順序；theta 陣列就照這個順序排
 PARAM_NAMES = ["logage", "A_V", "f_bin", "alpha", "MH", "q_gamma"]
 
 
@@ -43,6 +148,7 @@ class JointModel:
         self.crange = tuple(c3.hess_color_range)
         self.mrange = tuple(c3.hess_mag_range)
         self.nb_c, self.nb_m = c3.hess_color_bins, c3.hess_mag_bins
+        # ↓ 觀測色光圖只需要切一次 Hess 圖，之後每次比對都重複使用
         self.obs_h = hess(obs_color, obs_mag, self.nb_c, self.nb_m,
                           self.crange, self.mrange)
         self.n_obs = len(obs_color)
@@ -89,10 +195,12 @@ class JointModel:
         # 共用亂數：整條 MCMC 鏈共用同一批，概似才是參數的確定性函數
         self.draws = draw_randoms(
             self.n_syn, np.random.default_rng(cfg.step1_membership.random_seed))
+        # ═══════════════ 核心 1：先驗範圍與預先展開等時線 ═══════════════
         # 先驗範圍。金屬量與 q_gamma 從固定值升格為自由參數 ——
         # 輪廓測試顯示固定它們會讓 alpha 分別偏移 0.40 與 0.10，
         # 是統計誤差 0.003 的 133 倍與 33 倍，不能再當成已知量。
         b = cfg.joint_fit
+        # ↓ bounds：6 列 × 2 欄，每一列是一個參數的 [下限, 上限]
         self.bounds = np.array([
             [b.logage_min, b.logage_max],
             [b.av_min, b.av_max],
@@ -101,6 +209,7 @@ class JointModel:
             [b.mh_min, b.mh_max],
             [b.qgamma_min, b.qgamma_max],
         ])
+        # ↓ 金屬量高斯先驗的中心與寬度；寬度 0 代表改用均勻先驗
         self._mh_mean = float(b.get("mh_prior_mean", 0.0) or 0.0)
         self._mh_sigma = float(b.get("mh_prior_sigma", 0.0) or 0.0)
         if self._mh_sigma > 0:
@@ -112,6 +221,7 @@ class JointModel:
         # 三個理由：(1) 不必每次取樣都掃過 10 萬列的大表；(2) 不必每次重排序；
         # (3) 多行程平行時只要 pickle 這些小陣列，而不是整張表。
         # 六參數版本要對 (年齡 x 金屬量) 的每個組合都預先取出來。
+        # ↓ 網格裡有哪些年齡、金屬量；只保留先驗範圍內（各向外多留 0.06）的
         all_ages = np.unique(np.asarray(iso_grid["logAge"], float))
         all_mh = np.unique(np.asarray(iso_grid["MH"], float))
         alo, ahi = self.bounds[0]
@@ -138,6 +248,7 @@ class JointModel:
         gm = np.asarray(iso_grid["Mini"], float)
         cols = [np.asarray(iso_grid[c], float)
                 for c in ("G_fSBmag", "G_BP_fSBmag", "G_RP_fSBmag")]
+        # ↓ _iso：{(年齡, 金屬量): (質量, G, BP, RP)}，每條都依質量由小到大排好
         self._iso = {}
         for ak in self._age_keys:
             for zk in self._mh_keys:
@@ -154,6 +265,7 @@ class JointModel:
         self.grid = None      # 大表用不到了，不要跟著 pickle 到子行程
 
     def _isochrone(self, logage, mh):
+        # ↓ 取最接近的年齡格點與金屬量格點（不內插，見 LIMITATIONS.md C14）
         ak = float(self._age_keys[np.argmin(np.abs(self._age_keys - logage))])
         zk = float(self._mh_keys[np.argmin(np.abs(self._mh_keys - mh))])
         return self._iso.get((ak, zk))
@@ -270,20 +382,25 @@ class JointModel:
                 "mass-dependent binary fractions fall outside [0, 1]")
         return np.where(hi, f_hi, f_lo)
 
+    # ═══════════════ 核心 2：先驗 ═══════════════
     def log_prior(self, theta):
         nb = len(self.bounds)
         if len(theta) != nb:
             raise ValueError(f"theta 長度 {len(theta)} 與 bounds {nb} 不符")
+        # ↓ 任何一個參數超出 [下限, 上限] → 不可能（對數機率 −∞）
         if np.any(theta < self.bounds[:, 0]) or np.any(theta > self.bounds[:, 1]):
             return -np.inf
+        # ↓ 範圍內一律平坦（加 0）
         lp = 0.0
         # 金屬量用高斯先驗（若有設定）。均勻先驗的邊界會變成硬牆並決定答案，
         # 高斯先驗則是「大概在這裡，偏離越多越不可能，但沒有絕對禁區」——
         # 資料夠強時仍能把後驗拉離先驗中心。
         if self._mh_sigma > 0:
+            # ↓ 高斯先驗的對數：−½ × ((MH − 中心) / 寬度)²
             lp += -0.5 * ((theta[4] - self._mh_mean) / self._mh_sigma) ** 2
         return lp
 
+    # ═══════════════ 核心 3：生成合成星團 ═══════════════
     def synthesise(self, theta, return_binary_flag=False,
                    return_source_index=False):
         """由參數生成合成星團，回傳套用選擇函數後的 (顏色, 星等[, 是否雙星])。
@@ -301,6 +418,7 @@ class JointModel:
         拆開前若要比較兩種概似，得把生成邏輯抄一份，抄錯就變成在比較兩份不同的
         合成星團而不是兩種概似。
         """
+        # ↓ 把前六個參數拆開
         logage, av, fbin, alpha, mh, qgamma = theta[:6]
         # 第七、八個參數都是選配的，長度不足就沿用物件屬性。
         # 這樣六參數與七參數的既有結果與呼叫端完全不受影響。
@@ -309,11 +427,13 @@ class JointModel:
         dav = float(theta[6]) if len(theta) > 6 else self.dav
         low_mass = (-float(theta[7]) if len(theta) > 7
                     else getattr(self, "low_mass_slope", -1.3))
+        # ↓ 取這組年齡、金屬量的等時線：質量 mi 與三個波段的絕對星等
         iso = self._isochrone(logage, mh)
         if iso is None:
             return None
         mi, gi, bpi, rpi = iso
 
+        # ↓ n：合成星（系統）數；d：預先抽好的亂數
         n = self.n_syn
         d = self.draws
         orig = IMF_BREAKS["kroupa"]
@@ -331,16 +451,20 @@ class JointModel:
             # 新版 synthesise 卻無條件讀取，就會撞 AttributeError ——
             # 這正是 2026-08-08 讓 p2_final 中途失敗的原因。
             # low_mass 已在函式開頭決定（可能來自 theta[7] 或物件屬性）。
+            # ↓ 暫時改寫 Kroupa 的三段冪次：最低段維持原值、中段 = 低質量段冪次、
+            #   高質量段 = −α（存的是 dN/dm 的冪次，斜率 α 對應冪次 −α）
             IMF_BREAKS["kroupa"] = (orig[0], [orig[1][0], low_mass, -alpha])
             # **這裡抽的是「主星」質量，不是「所有恆星」的質量**（D14，
             # 見下面 is_bin 那段與本方法末尾的說明）。抽樣範圍是等時線網格
             # 實際涵蓋的質量區間（mi.min()–mi.max()），不是 config 設定值——
             # 換一份質量涵蓋較窄的網格（例如 BHAC15 只到 1.4 Msun）會連帶
             # 改變被抽樣的質量上限，比較不同網格的結果時要記得這一點。
+            # ↓ 用預抽的均勻亂數 u_mass，依這個 IMF 逆變換抽出 n 個主星質量
             m1 = sample_imf(d["u_mass"][:n], "kroupa", mi.min(), mi.max())
         finally:
             IMF_BREAKS["kroupa"] = orig
 
+        # ↓ 由主星質量在等時線上內插出三個波段的絕對星等
         g = np.interp(m1, mi, gi)
         bp = np.interp(m1, mi, bpi)
         rp = np.interp(m1, mi, rpi)
@@ -388,17 +512,25 @@ class JointModel:
             if not (0.0 <= f_below <= 1.0 and 0.0 <= f_above <= 1.0):
                 raise ValueError("binary_fraction_profile fractions must be in [0, 1]")
             p_bin = np.where(m1 < mass_break, f_below, f_above)
+        # ↓ 每個系統擲一次骰：預抽亂數 u_bin < 雙星機率 → 這個系統帶伴星
         is_bin = d["u_bin"][:n] < p_bin
         if is_bin.any():
+            # ↓ 帶伴星的系統，用預抽亂數 u_q 抽質量比 q
             u = d["u_q"][:n][is_bin]
             qg, qm = qgamma, self.c3.binary_q_min
+            # ↓ 逆變換抽樣：讓 q 在 [q_min, 1] 之間服從 p(q) ∝ q^q_gamma
+            #   （q_gamma = −1 時公式分母為 0，改用對數均勻的特例）
             if abs(qg + 1) < 1e-9:
                 q = qm * (1.0 / qm) ** u
             else:
                 q = (qm ** (qg + 1) + u * (1.0 - qm ** (qg + 1))) ** (1.0 / (qg + 1))
+            # ↓ 伴星質量 = q × 主星質量，不低於等時線最小質量
             m2 = np.clip(m1[is_bin] * q, mi.min(), None)
             for arr, tab in ((g, gi), (bp, bpi), (rp, rpi)):
+                # ↓ 伴星的絕對星等
                 second = np.interp(m2, mi, tab)
+                # ↓ 未解析雙星 = 一個光點：星等換成流量 10^(−0.4 m)，兩顆相加，
+                #   再換回星等 −2.5 log10(總流量)
                 arr[is_bin] = -2.5 * np.log10(
                     10 ** (-0.4 * arr[is_bin]) + 10 ** (-0.4 * second))
 
@@ -423,6 +555,7 @@ class JointModel:
         # class 的 bug（見 WORK_BOARD.md），當時是另一個屬性但同一個
         # 成因，這裡順手把 dav_distribution 也改成防禦性寫法。
         dav_distribution = getattr(self, "dav_distribution", "lognormal")
+        # ↓ 沒有差異消光（正式設定）→ 全部星用同一個 A_V
         if dav <= 0 or av < 1e-6:
             av_i = av
         elif dav_distribution == "trunc_exp":
@@ -462,9 +595,12 @@ class JointModel:
             loc = av - dav if av >= dav else dav * np.log(av / dav)
             av_i = np.clip(loc - dav * np.log1p(-u), 0.0, None)
         else:
+            # ↓ 對數常態：選 s2 讓分布的平均恰為 A_V、標準差恰為 dav，
+            #   再用預抽的常態亂數 z_av 產生每顆星自己的消光
             s2 = np.log1p((dav / av) ** 2)
             av_i = np.exp(np.log(av) - 0.5 * s2
                           + np.sqrt(s2) * d["z_av"][:n])
+        # ↓ 絕對星等 → 視星等：加距離模數，再加各波段的消光（係數 × A_V）
         g += self.dm + self.ext.g * av_i
         bp += self.dm + self.ext.bp * av_i
         rp += self.dm + self.ext.rp * av_i
@@ -494,6 +630,7 @@ class JointModel:
             bp += dvar
             rp += dvar
 
+        # ↓ 加 G 測光誤差：預抽常態亂數 z_g × 該星等的誤差（errmodel 內插）
         g += d["z_g"][:n] * _interp_err(g, self.errmodel, "e_g")
         # **已知現役缺陷**：用 G 查 BP/RP 的誤差。同一個 G 之下紅星的 BP
         # 暗得多，用 G 查等於用一個比真實 BP 星等亮的值去查，會低估紅星
@@ -514,9 +651,11 @@ class JointModel:
             bp += d["z_bp"][:n] * e_bp_val
             rp += d["z_rp"][:n] * e_rp_val
         else:
+            # ↓ 正式設定走這裡：BP、RP 的誤差也用 G 星等去查（見上方說明的已知缺陷）
             bp += d["z_bp"][:n] * _interp_err(g, self.errmodel, "e_bp")
             rp += d["z_rp"][:n] * _interp_err(g, self.errmodel, "e_rp")
 
+        # ↓ 只留跟觀測同樣星等範圍的星：4 ≤ G ≤ 18
         keep = (g <= self.g_faint) & (g >= self.g_bright)
         # 測光品質篩選：第 2 步把 1,297 顆砍到 1,078，而且**不是隨機砍的** ——
         # G>=17 的紅星被砍掉 59%、藍星只有 20%，因為 BP 訊噪比那一刀對
@@ -525,26 +664,33 @@ class JointModel:
         if self.selection is not None:
             keep &= self.selection.keep(g, bp, rp,
                                         d["z_snr"][:n], d["u_sel"][:n])
+        # ↓ 剩不到 50 顆代表這組參數生成不出像樣的星團，回傳 None（概似 −∞）
         if keep.sum() < 50:
             return None
         if return_source_index:
             return (bp - rp)[keep], g[keep], is_bin[keep], np.flatnonzero(keep)
         if return_binary_flag:
             return (bp - rp)[keep], g[keep], is_bin[keep]
+        # ↓ 正式用法：回傳合成星的顏色 (BP−RP) 與 G 星等
         return (bp - rp)[keep], g[keep]
 
+    # ═══════════════ 核心 4：概似與後驗 ═══════════════
     def log_likelihood(self, theta):
         """給定六個參數，生成合成星團並與觀測 CMD 比對。"""
+        # ↓ 生成合成星團；生成失敗 → −∞
         syn = self.synthesise(theta)
         if syn is None:
             return -np.inf
+        # ↓ 合成星切成 Hess 圖（格子跟觀測一樣）
         mod_h = hess(syn[0], syn[1], self.nb_c, self.nb_m,
                      self.crange, self.mrange,
                      smooth=self.c3.model_hess_smooth)
+        # ↓ 逐格比較觀測與合成的星數分布，回傳 Poisson 對數概似
         return poisson_loglike(self.obs_h, mod_h, self.n_obs,
                                outlier_frac=getattr(self, "outlier_frac", 0.01))
 
     def log_posterior(self, theta):
+        # ↓ 對數後驗 = 對數先驗 + 對數概似；先驗不合格就不必生成星團
         lp = self.log_prior(theta)
         if not np.isfinite(lp):
             return -np.inf
@@ -576,6 +722,7 @@ def make_pool(model, n_proc):
     return Pool(n_proc, initializer=_init_worker, initargs=(model,))
 
 
+# ═══════════════ 核心 5：MCMC 取樣 ═══════════════
 def run_mcmc(model: JointModel, n_walkers: int, n_steps: int, n_burn: int,
              start: np.ndarray, seed: int, progress: bool = True,
              pool=None, moves=None):
@@ -585,9 +732,13 @@ def run_mcmc(model: JointModel, n_walkers: int, n_steps: int, n_burn: int,
     moves 預設用 DEMove + DESnookerMove 的組合，比 emcee 內建的 StretchMove
     更適合有相關性的參數（我們的 A_V 與 alpha 相關係數達 0.66）；
     StretchMove 在強相關的後驗上接受率會很低。
+
+    ⚠ 上面引用的「相關係數 0.66」已被推翻：不同鏈長給出 +0.66／−0.05／−0.22，
+    是鏈未收斂的產物（docs/reference/REFUTED.md）。
     """
     import emcee
 
+    # ↓ ndim：參數個數（6）
     ndim = len(PARAM_NAMES)
     rng = np.random.default_rng(seed)
     # 在起始點附近撒開走者，但不能撒到先驗範圍外
@@ -600,16 +751,23 @@ def run_mcmc(model: JointModel, n_walkers: int, n_steps: int, n_burn: int,
                  (emcee.moves.DESnookerMove(), 0.2)]
     # 有 pool 時用模組層級函式（工人已持有模型），沒有才用綁定方法
     fn = _worker_logpost if pool is not None else model.log_posterior
+    # ↓ 建立取樣器：n_walkers 個走者、ndim 維、目標函數 fn（對數後驗）
     sampler = emcee.EnsembleSampler(n_walkers, ndim, fn,
                                     pool=pool, moves=moves)
+    # ↓ 每個走者從 p0 出發走 n_steps 步
     sampler.run_mcmc(p0, n_steps, progress=progress)
 
+    # ↓ 丟掉前 n_burn 步暖身，把所有走者的樣本攤平成一張表（每列一組參數）
     chain = sampler.get_chain(discard=n_burn, flat=True)
     logp = sampler.get_log_prob(discard=n_burn, flat=True)
+    # ↓ 自相關時間 τ：相隔幾步的樣本才算「互相獨立」。鏈長要遠大於 τ
+    #   （常用 50 倍）才算收斂；這個模型實測 τ 達 822–1454，遠不夠
     try:
         tau = sampler.get_autocorr_time(quiet=True)
     except Exception:
         tau = np.full(ndim, np.nan)
+    # ↓ acceptance：所有走者「提議的下一步被接受」的平均比例
+    #   best：樣本裡對數後驗最高的那一組參數
     return {"chain": chain, "logp": logp, "tau": tau,
             "acceptance": float(np.mean(sampler.acceptance_fraction)),
             "best": chain[int(np.argmax(logp))]}
