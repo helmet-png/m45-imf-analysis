@@ -59,6 +59,31 @@ def _binary(petar, left, right):
     return petar.Binary(left, right)
 
 
+def _load_processed_binary(petar, path: Path, interrupt_mode: str, external_mode: str):
+    """Load a ``petar.data.process`` binary table without shifting its leaves.
+
+    The processed table stores the two component Particle records first, then
+    the ten binary-summary columns.  ``petar.Binary.loadtxt`` instead expects
+    its own summary columns before the components, which silently shifts the
+    second component for this on-disk format.
+    """
+    first = _particle(petar, interrupt_mode, external_mode)
+    second = _particle(petar, interrupt_mode, external_mode)
+    raw = np.loadtxt(path)
+    if raw.ndim == 1:
+        raw = raw.reshape(1, -1)
+    component_columns = int(first.ncols)
+    expected_columns = 2 * component_columns + 10
+    if raw.shape[1] != expected_columns:
+        raise ValueError(
+            f"Processed binary table {path} has {raw.shape[1]} columns; "
+            f"expected two {component_columns}-column components followed by 10 binary columns"
+        )
+    first.readArray(raw[:, :component_columns])
+    second.readArray(raw[:, component_columns:2 * component_columns])
+    return SimpleNamespace(p1=first, p2=second)
+
+
 def _leaves(node):
     if hasattr(node, "p1") and hasattr(node, "p2"):
         yield from _leaves(node.p1)
@@ -147,12 +172,18 @@ def export_catalog(args) -> dict:
     )
     offset += n_single
 
+    if args.binary is not None:
+        binary = _load_processed_binary(
+            petar, args.binary, args.interrupt_mode, args.external_mode
+        )
+        offset, accounting = _append_category(
+            binary, "binary", offset, particle_ids, masses, positions,
+            system_ids, star_types, current_masses,
+        )
+        accounting["path"] = str(args.binary)
+        categories.append(accounting)
+
     specs = [
-        ("binary", args.binary, lambda: _binary(
-            petar,
-            _particle(petar, args.interrupt_mode, args.external_mode),
-            _particle(petar, args.interrupt_mode, args.external_mode),
-        )),
         ("triple", args.triple, lambda: _binary(
             petar,
             _particle(petar, args.interrupt_mode, args.external_mode),
@@ -279,6 +310,31 @@ def run_self_test() -> dict:
             and sorted(ids[groups == 11].tolist()) == [4, 5, 6]
         ),
     }
+    if not all(checks.values()):
+        raise AssertionError(f"System catalog self-test failed: {checks}")
+
+    class FakeParticle:
+        ncols = 2
+
+        def readArray(self, array):
+            self.id = array[:, 1].astype(int)
+            self.mass = array[:, 0]
+            self.pos = np.zeros((len(array), 3))
+            self.size = len(array)
+
+    fake_petar = SimpleNamespace(Particle=lambda **kwargs: FakeParticle())
+    raw_binary = np.zeros((1, 14))  # two 2-column components plus 10 summaries
+    raw_binary[0, :4] = [1.0, 1605, 0.5, 1606]
+    binary_path = Path("synthetic_processed_binary.dat")
+    original_loadtxt = np.loadtxt
+    try:
+        np.loadtxt = lambda path: raw_binary
+        binary = _load_processed_binary(fake_petar, binary_path, "none", "none")
+    finally:
+        np.loadtxt = original_loadtxt
+    checks["processed_binary_leaf_order"] = (
+        binary.p1.id.tolist() == [1605] and binary.p2.id.tolist() == [1606]
+    )
     if not all(checks.values()):
         raise AssertionError(f"System catalog self-test failed: {checks}")
     return {"status": "synthetic_validation_only", "self_test": checks}

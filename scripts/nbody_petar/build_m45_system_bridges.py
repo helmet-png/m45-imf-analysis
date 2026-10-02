@@ -91,8 +91,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=ROOT / "results" / "m45_system_definition_bridge")
     parser.add_argument("--petar-package-path", type=Path)
     parser.add_argument(
-        "--external-mode", choices=("none", "galpy"), default="galpy",
-        help="Processed-catalog schema; formal M45 grid uses galpy.",
+        "--external-mode", choices=("none", "galpy"), default="none",
+        help="Processed-catalog schema; the formal M45 snapshots were verified as none.",
     )
     parser.add_argument("--aperture-pc", type=float, default=11.68)
     parser.add_argument("--n-projections", type=int, default=32)
