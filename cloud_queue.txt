@@ -318,6 +318,11 @@ senior24_dispatch_smoketest|kaggle_smoketest.py|||true|senior24
 # 以完整 10-run 為 gate，避免只挑中央模型就把 primary/system 修正當完整敏感度。
 m45_system_definition_bridge|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20260914 --require-run-count 10||false|senior24
 
+# 2026-10-02：原標籤以系統 Python 呼叫 catalog exporter，缺少 PeTar Python
+# module 而 exit 1。已在 senior24 驗證 install/include 放入 PYTHONPATH 後
+# `import petar` 成功；用新標籤與新輸出目錄重派，不覆寫失敗紀錄。
+m45_system_definition_bridge_r2|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20261002 --require-run-count 10 --petar-package-path /home/estopic/nbody/install/include||false|senior24
+
 # 2026-09-18：p2_free_lowmass 剩下 9 次重複（A3／D19）。第 1 次重複
 # （repeat_offset=0，2026-08-14 手動保存於
 # results/p2_free_lowmass_rep1_preserved.npz：p_lowmass=1.322、
