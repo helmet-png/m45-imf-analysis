@@ -239,3 +239,4 @@ MWPotential2014` 的執行檔 `petar.omp.avx512.bse.galpy`（Galpy 鎖在
   另記錄初始總質量跨度過大的設計問題。兩者的修正方案待使用者決定。
 - 2026-10-02：方案 A 實測完成（能證明成因、不能逐筆驗收），決定做方案 B，並先評估回饋 PeTar 上游。
 - 2026-10-02：方案 B 修補驗收通過（開潮汐＋恆星演化 Error_cum／內部能量 −114% → −9.9e-5），修補檔收進 nbody_setup/。
+- 2026-10-02：方案 B 回報 PeTar 上游：issue lwang-astro/PeTar#80、PR lwang-astro/PeTar#81（註明由 Claude Opus 5.5 完成，使用者同意送出）。決定網格照原設計跑完（α_high 先驗維持 1.0–3.5），剩餘 run 改用修補版 PeTar。
