@@ -447,3 +447,14 @@ d19_completeness_injection_s3|scripts/diagnostics/d19_completeness_injection.py|
 # nbody_train_b14|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
 # nbody_train_b15|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
 # nbody_train_b16|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+
+# 2026-10-02: requested environment preflight for currently idle workers.
+# Each job only verifies push/run/pull and a small NumPy calculation; no science
+# result is produced and no existing result can be overwritten.
+envcheck_gcp1_20261002|kaggle_smoketest.py|||true|gcp1
+envcheck_justinlan11_20261002|kaggle_smoketest.py|||true|justinlan11
+envcheck_teammate2_20261002|kaggle_smoketest.py|||true|teammate2
+envcheck_helmetalbert_20261002|kaggle_smoketest.py|||true|helmetalbert
+envcheck_account5_20261002|kaggle_smoketest.py|||true|account5
+envcheck_account6_20261002|kaggle_smoketest.py|||true|account6
+envcheck_account7_20261002|kaggle_smoketest.py|||true|account7
