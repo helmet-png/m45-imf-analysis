@@ -1,0 +1,138 @@
+PeTar 能量記帳修補：開外部位能（galpy，RECORD_CM_IN_HEADER）時，質量改變要以
+外部位能所在座標系計算動能變化。適用 PeTar commit 84b81a8（= 2026-06 上游 master）。
+
+問題：粒子速度存「相對系統質心」，但總能量在銀河系座標下計算（加回質心速度 V）。
+恆星演化、合併、逃逸星移除改變質量時，原程式只記相對速度的動能變化，漏掉
+V.(m1 v1 - m0 v0) + 0.5 (m1-m0)|V|^2，開潮汐 + 恆星演化時 Error_cum 被這項主宰。
+只影響能量診斷輸出，不影響動力學。全部包在 #ifdef RECORD_CM_IN_HEADER。
+
+驗收（同一組初始條件 mb_train_0000_s40001，135 Myr）：
+  原版  開潮汐+恆星演化  Error_cum = -7.23e8（內部能量的 -114%）
+  修補  開潮汐+恆星演化  Error_cum = -6.27e4（-9.9e-5）
+  修補  關潮汐+恆星演化  Error_cum = +9.58e4（1.5e-4；原版 3.4e-4，同量級）
+套用：cd PeTar && git apply <本檔>，之後照原本的 configure/make 流程重編。
+見 docs/planning/NBODY_PREREGISTRATION.md 五節 2026-10-02。
+
+diff --git a/src/hard.hpp b/src/hard.hpp
+index e08da64..6d30eda 100644
+--- a/src/hard.hpp
++++ b/src/hard.hpp
+@@ -855,6 +855,13 @@ public:
+             Float de_kin = 0.5*dm*(vcm[0]*vcm[0]+vcm[1]*vcm[1]+vcm[2]*vcm[2]);
+             auto& vbin = bink.vel;
+             de_kin += bink.mass*(vbin[0]*vcm[0]+vbin[1]*vcm[1]+vbin[2]*vcm[2]);
++#ifdef RECORD_CM_IN_HEADER
++            {
++                PS::F64vec vcm_s(vcm[0], vcm[1], vcm[2]);
++                PS::F64vec vbin_s(vbin[0], vbin[1], vbin[2]);
++                de_kin += calcDEKinFrameShift(bink.mass, vcm_s + vbin_s, pcm.mass, vcm_s);
++            }
++#endif
+ #endif
+             sym_int.particles.shiftToOriginFrame();
+             sym_int.particles.template writeBackMemberAll<PtclH4>();
+@@ -941,6 +948,10 @@ public:
+             Float de_kin = 0.5*dm*(vcm_org[0]*vcm_org[0]+vcm_org[1]*vcm_org[1]+vcm_org[2]*vcm_org[2]);
+             Float dvcm[3] = {pcm.vel[0] - vcm_org[0], pcm.vel[1] - vcm_org[1], pcm.vel[2] - vcm_org[2]};
+             de_kin += pcm.mass*(dvcm[0]*vcm_org[0]+dvcm[1]*vcm_org[1]+dvcm[2]*vcm_org[2]);
++#ifdef RECORD_CM_IN_HEADER
++            de_kin += calcDEKinFrameShift(pcm.mass, PS::F64vec(pcm.vel[0], pcm.vel[1], pcm.vel[2]),
++                                          mcm_bk, PS::F64vec(vcm_org[0], vcm_org[1], vcm_org[2]));
++#endif
+ 
+             ekin    = h4_int.getEkin();
+             epot    = h4_int.getEpot();
+@@ -2062,6 +2073,9 @@ public:
+             if (modify_flag) {
+                 auto& v = pi.vel;
+                 Float de_kin = 0.5*(pi.mass*(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]) - mbk*(vbk[0]*vbk[0]+vbk[1]*vbk[1]+vbk[2]*vbk[2]));
++#ifdef RECORD_CM_IN_HEADER
++                de_kin += calcDEKinFrameShift(pi.mass, pi.vel, mbk, vbk);
++#endif
+                 energy.de_sd_change_cum += de_kin;
+                 energy.de_sd_change_modify_single += de_kin;
+                 energy.de_change_cum += de_kin;
+diff --git a/src/petar.hpp b/src/petar.hpp
+index 01b23c3..e6812ce 100644
+--- a/src/petar.hpp
++++ b/src/petar.hpp
+@@ -1094,6 +1094,9 @@ public:
+ #endif        
+ 
+         stat.pcm.vel += dv;
++#ifdef RECORD_CM_IN_HEADER
++        FrameVelocity::vel = stat.pcm.vel;
++#endif
+         for (int i=0; i<stat.n_all_loc; i++) system_soft[i].vel -= dv;
+ 
+         //auto& adr = search_cluster.getAdrSysOneCluster();
+@@ -1423,6 +1426,9 @@ public:
+         ////// integrater one cluster
+         system_hard_one_cluster.initializeForOneCluster(search_cluster.getAdrSysOneCluster().size());
+         system_hard_one_cluster.setPtclForOneClusterOMP(system_soft, search_cluster.getAdrSysOneCluster());
++#ifdef RECORD_CM_IN_HEADER
++        FrameVelocity::vel = stat.pcm.vel;
++#endif
+         system_hard_one_cluster.driveForOneClusterOMP(_dt_drift);
+         //system_hard_one_cluster.writeBackPtclForOneClusterOMP(system_soft, search_cluster.getAdrSysOneCluster());
+         system_hard_one_cluster.writeBackPtclForOneClusterOMP(system_soft, mass_modify_list);
+@@ -2263,6 +2269,9 @@ public:
+                     remove_list_thx[ith].push_back(i);
+                     PS::F64 dpot = pi.mass*pi.pot_tot;
+                     PS::F64 dkin = 0.5*pi.mass*(pi.vel*pi.vel);
++#ifdef RECORD_CM_IN_HEADER
++                    dkin -= calcDEKinFrameShift(0.0, pi.vel, pi.mass, pi.vel);
++#endif
+                     PS::F64 eloss = dpot + dkin;
+                     stat.energy.etot_ref -= eloss;
+                     stat.energy.de_change_cum -= eloss;
+@@ -2785,6 +2794,9 @@ public:
+ #endif
+         stat.pcm.pos = file_header.pos_offset;
+         stat.pcm.vel = file_header.vel_offset;
++#ifdef RECORD_CM_IN_HEADER
++        FrameVelocity::vel = stat.pcm.vel;
++#endif
+         stat.pcm.is_center_shift_flag = true;
+ #endif        
+ 
+@@ -3719,6 +3731,9 @@ public:
+                 if (modify_flag) {
+                     auto& v = p.vel;
+                     PS::F64 de_kin = 0.5*(p.mass*(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]) - mbk*(vbk[0]*vbk[0]+vbk[1]*vbk[1]+vbk[2]*vbk[2]));
++#ifdef RECORD_CM_IN_HEADER
++                    de_kin += calcDEKinFrameShift(p.mass, v, mbk, vbk);
++#endif
+                     stat.energy.de_sd_change_cum += de_kin;
+                     stat.energy.de_sd_change_modify_single += de_kin;
+                     stat.energy.de_change_cum += de_kin;
+diff --git a/src/soft_ptcl.hpp b/src/soft_ptcl.hpp
+index 3a45f5b..23e1675 100644
+--- a/src/soft_ptcl.hpp
++++ b/src/soft_ptcl.hpp
+@@ -375,3 +375,25 @@ public:
+     }
+ };
+ 
++
++#ifdef RECORD_CM_IN_HEADER
++//! Velocity of the moving reference frame (system c.m., stat.pcm.vel).
++/*! With RECORD_CM_IN_HEADER, particle velocities are stored relative to this frame,
++    but the total energy is measured in the frame where the external potential is
++    defined (EnergyAndMomentum::calc adds the frame velocity back). Kinetic energy
++    changes caused by mass/velocity modifications (stellar evolution, mergers,
++    escaper removal) must therefore be converted to that frame as well.
++ */
++struct FrameVelocity {
++    inline static PS::F64vec vel = PS::F64vec(0.0);
++};
++
++//! Extra kinetic energy change seen in the external-potential frame when a body
++//! changes from (m0, v0) to (m1, v1), velocities given in the moving frame:
++//! dE = V.(m1 v1 - m0 v0) + 0.5 (m1 - m0) |V|^2
++inline PS::F64 calcDEKinFrameShift(const PS::F64 _m1, const PS::F64vec& _v1,
++                                   const PS::F64 _m0, const PS::F64vec& _v0) {
++    const PS::F64vec& V = FrameVelocity::vel;
++    return V*(_m1*_v1 - _m0*_v0) + 0.5*(_m1 - _m0)*(V*V);
++}
++#endif
