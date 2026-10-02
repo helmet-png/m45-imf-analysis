@@ -50,6 +50,7 @@ def process_run(
     run_dir: Path,
     output_dir: Path,
     petar_package_path: Path | None,
+    external_mode: str,
     aperture_pc: float,
     n_projections: int,
 ) -> dict:
@@ -61,6 +62,7 @@ def process_run(
         output = run_output / f"{run_id}_{tag}_systems.npz"
         command = [sys.executable, str(CATALOG_SCRIPT)]
         command.extend(snapshot_arguments(run_dir, snapshot_index, time_myr))
+        command.extend(["--external-mode", external_mode])
         if petar_package_path is not None:
             command.extend(["--petar-package-path", str(petar_package_path)])
         command.extend(["--output", str(output)])
@@ -88,6 +90,10 @@ def main() -> None:
     parser.add_argument("--run-glob", default="m45_*_formal_125myr_*")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "results" / "m45_system_definition_bridge")
     parser.add_argument("--petar-package-path", type=Path)
+    parser.add_argument(
+        "--external-mode", choices=("none", "galpy"), default="galpy",
+        help="Processed-catalog schema; formal M45 grid uses galpy.",
+    )
     parser.add_argument("--aperture-pc", type=float, default=11.68)
     parser.add_argument("--n-projections", type=int, default=32)
     parser.add_argument("--require-run-count", type=int, default=10)
@@ -110,6 +116,7 @@ def main() -> None:
         "mass_range_msun": [0.30, 2.50],
         "aperture_radius_pc": args.aperture_pc,
         "n_projections": args.n_projections,
+        "external_mode": args.external_mode,
     }
     print(json.dumps(plan, indent=2), flush=True)
     if args.dry_run:
@@ -118,7 +125,7 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     completed = [
         process_run(
-            run_dir, args.output_dir, args.petar_package_path,
+            run_dir, args.output_dir, args.petar_package_path, args.external_mode,
             args.aperture_pc, args.n_projections,
         )
         for run_dir in run_dirs
