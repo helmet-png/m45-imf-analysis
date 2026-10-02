@@ -17,9 +17,8 @@
   的 A–D 分級與引用可信度標記照舊使用（零之二）。
 - 你沒有 senior24／協調 VM 的 SSH 金鑰，只能請使用者在瀏覽器 SSH 分頁
   貼指令、貼回結果；指令寫法見零之五。
-- 派工不開 PR：在私有 repo `helmet-png/m45-dispatch` 的
-  `queue/cloud_queue.txt` 加一行、直接 push；本機 clone 在
-  `../m45-dispatch`（零之六）。
+- 派工清單是公開 repo 根目錄的 `cloud_queue.txt`，修改走一般 PR 流程
+  （零之六）。
 - 你判斷不需要 CodeRabbit 審的 PR（純派工、流程驗證、一次性驗證），標題
   以 `[免審]` 開頭讓它跳過，描述寫一句判斷理由；會留在主線或影響結論的
   程式／文件不可以帶（零之一）。

@@ -75,11 +75,9 @@
   `.coderabbit.yaml` 同步加 `ignore_title_keywords`。標記原訂 `[派工]`，
   後來範圍擴大到「作者自己判斷不需要審」，改名 `[免審]`。
 
-- 2026-09-21：新增零之六「派工走私有 repo `m45-dispatch`」。起因是每次
-  派工都要為一行 `cloud_queue.txt` 開公開 PR，每條都吃一次 CodeRabbit
-  免費額度、還要人工合併；佇列檔搬到私有 repo 後派工直接 push，不再
-  觸發審查，也讓之後協調 VM 回報狀態、log 的寫入憑證只綁這個不含
-  程式碼的 repo。舊佇列封存在 `docs/archive/cloud_queue_archived.txt`。
+- 2026-10-02：回復公開 repo 的 `cloud_queue.txt` 作為派工清單。原先規劃的
+  私有 `m45-dispatch` 庫未建立，協調 VM 無法取得佇列，因而回復已驗證可用
+  的 PR＋公開佇列流程。
 - 2026-08-24：新增主控板（`status_dashboard/`）與 `stage_map.py` 手動
   索引規則。
 - 2026-08-29：新增一之二「改既有段落不要順手重新換行」。起因是一次只改
