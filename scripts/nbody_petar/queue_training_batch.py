@@ -130,10 +130,10 @@ def write_status(runs_dir: Path, out_path: Path) -> dict:
             continue
         if data.get("status") == "complete" and not data.get("smoke", False):
             complete.append(d.name)
-            energy[d.name] = data.get("energy", {}).get("energy_error_relative")
+            energy[d.name] = data.get("energy", {}).get("energy_error_cum_over_e0")
         else:
             failed.append({"run_id": d.name, "status": data.get("status")})
-    summary = {"n_complete": len(complete), "failed": failed, "energy_error_relative": energy}
+    summary = {"n_complete": len(complete), "failed": failed, "energy_error_cum_over_e0": energy}
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     return summary
@@ -177,7 +177,7 @@ def run_self_test() -> dict:
         rd = Path(tmp) / "runs"
         (rd / "mb_train_0001_s1").mkdir(parents=True)
         (rd / "mb_train_0001_s1" / "result.json").write_text(
-            json.dumps({"status": "complete", "smoke": False, "energy": {"energy_error_relative": 1e-6}}))
+            json.dumps({"status": "complete", "smoke": False, "energy": {"energy_error_cum_over_e0": 1e-6}}))
         (rd / "mb_train_0002_s2").mkdir()
         (rd / "mb_train_0002_s2" / "result.json").write_text(
             json.dumps({"status": "complete", "smoke": True}))
