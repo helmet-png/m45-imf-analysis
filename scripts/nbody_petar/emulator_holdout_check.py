@@ -11,7 +11,9 @@
    與網格 CSV，得到設計矩陣 X（6 維 θ）與統計量 Y（26 維）。不重寫讀檔邏輯。
 2. 每筆 run 的 `observed.provenance.json` 記著該 run 用的 PeTar 執行檔
    （`build_training_stats.py` 寫的）；`--binary-filter` 可只取修補版或舊版，
-   預設全取並在報告中分開計數。
+   預設全取並在報告中分開計數。`--max-energy-error` 另外依
+   `summarize_training_runs.py` 的彙整表排除 t=105 Myr 累積能量誤差
+   |ΔE/E₀| 超過門檻的 run（敏感度檢查用，2026-10-05 加）。
 3. K 折（預設 5，固定亂數種子）：每折用 `emulator_fit.fit_emulators()` 訓練、
    `predict()` 預測留出的 run。每個統計量各自只用有限值（解體星團的 α 為 NaN，
    見 `build_training_stats.py` 的說明）。
@@ -24,6 +26,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
@@ -96,6 +99,10 @@ def main():
     ap.add_argument("--binary-filter", choices=("all", "patched", "original"), default="all")
     ap.add_argument("--patched-marker", default="install_framefix",
                     help="provenance 裡 petar_binary 路徑含這個字串就算修補版")
+    ap.add_argument("--max-energy-error", type=float, default=None,
+                    help="只用 |err_cum_over_e0_t105| 不超過此值的 run")
+    ap.add_argument("--run-summary", type=Path,
+                    default=REPO_ROOT / "results" / "nbody_training_runs_summary.csv")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--seed", type=int, default=20261002)
     ap.add_argument("--output", type=Path, default=REPO_ROOT / "results" / "nbody_emulator_holdout.json")
@@ -115,6 +122,16 @@ def main():
         n_orig += not patched
         if args.binary_filter == "all" or (args.binary_filter == "patched") == patched:
             run_dirs.append(d)
+    n_energy_excluded = 0
+    if args.max_energy_error is not None:
+        with args.run_summary.open(newline="", encoding="utf-8") as f:
+            err = {r["run_id"]: r["err_cum_over_e0_t105"] for r in csv.DictReader(f)}
+        missing = [d.name for d in run_dirs if err.get(d.name, "") == ""]
+        if missing:
+            raise ValueError(f"{len(missing)} runs lack err_cum_over_e0_t105 in {args.run_summary}: {missing[:5]}")
+        kept = [d for d in run_dirs if abs(float(err[d.name])) <= args.max_energy_error]
+        n_energy_excluded = len(run_dirs) - len(kept)
+        run_dirs = kept
     X, Y, names = load_training_data(run_dirs, args.grid)
     res = kfold_r2(X, Y, names, args.k, args.seed)
     targets = flatten_targets(json.loads(args.targets.read_text(encoding="utf-8")))
@@ -124,6 +141,7 @@ def main():
         "status": "preliminary_holdout_check_not_inference",
         "n_runs_used": int(len(X)), "n_patched_available": n_patched, "n_original_available": n_orig,
         "binary_filter": args.binary_filter, "k": args.k,
+        "max_energy_error": args.max_energy_error, "n_energy_excluded": n_energy_excluded,
         "theta_order": ["n_systems", "binary_system_fraction", "half_mass_radius_pc",
                         "mcluster_S", "imf_alpha_high", "imf_alpha_low"],
         "per_statistic": res,
