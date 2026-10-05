@@ -61,8 +61,10 @@ def parse_physic(log: Path) -> list[dict]:
         if not line.startswith("Physic:"):
             continue
         parts = line.split()[1:]
+        if len(parts) < len(PHYSIC_FIELDS):  # 被截斷的行（如磁碟寫滿中斷）整行略過
+            continue
         try:
-            rows.append(dict(zip(PHYSIC_FIELDS, map(float, parts[:len(PHYSIC_FIELDS)]))))
+            rows.append(dict(zip(PHYSIC_FIELDS, map(float, parts[:len(PHYSIC_FIELDS)]), strict=True)))
         except ValueError:
             continue
     return rows
@@ -73,7 +75,10 @@ def summarize_run(run_dir: Path, design: dict | None) -> dict:
     for k in DESIGN_FIELDS:
         out[k] = (design or {}).get(k, "")
     stage_p = run_dir / "stage.json"
-    stage = json.loads(stage_p.read_text(encoding="utf-8")) if stage_p.exists() else {}
+    try:
+        stage = json.loads(stage_p.read_text(encoding="utf-8")) if stage_p.exists() else {}
+    except json.JSONDecodeError:
+        stage = {}  # 損毀時 stages_done=0 代表「完成資訊不可用」，不代表確定沒跑完
     out["stages_done"] = sum(v == "done" for v in stage.values())
 
     res_p = run_dir / "result.json"
@@ -130,6 +135,8 @@ def run_self_test() -> dict:
             "Physic: 0.01 -5 -25 -45 10 -55 70 0 0 0 1\n")
         m = Path(tmp) / "mb_train_0001_s2"
         m.mkdir()
+        (m / "stage.json").write_text('{"mcluster": "do')  # 損毀
+        (m / "petar.log").write_text("Physic: -0 0 0 -100 50\n")  # 截斷
         rows = [summarize_run(d, {"seed": "1"}), summarize_run(m, None)]
     r = rows[0]
     checks = {
@@ -138,7 +145,9 @@ def run_self_test() -> dict:
         "first_interval_frac": abs(r["err_cum_first_interval_frac"] - 0.8) < 1e-12,
         "modify_cum": r["modify_cum"] == 70,
         "stages_done": r["stages_done"] == 5,
-        "missing_result_recorded": rows[1]["status"] == "missing_result" and rows[1]["n_physic_lines"] == 0,
+        "missing_result_recorded": rows[1]["status"] == "missing_result",
+        "truncated_physic_line_skipped": rows[1]["n_physic_lines"] == 0,
+        "corrupt_stage_json_tolerated": rows[1]["stages_done"] == 0,
     }
     if not all(checks.values()):
         raise AssertionError(f"summarize_training_runs self-test failed: {checks}")

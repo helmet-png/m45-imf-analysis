@@ -37,6 +37,12 @@ p(θ_初始條件 | 觀測)。只有 smoke test（S0-S4）量出單次 run 時�
    正確逼近真正的 N-body」——後者要等真的有多組 N-body run 之後才能
    用留出測試集的 R² 檢查（`--test-split` 那條路徑）。
 
+訓練資料狀態（2026-10-05）：訓練網格 430 筆中前 95 筆用原版 PeTar、其餘
+335 筆用能量記帳修補版（`nbody_setup/petar_moving_frame_energy.patch`）。
+原版 run 在開潮汐＋恆星演化時沒有可用的逐筆積分品質指標，且「修補不改動力學」
+尚未直接驗證（`docs/planning/NBODY_PREREGISTRATION.md` 五節「待驗證」），
+混用兩組前先確認該項，或只用修補版訓練並比較差異。
+
 自我測試（`--self-test`）：不需要真的跑過 N-body，用一個已知的解析
 函式（線性 + 高斯雜訊）當「假模擬器」產生訓練資料，訓練 GP、跑 SBC，
 檢查：(a) GP 在留出測試集的 R² 夠高（能學出這個簡單函式）；
