@@ -41,6 +41,51 @@ ALPHA_STAT_SIGMA = 0.144
 OUTLIER_FRACS = [0.005, 0.01, 0.02, 0.03]
 
 
+def print_summary(results: dict, fracs: list) -> None:
+    print(f"{'='*70}\nalpha 對殘留場星污染比例的敏感度\n{'='*70}")
+    print(f"{'frac':>8}{'alpha 平均':>11}{'散布':>8}")
+    means = []
+    for frac in fracs:
+        a = results[frac][:, 3]
+        means.append(a.mean())
+        print(f"{frac:>8.3f}{a.mean():>11.3f}{a.std():>8.3f}")
+    means = np.array(means)
+    span = float(means.max() - means.min())
+    print(f"\nalpha 跨度（掃過 frac={min(fracs)}-{max(fracs)}）= {span:.3f}")
+    print(f"對照注入回收統計誤差 {ALPHA_STAT_SIGMA:.3f} "
+          f"-> {span/ALPHA_STAT_SIGMA:.1f} 倍")
+    print("\n判讀：倍數遠大於 1，代表 1% 這個猜的常數必須量測或升格為自由參數；")
+    print("      倍數接近或小於 1，代表目前固定 0.01 不是主要誤差來源，")
+    print("      LIMITATIONS.md 裡「現役假設」的標記可以降級為「已驗證安全」。")
+
+
+def summarize_tags(tags: list, fracs: list, repeats: int) -> None:
+    """彙整依 --fracs 拆片、各用一個 --tag 跑的結果（雲端 p11 分片）。
+
+    每個 frac 必須剛好出現在一個分片檔裡、且至少有 repeats 次結果，否則報錯，
+    不印不完整的比較表。
+    """
+    sys.path.insert(0, str(HERE / "scripts" / "tools"))
+    import checkpoint                                            # noqa: E402
+    found = {}
+    for tag in tags:
+        path = HERE / "results" / f"profile_outlierfrac{tag}.npz"
+        if not path.exists():
+            raise SystemExit(f"缺分片輸出：{path.relative_to(HERE)}")
+        part = checkpoint.load_partial(path)
+        for frac in fracs:
+            if f"f{frac}" in part:
+                if frac in found:
+                    raise SystemExit(f"frac={frac} 同時出現在 {found[frac][0]} 與 {tag}")
+                found[frac] = (tag, np.array(part[f"f{frac}"]))
+    problems = [f"frac={f}: " + ("沒有結果" if f not in found else
+                                 f"{len(found[f][1])}/{repeats} 次")
+                for f in fracs if f not in found or len(found[f][1]) < repeats]
+    if problems:
+        raise SystemExit("分片不完整，不輸出比較表：" + "；".join(problems))
+    print_summary({f: found[f][1][:repeats] for f in fracs}, fracs)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--procs", type=int, default=None)
@@ -66,6 +111,9 @@ def main():
     # 沒有續傳機制」，續傳已在下面用 checkpoint.py 補上，2026-08-21 訂正。）
     ap.add_argument("--preflight", action="store_true",
                     help="只做開跑前檢查然後結束，不進行任何擬合")
+    ap.add_argument("--summarize-tags", default=None,
+                    help="不擬合，只彙整這些 --tag 分片（逗號分隔，如 "
+                         "_f0005,_f001,_f002,_f003）的結果成一張比較表")
     ap.add_argument("--force", action="store_true",
                     help="略過開跑前檢查的阻擋（不建議，僅供已知情況使用）")
     args = ap.parse_args()
@@ -83,6 +131,12 @@ def main():
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     fracs = ([float(x) for x in args.fracs.split(",")] if args.fracs
             else OUTLIER_FRACS)
+    if args.summarize_tags is not None:
+        tags = [t.strip() for t in args.summarize_tags.split(",") if t.strip()]
+        if any("/" in t or "\\" in t for t in tags):
+            ap.error("--summarize-tags 的 tag 只能包含檔名後綴字元")
+        summarize_tags(tags, fracs, args.repeats)
+        return
 
     cfg = cfgmod.load()
     c3, cj = cfg.step3_age, cfg.joint_fit
@@ -195,21 +249,7 @@ def main():
               f"{arr[:,3].mean():.3f}，散布 {arr[:,3].std():.3f}\n",
               flush=True)
 
-    print(f"{'='*70}\nalpha 對殘留場星污染比例的敏感度\n{'='*70}")
-    print(f"{'frac':>8}{'alpha 平均':>11}{'散布':>8}")
-    means = []
-    for frac in fracs:
-        a = results[frac][:, 3]
-        means.append(a.mean())
-        print(f"{frac:>8.3f}{a.mean():>11.3f}{a.std():>8.3f}")
-    means = np.array(means)
-    span = float(means.max() - means.min())
-    print(f"\nalpha 跨度（掃過 frac={min(fracs)}-{max(fracs)}）= {span:.3f}")
-    print(f"對照注入回收統計誤差 {ALPHA_STAT_SIGMA:.3f} "
-          f"-> {span/ALPHA_STAT_SIGMA:.1f} 倍")
-    print("\n判讀：倍數遠大於 1，代表 1% 這個猜的常數必須量測或升格為自由參數；")
-    print("      倍數接近或小於 1，代表目前固定 0.01 不是主要誤差來源，")
-    print("      LIMITATIONS.md 裡「現役假設」的標記可以降級為「已驗證安全」。")
+    print_summary(results, fracs)
 
     # 每一次重複跑完就已經存過檔了（見上面迴圈裡的 checkpoint.save_progress()），
     # 這裡不用再存一次，只是印出最終確認訊息。

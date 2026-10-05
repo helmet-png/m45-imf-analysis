@@ -588,19 +588,34 @@ def run_star_type_regression_test() -> dict:
     )
     checks["empty_merge_keeps_n_by_2_shape"] = empty["sky_xy"].shape == (0, 2)
 
-    # 未解析合併的位置代表必須是質量最大的分量（不是編號最前面的）
+    # 未解析合併的位置代表必須是質量最大的分量（不是編號最前面的，也不是
+    # 最亮的）：質量較大的分量故意設成較暗。
     pair = merge_unresolved(
         system_id=np.array([7, 7], np.int64),
         sky_xy=np.array([[0.0, 0.0], [1e-6, 0.0]]),
-        g_mag=np.array([12.0, 10.0]),
-        bp_mag=np.array([12.5, 10.5]),
-        rp_mag=np.array([11.5, 9.5]),
+        g_mag=np.array([10.0, 12.0]),
+        bp_mag=np.array([10.5, 12.5]),
+        rp_mag=np.array([9.5, 11.5]),
         distance_pc=135.48,
         resolution_arcsec=1.0,
         mass=np.array([0.6, 1.2]),
     )
     checks["merge_position_is_most_massive_component"] = bool(
         len(pair["sky_xy"]) == 1 and pair["sky_xy"][0, 0] == 1e-6
+    )
+    # 質量最大的分量看不到（G 為 NaN）時，只在看得到的分量間比較
+    trio = merge_unresolved(
+        system_id=np.array([8, 8, 8], np.int64),
+        sky_xy=np.array([[0.0, 0.0], [1e-6, 0.0], [2e-6, 0.0]]),
+        g_mag=np.array([np.nan, 12.0, 10.0]),
+        bp_mag=np.array([np.nan, 12.5, 10.5]),
+        rp_mag=np.array([np.nan, 11.5, 9.5]),
+        distance_pc=135.48,
+        resolution_arcsec=1.0,
+        mass=np.array([2.0, 1.2, 0.6]),
+    )
+    checks["merge_position_ignores_invisible_most_massive"] = bool(
+        len(trio["sky_xy"]) == 1 and trio["sky_xy"][0, 0] == 1e-6
     )
 
     # 迴歸測試（2026-09-18 Codex review）：查詢／CMD 硬星等邊界的四個
