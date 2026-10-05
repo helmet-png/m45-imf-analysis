@@ -28,7 +28,10 @@ particle 的欄位定義多插入 ``pot_ext`` 這一欄（見 PeTar
 後面的欄位全部錯位——尤其是巢狀 binary/triple/quadruple 的內層粒子，
 ``star.type``／``mass``／``pos`` 會讀到別的欄位的數值而不自知。因此
 ``--external-mode`` 必須跟產生輸入檔那次 ``petar.data.process -t`` 用的
-值完全一致，預設 ``none`` 只適用於沒有加 Galpy 銀河潮汐的舊快照。
+值完全一致。2026-10-03 起改成必填、沒有預設值：2026-09-09（c61d770）之前
+產的快照（包括 formal M45 10-run screening grid）是 ``none``，之後
+``render_commands()`` 產的是 ``galpy``，兩種都還在用，任何預設值都會讓
+其中一種靜默讀錯欄位。
 
 ======================================================================
 【這支程式在做什麼】（中文說明）
@@ -41,10 +44,9 @@ petar.data.process 會把一張快照拆成幾個檔：單星檔、雙星檔、�
 執行方式（一張快照執行一次）：
   python scripts/nbody_petar/petar_system_catalog.py --single <單星檔> \
       --binary <雙星檔> [--triple …] [--quadruple …] --time-myr <時間> \
-      --external-mode galpy --output <輸出.npz> --confirm-complete
-⚠ 目前的 N-body 指令（petar_m45_grid.render_commands()）一律用
-  petar.data.process -t galpy 產檔，所以**一定要加 --external-mode galpy**；
-  不加會用預設 none，欄位全部錯位（見上方英文說明的最後一段）。
+      --external-mode <none|galpy> --output <輸出.npz> --confirm-complete
+--external-mode 必填：2026-09-09 之後 render_commands() 產的快照用 galpy，
+之前的（例如 formal M45 10-run grid）用 none。填錯會讓欄位全部錯位。
 
 ======================================================================
 【(a) 引用的外部函式庫】
@@ -74,7 +76,7 @@ Python 標準庫：
   --binary／--triple／--quadruple   雙星、三合星、四合星檔（有就要給，見下）
   --time-myr            這張快照的時間（Myr，必填）
   --interrupt-mode      PeTar 的恆星演化模組，預設 bse（有 star.type／star.mass）
-  --external-mode       none 或 galpy；必須跟 petar.data.process -t 一致
+  --external-mode       none 或 galpy（必填）；必須跟 petar.data.process -t 一致
   --petar-package-path  petar Python 套件的位置
   --output              輸出 NPZ 路徑（必填）
   --confirm-complete    使用者確認「這張快照所有非空的多重系統檔都給了」（必填）：
@@ -89,10 +91,10 @@ Python 標準庫：
 ======================================================================
 【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
 ======================================================================
-  核心 1｜第 139–166 行｜_load_processed_binary()：照磁碟上的實際欄位順序讀雙星檔
-  核心 2｜第 169–177 行｜_leaves()：遞迴攤平一棵系統樹，取出所有樹葉
-  核心 3｜第 196–231 行｜_append_category()：把一類系統的樹葉寫成表格列並配 system_id
-  核心 4｜第 234–371 行｜export_catalog()：依序處理單星、雙星、三合、四合，檢查後存檔
+  核心 1｜第 141–168 行｜_load_processed_binary()：照磁碟上的實際欄位順序讀雙星檔
+  核心 2｜第 171–179 行｜_leaves()：遞迴攤平一棵系統樹，取出所有樹葉
+  核心 3｜第 198–233 行｜_append_category()：把一類系統的樹葉寫成表格列並配 system_id
+  核心 4｜第 236–373 行｜export_catalog()：依序處理單星、雙星、三合、四合，檢查後存檔
 
 ======================================================================
 【(d) 整體流程】
@@ -447,10 +449,11 @@ def main():
         "--interrupt-mode", choices=("none", "bse", "mobse", "bseEmp"), default="bse"
     )
     parser.add_argument(
-        "--external-mode", choices=("none", "galpy"), default="none",
-        help="必須跟產生這批輸入檔那次 `petar.data.process -t` 用的值完全"
-             "一致（petar_m45_grid.render_commands() 固定用 -t galpy），"
-             "否則 pot_ext 欄位錯位會讓後面所有欄位讀到錯的值",
+        "--external-mode", choices=("none", "galpy"),
+        help="必填（--self-test 除外）。必須跟產生這批輸入檔那次 "
+             "`petar.data.process -t` 用的值完全一致（2026-09-09 之後的 "
+             "render_commands() 用 -t galpy，之前的快照是 none），否則 "
+             "pot_ext 欄位錯位會讓後面所有欄位讀到錯的值",
     )
     parser.add_argument("--petar-package-path", type=Path)
     parser.add_argument("--output", type=Path)
@@ -462,6 +465,11 @@ def main():
         return
     if args.single is None or args.time_myr is None or args.output is None:
         parser.error("--single, --time-myr and --output are required")
+    if args.external_mode is None:
+        parser.error(
+            "--external-mode is required (none or galpy): it must match the "
+            "`petar.data.process -t` value used for these files"
+        )
     if not args.confirm_complete:
         parser.error(
             "--confirm-complete is required after checking that every non-empty "
