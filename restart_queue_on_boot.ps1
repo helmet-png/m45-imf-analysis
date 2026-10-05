@@ -159,7 +159,7 @@ try {
     # 若之後要恢復本機運算，把下面這行的註解拿掉即可，不用改別的地方。
     # Restart-QueueIfNotRunning -ScriptName "run_queue.py" -LogFile "queue_runner8.log"
     # **2026-08-27 起停用**：協調角色（cloud_queue.py + iap_tunnel_manager.py）
-    # 已經整組遷移到雲端協調 VM（instance-20260827-035250，e2-micro，
+    # 已經整組遷移到雲端協調 VM（control-center，e2-micro，
     # us-central1，systemd 常駐，見 docs/reference/CLOUD_WORKERS_IAP_SETUP.md
     # 「給協調 VM 操作者做一次」一節）。這台筆電不再需要、也不應該自動
     # 重啟這兩支——兩邊同時跑會對同一批 cloud_queue.txt／Kaggle 帳號搶著

@@ -55,6 +55,65 @@ schema，`petar_m45_grid.render_commands()` / `run_nbody_case.py` 不需要
 宣告的範圍內、（c）`petar_m45_grid.load_grid()` + `validate_grid()` 能
 直接吃這份輸出不報錯（跟正式產出走同一條驗證路徑，不是另外自己檢查
 一遍）、（d）同一個 `--master-seed` 跑兩次逐位元組相同（reproducibility）。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, sys, pathlib   參數與路徑
+  filecmp                  filecmp.cmp 逐位元組比較兩個檔案（自我測試用）
+  tempfile                 暫存資料夾（自我測試用）
+  csv, json（函式內 import）  寫 CSV、印結果
+第三方套件：
+  numpy（np）              np.linspace 等距挑雜訊點的編號
+  scipy.stats.qmc
+      qmc.LatinHypercube(d, seed)  拉丁超立方抽樣器：在 d 維空間撒點，保證
+                                   每一維切成 n 等份時每份剛好有一個點，
+                                   比純隨機撒點更均勻
+      sampler.random(n)            產生 n 個落在 0–1 之間的 d 維點
+      qmc.scale(點, 下限, 上限)     把 0–1 的點線性換算到實際參數範圍
+本專案其他模組：
+  scripts/nbody_petar/petar_m45_grid.py
+      load_grid()      讀網格 CSV
+      validate_grid()  檢查每一列是否合法（n_binaries 是否吻合、S < 0.5 等）
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+命令列參數：
+  --n-design (350)              拉丁超立方設計點數
+  --n-noise-points (20)         挑幾個設計點做雜訊量測
+  --extra-seeds-per-point (4)   每個雜訊點額外多跑幾個 seed
+  --master-seed (20260910)      拉丁超立方的亂數種子（固定 → 結果可重現）
+  --output                      輸出路徑，預設 repo 根目錄 petar_m45_training_grid.csv
+  --self-test                   只跑自我測試
+模組常數：
+  PARAM_NAMES／PARAM_BOUNDS     六個初始條件與範圍（見上方「方法」第 1 點）
+  CSV_FIELDS                    輸出欄位，跟 petar_m45_grid.csv 相同
+  MAIN_SEED_BASE = 40001        主設計點的 seed 起點
+  NOISE_SEED_BASE = 90001       雜訊複製的 seed 起點
+⚠ 下方 PARAM_NAMES 上一行的註解說順序「跟 emulator_fit.py 的 θ 順序對齊」，
+  實際上這裡是低質量段在前、emulator_fit.py 是高質量段在前。
+  emulator_fit.py 讀資料時依欄位名稱取值，所以不會對調，只是註解寫錯。
+預設產出：350 + 20 × 4 = 430 列
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 156–167 行｜sample_design()：拉丁超立方抽 350 個 6 維設計點
+  核心 2｜第 170–222 行｜build_rows()：每個設計點組成一列 CSV，雜訊點多加 4 個 seed
+  核心 3｜第 283–321 行｜main()：產生、寫檔、讀回驗證
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  拉丁超立方在 0–1 的 6 維立方體裡撒 350 個點 → 換算到實際參數範圍
+    → 從 350 個點裡等距挑 20 個當雜訊點
+    → 對每個設計點：
+        系統數取整數、雙星比例四捨五入到 4 位小數
+        → 雙星數 = round(系統數 × 雙星比例)；恆星數 = 系統數 + 雙星數
+        → 寫一列（seed = 40001 + 編號）；是雜訊點就再多寫 4 列（只換 seed）
+    → 寫成 CSV → 用 petar_m45_grid.py 的同一套驗證讀回來檢查
 """
 from __future__ import annotations
 
@@ -94,22 +153,30 @@ MAIN_SEED_BASE = 40001
 NOISE_SEED_BASE = 90001
 
 
+# ═══════════════ 核心 1：拉丁超立方抽樣 ═══════════════
 def sample_design(n_design: int, master_seed: int) -> np.ndarray:
     """回傳 (n_design, 6) 的實際參數值陣列（已縮放到 PARAM_BOUNDS）。"""
+    # ↓ 建立 6 維的拉丁超立方抽樣器（固定種子 → 每次結果相同）
     sampler = qmc.LatinHypercube(d=len(PARAM_NAMES), seed=master_seed)
+    # ↓ 抽 n_design 個點，每個點的 6 個座標都在 0–1 之間
     unit = sampler.random(n=n_design)
+    # ↓ 每一維的下限與上限
     lo = np.array([PARAM_BOUNDS[p][0] for p in PARAM_NAMES])
     hi = np.array([PARAM_BOUNDS[p][1] for p in PARAM_NAMES])
+    # ↓ 線性換算：實際值 = 下限 + (上限 − 下限) × 0–1 座標
     return qmc.scale(unit, lo, hi)
 
 
+# ═══════════════ 核心 2：組成網格的每一列 ═══════════════
 def build_rows(n_design: int, n_noise_points: int, extra_seeds: int,
                 master_seed: int) -> list[dict]:
     values = sample_design(n_design, master_seed)
+    # ↓ 在 0 到 n_design−1 之間等距挑 n_noise_points 個編號當雜訊點（去重、排序）
     noise_idx = sorted(set(np.linspace(0, n_design - 1, n_noise_points, dtype=int).tolist()))
 
     rows: list[dict] = []
     for i in range(n_design):
+        # ↓ 第 i 個設計點的 6 個值（順序同 PARAM_NAMES）
         n_sys = int(round(values[i, 0]))
         # 先四捨五入到 CSV 實際會寫出的 4 位小數，n_binaries 才跟
         # validate_grid() 用「CSV 裡讀回來的值」重算出來的結果一致
@@ -120,6 +187,7 @@ def build_rows(n_design: int, n_noise_points: int, extra_seeds: int,
         s_seg = float(values[i, 3])
         a_low = float(values[i, 4])
         a_high = float(values[i, 5])
+        # ↓ 衍生欄位：雙星系統數、恆星總數（每個雙星多一顆星）
         n_bin = round(n_sys * f_bin)
         n_stars = n_sys + n_bin
 
@@ -141,9 +209,11 @@ def build_rows(n_design: int, n_noise_points: int, extra_seeds: int,
                 "status": "ready",
             }
 
+        # ↓ 主設計點：run_id 例如 mb_train_0007_s40008
         main_seed = MAIN_SEED_BASE + i
         rows.append(make_row(f"mb_train_{i:04d}_s{main_seed}", main_seed))
 
+        # ↓ 雜訊點：初始條件完全相同，只換 seed，多寫 extra_seeds 列
         if i in noise_idx:
             for k in range(1, extra_seeds + 1):
                 extra_seed = NOISE_SEED_BASE + 10 * i + k
@@ -210,6 +280,7 @@ def run_self_test() -> dict:
     return result
 
 
+# ═══════════════ 核心 3：產生、寫檔、驗證 ═══════════════
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n-design", type=int, default=350)
@@ -234,6 +305,7 @@ def main():
     )
     write_csv(rows, args.output)
 
+    # ↓ 用正式的讀檔與驗證函式讀回來檢查，確認下游讀得懂
     loaded = load_grid(args.output)
     for row in loaded:
         row["_grid_path"] = str(args.output)

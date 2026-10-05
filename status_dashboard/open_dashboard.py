@@ -51,7 +51,7 @@ if sys.stdout is None:
 # 那台機器」，跟任何一個 worker 是不同概念，故意不共用同一份設定檔。
 PROJECT = "project-f6e2d0e1-cd17-4cfb-a9b"
 ZONE = "us-central1-a"
-INSTANCE = "instance-20260827-035250"
+INSTANCE = "control-center"
 PORT = 8866
 
 

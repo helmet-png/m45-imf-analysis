@@ -37,6 +37,110 @@ system MF **陡**：f_bin=0.30 -> +0.046、0.45 -> +0.066、0.60 -> +0.085、
 **+0.05 到 +0.09**——小於統計誤差 0.144，但跟好幾項系統誤差同量級，
 跟文獻比對時若一邊報 system 一邊報 stellar，這個差不可忽略。
 比對前務必先確認對方報的是哪一種。
+
+======================================================================
+【這支程式現在的角色】
+======================================================================
+**目前 PDMF 頭條數字的來源**（p2_final2_v3：α = 2.382 ± 0.068，
+logage = 8.026 ≈ 106 Myr）。上面說的 A／B／C／D 四套模型設定中，頭條用的是
+config C（選擇函數 + 差異消光）。頭條的實際跑法是 10 次獨立重複，分散到
+不同機器，每次換一組模型端亂數：
+  python fit_real.py --procs 4 --n-syn 40000 --repeats 1 --configs C \
+      --refines 3,3,3 --tag _p2final_v3_rep<k> --repeat-offset <k>   （k = 0…9）
+再把 10 個結果檔的 C 陣列串起來，α 的平均與散布就是頭條數字。
+⚠ ±0.068 是「同一批真實資料、換 10 組模型端亂數」的重現性散布，**不是**
+  統計誤差。要報的統計誤差是注入回收量出的 0.144（injection_recovery.py
+  的 S3F 情境；LIMITATIONS.md A8）。
+它用的是 joint_fit.py 的同一個模型，但不是 MCMC，而是**多階段網格搜尋**：
+在 7 維參數空間（6 個參數 + 差異消光 dav）的粗網格上逐點計算對數後驗，
+取最大的那一點，再在它附近用更細的格距重掃，重複幾輪。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, os, sys, time, pathlib   參數、CPU 數、路徑、計時
+  copy（在迴圈裡 import）           copy.copy 淺複製模型，每次重複各用一份
+第三方套件：
+  numpy（np）   陣列運算；np.median、np.log10（距離模數）、np.arange（網格軸）
+本專案其他模組：
+  scripts/tools/checkpoint.py   續傳：load_partial() 讀已算完的部分結果、
+                                save_progress() 每算完一次就存檔、
+                                check_manifest() 確認這次設定跟舊結果相同才續傳
+  scripts/tools/preflight.py    開跑前檢查（在 _preflight_gate() 裡 import）
+  pipeline/config.py            cfgmod.load()：讀 config.toml
+  pipeline/isochrones.py        isomod.load_grid()：讀等時線網格
+  pipeline/joint_fit.py         JointModel：前向模型本體（見該檔）
+  pipeline/selection.py         selmod.load()：讀選擇函數 data/selection.npz
+  pipeline/step5_imf.py         exclude_confirmed_non_members()：排除已確認非成員
+  pipeline/table_compat.py      Table：簡易表格
+  pipeline/step3_age.py         draw_randoms()：每次重複重抽一批模型端亂數
+  measure_overconfidence.py     GRID：預設網格檔名
+                                parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat
+  injection_recovery.py
+      COARSE                    六個參數的粗網格軸：
+                                  logage 7.30–8.40（間距 0.10）、A_V 0–1.0（0.10）、
+                                  f_bin 0.15–0.95（0.10）、alpha 1.50–3.20（0.20）、
+                                  MH −0.40–0.40（0.15）、q_gamma −1.20–0.80（0.50）
+      multi_stage_best()        多階段網格搜尋（見下方 (d)）；最佳解落在搜尋邊界
+                                上會直接報錯（除非該維度列在允許貼牆清單）
+      check_walls()             列出哪些維度貼在邊界上
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+命令列參數（括號內為預設值）：
+  --procs (CPU 核心數)   平行計算用幾個行程
+  --n-syn (120000)       每次生成幾顆合成星；頭條用 40000
+  --configs (A,B,C,D)    要跑哪幾套模型設定；頭條只用 C
+  --repeats (1)          每套設定重複幾次（每次換一組模型端亂數）
+  --repeat-offset (0)    重複次數的起始編號；亂數種子 = 2000 + 13 × (第幾次 + offset)
+  --grid                 等時線網格檔；換成 MIST 檔就是量等時線系統誤差
+  --tag                  輸出檔名後綴：results/fit_real<tag>.npz
+  --refines (3)          精修輪數與每輪的格距縮小倍數，例如 3,3,3 = 精修三輪、
+                         每輪格距變 1/3
+  --fix-mh               把金屬量固定在某值（P9 檢驗）
+  --native-bprp-err      BP/RP 誤差改用各自波段的星等查（驗證用）
+  --free-lowmass         低質量段冪次也一起擬合（只能配 config C/D）
+  --radius-range LO,HI   只用距中心 LO–HI 度的成員（徑向分析）
+  --g-bright MAG         觀測與合成兩邊都只留 G ≥ MAG（等時線比較用）
+  --members-file／--errmodel-file／--selection-file   三個輸入檔路徑
+  --preflight            只做開跑前檢查就結束；--force：檢查不過也強行開跑
+四套模型設定 CONFIGS：
+  A  沒有選擇函數、沒有差異消光（舊模型）
+  B  只加選擇函數
+  C  選擇函數 + 差異消光 dav 0–0.6（間距 0.15）← 頭條
+  D  同 C，但 dav 放寬到 0–1.2（檢查 α 會不會跟著邊界跑）
+  每套的第四項是「允許貼牆的維度」：A/B 允許 A_V 與 q_gamma；C/D 允許 q_gamma 與 dav
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 418–465 行｜讀觀測資料：排除非成員、算距離模數、挑選要擬合的星
+  核心 2｜第 467–513 行｜建立前向模型與四套設定
+  核心 3｜第 592–712 行｜主迴圈：每套設定、每次重複各做一次多階段網格搜尋並存檔
+  核心 4｜第 713–748 行｜整理結果：α 隨設定的變化、A→C 位移是否顯著
+其餘（build_manifest、_preflight_gate、續傳與參數檢查）是防止跑錯、重複算、
+混入不可比結果的保護機制，不影響擬合本身的數學。
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  讀參數 → 讀 config.toml 與 data/cmd_members.csv
+    → 排除已確認非成員 → 視差中位數算距離模數
+    → 取顏色與 G 星等（可選：只留某半徑範圍、亮端截斷）
+    → 建立 JointModel（n_synthetic 改成 --n-syn）、讀選擇函數、定義 A–D 四套設定
+    → 讀已存在的部分結果（續傳）＋開跑前檢查
+    → 對每套設定、每次重複：
+        複製模型 → 掛上該設定的選擇函數 → 用這次的種子重抽模型端亂數
+        → （C/D）加上 dav 這一維
+        → multi_stage_best：
+            粗網格的每一點都算一次對數後驗（平行）→ 取最大的點
+            → 在最佳點前後各一個格距內，把格距縮成 1/3 重掃 → 取最大
+            → 重複 --refines 指定的輪數
+            → 最佳點若貼在搜尋邊界上（且不在允許清單）→ 報錯中止
+        → 印出最佳參數 → 立刻存檔
+    → 印出各設定的 α 平均、散布，A→C 位移與其標準誤
 """
 from __future__ import annotations
 
@@ -64,6 +168,7 @@ MANIFEST_KEY = checkpoint.MANIFEST_KEY
 SEED_SCHEME = "fit-real-offset-v1:2000+13*(rep+repeat_offset)"
 
 
+# ═══════════════ 輔助：續傳時用來核對設定的清單 ═══════════════
 def build_manifest(args) -> dict:
     """列出所有會影響擬合結果、續傳時必須跟既有部分結果一致的執行設定。
     2026-08-15 CodeRabbit review 抓到：load_partial() 只看檔名（--tag），
@@ -310,8 +415,10 @@ def main():
     refines = [int(x) for x in args.refines.split(",") if x.strip()]
     n_proc = args.procs or (os.cpu_count() or 1)
 
+    # ═══════════════ 核心 1：讀觀測資料、挑選要擬合的星 ═══════════════
     cfg = cfgmod.load()
     c3 = cfg.step3_age
+    # ↓ 讀第 2 步產生的乾淨成員星（預設 data/cmd_members.csv）
     clean = Table.read(HERE / args.members_file, format="csv")
     # 已確認的非成員天體（RV+logg 雙訊號，見 LIMITATIONS.md A6）——顏色跟
     # 真成員無異，assign_masses() 的顏色檢查抓不到，只能靠這份獨立名單
@@ -325,10 +432,13 @@ def main():
         print(f"排除 {int(excl.sum())} 顆已確認非成員天體（見 "
               f"LIMITATIONS.md A6）")
     clean = clean[~excl]
+    # ↓ 測光誤差模型與等時線網格
     errmodel = dict(np.load(HERE / args.errmodel_file))
     grid = isomod.load_grid(isomod.CACHE / args.grid)
+    # ↓ 距離模數：視差中位數扣零點 → 距離 = 1000/視差 → m−M = 5 log10(距離) − 5
     plx = np.asarray(clean["parallax"], float)
     dm = 5.0 * np.log10(1000.0 / (np.median(plx) - c3.parallax_zero_point)) - 5.0
+    # ↓ 觀測顏色與 G 星等；ok：兩者都有值的星
     color = np.asarray(clean["bp_rp"], float)
     mag = np.asarray(clean["phot_g_mean_mag"], float)
     ok = np.isfinite(color) & np.isfinite(mag)
@@ -351,8 +461,11 @@ def main():
         print(f"亮端截斷 G >= {args.g_bright:.2f}："
               f"{int(ok.sum()):,} / {int(np.isfinite(mag).sum()):,} 顆",
               flush=True)
+    # ↓ 最終參與擬合的星
     color, mag = color[ok], mag[ok]
 
+    # ═══════════════ 核心 2：建立前向模型與四套設定 ═══════════════
+    # ↓ 把 config 裡的合成星數改成這次指定的 --n-syn（模型建構時會讀它）
     cfg._data["step3_age"]["n_synthetic"] = args.n_syn
     # P10（2026-08-10 使用者質問後查證，見 LIMITATIONS.md）：這裡曾經寫死
     # mh_prior_sigma=0.0，把 config.toml 宣告的高斯金屬量先驗（中心 -0.03、
@@ -362,6 +475,7 @@ def main():
     # 要寫進論文的最終數字，這裡沒有同等理由關掉，是從診斷腳本複製設定時
     # 沒有重新檢視。移除覆寫，改回讀 config 宣告的高斯先驗。
 
+    # ↓ 建立前向模型（見 pipeline/joint_fit.py）：所有重複都從這份複製
     base = joint_fit.JointModel(cfg, color, mag, grid, errmodel, dm)
     if args.g_bright is not None:
         # 合成端的亮端截斷，跟上面觀測端砍在同一個值。JointModel 預設從
@@ -373,6 +487,7 @@ def main():
               "e_bp_native/e_rp_native 鍵，目前載入的檔案沒有，請先重建 "
               f"{args.errmodel_file}")
         sys.exit(1)
+    # ↓ 讀選擇函數（build_selection.py 產生）
     sel = selmod.load(HERE / args.selection_file)
     print(f"真實觀測 {len(color):,} 顆，距離模數 {dm:.4f}，"
           f"n_synthetic {args.n_syn:,}")
@@ -387,6 +502,7 @@ def main():
     # 正負亂跳），跟 dav 一樣是 nuisance，會在兩側牆之間遊走 ——
     # 實測 PARSEC 撞下界 −1.2、MIST 撞上界 +0.8。放行，但絕不能當測量值報。
     # C 與 D 是修好的模型，除上述已知項外任何一維貼牆都必須中止。
+    # ↓ 每套設定 = (說明, 選擇函數或 None, dav 搜尋軸或 None, 允許貼牆的維度索引)
     CONFIGS = {
         "A": ("舊模型：無選擇函數、無差異消光", None, None, (1, 5)),
         "B": ("只加選擇函數", sel, None, (1, 5)),
@@ -396,7 +512,9 @@ def main():
               np.arange(0.0, 1.21, 0.20), (5, 6)),
     }
 
+    # ═══════════════ 輔助：續傳與開跑前檢查 ═══════════════
     from pipeline.step3_age import draw_randoms
+    # ↓ 輸出檔：results/fit_real<tag>.npz
     out_path = HERE / "results" / f"fit_real{args.tag}.npz"
     manifest = build_manifest(args)
     partial = checkpoint.load_partial(out_path)
@@ -471,6 +589,7 @@ def main():
                   f"--configs 移除 {no_dav}，或不要帶 --free-lowmass。",
                   flush=True)
             sys.exit(1)
+    # ═══════════════ 核心 3：主迴圈（每套設定 × 每次重複） ═══════════════
     for key in requested:
         desc, s, extra, allow = CONFIGS[key]
         print(f"{'='*74}\n{key}：{desc}\n{'='*74}", flush=True)
@@ -481,6 +600,8 @@ def main():
                       flush=True)
                 continue
             import copy
+            # ↓ 淺複製一份模型（共用已展開的等時線），再換上這次的設定：
+            #   觀測 Hess 圖、選擇函數（A 是 None）、只保留六個基本參數的先驗範圍
             m = copy.copy(base)
             m.obs_h = joint_fit.hess(color, mag, base.nb_c, base.nb_m,
                                      base.crange, base.mrange)
@@ -496,9 +617,11 @@ def main():
             # `--repeats 10` 的工作拆成多次獨立呼叫（例如分散到不同機器），
             # 結果跟一次跑完完全等價，也是這次能續傳的前提（續傳本質上
             # 就是「用同一個索引重跑一次」，種子不能因為 repeats 不同而變）。
+            # ↓ 這次重複專用的模型端亂數：種子 = 2000 + 13 × (rep + offset)
             m.draws = draw_randoms(
                 m.n_syn,
                 np.random.default_rng(2000 + 13 * (rep + args.repeat_offset)))
+            # ↓ C/D：把 dav 加成第七個參數
             if extra is not None:
                 m.enable_dav_fit(float(extra.min()), float(extra.max()))
             extra_axes = [extra] if extra is not None else []
@@ -513,6 +636,7 @@ def main():
             # 收窄 bounds 的原因：bounds 只擋先驗，多階段精修仍會在該維
             # 產生格點；換成單元素陣列才能真正讓它不動，且 multi_stage_best
             # 對 len(ax) < 2 的維度會直接沿用、不做精修。
+            # ↓ 六個參數的粗網格軸（injection_recovery.COARSE）
             axes = list(COARSE)
             if args.fix_mh is not None:
                 axes[4] = np.array([args.fix_mh])
@@ -520,6 +644,14 @@ def main():
             # 若啟用）**不放行**——它貼牆正是 P6b 要偵測的失敗模式，跟
             # inject_lowmass.py 用同一個判斷；其餘維度貼牆直接報錯，
             # 因為這支程式產出的是要寫進論文的數字。
+            # ↓ 多階段網格搜尋（擬合本體）：
+            #     m          這次的模型（提供 log_posterior）
+            #     axes       六個參數的粗網格軸
+            #     refines    精修輪數與格距縮小倍數（例如 [3, 3, 3]）
+            #     n_proc     平行行程數
+            #     extra_axis 額外維度的網格軸（dav，以及可選的 p_lowmass）
+            #     allow_wall 這套設定允許貼在邊界上的維度
+            #   回傳：最佳參數 best、它的對數後驗 lp、實際生效的邊界 bounds
             best, lp, bounds = multi_stage_best(
                 m, axes, refines, n_proc,
                 extra_axis=(extra_axes if extra_axes else None),
@@ -535,6 +667,7 @@ def main():
                 print(f"{nm:<10}{best[i]:>12.3f}")
             print(f"lnP = {lp:.1f}   年齡 {10**best[0]/1e6:.1f} Myr"
                   f"   ({time.time()-t0:.0f}s)\n", flush=True)
+            # ↓ 記下這次的最佳參數，並立刻存檔（中途被中斷也不會白算）
             reps.append(best)
             # 跑完一次重複就存一次，不等這個 config 的全部 repeats 或
             # 全部 configs 都跑完——中途被砍（不管是意外還是像這次一樣
@@ -577,9 +710,11 @@ def main():
     # 換成「這個 key 這次根本沒被主迴圈碰過」這個變體，一併在這裡收尾
     # 統一轉型修掉，不用在每個可能少碰到某個 key 的分支各自補一次
     # （2026-08-20 CodeRabbit review 抓到「A 混進 C 的統計」才發現）。
+    # ═══════════════ 核心 4：整理結果 ═══════════════
     out = {k: np.asarray(v) for k, v in out.items()}
     print(f"{'='*74}\nalpha 隨模型設定的變化\n{'='*74}")
     print(f"{'設定':<6}{'說明':<34}{'alpha 平均':>11}{'散布':>8}{'相對 A':>10}")
+    # ↓ 結果陣列每一列是一次重複的最佳參數；第 3 欄（從 0 數）就是 alpha
     a0 = out["A"][:, 3].mean() if "A" in out else np.nan
     for key in out:
         a = out[key][:, 3]
@@ -595,6 +730,7 @@ def main():
     if "A" in out and "C" in out and args.repeats > 1 \
             and len(out["A"]) > 1 and len(out["C"]) > 1:
         # 位移要與重現性比較才有意義。兩組各自的散布合併成位移的標準誤。
+        # ↓ 位移的標準誤 = √(A 的變異數/次數 + C 的變異數/次數)
         na, nc = len(out["A"]), len(out["C"])
         se = np.sqrt(out["A"][:, 3].var(ddof=1) / na
                      + out["C"][:, 3].var(ddof=1) / nc)

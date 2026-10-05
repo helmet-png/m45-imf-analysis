@@ -326,6 +326,9 @@ m45_system_definition_bridge_r2|scripts/nbody_petar/build_m45_system_bridges.py|
 # 2026-10-02: r2 loaded formal galpy catalogs as the default none schema and failed on a false duplicate ID. PR #235 passes the matching schema; use a new label and output directory.
 m45_system_definition_bridge_r3|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20261002_r3 --require-run-count 10 --petar-package-path /home/estopic/nbody/install/include --external-mode galpy||false|senior24
 
+# 2026-10-02: r3 proved the formal files use the 34-column none schema. PR #238 also fixes the binary table layout so component IDs 1605 and 1606 stay distinct; requeue with a new label and output directory.
+m45_system_definition_bridge_r4|scripts/nbody_petar/build_m45_system_bridges.py|--runs-root /home/estopic/m45_membership/runs --output-dir results/m45_system_definition_bridge_20261002_r4 --require-run-count 10 --petar-package-path /home/estopic/nbody/install/include --external-mode none||false|senior24
+
 # 2026-09-18：p2_free_lowmass 剩下 9 次重複（A3／D19）。第 1 次重複
 # （repeat_offset=0，2026-08-14 手動保存於
 # results/p2_free_lowmass_rep1_preserved.npz：p_lowmass=1.322、
@@ -360,15 +363,19 @@ m45_system_definition_bridge_r3|scripts/nbody_petar/build_m45_system_bridges.py|
 # 2026-09-18 停用（使用者要求）：先讓 D19 Stage 2（成員判定閘門）完成，
 # 兩批一起排比分開排更有效率、也避免佔用 worker 排隊順位。D19 完成後
 # 把下面 9 行的 # 拿掉即可重新排入，內容未變。
-# p2_free_lowmass_r1|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 1 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r1|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r2|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 2 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r2|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r3|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 3 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r3|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r4|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 4 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r4|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r5|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 5 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r5|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r6|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 6 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r6|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r7|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 7 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r7|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r8|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 8 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r8|measure_overconfidence.py,injection_recovery.py|false|
-# p2_free_lowmass_r9|fit_real.py|--procs 8 --n-syn 40000 --repeats 1 --repeat-offset 9 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r9|measure_overconfidence.py,injection_recovery.py|false|
+# 2026-10-02 重新排入（使用者要求）：全部派給 senior24，--procs 8 -> 24。
+# 第 7 欄 60 = 本工作逾時小時數：第 1 次重複在 8 核筆電上 44 小時，24 核
+# 估 15–22 小時，貼著預設 20 小時上限，被砍會整次白跑（無法中途續跑），
+# 所以放寬到 60。需要協調 VM 的 cloud_queue.py 也更新到認得第 7 欄的版本。
+p2_free_lowmass_r1|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 1 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r1|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r2|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 2 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r2|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r3|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 3 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r3|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r4|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 4 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r4|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r5|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 5 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r5|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r6|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 6 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r6|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r7|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 7 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r7|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r8|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 8 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r8|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+p2_free_lowmass_r9|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 9 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r9|measure_overconfidence.py,injection_recovery.py|false|senior24|60
 
 # 2026-09-18：D19 Stage 2 第一步——pyUPMASK 能不能在雲端 worker 上跑
 # 起來的小規模可行性測試（見 LIMITATIONS.md D19、WORK_BOARD.md
@@ -440,3 +447,14 @@ d19_completeness_injection_s3|scripts/diagnostics/d19_completeness_injection.py|
 # nbody_train_b14|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
 # nbody_train_b15|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
 # nbody_train_b16|scripts/nbody_petar/queue_training_batch.py|--limit 30 --n-threads 24 --nbody-dir /home/estopic/nbody||false|senior24
+
+# 2026-10-02: requested environment preflight for currently idle workers.
+# Each job only verifies push/run/pull and a small NumPy calculation; no science
+# result is produced and no existing result can be overwritten.
+envcheck_gcp1_20261002|kaggle_smoketest.py|||true|gcp1
+envcheck_justinlan11_20261002|kaggle_smoketest.py|||true|justinlan11
+envcheck_teammate2_20261002|kaggle_smoketest.py|||true|teammate2
+envcheck_helmetalbert_20261002|kaggle_smoketest.py|||true|helmetalbert
+envcheck_account5_20261002|kaggle_smoketest.py|||true|account5
+envcheck_account6_20261002|kaggle_smoketest.py|||true|account6
+envcheck_account7_20261002|kaggle_smoketest.py|||true|account7

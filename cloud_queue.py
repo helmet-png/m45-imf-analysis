@@ -220,13 +220,24 @@ def read_queue() -> list[dict]:
         line = line.strip()
         if not line or line.startswith("#") or "|" not in line:
             continue
-        parts = (line.split("|") + [""] * 6)[:6]
-        label, script, args, extra, minimal, worker = parts
+        parts = (line.split("|") + [""] * 7)[:7]
+        label, script, args, extra, minimal, worker, max_hours = parts
+        # 2026-10-02：選填第 7 欄＝這個工作的逾時小時數（預設 MAX_WAIT_HOURS）。
+        # 單次就要跑 20 小時以上、又無法中途續跑的工作（例如 fit_real.py
+        # --free-lowmass 一次重複）才需要填；填錯（非正數）直接當成沒填，
+        # 不讓一個打錯的欄位變成永不逾時。
+        try:
+            max_h = float(max_hours) if max_hours.strip() else None
+        except ValueError:
+            max_h = None
+        if max_h is not None and max_h <= 0:
+            max_h = None
         out.append({
             "label": label.strip(), "script": script.strip(),
             "args": args.strip(), "extra": extra.strip(),
             "minimal": minimal.strip().lower() in ("1", "true", "yes"),
             "worker": worker.strip() or None,
+            "max_hours": max_h,
         })
     return out
 
@@ -706,7 +717,7 @@ def main() -> None:
                     continue
 
                 elapsed_h = (time.time() - slot["t0"]) / 3600
-                if elapsed_h > MAX_WAIT_HOURS:
+                if elapsed_h > (item.get("max_hours") or MAX_WAIT_HOURS):
                     if kind == "ssh":
                         # SSH worker 是持久機器，逾時不能直接放槽位——遠端的
                         # 行程可能還真的在跑，放了槽位讓主迴圈重派，會在同一個

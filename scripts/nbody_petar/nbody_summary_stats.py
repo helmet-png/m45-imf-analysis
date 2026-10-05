@@ -44,6 +44,67 @@
 成立的，不是統計巧合）；(b) 算出的 α 都落在 [1, 4] 這個寬鬆但有意義
 的量級範圍內；(c) f_bin 落在 [0, 1]；(d) 找不到 `data/cmd_members.csv`
 時優雅地回報缺檔，不是模糊的 traceback。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  argparse, json, math, sys, pathlib   參數、寫 JSON、數學函數、路徑
+第三方套件：
+  numpy（np）   np.isin（排除非成員）、np.sort（求半數半徑）、np.mean 等
+本專案其他模組：
+  pipeline/isochrones.py     load_grid()、isochrone_at()：取等時線
+  pipeline/step3_age.py      COL_*（欄位名）、_Ext（消光係數盒子）
+  pipeline/step4_binaries.py flag_cmd_offset()：比單星主序亮 0.375 星等以上就判為雙星
+  pipeline/step5_imf.py      assign_masses()（星等查質量）、mle_powerlaw()（冪律擬合）、
+                             CONFIRMED_NON_MEMBER_IDS（非成員名單）
+  pipeline/table_compat.py   Table：簡易表格
+  observe_snapshot.py        DEFAULT_*（距離、消光、年齡、金屬量、等時線檔）、
+                             EXT_COEFF（消光係數）——兩支程式共用同一組設定
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+  --from-real <CSV>   真實星表（data/cmd_members.csv）；會排除已知非成員；
+                      預設輸出 results/nbody_observed_targets.json
+  --from-mock <CSV>   observe_snapshot.py 產的假星表；
+                      預設輸出跟輸入同名、副檔名換成 .stats.json
+                      ⚠ emulator_fit.py 讀的是 <run 資料夾>/observed.stats.json，
+                        所以假星表要命名為該 run 資料夾裡的 observed.csv 才接得上
+  （兩者必須二選一）
+  --distance-pc (135.48)、--av (0.386)、--logage (8.026)、--mh (−0.022)
+                      等時線與距離設定（預設同 observe_snapshot.py）
+  --aperture-pc (11.68)  最外圈的半徑
+  --mass-min (0.5)、--mass-max (2.5)  冪律擬合的質量範圍
+  --cmd-offset-threshold (0.375)       雙星判定門檻
+  --isochrone-grid、--output、--self-test
+26 個統計量（emulator_fit.py 用的就是這 26 個）：
+  n_within × 4      1°、2°、3°、全孔徑內的星數
+  alpha_within × 4  同樣四個半徑內的 α
+  fbin_within × 4   同樣四個半徑內的雙星比例
+  fbin_global × 1   全部星的雙星比例
+  half_number_radius_2d_pc × 1   一半的星落在多大半徑內
+  radial_mass_density_pc2 × 12   3 個質量段 × 4 個環帶的面數密度
+  （另外輸出 global_fit 等資訊，但 emulator_fit.py 沒有用）
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 149–160 行｜radius_bin_edges_pc()、_projected_radius_pc()：半徑定義
+  核心 2｜第 180–265 行｜compute_stats()：算出全部統計量
+  核心 3｜第 314–365 行｜main()：讀星表、算統計量、寫 JSON
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  讀星表（真實或假）→（真實才做）排除非成員
+    → 每顆星的投影半徑：假星表直接讀 projected_radius_pc 欄；
+      真實星表用 RA/Dec 中位數當中心算角距，再換成 pc
+    → 取等時線、算距離模數
+    → 對 4 個半徑：星數、查質量後擬合 α、CMD 偏移判雙星的比例
+    → 全部星：α、雙星比例；半數半徑
+    → 3 個質量段 × 4 個環帶：環帶內星數 ÷ 環帶面積
+    → 寫成 JSON
 """
 from __future__ import annotations
 
@@ -85,10 +146,12 @@ DEFAULT_MASS_MAX = 2.5
 DEFAULT_CMD_OFFSET_THRESHOLD = 0.375
 
 
+# ═══════════════ 核心 1：半徑的定義 ═══════════════
 def radius_bin_edges_pc(distance_pc: float, aperture_pc: float) -> list[float]:
     """1 度/2 度/3 度/全孔徑，換算成物理半徑（pc），跟 radial_r1/r2/r3/rall
     的角度定義一致（tan(角度)*距離），全孔徑用修正後的實際孔徑而不是
     再算一次 5 度。"""
+    # ↓ 角度換成物理半徑：tan(角度) × 距離。135.48 pc 時 1° ≈ 2.36 pc
     return [
         math.tan(math.radians(1.0)) * distance_pc,
         math.tan(math.radians(2.0)) * distance_pc,
@@ -114,6 +177,7 @@ def _projected_radius_pc(t, distance_pc: float) -> np.ndarray:
     return np.tan(np.radians(rdeg)) * distance_pc
 
 
+# ═══════════════ 核心 2：算統計量 ═══════════════
 def compute_stats(
     t,
     distance_pc: float,
@@ -127,6 +191,7 @@ def compute_stats(
     iso_grid,
     exclude_non_members: bool,
 ) -> dict:
+    # ↓ 真實星表：排除 step5_imf.py 名單裡的已確認非成員
     if exclude_non_members and "source_id" in t.colnames:
         sid = np.asarray(t["source_id"], np.int64)
         excluded = np.isin(sid, np.array(list(CONFIRMED_NON_MEMBER_IDS), np.int64))
@@ -136,6 +201,7 @@ def compute_stats(
     mag = np.asarray(t["phot_g_mean_mag"], float)
     radius_pc = _projected_radius_pc(t, distance_pc)
 
+    # ↓ 距離模數、消光係數、等時線（查質量與判雙星都用這條）
     dist_mod = 5.0 * math.log10(distance_pc) - 5.0
     ext = _Ext(EXT_COEFF["G"], EXT_COEFF["BP"], EXT_COEFF["RP"])
     iso = isomod.isochrone_at(iso_grid, logage, mh)
@@ -147,10 +213,13 @@ def compute_stats(
     alpha_within: dict[str, dict] = {}
     fbin_within: dict[str, float] = {}
     for label, edge in zip(labels, edges):
+        # ↓ 這個半徑內的星
         sel = radius_pc <= edge
         n_within[label] = int(sel.sum())
+        # ↓ 傳統法：星等查質量（含顏色檢查）→ 0.5–2.5 M☉ 內擬合 α
         masses = assign_masses(mag[sel], iso, dist_mod, av, ext, obs_color=color[sel])
         alpha_within[label] = mle_powerlaw(masses, mass_min, mass_max)
+        # ↓ 比單星主序亮超過 0.375 星等的判為雙星，雙星比例 = 被判為雙星的比例
         is_bin = flag_cmd_offset(color[sel], mag[sel], iso, dist_mod, av, ext,
                                  cmd_offset_threshold)
         valid = np.isfinite(color[sel]) & np.isfinite(mag[sel])
@@ -162,6 +231,7 @@ def compute_stats(
     valid_all = np.isfinite(color) & np.isfinite(mag)
     fbin_global = float(np.mean(is_bin_all[valid_all])) if valid_all.any() else float("nan")
 
+    # ↓ 半數半徑：所有半徑排序後取正中間那一個
     sorted_r = np.sort(radius_pc)
     r_half = float(sorted_r[len(sorted_r) // 2]) if len(sorted_r) else float("nan")
 
@@ -171,6 +241,7 @@ def compute_stats(
         in_mass = (all_masses >= m_lo) & (all_masses < m_hi)
         for i, label in enumerate(labels):
             lo, hi = ring_edges[i], ring_edges[i + 1]
+            # ↓ 這個質量段、這個環帶裡的星；環帶面積 = π(外半徑² − 內半徑²)
             in_ring = (radius_pc > lo) & (radius_pc <= hi) & in_mass
             area_pc2 = math.pi * (hi**2 - lo**2)
             density[f"m{m_lo:g}_{m_hi:g}_{label}"] = (
@@ -240,6 +311,7 @@ def run_self_test() -> dict:
     return summary
 
 
+# ═══════════════ 核心 3：讀星表、算、寫檔 ═══════════════
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--from-real", type=Path)
@@ -278,6 +350,8 @@ def main():
     stats["status"] = "observed_targets" if is_real else "mock_observation"
     stats["source"] = str(source)
 
+    # ↓ 輸出路徑：真實 → results/nbody_observed_targets.json；
+    #   假 → 跟輸入同位置、副檔名換成 .stats.json
     output = args.output
     if output is None:
         output = (

@@ -29,6 +29,59 @@
 km/s 門檻）列出離群星，並跟 Gaia 自己的 `non_single_star` 旗標命中率、
 `rv_nb_transits`（transit 數）中位數做分組對照，檢查離群是不是能被「已知
 天測雙星」或「RV 雜訊較大（transit 少）」解釋掉。
+
+======================================================================
+【(a) 引用的外部函式庫】
+======================================================================
+Python 標準庫：
+  importlib.util, os, sys, pathlib   載入 gaia-export、處理路徑
+第三方套件：
+  numpy（np）
+      np.full         建立一個填滿同一個值（這裡是 NaN）的陣列
+      np.isfinite     判斷是不是正常數字
+      np.median／np.percentile  中位數、百分位
+      np.abs          絕對值
+本專案其他模組：
+  pipeline/config.py        cfgmod.load()：讀 config.toml
+  pipeline/table_compat.py  Table：只用 numpy 實作的簡易表格
+外部專案 gaia-export 的 server.py：
+  server.run_tap_query(adql, "csv")  送 ADQL 查詢到 ESA，取回 CSV
+  ⚠ 跟 gaia_astrophys.py 一樣，檔案一被 import 就載入 server.py
+
+======================================================================
+【(b) 用到的參數與意義】
+======================================================================
+沒有命令列參數。
+  bulk_rv     星團整體徑向速度；先找 config.toml [step1_membership] 的
+              bulk_rv，沒有就用 HR23 文獻值 5.343 km/s
+  batch = 500 每次查詢最多 500 個 source_id
+  5.0         顯著離群的門檻：|RV − bulk_rv| ÷ RV 誤差 > 5（5σ）
+  membership_threshold = 0.7（config）  重算 comparison.csv 分歧集合用
+要查的欄位 COLS：
+  radial_velocity, radial_velocity_error  徑向速度與誤差（km/s）
+  rv_method_used                          Gaia 用哪種方法算徑向速度
+  rv_nb_transits                          量了幾次（次數越多越可靠）
+  non_single_star                         Gaia 的非單星旗標（0 = 沒標記）
+
+======================================================================
+【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
+======================================================================
+  核心 1｜第 144–168 行｜fetch_rv()：分批向 Gaia 查成員星的徑向速度
+  核心 2｜第 185–220 行｜main() 整理成陣列並寫 data/radial_velocity.csv
+  核心 3｜第 222–248 行｜main() 用誤差加權找出偏離星團整體速度的離群星
+  核心 4｜第 250–295 行｜main() 分組對照與 comparison.csv 分歧集合（純報告）
+
+======================================================================
+【(d) 整體流程】
+======================================================================
+  讀 bulk_rv → 讀 data/cmd_members.csv 的 source_id
+    → 每 500 個一批查 Gaia 主星表的徑向速度欄位
+    → 依成員順序排成陣列（沒有資料的填 NaN）→ 寫 data/radial_velocity.csv
+    → 印出有徑向速度的比例、相對 bulk_rv 的偏差分布
+    → 對有誤差的星算 σ = |RV − bulk_rv| ÷ 誤差，σ > 5 列為離群並逐顆印出
+    → 對照：離群組的非單星旗標命中率、量測次數中位數，跟全體比
+    → 若有 data/comparison.csv：列出「我們跟 HR23 判定分歧」的星裡有誰有徑向速度
+  ⚠ 這支程式只印報告、寫 radial_velocity.csv，**不會修改成員名單**。
 """
 from __future__ import annotations
 
@@ -80,17 +133,22 @@ def _load_server():
     )
 
 
+# ↓ 檔案一被 import 就載入 gaia-export（找不到會直接報錯）
 server = _load_server()
 
+# ↓ 要向 Gaia 主星表查的欄位（意義見檔頭 (b)）
 COLS = ["source_id", "radial_velocity", "radial_velocity_error",
         "rv_method_used", "rv_nb_transits", "non_single_star"]
 
 
+# ═══════════════ 核心 1：分批查詢徑向速度 ═══════════════
 def fetch_rv(ids: np.ndarray) -> dict:
+    # ↓ out_rows：{source_id 字串: {欄位名: 值字串}}
     out_rows = {}
     batch = 500
     for i in range(0, len(ids), batch):
         chunk = ids[i:i + batch]
+        # ↓ 這一批 id 組成 "id1,id2,…"，放進 WHERE source_id IN (…)
         idlist = ",".join(str(int(s)) for s in chunk)
         adql = (f"SELECT {', '.join(COLS)} FROM gaiadr3.gaia_source "
                 f"WHERE source_id IN ({idlist})")
@@ -99,6 +157,7 @@ def fetch_rv(ids: np.ndarray) -> dict:
         if len(lines) < 2:
             continue
         header = lines[0].split(",")
+        # ↓ 每一行跟欄位名配對成字典，以 source_id 為鍵存起來
         for ln in lines[1:]:
             vals = ln.split(",")
             out_rows[vals[0]] = dict(zip(header, vals))
@@ -111,6 +170,7 @@ def fetch_rv(ids: np.ndarray) -> dict:
 
 def main():
     cfg = cfgmod.load()
+    # ↓ getattr(物件, 名稱, 預設)：config 有 bulk_rv 就用，沒有就得到 None
     bulk_rv = getattr(cfg.step1_membership, "bulk_rv", None)
     if bulk_rv is None:
         bulk_rv = 5.343  # HR23，config.toml 未覆寫時的預設查詢值
@@ -122,11 +182,14 @@ def main():
     print(f"成員星 {len(ids):,} 顆，開始查 Gaia DR3 radial_velocity...")
     rows = fetch_rv(ids)
 
+    # ═══════════════ 核心 2：整理成陣列並寫檔 ═══════════════
+    # ↓ 先準備五個跟成員星等長、全填 NaN（或空字串）的陣列
     rv = np.full(len(ids), np.nan)
     rv_err = np.full(len(ids), np.nan)
     nb_transits = np.full(len(ids), np.nan)
     rv_method = np.array([""] * len(ids), dtype=object)
     non_single_star = np.full(len(ids), np.nan)
+    # ↓ 逐顆成員填值：查不到的星、或某欄是空值的，就維持 NaN
     for i, sid in enumerate(ids):
         r = rows.get(str(int(sid)))
         if not r:
@@ -156,6 +219,8 @@ def main():
     if ok.sum() == 0:
         return
 
+    # ═══════════════ 核心 3：找出顯著離群星 ═══════════════
+    # ↓ 每顆有徑向速度的星相對星團整體速度的偏差（km/s）
     resid = rv[ok] - bulk_rv
     print(f"  相對 bulk_rv={bulk_rv} km/s 的偏差：中位數 "
           f"{np.median(resid):+.2f}、16-84% 區間 "
@@ -167,7 +232,9 @@ def main():
     # （2026-08-13 CodeRabbit review 指出舊版固定 5 km/s 門檻卻宣稱是
     # 「5σ」，數字對不上，已改成真的算 sigma）。沒有誤差值的星無法算
     # sigma，不計入離群判定。
+    # ↓ ok_err：同時有徑向速度與正的誤差值的星
     ok_err = ok & np.isfinite(rv_err) & (rv_err > 0)
+    # ↓ sigma：偏差是自己誤差的幾倍；> 5 就是顯著離群
     sigma = np.full(len(rv), np.nan)
     sigma[ok_err] = np.abs(rv[ok_err] - bulk_rv) / rv_err[ok_err]
     outlier = ok_err & (sigma > 5.0)
@@ -180,6 +247,7 @@ def main():
                             sigma[outlier]):
         print(f"    source_id={sid}  RV={v:+.2f}±{e:.2f} km/s  ({s:.1f}σ)")
 
+    # ═══════════════ 核心 4：分組對照（純報告） ═══════════════
     # 分組對照：離群星是不是能用 Gaia 自己的 non_single_star 旗標、或
     # RV 雜訊較大（transit 數少）解釋掉，而不是假設一定是污染。
     ns_ok = ok_err & np.isfinite(non_single_star)
@@ -204,6 +272,7 @@ def main():
     comp_path = HERE / "data" / "comparison.csv"
     if comp_path.exists():
         comp = Table.read(str(comp_path), format="csv")
+        # ↓ 我們判為成員（機率 ≥ 0.7）跟 HR23 判為成員（> 0.5）不一致的星
         my_member = np.asarray(comp["my_prob"], float) >= \
             cfg.step1_membership.membership_threshold
         hr23_member = np.asarray(comp["hr23_member"], float) > 0.5
