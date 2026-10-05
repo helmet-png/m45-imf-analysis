@@ -1,0 +1,10 @@
+{
+  "n_run_dirs": 182,
+  "n_all_five_stages_done": 181,
+  "status_count": {
+    "complete": 88,
+    "energy_check_failed": 93,
+    "missing_result": 1
+  },
+  "note": "status 來自 run_nbody_case.py 的現行驗收（最後區間 |Error/Total| < 1e-3），2026-10-02 判定該指標在開潮汐時無效，status 不代表資料好壞。"
+}
