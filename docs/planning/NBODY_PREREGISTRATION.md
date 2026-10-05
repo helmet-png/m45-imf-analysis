@@ -170,3 +170,20 @@ MWPotential2014` 的執行檔 `petar.omp.avx512.bse.galpy`（Galpy 鎖在
 - 2026-09-11：senior24 補上 galpy 支援（`--galpy-set MWPotential2014`
   可用），見上方五節更新與 PR #205；同時記錄 `petar.init` 正式跑潮汐
   網格時必須帶 `-t -c <真實銀河座標>`，不能沿用崩潰測試用的原點設定。
+- 2026-10-03：方法 B 後處理鏈接通（`scripts/nbody_petar/build_training_stats.py`）：
+  快照 → `petar.data.process -M` 重新偵測多重系統 → `petar_system_catalog.py` →
+  `observe_snapshot.py` → `nbody_summary_stats.py --from-mock` → `observed.stats.json`。
+  145 筆全數成功。三個**初步判讀**的設定（之後要改要記在這裡）：(1) 快照取
+  105 Myr（`data.21`），跟 `observe_snapshot.py` 換算星等用的等時線年齡
+  logage 8.026 ≈ 106 Myr 一致，100–135 Myr 年齡不確定度另外處理；(2) 每筆
+  run 一個投影方向（由 run_id 決定），投影雜訊交給 GP nugget；(3) 選樣退化用
+  測光品質選擇函數、不疊召回曲線（兩者不能同時開，見 `observe_snapshot.py`）。
+  修掉兩個既有問題：訓練網格的 `petar.data.process` 沒開 `-M`，三合星被拆成
+  共用一顆星的兩對雙星；`petar_system_catalog.py` 讀三／四合星檔會出錯，且
+  PeTar 非互為最近鄰的配對會讓同一顆星出現在兩個系統，現改為合併共用成員的系統。
+  K 折交叉驗證（`emulator_holdout_check.py`，145 筆）：計數與數密度 R² 0.8–0.96；
+  α(<r) 全孔徑 R² 0.87、殘差 0.22；**f_bin 五維 R² ≈ 0 或負值**——CMD 偏移法
+  （0.375 mag）在模擬端偵測到的比例很小（觀測值 0.058），對 f_bin_ini 幾乎沒有
+  資訊，是否換統計量待決定。極端 IMF 的 run 到 105 Myr 已解體，α 為 NaN
+  （145 筆中 15 筆全孔徑 α 無法計算），目前在 GP 中逐統計量排除，處理方式待決定。
+

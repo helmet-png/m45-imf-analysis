@@ -99,12 +99,13 @@ Python 標準庫：
 ======================================================================
   import petar
     → 單星檔：每顆星一個 system_id
-    → 雙星檔：手動切欄位（前 N 欄 = 第一顆、接著 N 欄 = 第二顆、最後 10 欄 = 軌道摘要）
+    → 雙星檔：手動切欄位，用「摘要總質量 = 兩顆星質量和」判斷摘要在前或在後（隨 PeTar 版本不同）
       → 兩顆星共用同一個 system_id
-    → 三合星檔：照「外圍星 + 內雙星」的樹狀結構讀 → 攤平成 3 顆星、共用 system_id
+    → 三合星檔：照「外圍星 + 內雙星」的樹狀結構讀（逐層核對質量和）→ 攤平成 3 顆星、共用 system_id
     → 四合星檔：照「雙星 + 雙星」讀 → 攤平成 4 顆星、共用 system_id
     → 所有星接成一張表
-    → 檢查：同一個粒子編號不能出現兩次、質量必須是正數、位置必須是正常數字
+    → 同一顆星出現在兩個系統（PeTar 非互為最近鄰配對）→ 合併成一個系統、只留一份
+    → 檢查：質量必須是正數、位置必須是正常數字
     → 存 NPZ 與 metadata.json
 """
 from __future__ import annotations
@@ -132,18 +133,46 @@ def _particle(petar, interrupt_mode: str, external_mode: str = "none"):
     return petar.Particle(**kwargs)
 
 
-def _binary(petar, left, right):
-    return petar.Binary(left, right)
+def _multiple_reader(petar, structure: str, interrupt_mode: str, external_mode: str):
+    """建立空的 binary/triple/quadruple 讀檔物件。
+
+    2026-10-02 修正：以前用 ``petar.Binary(空實例, 空實例)`` 組巢狀結構，
+    PeTar 的 ``Binary.__init__`` 拿到兩個實例時會立刻呼叫
+    ``particleToSemiEcc`` 算軌道參數；巢狀時一邊是空 Binary（pos 形狀
+    (0,3)）、一邊是空 Particle（pos 形狀 (0,)），直接 broadcast 錯誤——
+    以前從沒餵過 triple/quadruple 檔所以沒被發現。改成跟 PeTar 自己
+    （``tools/analysis/data.py`` 的 ``findMultiple()``）一樣，用成員「型別」
+    建構：triple 是 ``member_particle_type_one=Particle``、
+    ``member_particle_type_two=[Particle, Particle]``，quadruple 是
+    ``member_particle_type=[Particle, Particle]``。``simple_mode`` 用預設
+    True，欄數對得上 ``petar.data.process -M`` 的輸出（bse+galpy：
+    單星 35、雙星 10+2×35=80、三合星 10+35+80=125、四合星 10+80+80=170 欄，
+    2026-10-02 用實際檔案逐一核對過）。
+    """
+    initargs = _particle(petar, interrupt_mode, external_mode).initargs
+    P = petar.Particle
+    if structure == "binary":
+        return petar.Binary(member_particle_type=P, **initargs)
+    if structure == "triple":
+        return petar.Binary(member_particle_type_one=P, member_particle_type_two=[P, P], **initargs)
+    if structure == "quadruple":
+        return petar.Binary(member_particle_type=[P, P], **initargs)
+    raise ValueError(structure)
 
 
 # ═══════════════ 核心 1：讀雙星檔 ═══════════════
 def _load_processed_binary(petar, path: Path, interrupt_mode: str, external_mode: str):
     """Load a ``petar.data.process`` binary table without shifting its leaves.
 
-    The processed table stores the two component Particle records first, then
-    the ten binary-summary columns.  ``petar.Binary.loadtxt`` instead expects
-    its own summary columns before the components, which silently shifts the
-    second component for this on-disk format.
+    每列 = 2 顆星（各 N 欄）+ 10 欄軌道摘要（第一欄是系統總質量），但兩者的
+    先後順序隨 PeTar 版本不同，兩種都實測過：
+    - 摘要在前（``petar.Binary`` 的 keys 順序）：GCP 上 PeTar 84b81a8＋galpy 的
+      訓練網格（N=35，80 欄；mb_train_0005_s40006 data.21.binary 648 列，
+      總質量 = 兩顆質量和，誤差 4e-16）。
+    - 星在前、摘要在後：senior24 正式 M45 快照（N=34，78 欄；PR #238 用原始
+      第 775 列 ID 1605、1606 核對）。
+    所以不寫死順序，用「摘要的總質量 = 兩顆星質量和」這個恆等式判斷；兩種都
+    不成立（或都成立，無法分辨）就報錯，不猜。
     """
     # ↓ 兩張空的粒子表：第一顆星、第二顆星
     first = _particle(petar, interrupt_mode, external_mode)
@@ -153,17 +182,35 @@ def _load_processed_binary(petar, path: Path, interrupt_mode: str, external_mode
     if raw.ndim == 1:
         raw = raw.reshape(1, -1)
     # ↓ 一顆星佔幾欄；整列應該 = 2 顆星 + 10 欄軌道摘要
-    component_columns = int(first.ncols)
-    expected_columns = 2 * component_columns + 10
-    if raw.shape[1] != expected_columns:
+    n = int(first.ncols)
+    if raw.shape[1] != 2 * n + 10:
         raise ValueError(
             f"Processed binary table {path} has {raw.shape[1]} columns; "
-            f"expected two {component_columns}-column components followed by 10 binary columns"
+            f"expected two {n}-column components plus 10 binary columns"
         )
-    # ↓ 前 N 欄填進第一顆、接下來 N 欄填進第二顆（最後 10 欄軌道摘要不用）
-    first.readArray(raw[:, :component_columns])
-    second.readArray(raw[:, component_columns:2 * component_columns])
-    return SimpleNamespace(p1=first, p2=second)
+    # ↓ 兩種順序各自的 (第一顆起始欄, 第二顆起始欄, 摘要總質量欄)；每顆星第 0 欄是質量
+    layouts = {"summary_first": (10, 10 + n, 0), "components_first": (0, n, 2 * n)}
+    ok = [name for name, (a, b, s) in layouts.items()
+          if np.allclose(raw[:, s], raw[:, a] + raw[:, b], rtol=1e-9, atol=0)]
+    if len(ok) != 1:
+        raise ValueError(
+            f"Cannot determine column layout of {path}: total-mass identity holds for {ok or 'neither'}")
+    a, b, _ = layouts[ok[0]]
+    first.readArray(raw[:, a:a + n])
+    second.readArray(raw[:, b:b + n])
+    return SimpleNamespace(p1=first, p2=second, layout=ok[0])
+
+
+def _check_mass_tree(node, path: Path):
+    """巢狀 triple/quadruple 用 ``petar.Binary`` 讀（摘要在前），逐層確認
+    「節點總質量 = 兩個子節點質量和」，欄位順序不符時報錯而不是靜默錯位。"""
+    if not (hasattr(node, "p1") and hasattr(node, "p2")):
+        return
+    if node.size and not np.allclose(node.mass, np.asarray(node.p1.mass) + np.asarray(node.p2.mass),
+                                     rtol=1e-9, atol=0):
+        raise ValueError(f"{path}: node mass != p1.mass + p2.mass; column layout differs from petar.Binary")
+    _check_mass_tree(node.p1, path)
+    _check_mass_tree(node.p2, path)
 
 
 # ═══════════════ 核心 2：遞迴攤平系統樹 ═══════════════
@@ -231,6 +278,58 @@ def _append_category(
     }
 
 
+
+def _merge_shared_components(particle_id, mass, position, system_id, star_type, current_mass):
+    """同一顆星出現在多個系統時，把那些系統合併成一個，重複的星只留一份。
+
+    2026-10-02 加入。``petar.data.process`` 配對雙星用「每顆星找最近鄰」，
+    不要求互為最近：A、C 都以 B 為最近鄰時會產生 (A,B)、(B,C) 兩對共用 B 的
+    雙星；開 ``-M`` 後這兩對再被配成一個「四合星」，B 在裡面出現兩次
+    （實測 mb_train_0005_s40006 的 ID 786、mb_train_0007_s40008 的 ID 550，
+    物理上都是一個階層式三合星）。共用成員的系統物理上本來就是同一個束縛
+    系統，所以用 union-find 合併 system_id；重複列必須在每個欄位都一致才
+    丟掉（同一張快照的同一顆星不可能不一致），不一致就報錯而不是猜。
+    """
+    order = np.argsort(particle_id, kind="stable")
+    pid_sorted = particle_id[order]
+    dup_mask = np.r_[False, pid_sorted[1:] == pid_sorted[:-1]]
+    if not dup_mask.any():
+        return particle_id, mass, position, system_id, star_type, current_mass, []
+
+    parent = {int(x): int(x) for x in np.unique(system_id)}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    keep = np.ones(len(particle_id), bool)
+    merged = []
+    for j in np.where(dup_mask)[0]:
+        a, b = order[j - 1], order[j]
+        # 往回找這個 id 第一次出現的列（可能出現 3 次以上）
+        k = j - 1
+        while k > 0 and dup_mask[k]:
+            k -= 1
+        a = order[k]
+        same = (np.isclose(mass[a], mass[b]) and np.allclose(position[a], position[b])
+                and star_type[a] == star_type[b] and np.isclose(current_mass[a], current_mass[b]))
+        if not same:
+            raise ValueError(
+                f"Component {int(particle_id[a])} appears twice with different values; "
+                "refusing to merge")
+        ra, rb = find(int(system_id[a])), find(int(system_id[b]))
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+        keep[b] = False
+        merged.append(int(particle_id[b]))
+    new_sys = np.array([find(int(x)) for x in system_id])
+    sel = keep
+    return (particle_id[sel], mass[sel], position[sel], new_sys[sel], star_type[sel],
+            current_mass[sel], sorted(set(merged)))
+
+
 # ═══════════════ 核心 4：處理所有類別並存檔 ═══════════════
 def export_catalog(args) -> dict:
     if args.petar_package_path is not None:
@@ -272,39 +371,22 @@ def export_catalog(args) -> dict:
             system_ids, star_types, current_masses,
         )
         accounting["path"] = str(args.binary)
+        accounting["column_layout"] = binary.layout
         categories.append(accounting)
 
     # ↓ 三合星與四合星的樹狀結構：
     #     三合星 = Binary(單顆, Binary(單顆, 單顆))
     #     四合星 = Binary(Binary(單顆, 單顆), Binary(單顆, 單顆))
     specs = [
-        ("triple", args.triple, lambda: _binary(
-            petar,
-            _particle(petar, args.interrupt_mode, args.external_mode),
-            _binary(
-                petar,
-                _particle(petar, args.interrupt_mode, args.external_mode),
-                _particle(petar, args.interrupt_mode, args.external_mode),
-            ),
-        )),
-        ("quadruple", args.quadruple, lambda: _binary(
-            petar,
-            _binary(
-                petar,
-                _particle(petar, args.interrupt_mode, args.external_mode),
-                _particle(petar, args.interrupt_mode, args.external_mode),
-            ),
-            _binary(
-                petar,
-                _particle(petar, args.interrupt_mode, args.external_mode),
-                _particle(petar, args.interrupt_mode, args.external_mode),
-            ),
-        )),
+        (kind, getattr(args, kind),
+         lambda kind=kind: _multiple_reader(petar, kind, args.interrupt_mode, args.external_mode))
+        for kind in ("triple", "quadruple")
     ]
     for category, path, constructor in specs:
         if path is None:
             continue
         node = _load_ascii(constructor(), path)
+        _check_mass_tree(node, path)
         offset, accounting = _append_category(
             node,
             category,
@@ -326,14 +408,9 @@ def export_catalog(args) -> dict:
     system_id = np.concatenate(system_ids)
     star_type = np.concatenate(star_types)
     current_mass = np.concatenate(current_masses)
-    # ↓ 檢查：同一顆星不能同時出現在兩個類別裡
-    if len(np.unique(particle_id)) != len(particle_id):
-        unique, count = np.unique(particle_id, return_counts=True)
-        duplicate = unique[count > 1][:10].tolist()
-        raise ValueError(
-            "Components occur in more than one processed category; "
-            f"duplicate IDs include {duplicate}"
-        )
+    (particle_id, mass, position, system_id, star_type, current_mass,
+     merged_ids) = _merge_shared_components(
+        particle_id, mass, position, system_id, star_type, current_mass)
     if not np.all(np.isfinite(mass)) or np.any(mass <= 0):
         raise ValueError("Processed component masses must be finite and positive")
     if not np.all(np.isfinite(position)):
@@ -358,7 +435,8 @@ def export_catalog(args) -> dict:
         "external_mode": args.external_mode,
         "confirmed_complete": bool(args.confirm_complete),
         "n_components": int(len(particle_id)),
-        "n_systems": int(offset),
+        "n_systems": int(len(np.unique(system_id))),
+        "shared_component_ids_merged": merged_ids,
         "categories": categories,
         "warning": (
             "Scientific use is valid only if every non-empty single/binary/"
@@ -406,6 +484,21 @@ def run_self_test() -> dict:
             and sorted(ids[groups == 11].tolist()) == [4, 5, 6]
         ),
     }
+    # 共用成員合併：系統 20=(1,2)、21=(3,2) 共用 2 → 合併成一個系統、2 只留一份
+    pid = np.array([1, 2, 3, 2, 9]); sysid = np.array([20, 20, 21, 21, 22])
+    m = np.array([1.0, 2.0, 3.0, 2.0, 5.0]); pos = np.c_[pid, pid * 0, pid * 0].astype(float)
+    st = np.ones(5, int); cm = m.copy()
+    out = _merge_shared_components(pid, m, pos, sysid, st, cm)
+    checks["shared_member_merged"] = (
+        sorted(out[0].tolist()) == [1, 2, 3, 9]
+        and len(set(out[3][np.isin(out[0], [1, 2, 3])].tolist())) == 1
+        and out[6] == [2])
+    m_bad = m.copy(); m_bad[3] = 2.5
+    try:
+        _merge_shared_components(pid, m_bad, pos, sysid, st, m_bad)
+        checks["inconsistent_duplicate_rejected"] = False
+    except ValueError:
+        checks["inconsistent_duplicate_rejected"] = True
     if not all(checks.values()):
         raise AssertionError(f"System catalog self-test failed: {checks}")
 
@@ -419,18 +512,27 @@ def run_self_test() -> dict:
             self.size = len(array)
 
     fake_petar = SimpleNamespace(Particle=lambda **kwargs: FakeParticle())
-    raw_binary = np.zeros((1, 14))  # two 2-column components plus 10 summaries
-    raw_binary[0, :4] = [1.0, 1605, 0.5, 1606]
+    # 兩種欄位順序（見 _load_processed_binary）：每顆星 2 欄 (質量, ID)，摘要 10 欄、第一欄總質量
+    comps_first = np.zeros((1, 14)); comps_first[0, :5] = [1.0, 1605, 0.5, 1606, 1.5]
+    summ_first = np.zeros((1, 14)); summ_first[0, [0, 10, 11, 12, 13]] = [1.5, 1.0, 1605, 0.5, 1606]
+    ambiguous = np.zeros((1, 14))  # 總質量恆等式兩種都不成立
     binary_path = Path("synthetic_processed_binary.dat")
     original_loadtxt = np.loadtxt
     try:
-        np.loadtxt = lambda path: raw_binary
-        binary = _load_processed_binary(fake_petar, binary_path, "none", "none")
+        for name, raw in (("components_first", comps_first), ("summary_first", summ_first)):
+            np.loadtxt = lambda path, raw=raw: raw
+            binary = _load_processed_binary(fake_petar, binary_path, "none", "none")
+            checks[f"processed_binary_leaf_order_{name}"] = (
+                binary.p1.id.tolist() == [1605] and binary.p2.id.tolist() == [1606]
+                and binary.layout == name)
+        np.loadtxt = lambda path: ambiguous
+        try:
+            _load_processed_binary(fake_petar, binary_path, "none", "none")
+            checks["unknown_layout_rejected"] = False
+        except ValueError:
+            checks["unknown_layout_rejected"] = True
     finally:
         np.loadtxt = original_loadtxt
-    checks["processed_binary_leaf_order"] = (
-        binary.p1.id.tolist() == [1605] and binary.p2.id.tolist() == [1606]
-    )
     if not all(checks.values()):
         raise AssertionError(f"System catalog self-test failed: {checks}")
     return {"status": "synthetic_validation_only", "self_test": checks}
