@@ -422,9 +422,9 @@ membership_probability_weighted_imf：Codex 認領。先只做現有資料的
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| gaia_astrometric_covariance_validation | 尚未進行 | 指派時間：2026-09-15 | Gaia DR3 天體測量誤差與相關係數；現行 pyUPMASK 輸入介面 | 欄位覆蓋率、協方差正定性、可行的最小 A/B 驗證設計 |
+| gaia_astrometric_covariance_validation | 進行中 | 開始：2026-10-07 | Gaia DR3 天體測量誤差與相關係數；現行 pyUPMASK 輸入介面 | 欄位覆蓋率、協方差正定性、可行的最小 A/B 驗證設計 |
 
-gaia_astrometric_covariance_validation：尚未認領。先確認 Gaia 的相關係數欄位
+gaia_astrometric_covariance_validation：Codex 認領。先確認 Gaia 的相關係數欄位
 是否存在於可重建的原始資料、pyUPMASK 是否能接受逐星完整協方差，以及現行
 「相關抽樣」實際包含哪些維度；沒有介面證據前不得宣稱完整協方差已被使用。
 本任務先做欄位與介面驗證，不直接重跑正式 IMF，耗時未查證。
