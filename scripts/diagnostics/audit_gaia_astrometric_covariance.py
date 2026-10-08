@@ -37,7 +37,7 @@ def audit(table: Table) -> dict:
     report["usable_rows"] = int(usable.sum())
     report["out_of_range_rows"] = int((finite & ~in_range).sum())
     if report["out_of_range_rows"]:
-        report["status"] = "out_of_range_rows"
+        report["status"] = "invalid_covariance_rows"
     if not usable.any():
         report["status"] = "no_usable_rows"
         return report
@@ -51,20 +51,21 @@ def audit(table: Table) -> dict:
     report["minimum_eigenvalue"] = float(minimum.min())
     report["non_psd_rows"] = int((minimum < -1e-10).sum())
     if report["non_psd_rows"]:
-        report["status"] = "non_psd_rows"
+        report["status"] = "invalid_covariance_rows"
     return report
 
 
 def self_test() -> None:
-    table = Table({"pmra_error": [0.2, 0.2, 0.2], "pmdec_error": [0.3, 0.3, 0.3],
-                   "parallax_error": [0.1, 0.1, 0.1],
-                   "pmra_pmdec_corr": MaskedColumn([0.1, 1.0, 0.2],
-                                                     mask=[False, False, True]),
-                   "parallax_pmra_corr": [0.2, 1.0, 0.3],
-                   "parallax_pmdec_corr": [0.3, -1.0, 0.4]})
+    table = Table({"pmra_error": [0.2] * 4, "pmdec_error": [0.3] * 4,
+                   "parallax_error": [0.1] * 4,
+                   "pmra_pmdec_corr": MaskedColumn([0.1, 1.0, 0.2, 1.1],
+                                                     mask=[False, False, True, False]),
+                   "parallax_pmra_corr": [0.2, 1.0, 0.3, 0.2],
+                   "parallax_pmdec_corr": [0.3, -1.0, 0.4, 0.3]})
     report = audit(table)
-    assert report["usable_rows"] == 1 and report["non_psd_rows"] == 1
-    assert report["status"] == "out_of_range_rows"
+    assert report["usable_rows"] == 2 and report["non_psd_rows"] == 1
+    assert report["out_of_range_rows"] == 1
+    assert report["status"] == "invalid_covariance_rows"
 
 
 def main() -> None:
