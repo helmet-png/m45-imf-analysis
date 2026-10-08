@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from astropy.table import Table
+from astropy.table import MaskedColumn, Table
 
 ERROR_COLUMNS = ("pmra_error", "pmdec_error", "parallax_error")
 CORR_COLUMNS = ("pmra_pmdec_corr", "parallax_pmra_corr", "parallax_pmdec_corr")
@@ -23,13 +23,21 @@ def audit(table: Table) -> dict:
               "status": "missing_columns" if missing else "ok"}
     if missing:
         return report
-    errors = np.column_stack([np.asarray(table[name], float) for name in ERROR_COLUMNS])
-    corrs = np.column_stack([np.asarray(table[name], float) for name in CORR_COLUMNS])
+    errors = np.column_stack([
+        np.ma.filled(np.asanyarray(table[name], dtype=float), np.nan)
+        for name in ERROR_COLUMNS
+    ])
+    corrs = np.column_stack([
+        np.ma.filled(np.asanyarray(table[name], dtype=float), np.nan)
+        for name in CORR_COLUMNS
+    ])
     finite = np.isfinite(errors).all(axis=1) & np.isfinite(corrs).all(axis=1)
     in_range = (np.abs(corrs) <= 1).all(axis=1)
     usable = finite & (errors > 0).all(axis=1) & in_range
     report["usable_rows"] = int(usable.sum())
     report["out_of_range_rows"] = int((finite & ~in_range).sum())
+    if report["out_of_range_rows"]:
+        report["status"] = "out_of_range_rows"
     if not usable.any():
         report["status"] = "no_usable_rows"
         return report
@@ -48,12 +56,15 @@ def audit(table: Table) -> dict:
 
 
 def self_test() -> None:
-    table = Table({"pmra_error": [0.2, 0.2], "pmdec_error": [0.3, 0.3],
-                   "parallax_error": [0.1, 0.1], "pmra_pmdec_corr": [0.1, 1.0],
-                   "parallax_pmra_corr": [0.2, 1.0], "parallax_pmdec_corr": [0.3, -1.0]})
+    table = Table({"pmra_error": [0.2, 0.2, 0.2], "pmdec_error": [0.3, 0.3, 0.3],
+                   "parallax_error": [0.1, 0.1, 0.1],
+                   "pmra_pmdec_corr": MaskedColumn([0.1, 1.0, 0.2],
+                                                     mask=[False, False, True]),
+                   "parallax_pmra_corr": [0.2, 1.0, 0.3],
+                   "parallax_pmdec_corr": [0.3, -1.0, 0.4]})
     report = audit(table)
-    assert report["usable_rows"] == 2 and report["non_psd_rows"] == 1
-    assert report["status"] == "non_psd_rows"
+    assert report["usable_rows"] == 1 and report["non_psd_rows"] == 1
+    assert report["status"] == "out_of_range_rows"
 
 
 def main() -> None:
