@@ -458,3 +458,18 @@ envcheck_helmetalbert_20261002|kaggle_smoketest.py|||true|helmetalbert
 envcheck_account5_20261002|kaggle_smoketest.py|||true|account5
 envcheck_account6_20261002|kaggle_smoketest.py|||true|account6
 envcheck_account7_20261002|kaggle_smoketest.py|||true|account7
+# 2026-10-03：p11_outlierfrac_v3（A1／B2）從本機 queue.txt 移過來——2026-08-23
+# 改成只用雲端算力之後，這一項留在已停用的本機佇列裡，一直沒有排進雲端。
+# 舊結果（profile_outlierfrac_legacy_no_manifest.npz）是精修 bug 修好前的
+# 粗網格結果，四個 frac 的 alpha 全部精確 2.500，不可引用（LIMITATIONS.md A1）。
+# 比照 p6_lowmass_v3 用 --fracs 拆成四個分片平行跑，每片各自的 --tag
+# （輸出 results/profile_outlierfrac{tag}.npz，共用 tag 會互相覆蓋）。
+# 相依檔案同 p6（profile_outlierfrac.py 直接 import checkpoint、preflight、
+# injection_recovery、measure_overconfidence）。最後一片 worker 留空，誰有空給誰。
+# 彙整：四片都拉回 results/ 後執行
+#   python profile_outlierfrac.py --summarize-tags _f0005,_f001,_f002,_f003
+# 每個 frac 要剛好三次結果才輸出四點比較表，缺片或不足會報錯。
+p11_outlierfrac_v3_f0005|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --fracs 0.005 --tag _f0005|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|justinlan11
+p11_outlierfrac_v3_f001|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --fracs 0.01 --tag _f001|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|teammate2
+p11_outlierfrac_v3_f002|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --fracs 0.02 --tag _f002|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|helmetalbert
+p11_outlierfrac_v3_f003|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --fracs 0.03 --tag _f003|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|

@@ -335,7 +335,8 @@ c5_davform_truncexp|injection_recovery.py --procs 8 --n-syn 40000 --trials 3 --r
 # 已處理：(1) 舊檔改名成 profile_outlierfrac_legacy_no_manifest.npz 移開；
 # (2) 主工作樹的 scripts/tools/checkpoint.py 換成 PR #89 的版本（無
 # manifest 的舊檔一律擋下、不再靜默信任）。這裡換 label 重排。
-p11_outlierfrac_v3|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
+# 2026-10-03 移到 cloud_queue.txt（拆成 p11_outlierfrac_v3_f0005／f001／f002／f003 四片）。
+# p11_outlierfrac_v3|profile_outlierfrac.py --procs 8 --n-syn 40000 --repeats 3 --refines 3,3
 
 # ===== 2026-08-21：p6_lowmass_v2 重排到佇列最後（使用者選項 C）=====
 # 換 label 的理由：原本的 p6_lowmass_v2 會被記進 logs/queue_done.txt

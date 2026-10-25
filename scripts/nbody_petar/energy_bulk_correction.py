@@ -27,6 +27,13 @@
      相對 ½V² 約 1% 量級；逃逸星的 v_rel 有方向性，不一定平均掉。
    所以這是**粗篩**：能抓出明顯壞掉的 run，不能證明積分誤差小於 1e-3。
    精確做法是修 PeTar 的記帳本身（方案 B）。
+   - 分母 E_int,0 的位能是純點質量 −Gm_im_j/r_ij，沒有 PeTar 的 softening
+     與雙星 regularization，只是量級近似；它只當分母用，不影響 E_corr 本身。
+5. 資料完整性：`Physic:` 行要以換行結尾且欄位數足夠（被截斷但仍能
+   `float()` 的數字會靜默變錯值），快照 `data.*` 張數必須等於 Physic 區間
+   數 + 1，否則該 run 記為 error。CSV 保留所有可解析的 run，但百分位數
+   只用 `stage.json` 五個階段都完成（積分跑到終點）的 run；不用
+   `result.json` 的 status，它在開潮汐時就是無效驗收的結果。
 
 自我測試（`--self-test`）：
 (a) 兩質點系統的內部能量與解析值一致；
@@ -76,17 +83,39 @@ def internal_energy(mass: np.ndarray, pos: np.ndarray, vel: np.ndarray, g: float
     return float(ekin + epot)
 
 
+N_PHYSIC_FIELDS = 11
+STAGES = ("mcluster", "petar_init", "petar", "gether", "process")
+
+
 def parse_physic_err(log: Path) -> tuple[list[float], float, float]:
-    """回傳 (每區間 Error, 最後 Error_cum, 初始 Total)。"""
-    rows = [l.split()[1:12] for l in log.read_text(encoding="utf-8", errors="replace").splitlines()
-            if l.startswith("Physic:")]
-    vals = [[float(x) for x in r] for r in rows]
+    """回傳 (每區間 Error, 最後 Error_cum, 初始 Total)；截斷的 Physic 行直接報錯。"""
+    vals = []
+    for line in log.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True):
+        if not line.startswith("Physic:"):
+            continue
+        parts = line.split()[1:]
+        if not line.endswith("\n") or len(parts) < N_PHYSIC_FIELDS:
+            raise ValueError(f"truncated Physic line: {line.strip()[:80]!r}")
+        vals.append([float(x) for x in parts[:N_PHYSIC_FIELDS]])
+    if len(vals) < 2:
+        raise ValueError(f"only {len(vals)} Physic lines")
     return [v[1] for v in vals[1:]], vals[-1][2], vals[0][3]
+
+
+def all_stages_done(run_dir: Path) -> bool:
+    try:
+        stage = json.loads((run_dir / "stage.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return all(stage.get(k) == "done" for k in STAGES)
 
 
 def correct_run(run_dir: Path) -> dict:
     errs, err_cum, total0 = parse_physic_err(run_dir / "petar.log")
     n_snap = len(errs) + 1
+    n_files = sum(1 for f in run_dir.glob("data.*") if f.suffix[1:].isdigit())
+    if n_files != n_snap:
+        raise ValueError(f"{n_files} snapshots but {len(errs)} Physic intervals (expect {n_snap})")
     snaps = [read_snapshot(run_dir / f"data.{k}") for k in range(n_snap)]
     m = np.array([s[1].sum() for s in snaps])
     v2 = np.array([s[0] @ s[0] for s in snaps])
@@ -96,6 +125,7 @@ def correct_run(run_dir: Path) -> dict:
     e_corr = err_cum - pred.sum()
     return {
         "run_id": run_dir.name,
+        "all_stages_done": all_stages_done(run_dir),
         "n_intervals": len(errs),
         "mass_initial": float(m[0]),
         "mass_final": float(m[-1]),
@@ -135,7 +165,22 @@ def run_self_test() -> dict:
             head = f"{k} 2 {5.0*k} 0 0 0 {V[0]} {V[1]} {V[2]}\n"
             rows = f"{mk/2} 1 0 0 0 0.1 0\n{mk/2} -1 0 0 0 -0.1 0\n"
             (d / f"data.{k}").write_text(head + rows)
+        (d / "stage.json").write_text(json.dumps({k: "done" for k in STAGES}))
         r = correct_run(d)
+        checks["all_stages_done_read"] = r["all_stages_done"]
+        (d / "data.3").write_text((d / "data.2").read_text())
+        try:
+            correct_run(d)
+            checks["snapshot_count_mismatch_rejected"] = False
+        except ValueError:
+            checks["snapshot_count_mismatch_rejected"] = True
+        (d / "data.3").unlink()
+        (d / "petar.log").write_text("\n".join(lines) + " -2.512e+0")  # 最後一行沒換行＝截斷
+        try:
+            correct_run(d)
+            checks["truncated_last_line_rejected"] = False
+        except ValueError:
+            checks["truncated_last_line_rejected"] = True
     checks["corrected_error_zero_when_only_bulk_term"] = abs(r["err_cum_corrected"]) < 1e-9
     checks["ratio_one"] = abs(r["ratio_err_cum_over_pred"] - 1.0) < 1e-12
     if not all(checks.values()):
@@ -178,12 +223,17 @@ def main():
         w.writeheader()
         w.writerows(rows)
 
-    ok = [r for r in rows if "error" not in r]
+    ok = [r for r in rows if "error" not in r and r["all_stages_done"]]
+    summary = {"n_runs_complete": len(ok), "n_rows": len(rows),
+               "n_errors": sum("error" in r for r in rows)}
+    if not ok:
+        print(json.dumps(summary, indent=2), flush=True)
+        return
     corr = np.array([r["err_cum_corrected_over_e_int0"] for r in ok])
     raw = np.array([r["err_cum_raw_over_e_int0"] for r in ok])
     ratio = np.array([r["ratio_err_cum_over_pred"] for r in ok])
     print(json.dumps({
-        "n_runs": len(ok), "n_errors": len(rows) - len(ok),
+        **summary,
         "raw_err_cum_over_e_int0_pct_0_50_90_100": np.percentile(np.abs(raw), [0, 50, 90, 100]).tolist(),
         "corrected_over_e_int0_pct_0_50_90_100": np.percentile(np.abs(corr), [0, 50, 90, 100]).tolist(),
         "ratio_err_cum_over_pred_pct_10_50_90": np.nanpercentile(ratio, [10, 50, 90]).tolist(),

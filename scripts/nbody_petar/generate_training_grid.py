@@ -92,17 +92,14 @@ Python 標準庫：
   CSV_FIELDS                    輸出欄位，跟 petar_m45_grid.csv 相同
   MAIN_SEED_BASE = 40001        主設計點的 seed 起點
   NOISE_SEED_BASE = 90001       雜訊複製的 seed 起點
-⚠ 下方 PARAM_NAMES 上一行的註解說順序「跟 emulator_fit.py 的 θ 順序對齊」，
-  實際上這裡是低質量段在前、emulator_fit.py 是高質量段在前。
-  emulator_fit.py 讀資料時依欄位名稱取值，所以不會對調，只是註解寫錯。
 預設產出：350 + 20 × 4 = 430 列
 
 ======================================================================
 【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
 ======================================================================
-  核心 1｜第 156–167 行｜sample_design()：拉丁超立方抽 350 個 6 維設計點
-  核心 2｜第 170–222 行｜build_rows()：每個設計點組成一列 CSV，雜訊點多加 4 個 seed
-  核心 3｜第 283–321 行｜main()：產生、寫檔、讀回驗證
+  核心 1｜第 155–166 行｜sample_design()：拉丁超立方抽 350 個 6 維設計點
+  核心 2｜第 169–221 行｜build_rows()：每個設計點組成一列 CSV，雜訊點多加 4 個 seed
+  核心 3｜第 282–320 行｜main()：產生、寫檔、讀回驗證
 
 ======================================================================
 【(d) 整體流程】
@@ -131,7 +128,9 @@ REPO_ROOT = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 from petar_m45_grid import load_grid, validate_grid  # noqa: E402
 
-# 6 維設計空間，順序固定（跟 emulator_fit.py 的 θ 順序對齊）：
+# 6 維設計空間，順序固定。注意 imf 兩段的順序跟 emulator_fit.py 的 θ 相反
+# （這裡低質量段在前，那邊高質量段在前）；emulator_fit.py 依欄位名稱取值，
+# 所以不會對調：
 # N_sys, f_bin_ini, r_h_ini_pc, S, alpha_in_low, alpha_in_high
 PARAM_NAMES = ["n_systems", "binary_system_fraction", "half_mass_radius_pc",
                "mcluster_S", "imf_alpha_low", "imf_alpha_high"]

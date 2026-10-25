@@ -4,7 +4,9 @@ PeTar 能量記帳修補：開外部位能（galpy，RECORD_CM_IN_HEADER）時�
 問題：粒子速度存「相對系統質心」，但總能量在銀河系座標下計算（加回質心速度 V）。
 恆星演化、合併、逃逸星移除改變質量時，原程式只記相對速度的動能變化，漏掉
 V.(m1 v1 - m0 v0) + 0.5 (m1-m0)|V|^2，開潮汐 + 恆星演化時 Error_cum 被這項主宰。
-只影響能量診斷輸出，不影響動力學。全部包在 #ifdef RECORD_CM_IN_HEADER。
+新增的量只進能量記帳（energy.de_*），程式碼上不回饋到積分；但「不影響動力學」
+尚未用同 seed 原版／修補版比對直接驗證（見 NBODY_PREREGISTRATION.md 五節）。
+全部包在 #ifdef RECORD_CM_IN_HEADER。
 
 驗收（同一組初始條件 mb_train_0000_s40001，135 Myr）：
   原版  開潮汐+恆星演化  Error_cum = -7.23e8（內部能量的 -114%）
@@ -12,6 +14,15 @@ V.(m1 v1 - m0 v0) + 0.5 (m1-m0)|V|^2，開潮汐 + 恆星演化時 Error_cum 被
   修補  關潮汐+恆星演化  Error_cum = +9.58e4（1.5e-4；原版 3.4e-4，同量級）
 上游回報：https://github.com/lwang-astro/PeTar/issues/80 、PR https://github.com/lwang-astro/PeTar/pull/81
 套用：cd PeTar && git apply <本檔>，之後照原本的 configure/make 流程重編。
+版本：2026-10-05 版改兩處（CodeRabbit 審核）：
+  - FrameVelocity 由 C++17 的 inline static 變數改為函式內 static（C++11 可編，
+    保留 --with-cpp-std=11）；
+  - 每次 stat.calcAndShiftCenterOfMass 更新 stat.pcm.vel 後都同步 FrameVelocity，
+    原版只在 correctPtclVelCM、讀檔、硬交互作用前同步，單粒子迴圈等路徑可能用到
+    過期的 V（只影響能量記帳）。
+  訓練網格已跑的 335 筆修補版 run 用的是 2026-10-02 版（本 repo commit 9ff3e81 的修補檔，
+  sha256 開頭 7e62ab282696ec2a），
+  本版尚未重新編譯驗證。
 見 docs/planning/NBODY_PREREGISTRATION.md 五節 2026-10-02。
 
 diff --git a/src/hard.hpp b/src/hard.hpp
@@ -54,7 +65,7 @@ index e08da64..6d30eda 100644
                  energy.de_sd_change_modify_single += de_kin;
                  energy.de_change_cum += de_kin;
 diff --git a/src/petar.hpp b/src/petar.hpp
-index 01b23c3..e6812ce 100644
+index 01b23c3..e44290a 100644
 --- a/src/petar.hpp
 +++ b/src/petar.hpp
 @@ -1094,6 +1094,9 @@ public:
@@ -62,7 +73,7 @@ index 01b23c3..e6812ce 100644
  
          stat.pcm.vel += dv;
 +#ifdef RECORD_CM_IN_HEADER
-+        FrameVelocity::vel = stat.pcm.vel;
++        FrameVelocity::vel() = stat.pcm.vel;
 +#endif
          for (int i=0; i<stat.n_all_loc; i++) system_soft[i].vel -= dv;
  
@@ -72,7 +83,7 @@ index 01b23c3..e6812ce 100644
          system_hard_one_cluster.initializeForOneCluster(search_cluster.getAdrSysOneCluster().size());
          system_hard_one_cluster.setPtclForOneClusterOMP(system_soft, search_cluster.getAdrSysOneCluster());
 +#ifdef RECORD_CM_IN_HEADER
-+        FrameVelocity::vel = stat.pcm.vel;
++        FrameVelocity::vel() = stat.pcm.vel;
 +#endif
          system_hard_one_cluster.driveForOneClusterOMP(_dt_drift);
          //system_hard_one_cluster.writeBackPtclForOneClusterOMP(system_soft, search_cluster.getAdrSysOneCluster());
@@ -92,12 +103,60 @@ index 01b23c3..e6812ce 100644
          stat.pcm.pos = file_header.pos_offset;
          stat.pcm.vel = file_header.vel_offset;
 +#ifdef RECORD_CM_IN_HEADER
-+        FrameVelocity::vel = stat.pcm.vel;
++        FrameVelocity::vel() = stat.pcm.vel;
 +#endif
          stat.pcm.is_center_shift_flag = true;
  #endif        
  
-@@ -3719,6 +3731,9 @@ public:
+@@ -2837,6 +2849,7 @@ public:
+         stat.n_real_loc = stat.n_all_loc = n_loc;
+ #ifdef RECORD_CM_IN_HEADER
+         stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 3, true);
++        FrameVelocity::vel() = stat.pcm.vel;
+         file_header.pos_offset = stat.pcm.pos;
+         file_header.vel_offset = stat.pcm.vel;
+ #endif
+@@ -2909,6 +2922,7 @@ public:
+         stat.n_real_loc = stat.n_all_loc = n_loc;
+ #ifdef RECORD_CM_IN_HEADER
+         stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 3, true);
++        FrameVelocity::vel() = stat.pcm.vel;
+ 
+         file_header.pos_offset = stat.pcm.pos;
+         file_header.vel_offset = stat.pcm.vel;
+@@ -2971,6 +2985,7 @@ public:
+ 
+ #ifdef RECORD_CM_IN_HEADER
+         stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 1, true);
++        FrameVelocity::vel() = stat.pcm.vel;
+         file_header.pos_offset = stat.pcm.pos;
+         file_header.vel_offset = stat.pcm.vel;
+ #endif
+@@ -3034,6 +3049,7 @@ public:
+ 
+ #ifdef RECORD_CM_IN_HEADER
+         stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 1, true);
++        FrameVelocity::vel() = stat.pcm.vel;
+         file_header.pos_offset = stat.pcm.pos;
+         file_header.vel_offset = stat.pcm.vel;
+ #endif
+@@ -3334,6 +3350,7 @@ public:
+             }
+ #ifdef RECORD_CM_IN_HEADER
+             stat.calcAndShiftCenterOfMass(&system_soft[0], stat.n_real_loc);
++            FrameVelocity::vel() = stat.pcm.vel;
+ #else
+             stat.calcCenterOfMass(&system_soft[0], stat.n_real_loc);
+ #endif
+@@ -3616,6 +3633,7 @@ public:
+ #ifdef RECORD_CM_IN_HEADER
+                 // For single particle, potential can be zero, thus use mode 2 instead
+                 stat.calcAndShiftCenterOfMass(&p, stat.n_real_loc, 2);
++                FrameVelocity::vel() = stat.pcm.vel;
+ #endif
+ 
+                 bool interrupt_flag = false;  // for interrupt integration when time reach end
+@@ -3719,6 +3737,9 @@ public:
                  if (modify_flag) {
                      auto& v = p.vel;
                      PS::F64 de_kin = 0.5*(p.mass*(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]) - mbk*(vbk[0]*vbk[0]+vbk[1]*vbk[1]+vbk[2]*vbk[2]));
@@ -107,11 +166,19 @@ index 01b23c3..e6812ce 100644
                      stat.energy.de_sd_change_cum += de_kin;
                      stat.energy.de_sd_change_modify_single += de_kin;
                      stat.energy.de_change_cum += de_kin;
+@@ -3794,6 +3815,7 @@ public:
+ #ifdef RECORD_CM_IN_HEADER
+             // update center
+             stat.calcAndShiftCenterOfMass(&system_soft[0], stat.n_real_loc);
++            FrameVelocity::vel() = stat.pcm.vel;
+ #endif
+ 
+             // >9. Domain decomposition
 diff --git a/src/soft_ptcl.hpp b/src/soft_ptcl.hpp
-index 3a45f5b..23e1675 100644
+index 3a45f5b..124c4ca 100644
 --- a/src/soft_ptcl.hpp
 +++ b/src/soft_ptcl.hpp
-@@ -375,3 +375,25 @@ public:
+@@ -375,3 +375,29 @@ public:
      }
  };
  
@@ -125,7 +192,11 @@ index 3a45f5b..23e1675 100644
 +    escaper removal) must therefore be converted to that frame as well.
 + */
 +struct FrameVelocity {
-+    inline static PS::F64vec vel = PS::F64vec(0.0);
++    //! function-local static: a single definition across translation units, valid in C++11
++    static PS::F64vec& vel() {
++        static PS::F64vec v(0.0);
++        return v;
++    }
 +};
 +
 +//! Extra kinetic energy change seen in the external-potential frame when a body
@@ -133,7 +204,7 @@ index 3a45f5b..23e1675 100644
 +//! dE = V.(m1 v1 - m0 v0) + 0.5 (m1 - m0) |V|^2
 +inline PS::F64 calcDEKinFrameShift(const PS::F64 _m1, const PS::F64vec& _v1,
 +                                   const PS::F64 _m0, const PS::F64vec& _v0) {
-+    const PS::F64vec& V = FrameVelocity::vel;
++    const PS::F64vec& V = FrameVelocity::vel();
 +    return V*(_m1*_v1 - _m0*_v0) + 0.5*(_m1 - _m0)*(V*V);
 +}
 +#endif

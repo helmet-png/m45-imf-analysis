@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PARSEC isochrone 的取得、快取與內插。
+"""PARSEC isochrone 的取得、快取與最近格點查詢。
 
 ======================================================================
 【這支程式在做什麼】
@@ -13,8 +13,8 @@
 注意 isochrone 一律以 **零消光、絕對星等** 下載。消光與距離模數是擬合階段才
 套用的參數，不該烘進快取裡 —— 否則換一組消光就要重新下載。
 
-⚠ 標題寫「內插」，但 isochrone_at() 實際上是取**最近的格點**，沒有內插
-（見該函式的說明，以及 LIMITATIONS.md C14）。
+isochrone_at() 取**最近的格點**，不做內插（理由見該函式的說明，限制見
+LIMITATIONS.md C14）。
 
 這個檔案**沒有 main()，不能直接執行**，由別的程式 import 後呼叫：
   - scripts/drivers/run_pipeline.py：用 config.toml 的範圍呼叫 download_grid()
