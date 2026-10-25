@@ -1,0 +1,10 @@
+{
+  "snapshot_index": 21,
+  "time_myr": 105.0,
+  "projection_index": 30,
+  "n_projections": 32,
+  "degradation": "selection",
+  "multiples_redetected": true,
+  "petar_binary": "/home/albertren888_gmail_com/nbody/install_framefix/bin/petar.omp.avx2.bse.galpy",
+  "seconds": 39.9
+}

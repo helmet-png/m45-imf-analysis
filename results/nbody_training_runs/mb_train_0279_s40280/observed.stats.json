@@ -1,0 +1,81 @@
+{
+  "n_input": 74,
+  "n_within": {
+    "r1_1deg": 0,
+    "r2_2deg": 13,
+    "r3_3deg": 29,
+    "rall_aperture": 74
+  },
+  "alpha_within": {
+    "r1_1deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 0
+    },
+    "r2_2deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 4
+    },
+    "r3_3deg": {
+      "alpha": 1.676414775675462,
+      "alpha_err": 0.6681408142171109,
+      "n": 11,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "rall_aperture": {
+      "alpha": 1.9724505763702116,
+      "alpha_err": 0.39749787083678667,
+      "n": 33,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    }
+  },
+  "fbin_within": {
+    "r1_1deg": NaN,
+    "r2_2deg": 0.07692307692307693,
+    "r3_3deg": 0.034482758620689655,
+    "rall_aperture": 0.02702702702702703
+  },
+  "fbin_global": 0.02702702702702703,
+  "global_fit": {
+    "alpha": 1.9724505763702116,
+    "alpha_err": 0.39749787083678667,
+    "n": 33,
+    "m_lo": 0.5,
+    "m_hi": 2.5
+  },
+  "half_number_radius_2d_pc": 8.391732988148014,
+  "radial_mass_density_pc2": {
+    "m0.3_0.5_r1_1deg": 0.0,
+    "m0.3_0.5_r2_2deg": 0.09478785402649886,
+    "m0.3_0.5_r3_3deg": 0.03406820169564715,
+    "m0.3_0.5_rall_aperture": 0.022205219863331713,
+    "m0.5_1_r1_1deg": 0.0,
+    "m0.5_1_r2_2deg": 0.03791514161059954,
+    "m0.5_1_r3_3deg": 0.04542426892752953,
+    "m0.5_1_rall_aperture": 0.05181217968110734,
+    "m1_2.5_r1_1deg": 0.0,
+    "m1_2.5_r2_2deg": 0.03791514161059954,
+    "m1_2.5_r3_3deg": 0.03406820169564715,
+    "m1_2.5_rall_aperture": 0.02960695981777562
+  },
+  "radius_bin_edges_pc": {
+    "r1_1deg": 2.3648121964749182,
+    "r2_2deg": 4.731065850741982,
+    "r3_3deg": 7.100205937266423,
+    "rall_aperture": 11.68
+  },
+  "config": {
+    "distance_pc": 135.48,
+    "av": 0.386,
+    "logage": 8.026,
+    "mh": -0.022,
+    "aperture_pc": 11.68,
+    "mass_min": 0.5,
+    "mass_max": 2.5
+  },
+  "status": "mock_observation",
+  "source": "/home/albertren888_gmail_com/m45_membership/runs_training/mb_train_0279_s40280/observed.csv"
+}

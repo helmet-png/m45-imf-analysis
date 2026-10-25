@@ -1,0 +1,81 @@
+{
+  "n_input": 90,
+  "n_within": {
+    "r1_1deg": 2,
+    "r2_2deg": 16,
+    "r3_3deg": 37,
+    "rall_aperture": 90
+  },
+  "alpha_within": {
+    "r1_1deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 0
+    },
+    "r2_2deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 2
+    },
+    "r3_3deg": {
+      "alpha": 1.155268078601865,
+      "alpha_err": 0.6817007794519085,
+      "n": 10,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "rall_aperture": {
+      "alpha": 1.6660857989600175,
+      "alpha_err": 0.41841605828570616,
+      "n": 28,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    }
+  },
+  "fbin_within": {
+    "r1_1deg": 0.0,
+    "r2_2deg": 0.0,
+    "r3_3deg": 0.0,
+    "rall_aperture": 0.03333333333333333
+  },
+  "fbin_global": 0.03333333333333333,
+  "global_fit": {
+    "alpha": 1.6660857989600175,
+    "alpha_err": 0.41841605828570616,
+    "n": 28,
+    "m_lo": 0.5,
+    "m_hi": 2.5
+  },
+  "half_number_radius_2d_pc": 8.26115110312107,
+  "radial_mass_density_pc2": {
+    "m0.3_0.5_r1_1deg": 0.05691894137629131,
+    "m0.3_0.5_r2_2deg": 0.09478785402649886,
+    "m0.3_0.5_r3_3deg": 0.04542426892752953,
+    "m0.3_0.5_rall_aperture": 0.0703165295672171,
+    "m0.5_1_r1_1deg": 0.0,
+    "m0.5_1_r2_2deg": 0.01895757080529977,
+    "m0.5_1_r3_3deg": 0.04542426892752953,
+    "m0.5_1_rall_aperture": 0.040709569749441475,
+    "m1_2.5_r1_1deg": 0.0,
+    "m1_2.5_r2_2deg": 0.01895757080529977,
+    "m1_2.5_r3_3deg": 0.04542426892752953,
+    "m1_2.5_rall_aperture": 0.02590608984055367
+  },
+  "radius_bin_edges_pc": {
+    "r1_1deg": 2.3648121964749182,
+    "r2_2deg": 4.731065850741982,
+    "r3_3deg": 7.100205937266423,
+    "rall_aperture": 11.68
+  },
+  "config": {
+    "distance_pc": 135.48,
+    "av": 0.386,
+    "logage": 8.026,
+    "mh": -0.022,
+    "aperture_pc": 11.68,
+    "mass_min": 0.5,
+    "mass_max": 2.5
+  },
+  "status": "mock_observation",
+  "source": "/home/albertren888_gmail_com/m45_membership/runs_training/mb_train_0052_s40053/observed.csv"
+}

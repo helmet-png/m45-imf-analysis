@@ -1,0 +1,81 @@
+{
+  "n_input": 58,
+  "n_within": {
+    "r1_1deg": 2,
+    "r2_2deg": 15,
+    "r3_3deg": 20,
+    "rall_aperture": 58
+  },
+  "alpha_within": {
+    "r1_1deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 2
+    },
+    "r2_2deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 8
+    },
+    "r3_3deg": {
+      "alpha": 1.0470985437494116,
+      "alpha_err": 0.6807361019116157,
+      "n": 10,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "rall_aperture": {
+      "alpha": 1.1561525619050133,
+      "alpha_err": 0.3935871368777738,
+      "n": 30,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    }
+  },
+  "fbin_within": {
+    "r1_1deg": 0.0,
+    "r2_2deg": 0.06666666666666667,
+    "r3_3deg": 0.05,
+    "rall_aperture": 0.017241379310344827
+  },
+  "fbin_global": 0.017241379310344827,
+  "global_fit": {
+    "alpha": 1.1561525619050133,
+    "alpha_err": 0.3935871368777738,
+    "n": 30,
+    "m_lo": 0.5,
+    "m_hi": 2.5
+  },
+  "half_number_radius_2d_pc": 8.83519728184415,
+  "radial_mass_density_pc2": {
+    "m0.3_0.5_r1_1deg": 0.0,
+    "m0.3_0.5_r2_2deg": 0.11374542483179864,
+    "m0.3_0.5_r3_3deg": 0.022712134463764765,
+    "m0.3_0.5_rall_aperture": 0.02960695981777562,
+    "m0.5_1_r1_1deg": 0.05691894137629131,
+    "m0.5_1_r2_2deg": 0.07583028322119909,
+    "m0.5_1_r3_3deg": 0.011356067231882382,
+    "m0.5_1_rall_aperture": 0.040709569749441475,
+    "m1_2.5_r1_1deg": 0.05691894137629131,
+    "m1_2.5_r2_2deg": 0.03791514161059954,
+    "m1_2.5_r3_3deg": 0.011356067231882382,
+    "m1_2.5_rall_aperture": 0.03330782979499757
+  },
+  "radius_bin_edges_pc": {
+    "r1_1deg": 2.3648121964749182,
+    "r2_2deg": 4.731065850741982,
+    "r3_3deg": 7.100205937266423,
+    "rall_aperture": 11.68
+  },
+  "config": {
+    "distance_pc": 135.48,
+    "av": 0.386,
+    "logage": 8.026,
+    "mh": -0.022,
+    "aperture_pc": 11.68,
+    "mass_min": 0.5,
+    "mass_max": 2.5
+  },
+  "status": "mock_observation",
+  "source": "/home/albertren888_gmail_com/m45_membership/runs_training/mb_train_0127_s40128/observed.csv"
+}

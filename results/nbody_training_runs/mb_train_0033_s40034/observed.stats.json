@@ -1,0 +1,83 @@
+{
+  "n_input": 411,
+  "n_within": {
+    "r1_1deg": 24,
+    "r2_2deg": 106,
+    "r3_3deg": 205,
+    "rall_aperture": 411
+  },
+  "alpha_within": {
+    "r1_1deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 8
+    },
+    "r2_2deg": {
+      "alpha": 2.04444871505036,
+      "alpha_err": 0.3472579383869032,
+      "n": 44,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "r3_3deg": {
+      "alpha": 2.0396376332267683,
+      "alpha_err": 0.24680769917356205,
+      "n": 87,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "rall_aperture": {
+      "alpha": 2.1633333682338174,
+      "alpha_err": 0.17437614307609173,
+      "n": 180,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    }
+  },
+  "fbin_within": {
+    "r1_1deg": 0.0,
+    "r2_2deg": 0.009433962264150943,
+    "r3_3deg": 0.024390243902439025,
+    "rall_aperture": 0.0340632603406326
+  },
+  "fbin_global": 0.0340632603406326,
+  "global_fit": {
+    "alpha": 2.1633333682338174,
+    "alpha_err": 0.17437614307609173,
+    "n": 180,
+    "m_lo": 0.5,
+    "m_hi": 2.5
+  },
+  "half_number_radius_2d_pc": 7.131072969404424,
+  "radial_mass_density_pc2": {
+    "m0.3_0.5_r1_1deg": 0.5122704723866218,
+    "m0.3_0.5_r2_2deg": 0.417066557716595,
+    "m0.3_0.5_r3_3deg": 0.3293259497245891,
+    "m0.3_0.5_rall_aperture": 0.23685567854220496,
+    "m0.5_1_r1_1deg": 0.17075682412887394,
+    "m0.5_1_r2_2deg": 0.4739392701324943,
+    "m0.5_1_r3_3deg": 0.3293259497245891,
+    "m0.5_1_rall_aperture": 0.233154808564983,
+    "m1_2.5_r1_1deg": 0.28459470688145655,
+    "m1_2.5_r2_2deg": 0.2085332788582975,
+    "m1_2.5_r3_3deg": 0.15898494124635335,
+    "m1_2.5_rall_aperture": 0.11102609931665858
+  },
+  "radius_bin_edges_pc": {
+    "r1_1deg": 2.3648121964749182,
+    "r2_2deg": 4.731065850741982,
+    "r3_3deg": 7.100205937266423,
+    "rall_aperture": 11.68
+  },
+  "config": {
+    "distance_pc": 135.48,
+    "av": 0.386,
+    "logage": 8.026,
+    "mh": -0.022,
+    "aperture_pc": 11.68,
+    "mass_min": 0.5,
+    "mass_max": 2.5
+  },
+  "status": "mock_observation",
+  "source": "/home/albertren888_gmail_com/m45_membership/runs_training/mb_train_0033_s40034/observed.csv"
+}
