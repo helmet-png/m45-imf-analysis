@@ -376,6 +376,13 @@ p2_free_lowmass_r6|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-off
 p2_free_lowmass_r7|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 7 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r7|measure_overconfidence.py,injection_recovery.py|false|senior24|60
 p2_free_lowmass_r8|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 8 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r8|measure_overconfidence.py,injection_recovery.py|false|senior24|60
 p2_free_lowmass_r9|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 9 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r9|measure_overconfidence.py,injection_recovery.py|false|senior24|60
+# 2026-10-05：r1–r9 已在 senior24 跑完（每次 2.2–3.4 小時）。第 0 次重複
+# （repeat_offset=0，種子 2000）只有 2026-08-14 手動保存的
+# p2_free_lowmass_rep1_preserved.npz，但那次早於 2026-09-05 的 H8 修正
+# （fit_real.py 開始排除兩顆已確認非成員），樣本跟 r1–r9 不同，不能合併。
+# 用目前程式重跑 offset 0 補齊同質的 10 次；同一個種子也順便量出 H8 對
+# 這一維的影響（跟 rep1_preserved 只差樣本與程式版本）。
+p2_free_lowmass_r0|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 0 --refines 3,3 --configs C --free-lowmass --tag _free_lowmass_r0|measure_overconfidence.py,injection_recovery.py|false|senior24|60
 
 # 2026-09-18：D19 Stage 2 第一步——pyUPMASK 能不能在雲端 worker 上跑
 # 起來的小規模可行性測試（見 LIMITATIONS.md D19、WORK_BOARD.md
