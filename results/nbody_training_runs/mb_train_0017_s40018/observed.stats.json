@@ -1,0 +1,81 @@
+{
+  "n_input": 70,
+  "n_within": {
+    "r1_1deg": 0,
+    "r2_2deg": 16,
+    "r3_3deg": 29,
+    "rall_aperture": 70
+  },
+  "alpha_within": {
+    "r1_1deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 0
+    },
+    "r2_2deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 9
+    },
+    "r3_3deg": {
+      "alpha": 1.9473938525618557,
+      "alpha_err": 0.5366513904041667,
+      "n": 18,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "rall_aperture": {
+      "alpha": 2.1098470734576154,
+      "alpha_err": 0.34248046974525487,
+      "n": 46,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    }
+  },
+  "fbin_within": {
+    "r1_1deg": NaN,
+    "r2_2deg": 0.0,
+    "r3_3deg": 0.0,
+    "rall_aperture": 0.02857142857142857
+  },
+  "fbin_global": 0.02857142857142857,
+  "global_fit": {
+    "alpha": 2.1098470734576154,
+    "alpha_err": 0.34248046974525487,
+    "n": 46,
+    "m_lo": 0.5,
+    "m_hi": 2.5
+  },
+  "half_number_radius_2d_pc": 7.757958366531119,
+  "radial_mass_density_pc2": {
+    "m0.3_0.5_r1_1deg": 0.0,
+    "m0.3_0.5_r2_2deg": 0.03791514161059954,
+    "m0.3_0.5_r3_3deg": 0.03406820169564715,
+    "m0.3_0.5_rall_aperture": 0.022205219863331713,
+    "m0.5_1_r1_1deg": 0.0,
+    "m0.5_1_r2_2deg": 0.13270299563709842,
+    "m0.5_1_r3_3deg": 0.056780336159411915,
+    "m0.5_1_rall_aperture": 0.06661565958999514,
+    "m1_2.5_r1_1deg": 0.0,
+    "m1_2.5_r2_2deg": 0.03791514161059954,
+    "m1_2.5_r3_3deg": 0.04542426892752953,
+    "m1_2.5_rall_aperture": 0.037008699772219524
+  },
+  "radius_bin_edges_pc": {
+    "r1_1deg": 2.3648121964749182,
+    "r2_2deg": 4.731065850741982,
+    "r3_3deg": 7.100205937266423,
+    "rall_aperture": 11.68
+  },
+  "config": {
+    "distance_pc": 135.48,
+    "av": 0.386,
+    "logage": 8.026,
+    "mh": -0.022,
+    "aperture_pc": 11.68,
+    "mass_min": 0.5,
+    "mass_max": 2.5
+  },
+  "status": "mock_observation",
+  "source": "/home/albertren888_gmail_com/m45_membership/runs_training/mb_train_0017_s40018/observed.csv"
+}

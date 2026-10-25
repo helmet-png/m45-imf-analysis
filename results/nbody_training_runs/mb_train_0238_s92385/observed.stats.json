@@ -1,0 +1,83 @@
+{
+  "n_input": 94,
+  "n_within": {
+    "r1_1deg": 5,
+    "r2_2deg": 19,
+    "r3_3deg": 36,
+    "rall_aperture": 94
+  },
+  "alpha_within": {
+    "r1_1deg": {
+      "alpha": NaN,
+      "alpha_err": NaN,
+      "n": 4
+    },
+    "r2_2deg": {
+      "alpha": 1.3902022827269223,
+      "alpha_err": 0.6274558818624876,
+      "n": 12,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "r3_3deg": {
+      "alpha": 1.3133936394621724,
+      "alpha_err": 0.433209834769136,
+      "n": 25,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    },
+    "rall_aperture": {
+      "alpha": 1.1173872425985882,
+      "alpha_err": 0.3046623118441426,
+      "n": 50,
+      "m_lo": 0.5,
+      "m_hi": 2.5
+    }
+  },
+  "fbin_within": {
+    "r1_1deg": 0.0,
+    "r2_2deg": 0.0,
+    "r3_3deg": 0.0,
+    "rall_aperture": 0.031914893617021274
+  },
+  "fbin_global": 0.031914893617021274,
+  "global_fit": {
+    "alpha": 1.1173872425985882,
+    "alpha_err": 0.3046623118441426,
+    "n": 50,
+    "m_lo": 0.5,
+    "m_hi": 2.5
+  },
+  "half_number_radius_2d_pc": 8.578177646856766,
+  "radial_mass_density_pc2": {
+    "m0.3_0.5_r1_1deg": 0.0,
+    "m0.3_0.5_r2_2deg": 0.05687271241589932,
+    "m0.3_0.5_r3_3deg": 0.022712134463764765,
+    "m0.3_0.5_rall_aperture": 0.06661565958999514,
+    "m0.5_1_r1_1deg": 0.17075682412887394,
+    "m0.5_1_r2_2deg": 0.03791514161059954,
+    "m0.5_1_r3_3deg": 0.07949247062317667,
+    "m0.5_1_rall_aperture": 0.04441043972666343,
+    "m1_2.5_r1_1deg": 0.05691894137629131,
+    "m1_2.5_r2_2deg": 0.11374542483179864,
+    "m1_2.5_r3_3deg": 0.0681364033912943,
+    "m1_2.5_rall_aperture": 0.048111309703885385
+  },
+  "radius_bin_edges_pc": {
+    "r1_1deg": 2.3648121964749182,
+    "r2_2deg": 4.731065850741982,
+    "r3_3deg": 7.100205937266423,
+    "rall_aperture": 11.68
+  },
+  "config": {
+    "distance_pc": 135.48,
+    "av": 0.386,
+    "logage": 8.026,
+    "mh": -0.022,
+    "aperture_pc": 11.68,
+    "mass_min": 0.5,
+    "mass_max": 2.5
+  },
+  "status": "mock_observation",
+  "source": "/home/albertren888_gmail_com/m45_membership/runs_training/mb_train_0238_s92385/observed.csv"
+}

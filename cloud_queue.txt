@@ -473,3 +473,13 @@ p11_outlierfrac_v3_f0005|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeat
 p11_outlierfrac_v3_f001|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --fracs 0.01 --tag _f001|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|teammate2
 p11_outlierfrac_v3_f002|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --fracs 0.02 --tag _f002|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|helmetalbert
 p11_outlierfrac_v3_f003|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats 3 --refines 3,3 --fracs 0.03 --tag _f003|measure_overconfidence.py,injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false|
+
+# 2026-10-25：方法 B 推論試跑（emulator_infer.py，430 筆訓練資料，結果標 trial_run_not_citable）。
+# GCP 額度將盡，全部派 senior24。單一 worker 依序執行：
+#   v1_nofbin  ：主版本，拿掉 5 個 f_bin 統計量，含 40 次 SBC（估計數小時，上限 30 小時）
+#   v1_withfbin：26 個統計量全用，只取樣不做 SBC，比較 f_bin 的影響
+#   v1_energy  ：排除修補版中 t=105 Myr 累積能量誤差 > 1e-3 的 38 筆，比較能量誤差的影響
+# 需要 senior24 的 python 有 scikit-learn、emcee、scipy。
+nbody_infer_v1_nofbin|scripts/nbody_petar/emulator_infer.py|--tag _v1_nofbin|scripts/nbody_petar/emulator_fit.py,scripts/nbody_petar/emulator_holdout_check.py|false|senior24|30
+nbody_infer_v1_withfbin|scripts/nbody_petar/emulator_infer.py|--drop-prefix "" --sbc-trials 0 --tag _v1_withfbin|scripts/nbody_petar/emulator_fit.py,scripts/nbody_petar/emulator_holdout_check.py|false|senior24|10
+nbody_infer_v1_energy|scripts/nbody_petar/emulator_infer.py|--max-energy-error 1e-3 --sbc-trials 0 --tag _v1_energy|scripts/nbody_petar/emulator_fit.py,scripts/nbody_petar/emulator_holdout_check.py|false|senior24|10

@@ -1,0 +1,10 @@
+{
+  "n_runs": 145,
+  "status_count": {
+    "skipped_up_to_date": 4,
+    "ok": 141
+  },
+  "snapshot_index": 21,
+  "degradation": "selection",
+  "failed": []
+}

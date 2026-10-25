@@ -32,12 +32,15 @@
    從頭來過。
 4. **計時**：每步驟的 wall time、`OMP_NUM_THREADS`、CPU 資訊寫進
    `runs/<run_id>/timing.json`，這是 smoke test S3/S4 要量的核心產出。
-5. **能量／角動量守恆檢查**：解析 `petar.log` 最後一行 `Physic:` 狀態
-   輸出的 `Error/Total` 欄位（PeTar README 逐字核對過的欄位順序：
-   `Error/Total, Error, Error_cum, Total, Kinetic, Potential, Modify,
-   Modify_group, Modify_single, Error_PP, Error_PP_cum`）當累積相對
-   能量誤差，以及最後一行 `Angular Momentum:` 的 `|L|err_cum` 除以
-   `|L|` 當累積相對角動量誤差。超過門檻（`--energy-threshold`，預設
+5. **能量／角動量守恆檢查**：解析 `petar.log` 每一行 `Physic:` 狀態
+   輸出（PeTar README 逐字核對過的欄位順序：`Error/Total, Error,
+   Error_cum, Total, Kinetic, Potential, Modify, Modify_group,
+   Modify_single, Error_PP, Error_PP_cum`）。驗收值是預註冊五節的
+   |ΔE/E₀|＝最後一行 `Error_cum` 除以第一行（t=0）的 `|Total|`；另記錄
+   最後一段與最大一段的 `Error/Total`（單一輸出區間的誤差）。2026-10-05
+   以前誤把最後一段的 `Error/Total` 當累積誤差驗收。最後一行
+   `Angular Momentum:` 的 `|L|err_cum` 除以 `|L|` 當累積相對角動量誤差
+   （開 BSE 時只記錄、不驗收，見預註冊五節）。超過門檻（`--energy-threshold`，預設
    1e-3，S2 驗收用 1e-4 需另外傳）就把 `status` 標成
    `energy_check_failed`，但不刪除已產生的資料——是否可用留給人判斷。
 6. `--smoke`：覆寫網格列的 `-t`（模擬終止時間）與 `-o`（快照間隔），
@@ -255,7 +258,7 @@ def apply_smoke_overrides(command: str, t_myr: float, o_myr: float) -> str:
 
 # ═══════════════ 核心 2：從 petar.log 讀守恆誤差 ═══════════════
 def parse_energy_log(petar_log: Path) -> dict:
-    """解析 petar.log 最後一筆 Physic:／Angular Momentum: 狀態輸出。
+    """解析 petar.log 的 Physic:（能量）與最後一筆 Angular Momentum: 狀態輸出。
 
     欄位順序對照 PeTar README「Output columns」一節逐字核對：
     `Energy: Error/Total Error Error_cum Total Kinetic Potential Modify
@@ -267,19 +270,28 @@ def parse_energy_log(petar_log: Path) -> dict:
     text = petar_log.read_text(encoding="utf-8", errors="replace")
 
     # ↓ 收集所有以 "Physic:"（能量）與 "Angular Momentum:"（角動量）開頭的行；
-    #   PeTar 每輸出一次就印一行，最後一行就是積分結束時的累積誤差
+    #   PeTar 每輸出一次就印一行（第一行是 t=0 的初始狀態）
     physic_lines = [ln for ln in text.splitlines() if ln.strip().startswith("Physic:")]
     am_lines = [ln for ln in text.splitlines() if ln.strip().startswith("Angular Momentum:")]
 
     result: dict = {"status": "no_energy_lines_found"}
     if physic_lines:
-        fields = physic_lines[-1].split()
-        # fields[0] == "Physic:"，fields[1] 是 Error/Total
         try:
-            result["energy_error_relative"] = float(fields[1])
-            result["status"] = "parsed"
+            rows = [[float(x) for x in ln.split()[1:5]] for ln in physic_lines]
         except (IndexError, ValueError):
+            rows = None
             result["status"] = "physic_line_parse_failed"
+        if rows:
+            # ↓ 欄位：Error/Total（該輸出區間的誤差）、Error、Error_cum、Total。
+            #   2026-10-05 訂正：以前只取最後一行的 Error/Total 當驗收值，那是
+            #   「最後一個輸出區間」的誤差，不是預註冊五節的 |ΔE/E₀|；430 筆
+            #   訓練網格裡誤差多半發生在前 10 Myr（大質量星演化、超新星），
+            #   只看最後一段會漏掉。驗收改用累積誤差 Error_cum 除以初始總能量。
+            e0 = abs(rows[0][3])
+            result["energy_error_cum_over_e0"] = abs(rows[-1][2]) / e0 if e0 > 0 else float("inf")
+            result["energy_error_last_interval"] = rows[-1][0]
+            result["energy_error_max_interval"] = max(abs(r[0]) for r in rows)
+            result["status"] = "parsed"
 
     if am_lines:
         # ↓ 從最後一行抓出 |L|err_cum（累積角動量誤差）與 |L|（總角動量）兩個數字
@@ -444,7 +456,7 @@ def run_case(
     energy = parse_energy_log(run_dir / "petar.log")
     energy_ok = (
         energy.get("status") == "parsed"
-        and abs(energy.get("energy_error_relative", float("inf"))) < energy_threshold
+        and energy.get("energy_error_cum_over_e0", float("inf")) < energy_threshold
     )
 
     summary = {
@@ -483,12 +495,17 @@ def run_self_test() -> dict:
     checks["smoke_override_changes_t"] = "-t 1.0000" in smoke_petar
     checks["smoke_override_disables_stellar_evolution"] = "--stellar-evolution 0" in smoke_petar
 
-    # 能量 log 解析：用官方 README 逐字引用的範例行測試。
+    # 能量 log 解析：t=0 初始狀態行、一段誤差較大的中間行，加上官方 README
+    # 逐字引用的範例行（當最後一行）。
     sample_log = (
         "Energy:       Error/Total           Error       Error_cum           Total"
         "         Kinetic       Potential          Modify    Modify_group   Modify_single"
         "        Error_PP    Error_PP_cum\n"
-        "Physic:      1.883442e-05       -644.6969       -644.6969   -3.422972e+07"
+        "Physic:                -0               0               0   -4.000000e+07"
+        "    1.8e+07   -5.8e+07   0   0   0   0   0\n"
+        "Physic:      2.000000e-03          -80000          -80000   -3.500000e+07"
+        "    1.8e+07   -5.3e+07   0   0   0   0   0\n"
+        "Physic:      1.883442e-05      -644.6969       -644.6969   -3.422972e+07"
         "    1.846359e+07   -5.269331e+07        1841.216               0     0.008989855"
         "    -8.67599e-06    -8.67599e-06\n"
         "Angular Momentum:  |L|err: 187484.2  |L|err_cum: 187484.2  L: -1.17383e+07"
@@ -500,9 +517,13 @@ def run_self_test() -> dict:
         energy = parse_energy_log(tmp_log)
     finally:
         tmp_log.unlink(missing_ok=True)
-    checks["energy_error_parsed_correctly"] = abs(
-        energy.get("energy_error_relative", -1) - 1.883442e-05
-    ) < 1e-12
+    # 驗收值是最後一行 Error_cum／第一行 |Total|，不是最後一段的 Error/Total
+    checks["energy_error_cum_over_e0"] = abs(
+        energy.get("energy_error_cum_over_e0", -1) - 644.6969 / 4.0e7) < 1e-12
+    checks["energy_error_last_interval"] = abs(
+        energy.get("energy_error_last_interval", -1) - 1.883442e-05) < 1e-12
+    checks["energy_error_max_interval"] = abs(
+        energy.get("energy_error_max_interval", -1) - 2.0e-3) < 1e-12
     checks["angular_momentum_ratio_correct"] = abs(
         energy.get("angular_momentum_error_relative", -1) - (187484.2 / 1.267974e9)
     ) < 1e-9

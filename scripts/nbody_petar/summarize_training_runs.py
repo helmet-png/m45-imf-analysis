@@ -24,6 +24,12 @@ git；這支程式只抽出每筆 run 的設計參數、執行狀態、計時與
        * `err_cum_first_interval_frac`：第一個區間的 Error 佔 Error_cum
          的比例，用來看誤差是否集中在早期大量質量損失的階段。
        * `modify_cum`：最後一行的 Modify（恆星演化等造成的能量改變累計）。
+       * `err_cum_over_e0_t105`：同上但取 t=105 Myr（訓練統計量用的快照
+         data.21；第一行 Physic 是 t=0，每 5 Myr 一行）。
+       * `err_max_interval_rel`：所有區間中最大的 |Error/Total|。
+   - `manifest.json` 的 petar 指令是否用修補版（`install_framefix`）→ `petar_patched`。
+   - `data.bse.sn_kick`＋`data.sse.sn_kick` 行數 → `n_sn_kick`（2026-10-05：
+     修補版 335 筆的殘餘能量誤差與超新星反衝次數的 Spearman 相關 +0.83）。
 3. 不判斷好壞、不重新分類：這支程式只負責「如實抽出數字」，驗收邏輯要等
    能量指標修正方案定案後另外處理，避免把一個未定案的判準寫死在彙整表裡。
 
@@ -50,7 +56,8 @@ OUT_FIELDS = (["run_id"] + DESIGN_FIELDS +
               ["stages_done", "status", "n_threads", "petar_seconds", "n_physic_lines",
                "err_last_rel", "err_cum", "total_initial", "err_cum_over_e0",
                "err_cum_first_interval_frac", "modify_cum", "err_pp_cum",
-               "angular_momentum_error_relative"])
+               "angular_momentum_error_relative", "err_cum_over_e0_t105",
+               "err_max_interval_rel", "petar_patched", "n_sn_kick"])
 
 
 def parse_physic(log: Path) -> list[dict]:
@@ -96,6 +103,12 @@ def summarize_run(run_dir: Path, design: dict | None) -> dict:
     out["angular_momentum_error_relative"] = res.get("energy", {}).get(
         "angular_momentum_error_relative", "")
 
+    man_p = run_dir / "manifest.json"
+    out["petar_patched"] = ("install_framefix" in man_p.read_text(encoding="utf-8")
+                            if man_p.exists() else "")
+    out["n_sn_kick"] = sum(sum(1 for _ in (run_dir / f).open(encoding="utf-8", errors="replace"))
+                           for f in ("data.bse.sn_kick", "data.sse.sn_kick") if (run_dir / f).exists())
+
     ph = parse_physic(run_dir / "petar.log")
     out["n_physic_lines"] = len(ph)
     if len(ph) >= 2:
@@ -107,9 +120,13 @@ def summarize_run(run_dir: Path, design: dict | None) -> dict:
         out["err_cum_first_interval_frac"] = second["err"] / last["err_cum"] if last["err_cum"] else ""
         out["modify_cum"] = last["modify"]
         out["err_pp_cum"] = last["err_pp_cum"]
+        out["err_max_interval_rel"] = max(abs(r["err_rel"]) for r in ph)
+        out["err_cum_over_e0_t105"] = (ph[21]["err_cum"] / abs(first["total"])
+                                       if len(ph) > 21 and first["total"] else "")
     else:
         for k in ("err_last_rel", "err_cum", "total_initial", "err_cum_over_e0",
-                  "err_cum_first_interval_frac", "modify_cum", "err_pp_cum"):
+                  "err_cum_first_interval_frac", "modify_cum", "err_pp_cum",
+                  "err_max_interval_rel", "err_cum_over_e0_t105"):
             out[k] = ""
     return out
 
@@ -144,6 +161,7 @@ def run_self_test() -> dict:
         "err_cum_over_e0": abs(r["err_cum_over_e0"] - (-0.25)) < 1e-12,
         "first_interval_frac": abs(r["err_cum_first_interval_frac"] - 0.8) < 1e-12,
         "modify_cum": r["modify_cum"] == 70,
+        "err_max_interval_rel": r["err_max_interval_rel"] == 0.5,
         "stages_done": r["stages_done"] == 5,
         "missing_result_recorded": rows[1]["status"] == "missing_result",
         "truncated_physic_line_skipped": rows[1]["n_physic_lines"] == 0,
@@ -180,8 +198,13 @@ def main():
         "n_run_dirs": len(rows),
         "n_all_five_stages_done": len(fully_integrated),
         "status_count": status_count,
-        "note": ("status 來自 run_nbody_case.py 的現行驗收（最後區間 |Error/Total| < 1e-3），"
-                 "2026-10-02 判定該指標在開潮汐時無效，status 不代表資料好壞。"),
+        "note": ("status 來自各 run 跑完當時 run_nbody_case.py 的驗收：2026-10-05 以前誤用"
+                 "最後一個輸出區間的 |Error/Total| < 1e-3，不是預註冊的 |ΔE/E₀|；"
+                 "請看 err_cum_over_e0（修補版 PeTar 的 run 才有意義，舊版見 2026-10-02 紀錄）。"),
+        "n_patched": sum(r["petar_patched"] is True for r in rows),
+        "n_patched_err_cum_over_e0_gt_1e-3": sum(
+            r["petar_patched"] is True and r["err_cum_over_e0"] != "" and abs(r["err_cum_over_e0"]) > 1e-3
+            for r in rows),
     }
     out_json = args.out_csv.with_suffix(".json")
     out_json.write_text(json.dumps(overview, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
