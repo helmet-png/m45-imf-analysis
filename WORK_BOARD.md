@@ -129,11 +129,6 @@ Tailscale 連線（不需要固定對外 IP，也不用改路由器）。**`proc
 
 professor_report_preparation：Codex 認領，為下週與教授的線上討論整理共同報告。先以已合併的 `docs/planning/NBODY_M45_FORMAL_RESULTS_20260913.md` 與現有結果為準，安排各成員負責觀測資料、前向模型、N-body、限制與下一步，並列出希望教授協助判斷的問題。這是報告準備工作，不會把 N-body component-star 修正誤寫成最終 IMF 結論；詳細草案見 `docs/planning/M45_PROFESSOR_REPORT_PLAN_2026-09-13.md`。
 
-| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
-|---|---|---|---|---|
-| m45_system_definition_bridge | 進行中 | 開始：2026-09-14 | 10 組 PeTar run 的 t = 0、125 Myr processed 多重星目錄；質量範圍 0.30–2.50 M☉；孔徑 11.68 pc | component、primary、system-total 與 photometric-system 的動力學斜率修正 |
-
-m45_system_definition_bridge：Codex 認領，將已完成的 10-run screening grid 做 definition-matched 後處理，不重新積分 N-body。每個 run 必須確認 `petar.data.process` 輸出的 single/binary/triple/quadruple 目錄完整，再同時匯出 t=0 和 t=125 Myr 的 system catalog；任何必要目錄遺失時腳本會停止，不用 component-star 修正冒充 primary/system 修正。工作由 `cloud_queue.txt` 派往 senior24，完成後先驗收 manifest 和 10 份 bridge JSON，才可把結果記入 `results/RESULTS_LOG.md`。耗時未查證。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|

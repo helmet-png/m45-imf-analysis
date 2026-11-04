@@ -549,3 +549,7 @@ OL_runs 線性外推完整規模（9,278 顆、OL_runs=25）約 5.8 小時〔202
 參考）。子集檔版控於 `data/m45_g20_feasibility_subset.dat`（`prepared/`
 整個被 `.gitignore` 排除）。閘門通過，下一步是 `d19_full_membership_run`
 （見 `WORK_BOARD.md`）。
+
+| m45_system_definition_bridge | 2026-11-02 | 10 組 PeTar formal run 的 t=0、125 Myr processed catalog；0.30–2.50 M☉；11.68 pc；32 projections | 10 組 definition-matched catalog 與 bridge JSON：component、primary、system-total、photometric β=2/3/4 |
+
+m45_system_definition_bridge：10/10 run 都通過 manifest、catalog inventory 與 definition coverage 驗收；每組均含 t=0、t=125 Myr NPZ 和 metadata。screening grid 的 Δα(PDMF−IMF) 平均為 component −0.1317、primary −0.1423、system-total −0.1240、photometric β=4 −0.1473。不同 run 的差異很大，這些是與系統定義匹配的動力學修正基準，不能直接加到 component-star 或頭條 α；後續論文使用時必須選擇與觀測量相同的系統定義。
