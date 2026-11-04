@@ -1,0 +1,142 @@
+{
+  "status": "complete_recovered_subset_offsets_1_to_9",
+  "column_order": [
+    "logage",
+    "av_mean",
+    "f_bin",
+    "alpha",
+    "MH",
+    "q_gamma",
+    "dav",
+    "p_lowmass"
+  ],
+  "formal_repeat_offsets": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "n_formal_recovered_repeats": 9,
+  "manifest_validation": {
+    "all_expected_files_present": true,
+    "all_manifests_match_expected_recipe": true,
+    "validated_recipe": {
+      "free_lowmass": true,
+      "n_syn": 40000,
+      "refines": "3,3",
+      "seed_scheme": "fit-real-offset-v1:2000+13*(rep+repeat_offset)",
+      "grid": "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat",
+      "members_file": "data/cmd_members.csv",
+      "errmodel_file": "data/errmodel.npz",
+      "selection_file": "data/selection.npz",
+      "fix_mh": null,
+      "native_bprp_err": false,
+      "radius_range": null,
+      "g_bright": null
+    },
+    "tags": [
+      "_free_lowmass_r1",
+      "_free_lowmass_r2",
+      "_free_lowmass_r3",
+      "_free_lowmass_r4",
+      "_free_lowmass_r5",
+      "_free_lowmass_r6",
+      "_free_lowmass_r7",
+      "_free_lowmass_r8",
+      "_free_lowmass_r9"
+    ]
+  },
+  "parameter_statistics": {
+    "logage": {
+      "mean": 8.033333333333331,
+      "sample_sd": 0.0,
+      "sem": 0.0,
+      "minimum": 8.033333333333331,
+      "maximum": 8.033333333333331
+    },
+    "av_mean": {
+      "mean": 0.388888888888889,
+      "sample_sd": 0.030429030972509225,
+      "sem": 0.010143010324169742,
+      "minimum": 0.3333333333333334,
+      "maximum": 0.42222222222222233
+    },
+    "f_bin": {
+      "mean": 0.5364197530864199,
+      "sample_sd": 0.056867231602903974,
+      "sem": 0.01895574386763466,
+      "minimum": 0.41666666666666674,
+      "maximum": 0.6166666666666666
+    },
+    "alpha": {
+      "mean": 2.475308641975308,
+      "sample_sd": 0.10625176509467464,
+      "sem": 0.035417255031558216,
+      "minimum": 2.299999999999999,
+      "maximum": 2.655555555555555
+    },
+    "MH": {
+      "mean": -0.011111111111111053,
+      "sample_sd": 0.01666666666666666,
+      "sem": 0.005555555555555553,
+      "minimum": -0.01666666666666663,
+      "maximum": 0.033333333333333375
+    },
+    "q_gamma": {
+      "mean": -0.8913580246913578,
+      "sample_sd": 0.13639740613570595,
+      "sem": 0.045465802045235315,
+      "minimum": -1.0888888888888888,
+      "maximum": -0.6999999999999997
+    },
+    "dav": {
+      "mean": 0.5518518518518517,
+      "sample_sd": 0.03379312516832342,
+      "sem": 0.011264375056107806,
+      "minimum": 0.4999999999999999,
+      "maximum": 0.5999999999999999
+    },
+    "p_lowmass": {
+      "mean": 1.085185185185185,
+      "sample_sd": 0.20245407953654,
+      "sem": 0.06748469317884666,
+      "minimum": 0.7444444444444447,
+      "maximum": 1.3666666666666667
+    }
+  },
+  "alpha_p_lowmass_correlation": -0.6561832807779007,
+  "legacy_offset0_candidate": {
+    "present": true,
+    "path": "results/p2_free_lowmass_rep1_preserved.npz",
+    "has_manifest": false,
+    "C_shape": [
+      1,
+      8
+    ],
+    "lnP": 1334.3,
+    "parameter_row": [
+      8.033,
+      0.333,
+      0.617,
+      2.389,
+      -0.017,
+      -0.867,
+      0.5,
+      1.322
+    ],
+    "eligible_for_formal_aggregate": false,
+    "reason": "The archive has no manifest, so its input files, refinement recipe, seed scheme, and repeat offset cannot be machine-verified."
+  },
+  "formal_aggregate_status": "not_a_complete_10_repeat_aggregate",
+  "interpretation_limits": [
+    "The nine runs differ only through model-randomness repeat offsets; they do not measure observational sampling uncertainty.",
+    "The manifest-free offset-0 candidate is excluded from every formal statistic in this file.",
+    "The free-lowmass fit does not replace the p6_lowmass_v3 profile needed to measure d(alpha)/d(p).",
+    "These descriptive statistics are not a final M45 IMF measurement."
+  ]
+}
