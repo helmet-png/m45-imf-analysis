@@ -3,6 +3,12 @@
 本文件是 2026-09-13 依現有結果擬定的下週討論草案。數字與判讀以
 `results/RESULTS_LOG.md`、`docs/planning/NBODY_M45_FORMAL_RESULTS_20260913.md`
 及其對應 JSON/CSV 為準；討論時應把它們稱為目前結果，不預設為最終結論。
+## 2026-11-04 更新狀態
+
+- `m45_system_definition_bridge_20261102_r4` 已完成驗收：10/10 formal run 都具備 t=0 與 t=125 Myr catalog、10 份 bridge JSON，且 component、primary、system-total、photometric β=2/3/4 六種定義都齊全。
+- 低質量 `fit_real.py --free-lowmass` 的 r1–r9 回收輸出皆可讀取；統計整合與不確定度摘要尚未完成。
+- 原先以 `Error/Total` 報告的潮汐 run 能量數值，後來發現未完整納入失去質量的質心動能。因此它不能再當作物理能量守恆精度；後續需做修正後的能量記帳驗證。
+- 舊 GCP 協調 VM 已停止使用，現階段不派新雲端工作；報告應清楚區分「已回收並驗收」與「仍待本機或新運算環境完成」的項目。
 
 ## 會議目標
 
@@ -19,8 +25,8 @@ PeTar N-body 是否已提供可用的動力學校正、下一步應優先補哪�
 |---|---:|---|---|
 | 主講／開場 | 1.5 分鐘 | M45 的科學問題：為何觀測到的是 PDMF、而不是直接的 IMF；本次希望用動力學校正縮小差距 | M45 CMD 或研究流程總覽 |
 | 觀測與前向模型負責人 | 2.5 分鐘 | Gaia 成員、質量範圍、前向模型目前量到的量，以及已做的注入回收／敏感度檢查 | 質量函數與主要不確定度圖 |
-| N-body 負責人 | 3 分鐘 | 10 組 125 Myr PeTar grid 的設定、驗收與結果；中心 3 seeds 的修正 +0.1735、完整網格中位數 +0.138，並說明範圍反映初始條件敏感度 | 10-run correction 分布與 energy-error 摘要 |
-| 限制與下一步負責人 | 2 分鐘 | component-star 與 unresolved-system 定義尚未完全對齊、未做 Gaia selection mock、銀河潮汐仍是對照組；提出下一階段選項 | 一張「已完成／待完成」表 |
+| N-body 負責人 | 3 分鐘 | 10 組 125 Myr PeTar grid 與已驗收的 system-definition bridge；呈現暫定修正範圍及初始條件敏感度，並說明潮汐能量記帳仍待修正驗證 | 10-run correction 分布、catalog 完整性表、限制摘要 |
+| 限制與下一步負責人 | 2 分鐘 | system 定義 bridge 已完成；尚未完成 Gaia selection mock、潮汐能量記帳驗證與低質量 r1–r9 統計整合；提出下一階段選項 | 一張「已完成／待完成」表 |
 | 主講／收尾 | 1 分鐘 | 重申目前可支持的主張與三個希望教授協助決定的問題 | 下一步決策清單 |
 
 若人數少於四人，可由同一人合併「開場＋收尾」或「觀測＋限制」兩段；若
@@ -29,14 +35,17 @@ PeTar N-body 是否已提供可用的動力學校正、下一步應優先補哪�
 
 ## N-body 應怎麼說
 
-可以說：10 組正式 screening run 都從 0 演化到 125 Myr，並完成快照處理與
-component-star PDMF 分析。全部最終能量誤差小於 `1e-3`，最大約 `7.83e-6`。
-三個中心 seeds 的 IMF 修正中位數為 `+0.1735`、seed 標準差 `0.0343`；完整
-10 組初始條件的中位數為 `+0.1380`、16–84% 範圍為 `+0.0694` 至 `+0.1972`。
+可以說：10 組正式 screening run 都從 0 演化到 125 Myr，且 system-definition
+bridge 已完成驗收：每組都有 t=0 與 t=125 Myr catalog，並涵蓋 component、primary、
+system-total 與 photometric-system 定義。三個中心 seeds 的暫定修正中位數為
+`+0.1735`、seed 標準差 `0.0343`；完整 10 組初始條件的中位數為 `+0.1380`、
+16–84% 範圍為 `+0.0694` 至 `+0.1972`。這些數字用來展示動力學校正的量級與
+初始條件敏感度。
 
-不應說「最終 IMF 已經確定」。這批修正仍是 component-star 定義，且尚未把
-Gaia 選擇效應、unresolved system 定義與銀河潮汐對照完整併入。因此它適合
-展示「動力學校正量級與初始條件敏感度」，不能單獨變成最終頭條 IMF。
+不應說「最終 IMF 已經確定」，也不應把舊的 `Error/Total` 數字當作潮汐模型的
+物理能量守恆精度：該記帳尚未納入失去質量的質心動能，必須先完成修正後驗證。
+此外，Gaia 選擇效應、完整的觀測 system-MF 對齊與銀河潮汐對照仍未併入最終推論。
+因此目前結果適合當作已驗收的 catalog 與動力學敏感度證據，不能單獨變成最終頭條 IMF。
 
 目前可直接使用的主圖是
 `results/figures/m45_nbody_correction_summary_20260914.png`：左圖展示中央
@@ -47,12 +56,12 @@ Gaia 選擇效應、unresolved system 定義與銀河潮汐對照完整併入。
 
 ## 建議問教授的三個問題
 
-1. 在目前科展範圍內，是否應把 10-run screening grid 作為主要動力學證據，
-   並把 system-level bridge 與 Gaia mock selection 定為下一階段？
-2. 銀河潮汐對照組應在下次報告前完成一組代表性測試，還是先優先完成
-   component-to-system 的定義橋接？
-3. 對 M45 的主張，應優先呈現「PDMF 經動力修正的範圍」，還是先把觀測樣本
-   半徑擴張與完整度驗證做完再報校正後數字？
+1. 已完成 10-run system-definition bridge 後，下一個應優先完成的是 Gaia mock
+   selection、低質量 r1–r9 統計整合，還是潮汐能量記帳驗證？
+2. 銀河潮汐對照組應在下次報告前完成一組代表性測試，還是先將現有無潮汐
+   10-run 結果以一致的 system 定義與觀測選擇函數對齊？
+3. 對 M45 的主張，是否應先呈現「PDMF 經動力修正的暫定範圍與限制」，待
+   完整度與能量驗證完成後再報校正後 IMF 數字？
 
 ## 下週時程
 
@@ -67,10 +76,9 @@ Gaia 選擇效應、unresolved system 定義與銀河潮汐對照完整併入。
 ## 報告前可繼續的工作
 
 1. 將正式 N-body 10-run 結果整理成簡報圖與一頁表，而不是再無目的擴張網格。
-2. 用 processed catalog 完成 component、primary、photometric-system 三種定義的
-   bridge，檢查動力修正能否對齊觀測 system MF；這直接回應目前最重要的定義
-   缺口。2026-09-14 已依 `cloud_queue.txt` 派出 10-run 後處理；尚未回收驗收前
-   不把它說成已完成。
+2. 將已完成的 10-run system-definition bridge 整理為一張 catalog 完整性表與
+   一張 definitions 對照表；接著做低質量 r1–r9 的統計整合，兩者都不需要重跑
+   N-body。
 3. 依教授意見決定是否補一組銀河潮汐對照。它是物理完整度檢查，不應在沒有
    真實 M45 軌道初始條件時直接與無潮汐基準混合。
 
