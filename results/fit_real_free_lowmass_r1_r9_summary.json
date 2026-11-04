@@ -113,6 +113,7 @@
   "legacy_offset0_candidate": {
     "present": true,
     "path": "results/p2_free_lowmass_rep1_preserved.npz",
+    "readable": true,
     "has_manifest": false,
     "C_shape": [
       1,

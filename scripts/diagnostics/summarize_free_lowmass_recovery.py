@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import zlib
 from pathlib import Path
+from zipfile import BadZipFile
 
 import numpy as np
 
@@ -76,7 +78,7 @@ def load_recovered(path: Path, offset: int) -> tuple[np.ndarray, dict]:
     if manifest.get("repeat_offset") != offset:
         raise ValueError(f"{path.name}: repeat_offset does not match filename")
     for key, expected in EXPECTED_MANIFEST.items():
-        if manifest.get(key) != expected:
+        if key not in manifest or manifest[key] != expected:
             raise ValueError(
                 f"{path.name}: manifest {key}={manifest.get(key)!r}, expected {expected!r}"
             )
@@ -97,6 +99,15 @@ def summarize(values: np.ndarray) -> dict[str, dict[str, float]]:
     }
 
 
+def display_path(path: Path) -> str:
+    """Return a repository-relative POSIX path when possible."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
 def inspect_legacy(path: Path) -> dict:
     """Describe, but do not validate or aggregate, the manifest-free offset-0 candidate."""
     if not path.exists():
@@ -105,14 +116,25 @@ def inspect_legacy(path: Path) -> dict:
             "eligible_for_formal_aggregate": False,
             "reason": "legacy offset-0 candidate is absent",
         }
-    with np.load(path, allow_pickle=False) as raw:
-        values = np.asarray(raw["C"], dtype=float) if "C" in raw.files else None
-        ln_p = np.asarray(raw["lnP"], dtype=float) if "lnP" in raw.files else None
-        has_manifest = "__manifest__" in raw.files
+    try:
+        with np.load(path, allow_pickle=False) as raw:
+            values = np.asarray(raw["C"], dtype=float) if "C" in raw.files else None
+            ln_p = np.asarray(raw["lnP"], dtype=float) if "lnP" in raw.files else None
+            has_manifest = "__manifest__" in raw.files
+    except (OSError, ValueError, EOFError, BadZipFile, zlib.error) as error:
+        return {
+            "present": True,
+            "path": display_path(path),
+            "readable": False,
+            "error": f"{type(error).__name__}: {error}",
+            "eligible_for_formal_aggregate": False,
+            "reason": "The legacy candidate could not be read and is excluded from formal statistics.",
+        }
     row_is_compatible_shape = values is not None and values.shape == (1, len(COLUMN_ORDER))
     return {
         "present": True,
-        "path": str(path.relative_to(ROOT)).replace("\\", "/"),
+        "path": display_path(path),
+        "readable": True,
         "has_manifest": has_manifest,
         "C_shape": list(values.shape) if values is not None else None,
         "lnP": float(ln_p[0]) if ln_p is not None and ln_p.shape == (1,) else None,
@@ -121,6 +143,8 @@ def inspect_legacy(path: Path) -> dict:
         "reason": (
             "The archive has no manifest, so its input files, refinement recipe, "
             "seed scheme, and repeat offset cannot be machine-verified."
+            if not has_manifest
+            else "The archive has a manifest, but legacy offset-0 candidates are reported for provenance only and never aggregated."
         ),
     }
 
