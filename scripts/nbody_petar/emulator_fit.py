@@ -136,7 +136,7 @@ THETA_PRIOR_HIGH = np.array([1700.0, 0.95, 4.5, 0.5, 2.7, 1.3])
 
 
 # ═══════════════ 核心 1：訓練 GP 模擬器 ═══════════════
-def fit_emulators(X: np.ndarray, Y: np.ndarray, stat_names: list[str]) -> dict:
+def fit_emulators(X: np.ndarray, Y: np.ndarray, stat_names: list[str], random_state: int | None = None) -> dict:
     """對 Y 的每一維獨立訓練一個 GP，回傳 {stat_name: fitted GP}。"""
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import RBF, WhiteKernel
@@ -158,7 +158,8 @@ def fit_emulators(X: np.ndarray, Y: np.ndarray, stat_names: list[str]) -> dict:
         kernel = RBF(length_scale=np.ones(X.shape[1])) + WhiteKernel(noise_level=1.0)
         # ↓ normalize_y：統計量先標準化再學；n_restarts_optimizer=2：
         #   超參數最佳化多試 2 個起點，避免卡在局部最佳
-        gp = GaussianProcessRegressor(kernel=kernel, normalize_y=True, n_restarts_optimizer=2)
+        gp = GaussianProcessRegressor(kernel=kernel, normalize_y=True, n_restarts_optimizer=2,
+                                      random_state=random_state)
         # ↓ 用有效的 run 訓練：學出這些 θ 與這個統計量之間的關係
         gp.fit(x_norm[finite], y[finite])
         emulators[name] = gp

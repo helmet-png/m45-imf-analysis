@@ -31,7 +31,7 @@
   本身會把後驗推離那一區）。
 
 自我測試（`--self-test`）：兩個高度相關的解析輸出（相關 0.9），確認相關矩陣估得
-出來、後驗 68% 區間涵蓋真值，且 SBC 排名不偏。
+出來、後驗區間涵蓋真值。SBC 失敗處理另由回歸測試驗證。
 """
 from __future__ import annotations
 
@@ -70,9 +70,9 @@ def cv_correlation(X, Y, names, k, seed):
     folds = np.array_split(rng.permutation(len(X)), k)
     z = np.full_like(Y, np.nan, dtype=float)
     pred = np.full_like(Y, np.nan, dtype=float)
-    for f in folds:
+    for fold_index, f in enumerate(folds):
         train = np.setdiff1d(np.arange(len(X)), f)
-        model = fit_emulators(X[train], Y[train], names)
+        model = fit_emulators(X[train], Y[train], names, random_state=seed + fold_index)
         mu, sd = predict_batch(model, X[f])
         pred[f] = mu
         z[f] = (Y[f] - mu) / sd
@@ -114,14 +114,18 @@ def make_log_prob(model, y_obs, R, lo, hi):
 
 def sample(log_prob, lo, hi, n_walkers, n_steps, n_burn, seed):
     import emcee
+    if not 0 <= n_burn < n_steps:
+        raise ValueError("require 0 <= n_burn < n_steps")
     rng = np.random.default_rng(seed)
     start = lo + rng.random((n_walkers, len(lo))) * (hi - lo)
     s = emcee.EnsembleSampler(n_walkers, len(lo), log_prob, vectorize=True)
+    s.random_state = np.random.RandomState(seed).get_state()
     s.run_mcmc(start, n_steps, progress=False)
-    try:
-        tau = s.get_autocorr_time(discard=n_burn, quiet=True).tolist()
-    except Exception as exc:  # noqa: BLE001 - 只記錄，不影響樣本
-        tau = f"unavailable: {exc}"
+    # Fail closed: emcee requires at least 50 autocorrelation times by default.
+    tau = s.get_autocorr_time(discard=n_burn, quiet=False)
+    if not np.all(np.isfinite(tau)) or np.any(tau <= 0):
+        raise RuntimeError("invalid autocorrelation time; increase sampling steps")
+    tau = tau.tolist()
     return (s.get_chain(discard=n_burn, flat=True), s.get_log_prob(discard=n_burn, flat=True),
             float(np.mean(s.acceptance_fraction)), tau)
 
@@ -129,14 +133,24 @@ def sample(log_prob, lo, hi, n_walkers, n_steps, n_burn, seed):
 def run_sbc(model, R, lo, hi, n_trials, n_walkers, n_steps, n_burn, seed):
     rng = np.random.default_rng(seed)
     L = np.linalg.cholesky(R)
-    ranks = []
+    import emcee
+    ranks, failed_trials = [], []
     for t in range(n_trials):
         th = lo + rng.random(len(lo)) * (hi - lo)
         mu, sd = predict_batch(model, th)
         y = mu[0] + sd[0] * (L @ rng.standard_normal(len(mu[0])))
-        chain, _, _, _ = sample(make_log_prob(model, y, R, lo, hi), lo, hi,
-                                n_walkers, n_steps, n_burn, seed + 1000 + t)
+        try:
+            chain, _, _, _ = sample(make_log_prob(model, y, R, lo, hi), lo, hi,
+                                    n_walkers, n_steps, n_burn, seed + 1000 + t)
+        except (emcee.autocorr.AutocorrError, RuntimeError) as exc:
+            failed_trials.append({"trial": t, "reason": str(exc)})
+            continue
         ranks.append(np.mean(chain < th, axis=0))
+    # Never test only successful trials: convergence failures may depend on truth.
+    if failed_trials:
+        return {"status": "incomplete_sampling", "n_trials": n_trials,
+                "n_successful": len(ranks), "failed_trials": failed_trials,
+                "per_parameter": {}, "ranks": []}
     ranks = np.array(ranks)
     from scipy.stats import chi2
     out = {}
@@ -145,7 +159,7 @@ def run_sbc(model, R, lo, hi, n_trials, n_walkers, n_steps, n_burn, seed):
         e = n_trials / 5
         c = float(np.sum((h - e) ** 2 / e))
         out[name] = {"rank_hist_5bins": h.tolist(), "chi2": c, "p_value": float(1 - chi2.cdf(c, 4))}
-    return {"n_trials": n_trials, "per_parameter": out, "ranks": ranks.tolist()}
+    return {"status": "completed", "n_trials": n_trials, "per_parameter": out, "ranks": ranks.tolist()}
 
 
 def summarize(chain, lp, lo, hi, names):
@@ -159,6 +173,16 @@ def summarize(chain, lp, lo, hi, names):
             for i, name in enumerate(names)}
 
 
+def thin_time_axis(chain, log_prob, n_walkers, max_samples=20000):
+    """Thin complete ensemble steps, preserving every walker and aligned log probabilities."""
+    if max_samples < n_walkers:
+        raise ValueError("max_samples must fit a complete ensemble step")
+    n_steps = len(chain) // n_walkers
+    step_stride = max(1, int(np.ceil(n_steps / (max_samples // n_walkers))))
+    return (chain.reshape(n_steps, n_walkers, -1)[::step_stride].reshape(-1, chain.shape[-1]),
+            log_prob.reshape(n_steps, n_walkers)[::step_stride].reshape(-1))
+
+
 def run_self_test() -> dict:
     rng = np.random.default_rng(7)
     X = rng.uniform(0, 1, size=(200, 2))
@@ -166,11 +190,11 @@ def run_self_test() -> dict:
     Y = np.c_[X[:, 0] + X[:, 1], X[:, 0] - 0.5 * X[:, 1]] + noise
     names = ["a", "b"]
     R, r2, _ = cv_correlation(X, Y, names, 5, 0)
-    model = fit_emulators(X, Y, names)
+    model = fit_emulators(X, Y, names, random_state=0)
     lo, hi = np.zeros(2), np.ones(2)
     truth = np.array([0.4, 0.6])
     y_obs = np.array([truth[0] + truth[1], truth[0] - 0.5 * truth[1]])
-    chain, lp, acc, _ = sample(make_log_prob(model, y_obs, R, lo, hi), lo, hi, 16, 1500, 500, 1)
+    chain, lp, acc, _ = sample(make_log_prob(model, y_obs, R, lo, hi), lo, hi, 16, 4000, 1000, 1)
     q16, q84 = np.percentile(chain, [16, 84], axis=0)
     checks = {"correlation_recovered": bool(0.75 < R[0, 1] < 0.98),
               "emulator_accurate": bool(min(r2.values()) > 0.95),
@@ -230,7 +254,7 @@ def main():
 
     R, r2, zstd = cv_correlation(X, Y, names, args.cv_k, args.seed)
     print("CV R2:", {k: round(v, 3) for k, v in r2.items()}, flush=True)
-    model = fit_emulators(X, Y, names)
+    model = fit_emulators(X, Y, names, random_state=args.seed)
     log_prob = make_log_prob(model, y_obs, R, lo, hi)
     chain, lp, acc, tau = sample(log_prob, lo, hi, args.n_walkers, args.n_steps, args.n_burn, args.seed)
     post = summarize(chain, lp, lo, hi, THETA_NAMES)
@@ -257,8 +281,8 @@ def main():
     }
     out.with_suffix(".json").write_text(json.dumps(summary, indent=2, ensure_ascii=False, default=float) + "\n",
                                         encoding="utf-8")
-    thin = max(1, len(chain) // 20000)
-    np.savez_compressed(out.with_suffix(".npz"), chain=chain[::thin], log_prob=lp[::thin],
+    saved_chain, saved_lp = thin_time_axis(chain, lp, args.n_walkers)
+    np.savez_compressed(out.with_suffix(".npz"), chain=saved_chain, log_prob=saved_lp,
                         theta_names=np.array(THETA_NAMES))
     print(f"wrote {out.with_suffix('.json')} and .npz", flush=True)
     if sbc:
