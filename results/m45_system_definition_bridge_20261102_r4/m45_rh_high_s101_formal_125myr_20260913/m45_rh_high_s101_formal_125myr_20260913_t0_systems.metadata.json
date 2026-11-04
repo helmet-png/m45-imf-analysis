@@ -1,0 +1,29 @@
+{
+  "status": "physical_system_catalog",
+  "output": "results/m45_system_definition_bridge_20261102_r4/m45_rh_high_s101_formal_125myr_20260913/m45_rh_high_s101_formal_125myr_20260913_t0_systems.npz",
+  "time_myr": 0.0,
+  "interrupt_mode": "bse",
+  "external_mode": "none",
+  "confirmed_complete": true,
+  "n_components": 2369,
+  "n_systems": 1215,
+  "shared_component_ids_merged": [],
+  "categories": [
+    {
+      "category": "single",
+      "n_systems": 61,
+      "multiplicity": 1,
+      "n_components": 61,
+      "path": "runs/m45_rh_high_s101_formal_125myr_20260913/data.0.single"
+    },
+    {
+      "category": "binary",
+      "n_systems": 1154,
+      "multiplicity": 2,
+      "n_components": 2308,
+      "path": "runs/m45_rh_high_s101_formal_125myr_20260913/data.0.binary",
+      "column_layout": "summary_first"
+    }
+  ],
+  "warning": "Scientific use is valid only if every non-empty single/binary/triple/quadruple catalog from the same processed snapshot was supplied."
+}

@@ -122,3 +122,9 @@
 * **實測驗證修正有效**：套用修正後重跑，`radial_r3` 連續近 6 小時沒有再卡死一次（之前規律每 68–98 分鐘卡一次），最終乾淨完成
 * **PDMF→IMF 第 2 步徑向診斷四項全部跑完**（config C，單次重複、單階精修，會議前初步方向數字）：r1(0-1°)=2.10、r2(0-2°)=2.43、r3(0-3°)=2.50、rall(全樣本)=2.43——r1→r3 遞增支持核心到外圍的質量分層方向，但 rall 比 r3 低、不是單調，原因未解，需要正式 `--repeats 5 --refines 3,3` 重跑才能判斷是雜訊還是真訊號
 * 新增 `docs/PROJECT_TIMELINE.md`（本文件）+ `CONTRIBUTING.md` 五之三定期更新規則
+
+### 11/2 —— M45 system-definition bridge 結構驗收完成
+
+* senior24 對既有 10 組 formal PeTar screening grid 完成 definition-matched 後處理；修正失敗重跑的 external mode 為 formal snapshot 對應的 `none`。
+* manifest 為 `complete`：10/10 組都有 t=0、t=125 Myr system catalog 與 metadata，並各有 component、primary、system-total、photometric β=2/3/4 結果。
+* 這些數字是系統定義對齊的動力學修正基準；run 間變異不可忽略，尚不作最終 IMF 頭條值。
