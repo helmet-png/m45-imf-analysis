@@ -53,6 +53,7 @@
           "scripts": [
             "pipeline/step5_imf.py",
             "fit_real.py",
+            "scripts/diagnostics/summarize_free_lowmass_recovery.py",
             "pipeline/joint_fit.py"
           ],
           "queue_labels": [
