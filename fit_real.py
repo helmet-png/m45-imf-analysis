@@ -200,6 +200,8 @@ def build_manifest(args) -> dict:
         "members_file": args.members_file,
         "errmodel_file": args.errmodel_file,
         "selection_file": args.selection_file,
+        # B7：開了星團縱深，合成星團就不一樣，不能跟沒開的結果續傳混用。
+        "depth_spread": args.depth_spread,
     }
 
 
@@ -207,12 +209,17 @@ def build_manifest(args) -> dict:
 # 那個旗標當時根本不存在，所以舊檔案必定是用該旗標的預設值算出來的。
 # 這裡明確寫出每個後加鍵的「當時等效值」，讓缺鍵的舊檔案只在這次真的用了
 # 非預設值時才判為不相容，不會因為補了一個欄位就逼所有既有部分結果重算。
+# B7：用來建縱深分布的成員要多精確。parallax/parallax_error = 100 時
+# 單星的 DM 量測誤差是 2.17/100 = 0.022 mag，遠小於要量的 0.05–0.07 mag。
+DEPTH_MIN_PLX_SNR = 100.0
+
 MANIFEST_LEGACY_DEFAULTS = {
     "g_bright": None,
     "repeat_offset": 0,
     "members_file": "data/cmd_members.csv",
     "errmodel_file": "data/errmodel.npz",
     "selection_file": "data/selection.npz",
+    "depth_spread": False,
 }
 
 sys.path.insert(0, str(HERE))
@@ -401,6 +408,12 @@ def main():
                     help="Photometric-error NPZ relative to the repository root")
     ap.add_argument("--selection-file", default="data/selection.npz",
                     help="Selection-function NPZ relative to the repository root")
+    # --- 星團縱深（2026-11-06 新增，LIMITATIONS.md B7）---
+    # 單一距離模數忽略了成員沿視線方向的分布。開這個旗標時，合成系統的
+    # 距離模數從「高精度視差成員的 DM 減中位數」這個經驗分布抽樣。
+    ap.add_argument("--depth-spread", action="store_true",
+                    help="合成系統的距離模數從成員視差的經驗分布抽樣"
+                         f"（只用 parallax/parallax_error >= {DEPTH_MIN_PLX_SNR:g} 的成員）")
     args = ap.parse_args()
     if args.repeats < 1:
         # --repeats 0（或負數）讓 for rep in range(args.repeats) 完全不
@@ -487,6 +500,15 @@ def main():
               "e_bp_native/e_rp_native 鍵，目前載入的檔案沒有，請先重建 "
               f"{args.errmodel_file}")
         sys.exit(1)
+    if args.depth_spread:
+        # 用全樣本（不受 --radius-range 影響），理由同上方 dm 用全樣本。
+        e_plx = np.asarray(clean["parallax_error"], float)
+        good = np.isfinite(plx) & (plx / e_plx >= DEPTH_MIN_PLX_SNR)
+        dm_i = 5.0 * np.log10(1000.0 / (plx[good] - c3.parallax_zero_point)) - 5.0
+        base.dm_offsets = dm_i - np.median(dm_i)
+        print(f"星團縱深：{int(good.sum()):,} 顆成員，DM 偏移 std "
+              f"{base.dm_offsets.std():.3f}、穩健 std "
+              f"{np.subtract(*np.percentile(base.dm_offsets, [75, 25])) / 1.349:.3f} mag")
     # ↓ 讀選擇函數（build_selection.py 產生）
     sel = selmod.load(HERE / args.selection_file)
     print(f"真實觀測 {len(color):,} 顆，距離模數 {dm:.4f}，"

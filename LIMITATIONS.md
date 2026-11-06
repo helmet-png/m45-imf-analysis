@@ -258,6 +258,25 @@ chi²=0.75，總質量 456.0 M_sun，潮汐半徑外質量估計 14.4 M_sun，�
 自由擬合而非固定。細節見
 `docs/planning/LIMEPY_RADIAL_CROSSCHECK_FINAL_2026-08-25.md`。
 
+### B7 前向模型把整個星團放在同一個距離，成員的距離模數散布 0.05–0.07 mag 沒有建模（b7_control 否、b7_depth_spread 否）
+
+**問題**：`fit_real.py` 用成員視差中位數算出單一距離模數 5.659，每個
+合成系統都加同一個值。實際 1,078 顆成員的 DM 散布是 0.074 mag（標準差）、
+0.054 mag（IQR/1.349），量測誤差的中位貢獻只有 0.014 mag；
+`parallax/parallax_error ≥ 100` 的 762 顆是 0.070 mag。M45 潮汐半徑
+11.7 pc 在 135 pc 處對應約 ±0.18 mag，所以這個散布大半是真實縱深。
+`fit_real.py --depth-spread` 已實作：每個合成系統從這 762 顆的
+「DM 減中位數」經驗分布抽一個偏移，三個波段加同一個值，預設關閉
+（亂數多一組 `u_dm` 排在最後抽，關閉時結果逐位元不變）。
+
+**後果**：縱深讓 CMD 在星等方向多出約 0.05–0.07 mag 的展寬，量級跟
+測光誤差相當、比等質量雙星的 0.753 mag 小一個量級。現在這個展寬只能被
+f_bin、dav 或 q_gamma 吸收，三者都可能因此偏高；對 alpha 的影響方向與
+量級未測。`cloud_queue.txt` 已排 5 組 control（現在的程式、不開縱深）
+與 5 組 depth（只多 `--depth-spread`），同 repeat-offset 0–4、同種子，
+逐次配對相減。control 跑在 A6 非成員排除接進 `fit_real.py` 之後，
+所以它也會順便顯示 headline 換成現在的程式後動了多少。
+
 ---
 
 ## C 類
