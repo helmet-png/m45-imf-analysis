@@ -64,7 +64,10 @@
 - 銀河軌道：`scripts/nbody_petar/m45_orbit_init.py` 算出的
   t=−125 Myr 銀心直角座標（`--galpy-set MWPotential2014`）
 - 恆星演化：`--stellar-evolution 1 --bse-metallicity 0.02`
-  （mcluster `-Z 0.02` 一致）
+  （mcluster `-Z 0.02` 一致）。2026-11-06 補註：0.02 跟前向模型的
+  Z≈0.0144 不一致（`LIMITATIONS.md` D25）。主設定不變；Z=0.0144 的三個
+  中央 seed（`petar_m45_zcheck_grid.csv`）是事後加的敏感度組，不是預先
+  註冊的檢定，結果只用來判斷這個差異能不能忽略。
 
 ---
 

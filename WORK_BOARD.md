@@ -140,6 +140,15 @@ radial_r1_final（5 次重複、355 顆核心切片、實測 72,814 秒即約 4 
 未精修）移開，不要指望程式自動擋下來。
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| nbody_zcheck（D25） | 尚未進行 | 指派時間：2026-11-06 | `petar_m45_zcheck_grid.csv` 三列：m45_ref_s101／s202／s303，Z=0.0144，其餘同正式網格 | 三組 125 Myr correction，跟同 seed 的 Z=0.02 正式結果逐 seed 相減 |
+
+nbody_zcheck：在有 PeTar 的機器上逐列跑
+`run_nbody_case.py --grid petar_m45_zcheck_grid.csv --run-id <run_id> --petar-bin <完整檔名>`，
+再用跟 2026-09-13 正式網格同一套 `petar_pdmf_analysis.py` 設定（0.30–2.50 M☉、
+11.68 pc 孔徑、32 個投影方向、data.0 對 data.25）分析。規模跟正式網格的三個
+中央 seed 相同；`NBODY_PREREGISTRATION.md` 的 S4 實測一組約 17 分鐘
+（BSE 開、125 Myr），網格現在積分到 135 Myr，三組合計估計 1 小時內。
+判準見 `LIMITATIONS.md` D25。
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
 | nbody_prior_from_radial（A5） | 進行中 | 開始：2026-09-16 | 恆星數 N = 400 顆；質量分層度 S = 0.3、0.5、0.7（三組）；virial 比 Q = 0.5，圍繞 pilot 參數小幅擾動 | 3–5 組模擬跑完的 α(r) 曲線，跟觀測 α(<r) 的擬合優度比較 |

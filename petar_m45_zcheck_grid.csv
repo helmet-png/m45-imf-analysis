@@ -1,0 +1,4 @@
+run_id,n_systems,binary_system_fraction,n_stars,n_binaries,profile,mcluster_S,half_mass_radius_pc,imf_alpha_low,imf_alpha_high,seed,galactic_tide,priority,status,metallicity_z
+m45_ref_s101_z0144,1215,0.95,2369,1154,2,0.30,3.10,1.30,2.30,101,false,1,ready,0.0144
+m45_ref_s202_z0144,1215,0.95,2369,1154,2,0.30,3.10,1.30,2.30,202,false,1,ready,0.0144
+m45_ref_s303_z0144,1215,0.95,2369,1154,2,0.30,3.10,1.30,2.30,303,false,1,ready,0.0144
