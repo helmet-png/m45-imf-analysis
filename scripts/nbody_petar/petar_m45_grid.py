@@ -73,6 +73,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent.parent.parent  # 2026-08-26 檔案搬到 scripts/nbody_petar/，往上三層才是 repo 根目錄
 ORBIT_JSON = HERE / "results" / "m45_orbit_init.json"  # m45_orbit_init.py 的輸出，galactic_tide=true 時讀這裡的 -c 座標
 
+# D25：mcluster `-Z` 與 PeTar `--bse-metallicity` 用的金屬量 Z。網格 CSV 可帶
+# 選填欄位 `metallicity_z`；沒有這欄的網格（2026-09 的 10 組正式網格與 430 組
+# 訓練網格都是這種）照當時實際用的 0.02 渲染，舊結果因此仍可逐字重現。
+# 0.02 是 Hurley SSE/BSE 的「太陽」慣例；前向模型（PARSEC，Z☉=0.0152，
+# headline MH=-0.022）對應的絕對 Z 約 0.0144。兩種對齊方式（絕對 Z 或
+# 相對各自太陽值）哪個才對沒有定論，先用 petar_m45_zcheck_grid.csv 量敏感度。
+LEGACY_Z = 0.02
+# Hurley et al. (2000) SSE 擬合公式的適用範圍。
+Z_RANGE = (1e-4, 0.03)
+
 
 def load_grid(path: Path) -> list[dict]:
     with path.open(newline="", encoding="utf-8") as handle:
@@ -95,6 +105,8 @@ def parse_row(raw: dict) -> dict:
     ):
         row[key] = float(row[key])
     row["galactic_tide"] = row["galactic_tide"].strip().lower() == "true"
+    z = (row.get("metallicity_z") or "").strip()
+    row["metallicity_z"] = float(z) if z else LEGACY_Z
     return row
 
 
@@ -134,6 +146,11 @@ def validate_grid(rows: list[dict]) -> dict:
             errors.append(f"{row['run_id']}: imf_alpha_low 超出合理範圍 (0, 4)")
         if not 0.0 < row["imf_alpha_high"] < 5.0:
             errors.append(f"{row['run_id']}: imf_alpha_high 超出合理範圍 (0, 5)")
+        if not Z_RANGE[0] <= row["metallicity_z"] <= Z_RANGE[1]:
+            errors.append(
+                f"{row['run_id']}: metallicity_z={row['metallicity_z']} "
+                f"超出 SSE/BSE 適用範圍 {Z_RANGE}"
+            )
         if row["galactic_tide"] and not ORBIT_JSON.exists():
             # H3（2026-09 修復）：真跑之前 results/m45_orbit_init.json 必須
             # 已經存在（`python m45_orbit_init.py` 產生），render_commands()
@@ -205,7 +222,7 @@ def render_commands(row: dict) -> str:
         "-C", "5",
         "-u", "1",
         "-s", str(row["seed"]),
-        "-Z", "0.02",
+        "-Z", f"{row['metallicity_z']:g}",
         "-o", row["run_id"],
     ]
     if row["profile"] == 2:
@@ -267,7 +284,8 @@ def render_commands(row: dict) -> str:
             # 星團年齡」當成敏感度測試的一個維度，不需要為了測不同年齡
             # 重新積分一次。
             (
-                f"petar -u 1 -b {row['n_binaries']} --bse-metallicity 0.02 "
+                f"petar -u 1 -b {row['n_binaries']} "
+                f"--bse-metallicity {row['metallicity_z']:g} "
                 "--stellar-evolution 1 --detect-interrupt 1"
                 f"{galpy_set} "
                 "-t 135.0 -o 5.0 input > petar.log 2>&1"
