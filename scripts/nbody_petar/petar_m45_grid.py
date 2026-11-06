@@ -60,6 +60,12 @@ H12（2026-09-05，參數標準化，查證 mcluster 官方 README 確認）：
   explicitly virial equilibrium (Q=0.5), so ``render_commands()`` now
   passes ``-Q 0.50`` explicitly instead of relying on an unverified
   default.
+
+D26（2026-11-06）：網格從沒傳 mcluster 的 ``-p``／``-d``，所以用的是
+``main.c`` 預設 ``pairing=3``（主星 < msort=5 M☉ 時從 IMF 隨機配對）與
+``adis=1``（Kroupa 1995 週期分布）。這跟前向模型的雙星假設（q^γ、
+q>=0.10、f_bin 跟主星質量無關）不同，影響見 ``LIMITATIONS.md`` D26 與
+``scripts/diagnostics/compare_pairing_offsets.py``。
 """
 from __future__ import annotations
 

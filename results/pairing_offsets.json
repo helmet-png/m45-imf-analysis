@@ -1,0 +1,43 @@
+{
+  "mass_range_msun": [
+    0.3,
+    2.5
+  ],
+  "imf_breaks": [
+    0.08,
+    0.5,
+    150.0
+  ],
+  "imf_slopes": [
+    1.3,
+    2.3
+  ],
+  "n_sys": 2000000,
+  "seed": 20261106,
+  "forward": {
+    "alpha_component": 2.096,
+    "alpha_primary": 2.066,
+    "offset_component_minus_primary": 0.03000000000000025,
+    "params": {
+      "f_bin": 0.568,
+      "q_gamma": -0.896,
+      "q_min": 0.1
+    }
+  },
+  "random": {
+    "alpha_component": 2.066,
+    "alpha_primary": 1.8450000000000002,
+    "offset_component_minus_primary": 0.22099999999999964,
+    "params": {
+      "binary_system_fraction": 0.95
+    }
+  },
+  "petar_t0_check": {
+    "n_runs": 10,
+    "alpha_component_mean": 2.1391999999999998,
+    "alpha_primary_mean": 1.9536000000000002,
+    "offset_mean": 0.18559999999999993,
+    "offset_std": 0.018798345080824896,
+    "note": "10 組 grid 的 f_sys 不全是 0.95（bin_low 0.87、bin_high 0.99）"
+  }
+}
