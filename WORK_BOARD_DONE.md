@@ -553,3 +553,8 @@ OL_runs 線性外推完整規模（9,278 顆、OL_runs=25）約 5.8 小時〔202
 | m45_system_definition_bridge | 2026-11-02 | 10 組 PeTar formal run 的 t=0、125 Myr processed catalog；0.30–2.50 M☉；11.68 pc；32 projections | 10 組 definition-matched catalog 與 bridge JSON：component、primary、system-total、photometric β=2/3/4 |
 
 m45_system_definition_bridge：10/10 run 都通過 manifest、catalog inventory 與 definition coverage 驗收；每組均含 t=0、t=125 Myr NPZ 和 metadata。screening grid 的 Δα(PDMF−IMF) 平均為 component −0.1317、primary −0.1423、system-total −0.1240、photometric β=4 −0.1473。不同 run 的差異很大，這些是與系統定義匹配的動力學修正基準，不能直接加到 component-star 或頭條 α；後續論文使用時必須選擇與觀測量相同的系統定義。
+| 任務名稱 | 完成日期 | 輸入參數 | 輸出參數 |
+|---|---|---|---|
+| p2_free_lowmass_recovery_summary（A3） | 2026-11-04 | 9 組 40,000 顆合成星的自由低質量段擬合；repeat offset 1–9 | 可重現的參數統計、manifest 驗證與舊 offset 0 檔案 provenance 判定 |
+
+p2_free_lowmass_recovery_summary：9/9 回收檔的 manifest、有限值與設定一致性均通過；α 平均 2.475、跨重複 sample SD 0.106，低質量段冪次 p 平均 1.085、sample SD 0.202。舊 offset 0 檔案沒有 manifest，不能驗證輸入、精修設定、種子或 offset，因此排除在正式統計之外。結果建立了可追溯的九次摘要，但不取代 p6_lowmass_v3 的 d(alpha)/d(p) 輪廓，也不是最終 IMF。
