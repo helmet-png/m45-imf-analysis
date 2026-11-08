@@ -258,6 +258,30 @@ chi²=0.75，總質量 456.0 M_sun，潮汐半徑外質量估計 14.4 M_sun，�
 自由擬合而非固定。細節見
 `docs/planning/LIMEPY_RADIAL_CROSSCHECK_FINAL_2026-08-25.md`。
 
+### B6 消光係數全程用常數，Gaia 官方隨顏色變的係數蓋不到一半樣本；A_V=0.386 是 HR23 的 3.8 倍且原因未知（尚無認領工作）
+
+**問題**：前向模型、傳統法與 `observe_snapshot.py` 都用常數
+A_G/A_V=0.83、A_BP/A_V=1.08、A_RP/A_V=0.63。真實係數隨恆星顏色變。
+Gaia EDR3 官方係數（Fitzpatrick+2019 曲線，主序，
+`data/gaia_edr3_extinction/Fitz19_EDR3_MainSequence.csv`）只在內稟
+BP−RP 介於 −0.06 與 2.5 之間有效、官方說不可外插；1,078 顆成員裡有 556 顆
+比 2.5 紅（大約 G>15.5 的 M 矮星）、23 顆比 −0.06 藍，只有 499 顆在範圍內。
+`scripts/diagnostics/compare_extinction_coefficients.py`
+（`results/extinction_coefficient_comparison.json`）在 A_V=0.386、有效
+範圍內量到：常數係數讓 G 偏差 −0.051～+0.044 mag、BP−RP 偏差最多 0.026 mag；
+要湊出同樣的觀測色超，官方係數需要的 A_V 是常數版的 0.96–1.17 倍。另外，
+headline 的 A_V=0.386±0.033（重複雜訊）是 Hunt & Reffert (2023) 0.102 的
+3.8 倍，經典值 E(B−V)≈0.04 換算約 0.12，repo 內沒有任何條目解釋這個差。
+
+**後果**：在有效範圍內，換成官方係數會讓 A_V 變大而不是變小，所以消光
+係數**不能**解釋 A_V 偏高；偏高的成因要往別處找（例如跟 A4「MH 吸收系統
+偏差」一樣，是 A_V 在補等時線低質量段的顏色偏差，或 HR23 的 A_V 定義
+不同），目前沒有驗證。有效範圍外的 M 矮星（佔樣本一半、也是 alpha 主要
+靠的那段）沒有官方係數可用，要改係數只能用等時線自己的 SED 算（例如
+PARSEC 下載一份 extinction_av 不為 0 的同規格網格，逐點相減得到每顆星的
+係數），這是較大的架構改動，還沒決定要不要做。常數係數對 alpha 的影響
+未量。
+
 ---
 
 ## C 類
