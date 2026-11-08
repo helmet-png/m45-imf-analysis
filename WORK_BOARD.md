@@ -229,6 +229,14 @@ queue.txt，但循序佇列還沒輪到，認領前先查 logs/queue_done.txt �
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
+| b7_control／b7_depth_spread（B7） | 尚未進行 | 指派時間：2026-11-06 | headline 設定（config C、N=40,000、精修 3,3,3），repeat-offset 0–4；depth 組多 `--depth-spread` | 10 個 `fit_real_*_r{0..4}.npz`，逐 offset 配對的 alpha／f_bin／dav／q_gamma 差 |
+
+b7_control／b7_depth_spread：已排進 `cloud_queue.txt`（10 行，worker 留空）。
+單次耗時參考 `p2_free_lowmass_r*`（同為 headline 規模單次重複），上限設 60 小時。
+control 組同時回答 headline 換成接上 A6 排除的現行程式後動了多少。
+
+| 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
+|---|---|---|---|---|
 | pyupmask_completeness_test（C8） | 尚未進行 | 指派時間：2026-08-13 | 已知數量、已知位置（自行 μ、視差 π）的合成成員星，混入真實場星資料 | 完整度（召回率）對半徑 r／星等 G 的分箱曲線 |
 
 pyupmask_completeness_test：量 pyUPMASK 成員判定的完整度隨半徑/

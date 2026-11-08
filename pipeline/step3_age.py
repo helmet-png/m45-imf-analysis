@@ -112,6 +112,10 @@ def draw_randoms(n: int, rng: np.random.Generator) -> dict:
         # 光變／黑子造成的額外亮度散布。預設不啟用（JointModel 的
         # extra_scatter=0），只有明確開啟時才真的用到這組亂數。
         "z_var": rng.normal(0, 1, n),
+        # B7 星團縱深（2026-11-06 追加，同樣排在最後）：每個合成系統從
+        # JointModel.dm_offsets 抽一個距離模數偏移。預設 dm_offsets=None
+        # 不使用這組亂數，舊結果仍然逐位元可重現。
+        "u_dm": rng.random(n),
     }
 
 

@@ -186,6 +186,12 @@ class JointModel:
         # LIMITATIONS.md C19）。預設 0.0 = 不啟用，行為與加入前
         # 逐位元相同。
         self.extra_scatter = 0.0
+        # B7 星團縱深：成員的距離模數其實有 0.05–0.07 mag 的散布（量測誤差
+        # 只佔約 0.014），單一 self.dm 等於把整個星團放在同一個距離。設成
+        # 一維陣列（每顆成員的 DM 減中位數）時，每個合成系統從中抽一個偏移，
+        # 三個波段加同一個值（距離不影響顏色）。預設 None = 不啟用，行為與
+        # 加入前逐位元相同。
+        self.dm_offsets = None
         # 差異消光的分布形式（見 synthesise() 裡的完整說明）。**這是猜的
         # 選擇，從未跟其他合理的分布形式比較過代價**（C5，2026-08-14）。
         # 預設 "lognormal" 與原本行為一致；extinction_form_test 會覆寫成
@@ -603,6 +609,16 @@ class JointModel:
         g += self.dm + self.ext.g * av_i
         bp += self.dm + self.ext.bp * av_i
         rp += self.dm + self.ext.rp * av_i
+        # B7：星團縱深。加在系統層級（雙星已經流量相加），兩顆成員星在
+        # 同一個距離；加在測光誤差與選擇函數之前，因為縱深改變的是真實
+        # 視星等。用 getattr 的理由同 low_mass_slope（多行程 pickle）。
+        dm_off = getattr(self, "dm_offsets", None)
+        if dm_off is not None:
+            k = np.minimum((d["u_dm"][:n] * len(dm_off)).astype(int),
+                           len(dm_off) - 1)
+            g += dm_off[k]
+            bp += dm_off[k]
+            rp += dm_off[k]
 
         # C19 敏感度測試：自轉調製／前主序光變／黑子造成的額外亮度散布。
         # 模型本身完全沒有這一項（見 LIMITATIONS.md C19），這裡不是要

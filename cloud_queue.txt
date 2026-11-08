@@ -483,3 +483,19 @@ p11_outlierfrac_v3_f003|profile_outlierfrac.py|--procs 4 --n-syn 40000 --repeats
 nbody_infer_v1_nofbin|scripts/nbody_petar/emulator_infer.py|--tag _v1_nofbin|scripts/nbody_petar/emulator_fit.py,scripts/nbody_petar/emulator_holdout_check.py|false|senior24|30
 nbody_infer_v1_withfbin|scripts/nbody_petar/emulator_infer.py|--drop-prefix "" --sbc-trials 0 --tag _v1_withfbin|scripts/nbody_petar/emulator_fit.py,scripts/nbody_petar/emulator_holdout_check.py|false|senior24|10
 nbody_infer_v1_energy|scripts/nbody_petar/emulator_infer.py|--max-energy-error 1e-3 --sbc-trials 0 --tag _v1_energy|scripts/nbody_petar/emulator_fit.py,scripts/nbody_petar/emulator_holdout_check.py|false|senior24|10
+
+# 2026-11-06：B7 星團縱深 A/B。跟 headline p2_final2_v3 同設定、同 repeat-offset 0-4
+# （同一組種子，可逐次配對相減）。不直接跟 2026-08 的 fit_real_p2final_v3_rep*.npz
+# 比：那批跑在 fit_real.py 接上 A6 非成員排除（2026-09-05）之前，跟現在的程式
+# 差的不只縱深一項。所以 control 組用現在的程式、不開縱深重跑同樣五個 offset，
+# depth 組只多 --depth-spread。判準見 LIMITATIONS.md B7。
+b7_control_r0|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 0 --refines 3,3,3 --configs C --tag _b7_control_r0|measure_overconfidence.py,injection_recovery.py|false||60
+b7_control_r1|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 1 --refines 3,3,3 --configs C --tag _b7_control_r1|measure_overconfidence.py,injection_recovery.py|false||60
+b7_control_r2|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 2 --refines 3,3,3 --configs C --tag _b7_control_r2|measure_overconfidence.py,injection_recovery.py|false||60
+b7_control_r3|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 3 --refines 3,3,3 --configs C --tag _b7_control_r3|measure_overconfidence.py,injection_recovery.py|false||60
+b7_control_r4|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 4 --refines 3,3,3 --configs C --tag _b7_control_r4|measure_overconfidence.py,injection_recovery.py|false||60
+b7_depth_spread_r0|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 0 --refines 3,3,3 --configs C --depth-spread --tag _depth_spread_r0|measure_overconfidence.py,injection_recovery.py|false||60
+b7_depth_spread_r1|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 1 --refines 3,3,3 --configs C --depth-spread --tag _depth_spread_r1|measure_overconfidence.py,injection_recovery.py|false||60
+b7_depth_spread_r2|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 2 --refines 3,3,3 --configs C --depth-spread --tag _depth_spread_r2|measure_overconfidence.py,injection_recovery.py|false||60
+b7_depth_spread_r3|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 3 --refines 3,3,3 --configs C --depth-spread --tag _depth_spread_r3|measure_overconfidence.py,injection_recovery.py|false||60
+b7_depth_spread_r4|fit_real.py|--procs 24 --n-syn 40000 --repeats 1 --repeat-offset 4 --refines 3,3,3 --configs C --depth-spread --tag _depth_spread_r4|measure_overconfidence.py,injection_recovery.py|false||60
