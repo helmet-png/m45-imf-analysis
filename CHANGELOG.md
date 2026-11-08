@@ -100,6 +100,9 @@
 
 ## WORK_BOARD.md / WORK_BOARD_DONE.md
 
+- 2026-11-08：優先順序段落仍把 `limepy_radial_crosscheck` 正式版列為待做，
+  但它已在 2026-08-25 完成並移至 `WORK_BOARD_DONE.md`。更正舊段落，
+  避免協作者重複派工；模型誤差棒與估計器差異仍按 B5 保留。
 - 見上方「CONTRIBUTING.md」小節 2026-08-23／2026-08-24 各行——兩份
   文件的格式沿革跟 `CONTRIBUTING.md` 零之四規則的沿革是同一件事，
   不重複記錄。

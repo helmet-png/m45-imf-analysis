@@ -452,11 +452,9 @@ nbody_gas_remnant_preregistration：尚未認領。正式網格已包含初始�
 
 **第一階段（現役缺陷．優先度最高，直接影響「這是 PDMF 不是 IMF」這個
 最核心的主張）**：
-1. `limepy_radial_crosscheck` 補做正式版——B5 的探索性版本
-   （2026-08-20，用 `_prelim`）已經做過方向性比對，但 A5 真正的解除
-   條件要求用 `radial_final_reruns` 的 `_final` 誤差棒版本重做，這步
-   目前還沒有人排。是純比對計算，不需要重新起跑合成星團，任何一台
-   閒置的雲端 worker 都能做，優先度最高但成本最低，建議最先認領。
+1. `limepy_radial_crosscheck` 的正式版已完成，見 `WORK_BOARD_DONE.md`；
+   這裡保留原優先順序的脈絡，但不再認領或重跑。模型端誤差棒及估計器
+   口徑仍有限制，見 `LIMITATIONS.md` B5。
 2. `nbody_prior_from_radial` 的初步校準網格——A5 解除條件的另一半
    （第 5 步 N-body 交叉驗證），前置的三個定義不一致已解決，缺的是
    真的跑一組小規模模擬網格。跟第 1 項不衝突，可以平行進行。
