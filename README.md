@@ -161,13 +161,13 @@ IMF（見下方「PDMF → IMF」與 `LIMITATIONS.md` A5）。
 |---|---|---|
 | 1 | 文獻基準線（Li+2026） | 完成 |
 | 2 | 前向模型逐半徑重跑 α(<r) | 正式統計版四組（r1/r2/r3/rall）全部完成，見上方質量分層表 |
-| 3 | LIMEPY 多質量平衡模型交叉驗證 | 模型完成並合併；探索性交叉比對已做（`limepy_radial_crosscheck`），正式版待用第 2 步的 `_final` 資料重做 |
+| 3 | LIMEPY 多質量平衡模型交叉驗證 | 正式徑向交叉核對已完成（`limepy_radial_crosscheck`）；模型端仍無 bootstrap 誤差棒 |
 | 4 | 放大搜尋半徑到 8–17° | 尚未開始 |
 | 5 | N-body 模擬（Converse & Stahler 2010） | 探索性 pilot 已完成，方向與觀測質量分層一致；正式校準待第 2 步 `_final` 結果 |
 
-A5「測到的是 PDMF 不是 IMF」這條限制的解除條件，是把第 2 步的正式統計
-結果跟第 3 步（LIMEPY）與第 5 步（N-body）的預測做正式交叉驗證——這
-是目前優先度最高的待辦，細節與最新數字見 `LIMITATIONS.md` A5、B5。
+A5「測到的是 PDMF 不是 IMF」這條限制仍待 N-body 校準與觀測比較解除。
+LIMEPY 正式徑向交叉核對已完成，但模型端仍無 bootstrap 誤差棒，且不是
+獨立 IMF 驗證；限制與數值見 `LIMITATIONS.md` A5、B5。
 
 ---
 
