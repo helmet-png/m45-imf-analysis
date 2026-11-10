@@ -381,17 +381,20 @@ queue.txt。耗時未查證。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
-| bp15_bp20_paired_comparison（D12） | 尚未進行 | 指派時間：2026-08-23 | BP 誤差門檻 SNR_BP = 15 vs 20（現行）；合成星數 N = 40,000 顆；至少 5 組配對種子 | BP15 vs BP20 逐 offset 配對後的 α 差異 |
+| bp15_bp20_paired_comparison（D12） | 進行中 | 開始日期：2026-08-23 | BP 誤差門檻 SNR_BP = 15 vs 20（現行）；合成星數 N = 40,000 顆；至少 5 組配對種子 | BP15 vs BP20 逐 offset 配對後的 α 差異 |
 
 bp15_bp20_paired_comparison：檢查放寬 BP 誤差門檻（BP15 vs 現行
 BP20）找回的紅端候選星，納入後對 alpha 頭條數字有沒有實質影響。
 派工前置檢查已完成（scripts/diagnostics/prepare_bp15_paired_dispatch.py
 產生的 10 個唯一 job tag、82.2 MB 暫存 payload 已驗證可被 kernel
 讀取），彙整器（scripts/diagnostics/summarize_bp15_formal_paired.py）
-設計為缺任何配對就拒算平均（fail-closed）。本機目前缺
-kaggle_accounts.json／access token，還沒送出雲端長跑。先前的探索性
-smoke test（3 個 3k paired seeds）顯示 alpha 差仍不穩定，不能下科學
-結論；目前規劃使用 40k、至少 5 個 paired seeds，正式需求仍待完整驗證。耗時未查證。
+設計為缺任何配對就拒算平均（fail-closed）。Cloud queue 紀錄顯示
+repeat offset 0–2 的六個 BP15／BP20 工作已完成；offset 3、4 的四個工作
+已分派給 `justinlan11`、`teammate2`、`helmetalbert`、`account5`，尚待
+結果驗收。不要重複派送這六個已完成工作或四個已分派工作。
+先前的探索性 smoke test（3 個 3k paired seeds）顯示 alpha 差仍不穩定，
+不能下科學結論；正式比較仍須等五組 offset 配對全數完成並由彙整器驗收。
+本機未保有雲端 queue done log，offset 3、4 的完成狀態須以回收檔與執行紀錄確認；耗時未查證。
 
 | 任務名稱 | 狀態 | 開始日期／指派時間 | 輸入參數 | 輸出參數 |
 |---|---|---|---|---|
@@ -502,9 +505,9 @@ A3 已記錄低質量段冪次固定是目前最大的單一系統誤差來源�
    認領前先讀 D8／D16／D17 現在的內容）。`comaber_tier1` 要等前一項
    確認完才能真的動手，且動手前還缺 Kraus & Hillenbrand (2007) 的
    正確原文（The Astronomical Journal, 134, 2340），需要使用者提供。
-9. `bp15_bp20_paired_comparison`——派工前置檢查已完成，缺的是
-    Kaggle 帳號憑證真的送出正式規模長跑，現在 Kaggle 帳號已經在用
-    （見第 7 點），排隊順序上可以排在 p6b 三分片後面。
+9. `bp15_bp20_paired_comparison`——offset 0–2 的六個工作已完成，offset
+   3、4 的四個工作已分派；不需要再送出相同派工。待四個結果回收並驗收、
+   五組配對齊全後執行彙整器。這批正式工作排在 p6b 三分片之後。
 
 **沒有列進以上三階段、但 LIMITATIONS.md 裡還開著、目前無人認領的
 「尚無認領工作」項目**（C2、C4、C6、C7、C9–C12、C14–C17、C21、B2–B4、
