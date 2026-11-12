@@ -128,3 +128,8 @@
 * senior24 對既有 10 組 formal PeTar screening grid 完成 definition-matched 後處理；修正失敗重跑的 external mode 為 formal snapshot 對應的 `none`。
 * manifest 為 `complete`：10/10 組都有 t=0、t=125 Myr system catalog 與 metadata，並各有 component、primary、system-total、photometric β=2/3/4 結果。
 * 這些數字是系統定義對齊的動力學修正基準；run 間變異不可忽略，尚不作最終 IMF 頭條值。
+
+### 11/13 —— 傳統法五變體以 A6 排除後樣本重算（v3）
+
+* `traditional_accounting_v2.npz` 早於 A6（排除已確認非成員＋顏色一致性檢查），重算為 `traditional_accounting_v3.npz`：真實資料五變體 α 落在 2.37–2.44（全當單星 2.395→2.408，0.50–2.50 範圍只少了一顆 G=7.39 的亮星）。
+* 注入回收段因為假資料抽樣星數跟著樣本變（1,078→1,076）而整批換掉，f_bin=0.45 偏差從全當單星 −0.013／CMD 剔除 +0.120 變成 −0.073／+0.044：每情境 20 批的均值標準誤約 0.03，表 3 偏差欄只剩方向可引用，新增 `LIMITATIONS.md` A9。
