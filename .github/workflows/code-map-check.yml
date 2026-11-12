@@ -1,0 +1,28 @@
+name: Code map check
+
+# code_map/catalog.json 是手動維護的程式登記檔，code_map/ 底下的 .md 由
+# code_map/build_map.py 依它生成。搬檔案、改名、或改了 catalog.json 卻沒
+# 重新生成頁面，地圖就會悄悄過期——這裡每個 PR 都檢查一次：登記的路徑
+# 要存在、標籤值要合法、頁面要跟登記檔一致。只用 Python 標準庫。
+#
+# 目前還沒登記完所有程式，所以不加 --strict；全部登記完之後加上
+# --strict，之後新增 .py 沒登記就會被擋下。
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify code map is consistent with catalog.json
+        run: python3 code_map/build_map.py --check
