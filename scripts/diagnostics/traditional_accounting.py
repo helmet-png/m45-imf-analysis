@@ -50,8 +50,9 @@
 ======================================================================
 【這支程式現在的角色】
 ======================================================================
-**目前傳統法 PDMF 數字的來源**：真實資料五種變體全部落在 α = 2.37–2.42
-（results/traditional_accounting_v2.npz）。執行方式：
+**目前傳統法 PDMF 數字的來源**：真實資料五種變體全部落在 α = 2.37–2.44
+（results/traditional_accounting_v3.npz；v2 是排除已確認非成員與顏色
+一致性檢查加入前的舊樣本，2.37–2.42，不再引用）。執行方式：
   python scripts/diagnostics/traditional_accounting.py [--skip-legacy]
 兩大段：
   1. 注入回收：用前向模型生成「答案已知」的假星團（α 真值 2.35），
@@ -115,11 +116,11 @@ config.toml：
 ======================================================================
 【(c) 真正在執行操作的核心】（行號以這個版本為準，改程式後要更新）
 ======================================================================
-  核心 1｜第 213–268 行｜traditional_alpha()：跑一次完整傳統法（剔除 → 查質量 → 擬合）
-  核心 2｜第 271–300 行｜bootstrap_alpha_err()：重抽真實資料 1000 次量 α 的散布
-  核心 3｜第 320–371 行｜main() 讀資料、排除非成員、建立生成假資料用的模型
-  核心 4｜第 372–402 行｜main() 注入回收：4 種真實雙星比例 × 3 種變體 × 20 批假資料
-  核心 5｜第 404–440 行｜main() 真實資料：五種變體各跑一次，報 α 與誤差
+  核心 1｜第 217–272 行｜traditional_alpha()：跑一次完整傳統法（剔除 → 查質量 → 擬合）
+  核心 2｜第 275–304 行｜bootstrap_alpha_err()：重抽真實資料 1000 次量 α 的散布
+  核心 3｜第 324–375 行｜main() 讀資料、排除非成員、建立生成假資料用的模型
+  核心 4｜第 376–406 行｜main() 注入回收：4 種真實雙星比例 × 3 種變體 × 20 批假資料
+  核心 5｜第 408–444 行｜main() 真實資料：五種變體各跑一次，報 α 與誤差
 
 ======================================================================
 【(d) 整體流程】
@@ -136,7 +137,7 @@ config.toml：
       → C、D：直接算 α，誤差用 bootstrap（因為假資料沒有 RUWE／NSS 欄位，
         做不了注入回收）
   → 交叉檢查 bootstrap vs 注入回收的散布 → 印出判讀說明
-  → 存 results/traditional_accounting_v2.npz
+  → 存 results/traditional_accounting_v3.npz
 """
 from __future__ import annotations
 
@@ -180,6 +181,9 @@ ANALYTIC_CORRECTION = 0.016
 # **不要寫死在別處**——只有這裡一個地方定義，其他要用的地方 import 它。
 CURRENT_LOGAGE = 8.033
 CURRENT_AV = 0.383
+
+# 輸出檔名；樣本或方法變動時遞增版號，不要覆蓋舊檔（CONTRIBUTING.md 六之 5）。
+OUT_NAME = "traditional_accounting_v3.npz"
 
 # 舊選擇，降級為附錄敏感度測試用，不再進主表。
 LEGACY_ISOCHRONE = (8.00, 0.20, "step3 舊最佳(8.00,0.20)")
@@ -461,14 +465,14 @@ def main():
     print("  RUWE/GaiaNSS 兩欄的誤差是 bootstrap，跟其他欄的注入回收/曲率")
     print("    不是同一把尺，只能比中心值")
 
-    np.savez(HERE / "results" / "traditional_accounting_v2.npz",
+    np.savez(HERE / "results" / OUT_NAME,
              **{f"inj::{r}::{fb}::{tag}": v
                 for (r, fb, tag), v in results.items()},
              **{f"real::{k[0]}::{k[1]}::{k[2]}::alpha": v[0]
                 for k, v in real.items()},
              **{f"real::{k[0]}::{k[1]}::{k[2]}::err": v[1]
                 for k, v in real.items()})
-    print("\n寫入 results/traditional_accounting_v2.npz")
+    print(f"\n寫入 results/{OUT_NAME}")
 
 
 if __name__ == "__main__":
