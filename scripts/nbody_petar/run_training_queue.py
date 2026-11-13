@@ -110,7 +110,7 @@ def already_complete(run_dir: Path) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--grid", type=Path, default=REPO_ROOT / "petar_m45_training_grid.csv")
+    parser.add_argument("--grid", type=Path, default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv")
     parser.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs_training")
     parser.add_argument("--n-threads", type=int, default=8)
     parser.add_argument("--energy-threshold", type=float, default=1e-3)

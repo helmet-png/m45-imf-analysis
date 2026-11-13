@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "results"
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "ops"))  # kaggle_sync
 GRID = "parsec_v2.0_gaiaEDR3_logt7.7-8.3s0.05_mh-0.6-0.6s0.05.dat"
 BP15_INPUTS = [
     RESULTS / "cmd_members_bp15_smoke.csv",
@@ -34,7 +35,7 @@ def command(sample: str, offset: int, n_syn: int) -> dict:
         "--repeat-offset", str(offset), "--configs", "C", "--refines", "3,3",
         "--grid", GRID, "--tag", tag,
     ]
-    extras = ["measure_overconfidence.py", "injection_recovery.py"]
+    extras = ["scripts/core/measure_overconfidence.py", "scripts/core/injection_recovery.py"]
     if sample == "15":
         # kaggle_sync copies explicit extras into the kernel root, so the three
         # flags below deliberately omit the local results/ prefix.
@@ -93,7 +94,7 @@ def main() -> None:
         bp15 = next(job for job in jobs if job["sample"] == "BP15")
         with tempfile.TemporaryDirectory(prefix="m45_bp15_payload_") as tmp:
             payload = Path(tmp) / "payload"
-            build_payload("fit_real.py", bp15["extra_files"], payload)
+            build_payload("scripts/core/fit_real.py", bp15["extra_files"], payload)
             expected = [
                 payload / "fit_real.py",
                 payload / "cmd_members_bp15_smoke.csv",

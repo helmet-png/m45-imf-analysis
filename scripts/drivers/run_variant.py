@@ -14,7 +14,7 @@ pyUPMASK 會把 input/ 底下所有檔案都跑一遍，且 params.ini 從 CWD �
 輸出：results/baseline.dat（每顆星一列，含成員機率 probs_final）
       logs/baseline.log（pyUPMASK 執行過程的完整輸出）
 
-pyUPMASK 怎麼判定成員（摘要，細節見 README「pyUPMASK 分群參數」）：
+pyUPMASK 怎麼判定成員（摘要，細節見 docs/reference/CONFIG_REFERENCE.md「pyUPMASK 分群參數」）：
   重複 25 輪（外圈）；每一輪：
     1. 用每顆星的天測誤差把自行、視差隨機擾動一次（重抽）
     2. 用 PCA 把自行＋視差三維壓成兩維

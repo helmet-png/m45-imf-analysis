@@ -28,3 +28,8 @@ jobs:
 
       - name: Verify stage_map.py script paths exist
         run: python3 scripts/tools/check_stage_map_paths.py
+
+      # 2026-11 目錄重整後加上：佇列檔排進來的工作若還寫舊路徑，
+      # 會到 worker 上才失敗，這裡在 PR 階段擋下。
+      - name: Verify queue script paths exist
+        run: python3 scripts/tools/check_queue_paths.py

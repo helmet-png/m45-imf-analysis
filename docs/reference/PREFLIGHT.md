@@ -2,7 +2,7 @@
 
 這份文件記錄的判斷與數字都代表寫下當下的理解，不是不能動的規則（見
 `CONTRIBUTING.md` 零之二）。發現哪一條站不住腳、或有更好的做法，直接改。
-沿革見 [CHANGELOG.md](../../CHANGELOG.md)。
+沿革見 [CHANGELOG.md](../project/CHANGELOG.md)。
 
 ## 這套機制在防什麼
 
@@ -35,18 +35,18 @@
 | **C1** 量化簽章 | 最佳點是否全落在粗網格節點（可疑訊號，需搭配實際解析度或搜尋軌跡判定，不是必然＝沒精修）、重複間散布是否精確 0、有無貼牆 | `preflight.py --gate c` |
 | **C2** manifest 完整性 | 沒有 manifest 的結果檔無法事後查證設定 | 同上 |
 
-`run_queue.py` 已接上：派工前跑 B（不通過就記 `preflight_fail` 並跳過，
+`ops/run_queue.py` 已接上：派工前跑 B（不通過就記 `preflight_fail` 並跳過，
 不燒機時），跑完 `ok` 後跑 C（不通過就把狀態改記成 `gate_c_fail`，
 不是 `ok`）。兩者都不放進 `read_done()` 的「已完成」白名單，但重跑
 的處置完全不同：**Gate B 失敗（`preflight_fail`）修好問題後重啟
-`run_queue.py` 就會自動重新排進佇列**，因為機時還沒真的花下去；
+`ops/run_queue.py` 就會自動重新排進佇列**，因為機時還沒真的花下去；
 **Gate C 失敗（`gate_c_fail`）不能單純重啟了事**——機時已經花掉，
 必須先讀 `results/` 底下對應的輸出檔判斷警示是不是真的問題，再決定
 要不要調整設定後重跑，盲目重跑只會再燒一次同樣的機時（完整規則見
-`QUEUE_ALERTS.md`）。兩道關卡都不會讓整條佇列停下來——沒過就跳過
+`docs/project/QUEUE_ALERTS.md`）。兩道關卡都不會讓整條佇列停下來——沒過就跳過
 這一項，機器繼續跑下一項。
 
-檢查焊進五支計算腳本自己的 `main()`，不是焊進呼叫端（`run_queue.py`）
+檢查焊進五支計算腳本自己的 `main()`，不是焊進呼叫端（`ops/run_queue.py`）
 ——不管從哪台機器、用什麼方式呼叫（本機佇列、Kaggle 筆記本、x64
 協作機直接執行），檢查一定會發生。`--preflight` 旗標的意思是「只
 檢查、不要真的算」的乾跑模式，不加這個旗標時檢查一樣會自動跑一次，
@@ -57,11 +57,11 @@
 
 | 腳本 | A1 演算法本身 | A2 設定對帳 | A3 網格涵蓋 | B1／B2 意圖對帳／輸出衝突 | B3 續傳 |
 |---|---|---|---|---|---|
-| `fit_real.py` | 共用（`preflight.py --gate a`） | 有 | 有 | 有 | 有 |
-| `profile_lowmass.py` | 共用 | 有 | 有 | 有 | 有 |
-| `profile_outlierfrac.py` | 共用 | 有 | 有 | 有 | 有 |
-| `inject_lowmass.py` | 共用 | 有 | 有 | 有 | 有 |
-| `injection_recovery.py` | 共用 | 有 | 有 | 有 | 有 |
+| `scripts/core/fit_real.py` | 共用（`preflight.py --gate a`） | 有 | 有 | 有 | 有 |
+| `scripts/core/profile_lowmass.py` | 共用 | 有 | 有 | 有 | 有 |
+| `scripts/core/profile_outlierfrac.py` | 共用 | 有 | 有 | 有 | 有 |
+| `scripts/core/inject_lowmass.py` | 共用 | 有 | 有 | 有 | 有 |
+| `scripts/core/injection_recovery.py` | 共用 | 有 | 有 | 有 | 有 |
 
 A1 是共用的：`multi_stage_best()` 是這五支腳本都在用的同一份搜尋演算法，
 驗證它本身的正確性只需要做一次。A2／A3 集中在
@@ -71,19 +71,19 @@ A1 是共用的：`multi_stage_best()` 是這五支腳本都在用的同一份�
 ＋每個 key 重複幾次），每支腳本自己把旗標轉換成這組形狀再呼叫。B3
 （續傳）的共用實作在 `scripts/tools/checkpoint.py`
 （`atomic_savez()`／存取鎖／`load_partial()`／manifest 比對），五支
-腳本都呼叫同一份，不維護各自的複本。`run_queue.py` 的
+腳本都呼叫同一份，不維護各自的複本。`ops/run_queue.py` 的
 `PREFLIGHT_AWARE_SCRIPTS` 常數列出這五支腳本，Gate B（`_preflight_ok()`）
 跟 `preflight.py` 的 `gate_b()` 都吃這個常數。
 
 `checkpoint.save_progress()` 用一個 `attempted`（已嘗試次數，跟
-`len(results)`／已成功次數分開記）處理 `inject_lowmass.py` 會遇到的
+`len(results)`／已成功次數分開記）處理 `scripts/core/inject_lowmass.py` 會遇到的
 貼牆例外——某次試驗因為 `WallError`／`CornerError` 失敗，那個試驗
 索引真的跑過一次，續傳時不該重跑（重跑只會用同一組亂數種子再得到
-同一個失敗結果）。`injection_recovery.py` 的 `multi_stage_best()`
+同一個失敗結果）。`scripts/core/injection_recovery.py` 的 `multi_stage_best()`
 呼叫帶 `raise_on_wall=False`（貼牆只印警告不丟例外），每次嘗試必定
 成功，不需要這層區分。
 
-`expected_overrides` 機制：`profile_lowmass.py` 等四支診斷腳本會刻意
+`expected_overrides` 機制：`scripts/core/profile_lowmass.py` 等四支診斷腳本會刻意
 `cfg._data["joint_fit"]["mh_prior_sigma"] = 0.0` 關掉金屬量高斯先驗
 ——這是設計上正確的行為（先驗會污染這些腳本要測的東西），不是 A2
 那種「該用先驗卻被悄悄關掉」的 bug。`audit_common()` 接受
@@ -97,7 +97,7 @@ A1 是共用的：`multi_stage_best()` 是這五支腳本都在用的同一份�
 名稱，確認阻擋正確觸發）；`checkpoint.py` 的 `save_progress()`／
 `load_progress()`／`check_manifest()` 有單元測試（含跨行程競態、
 legacy 檔案相容性、`gate_c()` 對 `__attempted_*` 記帳鍵的排除）；
-`inject_lowmass.py`／`injection_recovery.py`／`profile_lowmass.py`
+`scripts/core/inject_lowmass.py`／`scripts/core/injection_recovery.py`／`scripts/core/profile_lowmass.py`
 各自用假的 `multi_stage_best()`／`make_fake()`（跳過真正的合成星團
 運算，只驗證存檔／續傳這條路徑本身）跑過完整的「執行一次→中斷→
 重啟」流程，確認第二次執行時已完成的項目一律被跳過。沒有花機時去

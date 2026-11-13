@@ -4,7 +4,7 @@
 工具：pyUPMASK（Pera et al. 2021），對照 Hunt & Reffert 2023（以下簡稱 HR23）
 狀態：第 1 步（成員判定）已跑通並做過穩健性檢驗；第 2–5 步見
 `docs/planning/PDMF_TO_IMF_PLAN.md`。方法演進與已推翻結論見
-[CHANGELOG.md](../../CHANGELOG.md)。
+[CHANGELOG.md](../project/CHANGELOG.md)。
 
 ## 一、結論
 

@@ -1,10 +1,10 @@
 # 雲端 SSH 運算節點（GCP／Oracle／任何 Linux VM）
 
-跟 `kaggle_sync.py`／`kaggle_queue.py`（Kaggle 帳號當運算節點）是同一個
-「worker」抽象的另一種實作，兩者可以同時派工，見 `cloud_queue.py` 開頭的
+跟 `ops/kaggle_sync.py`／`ops/kaggle_queue.py`（Kaggle 帳號當運算節點）是同一個
+「worker」抽象的另一種實作，兩者可以同時派工，見 `ops/cloud_queue.py` 開頭的
 說明。這份文件只講 **VM 那一端要手動做的事**——本機這一側的程式
-（`ssh_workers.py`／`ssh_sync.py`／`cloud_queue.py`）已經寫好，填好
-`ssh_workers.json` 就能用，不用再改程式。沿革見 [CHANGELOG.md](../../CHANGELOG.md)。
+（`ops/ssh_workers.py`／`ops/ssh_sync.py`／`ops/cloud_queue.py`）已經寫好，填好
+`ssh_workers.json` 就能用，不用再改程式。沿革見 [CHANGELOG.md](../project/CHANGELOG.md)。
 
 **多帳號資源池（隊友各自的 GCP 帳號互相共用）走 IAP tunnel，不是
 下面第 1 節這種對某個來源 IP 開防火牆的傳統直連**——來源 IP 白名單
@@ -35,7 +35,7 @@
 `albertren888`），但 `ssh_workers.json` 裡填的 `user`（例如 `helmet`）
 如果是不同名字，GCP 會**另外建一個獨立帳號**，兩個帳號各自有自己的
 home 目錄——瀏覽器帳號底下裝的 pip 套件、產生的 deploy key，
-`ssh_workers.json` 那個帳號完全看不到，會在 `ssh_sync.py push`
+`ssh_workers.json` 那個帳號完全看不到，會在 `ops/ssh_sync.py push`
 （`git clone` 卡在 Deploy Key 沒登記）跟第一次 `run`
 （`ModuleNotFoundError: No module named 'numpy'`）分別各踩一次坑。
 **避免的辦法**：從一開始就決定好 `ssh_workers.json` 要填的 `user`，
@@ -77,7 +77,7 @@ Ubuntu 24.04+／Debian 12+ 都預設鎖住系統 Python（PEP 668），
 ### 2.1 要跑 pyUPMASK（重新聚類，不是套用現成成員表）才需要（2026-09-18 新增）
 
 過去所有排進雲端的工作都是用**已經算好的** `data/cmd_members.csv`
-（`fit_real.py`／`inject_lowmass.py`／`profile_lowmass.py`），從沒有
+（`scripts/core/fit_real.py`／`scripts/core/inject_lowmass.py`／`scripts/core/profile_lowmass.py`），從沒有
 worker 真的重跑過 pyUPMASK 聚類本身——`scripts/diagnostics/
 sensitivity_sweep.py` 的 `stars_per_cluster` 可行性檢查就卡在「本機
 沒有 `pyUPMASK/` 目錄，沒有驗證過能不能跑」，一直沒有解決。
@@ -113,11 +113,11 @@ deploy key`，**不要勾選 "Allow write access"**。
 ## 3.1 驗證 GitHub 的 host key（第一次 `git clone` 前一定要做）
 
 VM 是全新機器，`~/.ssh/known_hosts` 裡不會有 `github.com` 的紀錄。
-`ssh_sync.py push` 第一次會透過非互動式 SSH 連線在 VM 上跑
+`ops/ssh_sync.py push` 第一次會透過非互動式 SSH 連線在 VM 上跑
 `git clone`——非互動連線遇到未知主機不會有地方可以按 yes，只會直接
 卡住等輸入或連線失敗；如果略過驗證直接關掉 host key 檢查
 （`StrictHostKeyChecking=no`），VM 對外那次 git 連線就完全不驗證
-GitHub 的身分。兩個做法擇一，跑完才能開始用 `ssh_sync.py push`：
+GitHub 的身分。兩個做法擇一，跑完才能開始用 `ops/ssh_sync.py push`：
 
 - **推薦**：在 VM 上手動跑一次互動式連線，出現 fingerprint 提示時人工
   核對後輸入 `yes`：
@@ -125,7 +125,7 @@ GitHub 的身分。兩個做法擇一，跑完才能開始用 `ssh_sync.py push`
   ssh -T git@github.com
   ```
   這一步一定要真人在場核對，不能改成 accept-new 之類自動接受——
-  這裡驗證的是 GitHub 本身的身分，跟 `ssh_workers.py` 對 VM 用
+  這裡驗證的是 GitHub 本身的身分，跟 `ops/ssh_workers.py` 對 VM 用
   `accept-new` 是不同的信任情境：VM 是自己剛建的，第一次連線照單全收
   風險可接受；GitHub 是外部服務，第一次連線就有可能被冒充。
 - 或：手動把 GitHub 官方公告的 host key fingerprint（見
@@ -140,7 +140,7 @@ GitHub 的身分。兩個做法擇一，跑完才能開始用 `ssh_sync.py push`
 ## 4. 本機設定 `ssh_workers.json`
 
 ```bash
-cp ssh_workers.json.example ssh_workers.json
+cp ops/ssh_workers.json.example ssh_workers.json
 ```
 
 編輯填入 VM 的 host／user／procs（VM 的 vCPU 數）。`key_path` 是**本機**
@@ -150,44 +150,44 @@ Deploy Key），留空就用 ssh 預設身分。
 ## 5. 驗證連線
 
 ```bash
-python ssh_workers.py          # 列出登記的 worker
-python ssh_sync.py push --worker gcp1
+python ops/ssh_workers.py          # 列出登記的 worker
+python ops/ssh_sync.py push --worker gcp1
 ```
 
 `push` 會自動 `git clone`（第一次）或 `git pull`，並補齊缺少的靜態
-資料（`data/`、`isochrones/` 底下的白名單檔案，見 `kaggle_sync.py` 的
+資料（`data/`、`isochrones/` 底下的白名單檔案，見 `ops/kaggle_sync.py` 的
 `NEEDED_DATA_FILES`／`NEEDED_ISOCHRONE_GLOBS`）——`push` 這一步本身就
 已經把程式碼跟靜態資料都同步完成才會回傳。跑成功之後先跑一輪 smoke
 test，確認整條 push→run→status→pull 的路徑通不通，再把工作排進正式
 佇列：
 
 ```bash
-python ssh_sync.py run --worker gcp1 --script kaggle_smoketest.py --label smoketest
-python ssh_sync.py status --worker gcp1 --label smoketest
-python ssh_sync.py pull --worker gcp1 --label smoketest
+python ops/ssh_sync.py run --worker gcp1 --script ops/kaggle_smoketest.py --label smoketest
+python ops/ssh_sync.py status --worker gcp1 --label smoketest
+python ops/ssh_sync.py pull --worker gcp1 --label smoketest
 ```
 
-`ssh_sync.py run` 只吃 `--worker`／`--script`／`--args`／`--label`
-四個參數，**沒有 `--minimal` 這個頂層旗標**，`kaggle_smoketest.py`
-本身也不解析任何命令列參數。跟 Kaggle 那邊 `kaggle_sync.py` 的
+`ops/ssh_sync.py run` 只吃 `--worker`／`--script`／`--args`／`--label`
+四個參數，**沒有 `--minimal` 這個頂層旗標**，`ops/kaggle_smoketest.py`
+本身也不解析任何命令列參數。跟 Kaggle 那邊 `ops/kaggle_sync.py` 的
 `--minimal`（控制要不要把 `pipeline/`／`data/`／`isochrones/` 一起
 打包上傳到 kernel）是不同機制：SSH worker 是持久機器，`push` 已經把
 整個 repo 跟靜態資料同步過一次，不需要另外的「精簡打包」選項。如果
 之後要指定的腳本本身支援類似 `--minimal` 的自訂旗標，**要用
 `--args=值` 的等號寫法**，例如
-`python ssh_sync.py run --worker gcp1 --script some_script.py --args=--minimal --label smoketest`
+`python ops/ssh_sync.py run --worker gcp1 --script some_script.py --args=--minimal --label smoketest`
 ——帶 `--` 開頭的值用空白分隔（`--args "--minimal"`）會被 argparse
 誤判成獨立選項而報錯「expected one argument」，只有 `--args=值`
 這種等號寫法才能明確綁定。
 
 確認整輪跑得通之後，才把工作排進 `cloud_queue.txt`、跑
-`python cloud_queue.py` 正式派工。
+`python ops/cloud_queue.py` 正式派工。
 
-**不要手動對同一個 worker 平行呼叫兩次 `ssh_sync.py run`**（例如開兩個
-終端機視窗、或手動跑的同時 `cloud_queue.py` 也在對它派工）——`pull()`
+**不要手動對同一個 worker 平行呼叫兩次 `ops/ssh_sync.py run`**（例如開兩個
+終端機視窗、或手動跑的同時 `ops/cloud_queue.py` 也在對它派工）——`pull()`
 用時間戳記分辨結果檔屬於哪個 label，兩個 label 同時在跑的話會抓錯
-檔案，細節見 `ssh_sync.py` 裡 `pull()` docstring 的「已知未解決的
-限制」。透過 `cloud_queue.py` 派工不會踩到這個問題（同一個 worker
+檔案，細節見 `ops/ssh_sync.py` 裡 `pull()` docstring 的「已知未解決的
+限制」。透過 `ops/cloud_queue.py` 派工不會踩到這個問題（同一個 worker
 同一時間只會佔一個槽位），只有繞過佇列手動平行呼叫才會。
 
 ## 跟 Kaggle 的差異（為什麼架構不一樣）
@@ -196,7 +196,7 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 |---|---|---|
 | 容器生命週期 | 一次性，跑完即消失 | 持久機器 |
 | 每次同步 | 整包重新打包上傳 | 只傳缺少/更新的部分（git pull＋差異檔案） |
-| 已知失敗模式 | dataset 掛載時序競態（`kaggle_queue.py` 的 `BACKOFFS`） | 目前未知——是較新路徑，第一次真的派重運算前建議先觀察一輪 |
+| 已知失敗模式 | dataset 掛載時序競態（`ops/kaggle_queue.py` 的 `BACKOFFS`） | 目前未知——是較新路徑，第一次真的派重運算前建議先觀察一輪 |
 | 核數 | 免費 CPU notebook 約 4 vCPU | 依 VM 規格（GCP 8 vCPU／Oracle 2 vCPU） |
 | 結果回傳 | `kaggle kernels output` 下載 | `scp` 拉 `results/` 回本機 |
 
@@ -204,15 +204,15 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 
 科展隊員不用拿到任何真實憑證（Kaggle token、VM 的 SSH 私鑰）就能自己
 排工作、讓它自動被派到某個帳號或 worker 上執行——真實憑證只放在
-`cloud_queue.py` 常駐執行的那台機器。運作方式跟這個 repo既有的協作
+`ops/cloud_queue.py` 常駐執行的那台機器。運作方式跟這個 repo既有的協作
 流程一致：
 
 **隊員這邊要做的事**（跟平常提 PR 一樣）：
 1. `git checkout -b <你的名字>/queue-<簡短描述>`
 2. 編輯 `cloud_queue.txt`，在檔案尾端加一行（格式見檔案開頭註解，跟
-   `kaggle_queue.txt` 完全相同）：
+   `ops/kaggle_queue.txt` 完全相同）：
    ```
-   我的實驗|profile_lowmass.py|--procs 4 --n-syn 40000|inject_lowmass.py|false|
+   我的實驗|scripts/core/profile_lowmass.py|--procs 4 --n-syn 40000|scripts/core/inject_lowmass.py|false|
    ```
    最後一欄（worker 名稱）留空，交給任何有空的帳號／worker 接；標籤
    （最前面那欄）要取一個目前佇列裡沒出現過的名字，避免跟別人或跟
@@ -220,7 +220,7 @@ python ssh_sync.py pull --worker gcp1 --label smoketest
 3. commit、push、開 PR，照 `CONTRIBUTING.md` 的規則自行合併（低風險、
    單純加一行資料，不用等審查）。
 
-**接下來自動發生的事**：跑 `cloud_queue.py` 的那台機器每一輪
+**接下來自動發生的事**：跑 `ops/cloud_queue.py` 的那台機器每一輪
 （預設 60 秒）都會自動把 `cloud_queue.txt` 從 `origin/main` 同步下來，
 PR 一合併，下一輪就會偵測到新工作、找一個閒置的帳號或 worker 開始跑，
 不需要另外通知操作那台機器的人。

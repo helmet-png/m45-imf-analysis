@@ -1,614 +1,468 @@
-# 星團分析 pipeline（第 1–5 步）
+# M45（昴宿星團）初始質量函數分析
 
-從 Gaia DR3 資料判定星團成員星、建色光圖、用前向模型擬合年齡與消光、
-求雙星比例並比較四種雙星判定法、最後量質量函數與 IMF 斜率。
-所有可調參數集中在 [config.toml](config.toml)，本檔說明每個參數的作用、
-改動後會發生什麼、以及預設值為何這樣選。
+用 Gaia DR3 資料量出昴宿星團（M45）的**質量函數斜率 α**，也就是「重的星
+比輕的星少多少」。整條流程的設計目標是：同一套規則能套到其他星團，
+誤差用同一把尺量。
 
-目前標的是 M45，主線是 PDMF→IMF 五步計畫（見下方「PDMF → IMF」一節）。
-流程的設計目標是讓同一套規則可套到其他星團，而不是替每團人工調到最好看；
-但**目前尚未達到「一套 M45 參數直接跑全銀河」**：誤差模型與選擇函數必須
-每團由資料重校準，完整聯合前向模型在 NGC 3532／Praesepe 都出現角落解
-（見 `LIMITATIONS.md` D16、D17）。哪些模組已通過、哪些仍失敗，見
-[MULTICLUSTER_VALIDATION.md](MULTICLUSTER_VALIDATION.md)。
+這份 README 是給第一次打開專案的人看的教學，包含五個部分：
+
+1. 專案在做什麼、目前的結果
+2. 資料夾地圖：每個資料夾、每個根目錄檔案是做什麼的
+3. 設定檔一覽：哪些檔案控制了程式的行為
+4. **教學：一個星團從頭跑到尾**，每一步用哪支程式、讀什麼、寫什麼
+5. 算力派工、結果存放、文件導覽
+
+逐一解釋 `config.toml` 每個參數的進階說明，在
+[docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md)。
 
 ---
 
-## 兩種成員機率的算法
+## 1. 專案在做什麼
 
-pyUPMASK 可以用兩種方式給出成員機率，由 `KDEP_flag` 切換。兩者是**不同的量**，
-數值不可互相比較。
+**要回答的問題**：星團裡不同質量的星各有幾顆？寫成數學是
+dN/dm ∝ m^(−α)，α 就是要量的數字。Salpeter（1955）量到 2.35，是今天
+仍在用的標準對照值。
 
-**頻率版（原始 UPMASK 的定義，`--kdep False`）**：P = 25 輪外圈中被判為成員的
-輪數比例。只有 26 個可能值（0/25 到 25/25），刻度均勻，不會飽和。
+**難在哪裡**：望遠鏡分不開靠得很近的兩顆星（未解析雙星）。兩顆星的光
+加在一起，看起來像一顆「比較重的星」，傳統做法因此會把 α 量偏。
 
-**KDE 後驗版（pyUPMASK 預設，`--kdep True`）**：對「已判為成員」與「已判為場星」
-兩堆星各建一個五維核密度估計（位置 x, y ＋ pmRA, pmDE, Plx），再問每顆星
-所在位置哪一堆的密度高：
+**本專案的做法（前向模型）**：不去猜哪一顆是雙星，而是在電腦裡生成
+一個假星團。生成時把雙星、測光誤差、望遠鏡看不到暗星的效應全部模擬
+進去，再調整參數，直到假星團的色光圖最像真的觀測。雙星比例 f_bin
+因此變成待解的參數，而不是需要事先剔除的雜訊。
 
-    P = 1 / (1 + L_field / L_memb)
+**目前的頭條結果**（工作代號 `p2_final2_v3`，細節與可信度見
+[LIMITATIONS.md](LIMITATIONS.md)）：
 
-這是貝氏定理在互斥且窮盡的兩假設下的形式，並隱含假設 P(成員) = P(場星) = 1/2。
-
-實測比較（M45，三個亂數種子）：
-
-| | KDE 後驗版 | 頻率版 |
+| 量 | 數值 | 說明 |
 |---|---|---|
-| 相異機率值 | 390 個 | 26 個 |
-| 中間帶（0.3–0.99）星數 | 158 | 362 |
-| P≥0.7 種子離散度 | 0.8% | 1.3% |
-| P≥0.9 種子離散度 | 1.2% | 5.7% |
-| P≥0.99 種子離散度 | 35.2% | 89.6% |
-| P≥0.7 precision / recall | 0.717 / 1.000 | 0.836 / 0.983 |
+| 成員星 | 1,297 顆（測光品質篩選後 1,078 顆） | pyUPMASK，成員機率 ≥ 0.7 |
+| α（0.5–2.5 M☉，主星質量分布） | **2.382** | 10 次重複的平均 |
+| α 的重現性散布 | ±0.068 | 換 10 組模型端亂數，**不是**統計誤差 |
+| α 的統計誤差 | ±0.144 | 注入回收測試量出（LIMITATIONS.md A8） |
+| 年齡 | log age = 8.026（約 106 Myr） | 受等時線網格解析度限制 |
+| 雙星比例 f_bin（q > 0.1） | 0.568 ± 0.023 | 跟文獻比較前要先對齊 q 下限（D24） |
 
-**沒有誰效力較低，是犯的錯不同。** KDE 版傾向多收（recall 完美但含較多 HR23
-不認的星），頻率版傾向少收（precision 較高但漏 16 顆真成員），且頻率版誠實地
-只有 26 個刻度、不製造 0.9993 這種假精確。
-
-做 IMF 需要完整度（漏掉的星會扭曲質量函數），所以預設用 KDE 版；
-若目的是挑選高純度樣本做後續觀測，頻率版較合適。
-
-### 等機率先驗的修正
-
-上面那條公式假設成員與場星各佔一半，但實際樣本 6,956 顆裡只有約 1,300 顆成員
-（先驗約 0.19）。`prior_fix.py` 不需重跑就能修正：由 P 反推概似比 R = 1/P − 1，
-再套用任意先驗；先驗本身可由資料自洽決定（反覆以新機率的平均更新先驗，即 EM）。
-
-實測自洽先驗收斂到 **π = 0.1867**，但影響很小：P≥0.7 的成員從 1,297 降到 1,258
-（少 3%）。原因是概似比 R 對多數星不是極小就是極大，只有 R ≈ 1 的模稜兩可者
-才受先驗影響，而 M45 分離太好、這種星很少。
-
-**這個修正會在分離差的星團上變得重要**（例如 NGC 2477 的 |pm| 僅 2.6 mas/yr，
-與場星幾乎重疊），做第二個標的時要重新評估。
+**這個 α 是現時質量函數（PDMF），還不是初始質量函數（IMF）**：樣本只
+取半徑 5° 內的星，而星團一億年來的動力學演化會讓重星沉到中心、輕星被
+甩到外面。把 PDMF 換算回 IMF 是目前的主線工作（第 4 節第 11 步）。
 
 ---
 
-## 快速開始
+## 2. 資料夾地圖
+
+```
+m45-imf-analysis/
+├─ README.md            本檔：教學入口
+├─ LIMITATIONS.md       所有已知限制的唯一權威清單（A–D 分級）
+├─ CONTRIBUTING.md      多人／多 AI 協作規則
+├─ CLAUDE.md, AGENTS.md 給 AI 協作者的專案規則
+├─ config.toml          第 1–5 步與聯合前向模型的所有可調參數
+├─ cloud_queue.txt      雲端派工清單（派工器固定從這個位置同步，不能搬）
+│
+├─ pipeline/            核心模組（被所有主程式 import）
+├─ scripts/
+│   ├─ core/            科學主程式：頭條擬合、注入回收、敏感度測試
+│   ├─ data_prep/       抓 Gaia 資料、前處理、建選擇函數、建等時線網格
+│   ├─ drivers/         串接第 1–3 步、跑 pyUPMASK
+│   ├─ diagnostics/     各條限制的查證腳本（每支對應 LIMITATIONS 的某一條）
+│   ├─ multicluster/    把同一套方法套到其他星團
+│   ├─ nbody_petar/     N-body 模擬（PDMF→IMF）；grids/ 放模擬參數網格
+│   ├─ plotting/        繪圖
+│   └─ tools/           共用工具：開跑前檢查、續傳、CI 檢查、結果合併
+├─ data/                輸入資料（成員表、誤差模型、選擇函數）
+├─ results/             所有計算結果；RESULTS_LOG.md 是結果日誌
+├─ docs/
+│   ├─ paper/           論文大綱、多星團驗證、N-body 預先註冊、已解決的限制
+│   ├─ project/         待辦看板、交接、佇列警示、規則沿革（協作管理用）
+│   ├─ reference/       方法說明、參數詳解、雲端 worker 設定
+│   ├─ teaching/        教學文件（高中程度讀者）
+│   ├─ planning/        帶日期的評估與計畫（歷史紀錄）
+│   └─ reports/         報告、研究日誌
+├─ ops/                 算力派工：雲端／Kaggle／SSH 派工器、本機佇列
+├─ setup/               環境安裝：PARSEC 憑證、pyUPMASK、ARM64、N-body 編譯
+├─ status_dashboard/    本機進度主控板（網頁介面）
+└─ _archive/            已結束階段的舊腳本（不再維護）
+```
+
+**不進版控、但跑程式需要的本機資料夾**（見 `.gitignore`）：
+
+| 資料夾 | 內容 | 怎麼產生 |
+|---|---|---|
+| `isochrones/` | 等時線網格（數百 MB） | 第 4 節第 0 步 |
+| `pyUPMASK/` | 成員判定外部程式 | `bash setup/setup_pyupmask.sh` |
+| `prepared/` | pyUPMASK 的輸入檔 | 第 2 步 |
+| `logs/` | 每個工作的執行紀錄、佇列完成紀錄 | 程式自動寫入 |
+| `certs/` | PARSEC 網站的憑證鏈 | `setup/setup_ca.ps1` |
+| `kaggle_work/`、`kaggle_results/`、`cloud_results/` | 派工的暫存與回傳結果 | 派工器自動寫入 |
+
+---
+
+## 3. 設定檔一覽
+
+程式的行為由下面這些檔案控制。改動之前先知道它影響誰。
+
+| 檔案 | 控制什麼 | 誰會讀它 | 注意事項 |
+|---|---|---|---|
+| [`config.toml`](config.toml) | 星團座標、成員判定、測光篩選、等時線網格、前向模型的先驗範圍 | `pipeline/config.py` → 幾乎所有主程式 | 各參數的意義與預設值理由見 [CONFIG_REFERENCE](docs/reference/CONFIG_REFERENCE.md) |
+| [`cloud_queue.txt`](cloud_queue.txt) | 要派到雲端的工作清單 | `ops/cloud_queue.py`（每 60 秒從 `origin/main` 同步一次） | 改動一律走 PR；**不能搬離根目錄**，派工器寫死這個位置 |
+| [`ops/queue.txt`](ops/queue.txt) | 本機序列佇列 | `ops/run_queue.py` | 2026-08-23 起本機不跑計算，保留作紀錄 |
+| [`ops/kaggle_queue.txt`](ops/kaggle_queue.txt) | 舊版 Kaggle 專用佇列 | `ops/kaggle_queue.py` | 已由 `cloud_queue.txt` 取代 |
+| `kaggle_accounts.json`、`ssh_workers.json`（根目錄） | Kaggle 帳號 token、SSH worker 連線資訊 | `ops/` 底下的派工器 | **憑證，不進版控**；格式照 `ops/*.json.example` |
+| [`scripts/nbody_petar/grids/petar_m45_grid.csv`](scripts/nbody_petar/grids/petar_m45_grid.csv) | N-body 正式網格：每一列是一次模擬的初始條件 | `petar_m45_grid.py`、`run_nbody_case.py` | 讀取時自動驗證欄位一致性；改完跑 `python scripts/nbody_petar/petar_m45_grid.py --run-id <id>` 確認 |
+| [`scripts/nbody_petar/grids/petar_m45_training_grid.csv`](scripts/nbody_petar/grids/petar_m45_training_grid.csv) | N-body 方法 B（模擬器）的 430 組訓練網格 | `generate_training_grid.py` 產生，`run_training_queue.py` 等讀取 | 由程式產生，不手改 |
+| `pyUPMASK/params.ini` | pyUPMASK 分群參數 | pyUPMASK 本身 | `run_variant.py` 會依 `config.toml` 改寫，不手改 |
+| [`setup/pyupmask_local.patch`](setup/pyupmask_local.patch) | 對 pyUPMASK 原始碼的三處修改（含 Python 3.12+ 相容） | `setup/setup_pyupmask.sh` | 換 pyUPMASK 版本時要重新確認 |
+| [`status_dashboard/categorization.json`](status_dashboard/categorization.json) | 主控板「依步驟看」頁的分類：哪支腳本屬於哪一步 | 主控板、CI 路徑檢查 | 搬腳本時要同步改，CI 會擋 |
+| [`.coderabbit.yaml`](.coderabbit.yaml) | 自動程式審查的範圍與各檔案的審查重點 | CodeRabbit | 標題帶 `[免審]` 的 PR 會被跳過 |
+| `.github/workflows/` | CI：結果日誌只能新增不能改、主控板路徑存在 | GitHub Actions | |
+
+---
+
+## 4. 教學：一個星團從頭跑到尾
+
+以 M45 為例。整條流程分成「準備觀測資料」「擬合」「量誤差」「PDMF→IMF」
+四段：
+
+```
+Gaia DR3 ──抓資料──> 原始星表 ──前處理──> pyUPMASK 輸入
+                                            │
+                                     成員判定（pyUPMASK）
+                                            │
+                    成員表 ──測光篩選──> cmd_members.csv ＋ errmodel.npz
+                                            │
+                               選擇函數 ──> selection.npz
+                                            │
+       等時線網格 ───────────────> 聯合前向模型擬合（fit_real.py）──> α、年齡、消光、f_bin
+                                            │
+                     注入回收（injection_recovery.py）──> 統計誤差與偏差
+                     傳統法對照（traditional_accounting.py）
+                     敏感度測試（profile_*.py、inject_*.py、diagnostics/）
+                                            │
+                     PDMF→IMF：分半徑擬合、LIMEPY、N-body 模擬
+                                            │
+                     results/RESULTS_LOG.md、LIMITATIONS.md、docs/paper/PAPER_OUTLINE.md
+```
+
+所有指令都在 **repo 根目錄**執行。
+
+### 第 0 步：環境建置
+
+1. **Python 套件**：numpy、scipy、scikit-learn、astropy、matplotlib、emcee、
+   certifi、astroquery。ARM64 Windows 機器的安裝方式見
+   `setup/setup_arm64.bat`。
+2. **PARSEC 憑證**（只做一次）：PARSEC 等時線網站沒有送出中繼憑證，Python
+   會連線失敗。這支腳本補上完整憑證鏈，不是關掉驗證：
+   ```bash
+   powershell -ExecutionPolicy Bypass -File setup/setup_ca.ps1
+   ```
+3. **pyUPMASK**（成員判定程式，外部專案）：
+   ```bash
+   bash setup/setup_pyupmask.sh
+   ```
+4. **gaia-export 姊妹專案**：`fetch_gaia.py` 與 `prep.py` 借用它的 Gaia
+   查詢程式碼，路徑由環境變數 `GAIA_EXPORT_PATH` 指定。
+5. **等時線網格**：恆星演化模型的查表，把「質量、年齡、金屬量」換算成
+   各波段亮度。頭條擬合用的網格這樣產生（存進 `isochrones/`）：
+   ```bash
+   python -c "from pipeline import isochrones; isochrones.download_grid(7.7, 8.3, 0.05, -0.6, 0.6, 0.05)"
+   ```
+   MIST、BHAC15、PARSEC DR2 網格（系統誤差比對用）用
+   `scripts/data_prep/build_mist_grid.py`、`build_bhac_grid.py`、
+   `build_dr2_grid.py` 產生。
+
+### 第 1 步：從 Gaia 抓星團天區的資料
 
 ```bash
-# 一次性：修復 PARSEC 服務的憑證鏈問題（見下方說明）
-powershell -ExecutionPolicy Bypass -File setup\setup_ca.ps1
+python scripts/data_prep/fetch_gaia.py --ra 56.60083 --dec 24.11389 --radius 5 --gmax 18 --plxmin 4 --top 20000
+```
 
-# 抓資料
-python scripts/data_prep/fetch_gaia.py --target M45 --radius 5 --gmax 18 --plxmin 4
+- **做什麼**：查詢 M45 中心 5° 內、G < 18、視差 > 4 mas 的所有星。
+- **`--top 20000`**：不給的話，程式會先請 ESA 精確計算符合條件的星數，
+  這個查詢對 M45 實測會逾時。給一個遠大於預期數量（約 7,000）的上限
+  就能跳過計數；若取回的列數剛好頂到上限，程式會報錯不寫檔，避免資料被
+  截斷而不自知。
+- **讀**：`config.toml` 的 `[target]`、`[step1_membership]` 決定預設值。
+  要重現既有樣本，一定要手動給 `--ra/--dec`。
+- **寫**：`data/m45_r5_g18_plx4.csv`，約 7,000 顆星。
 
-# 前處理成 pyUPMASK 輸入
+### 第 2 步：前處理成 pyUPMASK 的輸入格式
+
+```bash
 python scripts/data_prep/prep.py data/m45_r5_g18_plx4.csv --target M45 --name m45_raw
+```
 
-# 第 1 步：成員判定
+- **做什麼**：改欄位名、丟掉缺值，再把 RA/Dec 投影成以星團中心為原點
+  的平面座標。不投影的話，天區會被橫向拉伸。
+- **寫**：`prepared/m45_raw.dat`。
+
+### 第 3 步：成員判定（pyUPMASK）
+
+```bash
 python scripts/drivers/run_variant.py --name baseline --input m45_raw.dat
-
-# 第 1–3 步
-python scripts/drivers/run_pipeline.py
-
-# 圖
-python scripts/plotting/plots.py            # 第 1 步的六格驗證圖
-python scripts/plotting/plot_step3.py       # 第 3 步的年齡擬合圖
-
-# 現行 headline 數字：聯合前向模型的網格搜尋＋精修（不是上面第 3–5 步
-# 的循序擬合，也不是 MCMC，見下方「目前的結果」與「已知限制」C11）
-python fit_real.py --n-syn 40000 --repeats 10 --refines 3,3,3 --configs C
 ```
 
----
-
-## 目前的結果（M45）
-
-headline 數字來自聯合前向模型的網格搜尋＋精修（`fit_real.py`，config C，
-10 次重複、三階精修），不是第 3–5 步的循序擬合，也不是 MCMC（MCMC 家族
-從未收斂過，誤差棒不可引用，見「已知限制」C11）：
-
-| 量 | 本 pipeline（headline） |
-|---|---|
-| 成員數（P≥0.7） | 1,297（測光品質篩選後 1,078） |
-| alpha（m > 0.5 M☉ 段，system MF） | **2.382 ± 0.068**（population std） |
-| f_bin（雙星比例） | 落在 0.45–0.62（依 config／半徑切片而異，見下方） |
-
-完整參數（logage、A_V、MH 等）與逐次重複值見 `results/RESULTS_LOG.md`
-2026-08-20 那行；分級限制清單見 `LIMITATIONS.md`（A1–A5 是目前優先度
-最高的五項，直接影響這個數字能不能被引用）。
-
-### 第 4 步：雙星
-
-四種判定法在**同一批 1,078 顆星**上的結果：
-
-| 方法 | 標記數 | 佔比 |
-|---|---|---|
-| 前向模型（P>0.5） | 414 | 38.4% |
-| RUWE > 1.4 | 100 | 9.3% |
-| CMD 偏移 > 0.375 mag | 58 | 5.4% |
-| Gaia NSS | 24 | 2.2% |
-
-兩兩重疊（交集/聯集）最高只有 **18%**（RUWE ∩ NSS，兩者都是天測法），
-其餘多在 2%–13%。**這四種方法偵測的不是同一群雙星**，所以聯集不能當成
-「更完整」，各自的選擇函數也不能假設獨立——全專案唯一驗證過準確度
-（注入回收確認偏差 +0.011、散布 0.031）的雙星比例是前向模型自由擬合
-的 f_bin，其餘三種只當事後交叉核對用。
-
-### 第 5 步：IMF 與質量分層
-
-方法 A（傳統法，把每顆星當單星）比方法 B（前向模型，雙星內建於模型）
-系統性偏平——這重現了 arXiv:2603.15779 指出的效應，對齊兩法的擬合質量
-範圍（0.50–2.50 M☉）後偏差塌到 0.01–0.11，詳細數字與方法演進見
-`docs/reference/REFUTED.md`。
-
-**質量分層**（前向模型正式統計版，`radial_final_reruns`，
-`--repeats 5 --refines 3,3`，見 `LIMITATIONS.md` A5）：
-
-| 半徑 | alpha（5 次樣本標準差） |
-|---|---|
-| 0–1° | 2.0644 ± 0.1193 |
-| 0–2° | 2.3889 ± 0.0981 |
-| 0–3° | 2.4244 ± 0.0924 |
-| 全樣本（5.1°） | 2.3844 ± 0.0792 |
-
-alpha 隨半徑遞增，核心到 0–2° 是提示性訊號（多重比較校正後 p≈0.084–0.088，
-未達獨立顯著），2° 以外沒有偵測到進一步變化——量化了「在有限半徑內量
-IMF 會得到偏平的 α」這個判斷，但這測到的是 PDMF（現時質量函數），不是
-IMF（見下方「PDMF → IMF」與 `LIMITATIONS.md` A5）。
-
----
-
-## PDMF → IMF（目前主線）
-
-上面測到的 alpha 是現時質量函數（PDMF），不是初始質量函數（IMF）——樣本
-取自有限半徑（5° 錐），質量分層與動力學演化完全沒有建模（見
-`LIMITATIONS.md` A5）。PDMF→IMF 是把這個差距量化、進而估計出 IMF 的五步
-計畫，完整規劃見 [docs/planning/PDMF_TO_IMF_PLAN.md](docs/planning/PDMF_TO_IMF_PLAN.md)。
-目前進度：
-
-| 步驟 | 內容 | 狀態 |
-|---|---|---|
-| 1 | 文獻基準線（Li+2026） | 完成 |
-| 2 | 前向模型逐半徑重跑 α(<r) | 正式統計版四組（r1/r2/r3/rall）全部完成，見上方質量分層表 |
-| 3 | LIMEPY 多質量平衡模型交叉驗證 | 模型完成並合併；探索性交叉比對已做（`limepy_radial_crosscheck`），正式版待用第 2 步的 `_final` 資料重做 |
-| 4 | 放大搜尋半徑到 8–17° | 尚未開始 |
-| 5 | N-body 模擬（Converse & Stahler 2010） | 探索性 pilot 已完成，方向與觀測質量分層一致；正式校準待第 2 步 `_final` 結果 |
-
-A5「測到的是 PDMF 不是 IMF」這條限制的解除條件，是把第 2 步的正式統計
-結果跟第 3 步（LIMEPY）與第 5 步（N-body）的預測做正式交叉驗證——這
-是目前優先度最高的待辦，細節與最新數字見 `LIMITATIONS.md` A5、B5。
-
----
-
-## 為什麼不逐星團最佳化
-
-巡天的科學產出是**星團之間的比較**（IMF 斜率是否隨年齡、質量、環境變化）。
-統一方法的誤差是共享的、在差分比較中大幅抵消，而且可以在標竿星團上量化。
-
-逐星團最佳化的誤差是異質的，不抵消，而且有個致命失效模式：**若方法的選擇
-與某個星團性質相關，就會憑空製造那個性質的假趨勢**。例如對年輕星團用含自轉
-模型、對老星團用不含自轉模型，兩模型間的系統偏移會表現成隨年齡變化的趨勢 ——
-而那正好是要研究的問題。
-
-可接受的分支要滿足：由可測量的資料性質自動觸發、在看結果前決定、有記錄。
-判準是「規則是資料的函數，還是我對該天體既有認知的函數」。
-
-逐星團的精細分析職責是**量出統一流程的誤差**，不是取代它的結果。
-
----
-
-## 參數說明
-
-### `[target]`
-
-| 參數 | 預設 | 說明 |
-|---|---|---|
-| `name` | `"M45"` | 星團名稱，用 CDS Sesame 解析成座標 |
-| `hr23_name` | `"Melotte_22"` | Hunt & Reffert 2023 目錄裡的對應名稱，做交叉驗證用 |
-| `ra` / `dec` | 註解掉 | 取消註解可直接指定座標，跳過名稱解析 |
-
----
-
-### `[step1_membership]` — 成員判定
-
-#### 資料範圍
-
-**`radius_deg = 5.0`**
-錐形搜尋半徑。**改大**會涵蓋更多外圍成員與潮汐尾，但樣本數暴增（pyUPMASK 的
-內圈成本大致隨 N² 成長）；**改小**會漏掉外圍成員，recall 上限下降。
-
-預設 5.0 的依據：M45 的潮汐半徑是 4.71°，5° 錐內涵蓋 HR23 全天成員的
-**92.7%**（1,595/1,721 顆）。完整涵蓋要 15°（`rtot`=14.78°），但樣本會從
-6,956 顆爆到十幾萬，pyUPMASK 跑不動。
-
-**`g_mag_max = 18.0`**
-G 星等上限。**改暗**涵蓋更低質量的星（對 IMF 有利），但 Gaia 天測精度明顯下降，
-分群品質變差；**改亮**樣本乾淨但質量涵蓋範圍縮小。
-
-預設 18.0 與 Cantat-Gaudin & Anders 2020 相同，是 Gaia 天測精度的實用分界。
-在 135 pc 處對應絕對星等 M_G ≈ 12.3。
-
-**`parallax_min_mas = 4.0`**
-視差下限（4 mas = 250 pc）。**這是唯一與分群變數重疊的前切**，所以特別驗證過：
-實測對 HR23 成員**誤殺 0 顆**（`Plx<4` 和 `Plx<5` 都是零）。
-
-但要誠實記錄它做了多少事：樣本從 198,672 顆降到 6,956 顆，**清掉了 97% 的
-汙染星**。所以「這一刀不偏誤成員判定」和「不能宣稱是演算法把成員分辨出來的」
-兩件事同時成立，論文兩句都要寫。
-
-設 0 表示不切。完整不切視差是 198,672 顆，外推 pyUPMASK 需約 130 小時，
-實務上不可行；階梯到 `plx>2`（21,810 顆，約 96 分鐘）是可行上限。
-
-#### 座標處理
-
-**`deproject = false`**
-是否扣除星團整體運動造成的透視效應。星團橫跨數度時，同一個三維速度投影到
-天區不同位置會得到不同的自行運動。
-
-**實測結果：對 M45 開啟後，已知成員的自行運動合成標準差從 1.517 降到
-1.385 mas/yr，但最終成員名單只差 3.5%（低於換亂數種子造成的變異），
-所以預設關閉。** 對角徑更大或自行運動更快的星團可能有意義。
-
-`bulk_*` 四個參數（整體 pmRA/pmDE/視差/徑向速度）留空時自動從 HR23 查詢。
-
-#### pyUPMASK 分群參數
-
-**`outer_loop_runs = 25`**
-外圈輪數。成員機率就是這些輪次的平均，所以**這個數字直接決定機率的解析度**。
-
-實測：從 25 提高到 100，P≥0.5 的成員數幾乎不變（1,318→1,316），但
-P≥0.99 的種子間離散度從 37.2% 只降到 26.1%（純取樣雜訊應降 √4=2 倍）。
-**有一個不隨輪數縮小的殘餘成分** —— 增加輪數救不了高門檻的不穩定。
-25 已足夠（常見文獻甚至只用 10），代價是 100 輪要跑 29–63 分鐘。
-
-**`resample_errors = true`**
-是否用測量誤差重抽。**pyUPMASK 的原始預設是 `false`，等於完全不使用 Gaia
-提供的天測誤差，機率值會失去統計意義。** 這是最容易踩的坑，務必保持 true。
-
-**`independent_resample = false`**
-pyUPMASK 原始碼每顆星只抽**一個**亂數套用到 pmRA/pmDE/Plx 三個維度，等於三者
-的擾動完全相關，統計上不正確。設 true 改為各維獨立抽樣。
-
-實測只造成 **1.3%** 差異（低於種子間變異），所以預設保留原始行為以免偏離
-已發表的方法。
-
-**`use_pca = true` / `pca_dims = 2`**
-是否 PCA 降維、降到幾維。**這個參數曾被我誤判為影響最大的旋鈕** —— 在
-P≥0.99 下關閉 PCA 會讓成員從 1,188 掉到 764（差 36%）。但那是門檻假象：
-在 P≥0.5 只差 2.3%。改動它會改變純度與完整度的交換點，不會改變科學結論。
-
-`pca_dims` 本身（非開關）尚未做敏感度測試。
-
-**`stars_per_cluster = 25`**
-每個統計群的星數，決定 KMeans 分幾群（N/25）。改小會分出更多小群，
-對稀疏星團可能有利；文獻上常見 10。**尚未測試。**
-
-**`clustering_method = "MiniBatchKMeans"`**
-可選 KMeans, DBSCAN, GaussianMixture, HDBSCAN 等。**尚未與替代選項比較。**
-注意若改用 HDBSCAN，就會與 HR23 同演算法，交叉驗證會失去鑑別力。
-
-**`outlier_nsigma = 5.0`**
-離群值排除的標準差倍數。實測對 HR23 成員**誤殺 0 顆**（99 顆被遮罩，
-無一是成員），所以 5σ 是安全的。
-
-**`random_seed = 42`**
-固定以求可重現。**這不是無關緊要的參數** —— 在 P≥0.99 下換種子會讓成員數
-從 1,188 變成 815。在 P≥0.7 則只差 1.1%。
-
-#### 成員判定門檻
-
-**`membership_threshold = 0.7`**
-
-這是整份設定裡最需要說明的一個。
-
-pyUPMASK 的機率是 **KDE 概似比後驗**（`1/(1+L_field/L_memb)`）的多輪平均，
-不是「多少比例的輪次判為成員」的頻率。概似比後驗會**飽和**：對深在成員分布
-核心的星，概似比接近零、後驗迅速逼近 1。M45 與場星分離極好，於是一千多顆星
-全部擠進 0.999–1.0。
-
-**那個堆積反映的是「星團跟場星分得多開」，不是「對成員身分多有把握」。**
-
-門檻穩不穩，取決於它切在星密度高還是低的地方。實測四個亂數種子：
-
-| 門檻 | seed42 | seed43 | seed44 | seed99 | 離散度 |
-|---|---|---|---|---|---|
-| P ≥ 0.5 | 1,318 | 1,321 | 1,325 | 1,311 | 1.1% |
-| **P ≥ 0.7** | **1,297** | **1,303** | **1,306** | **1,292** | **1.1%** |
-| P ≥ 0.9 | 1,264 | 1,255 | 1,270 | 1,249 | 1.7% |
-| P ≥ 0.95 | 1,237 | 1,133 | 1,250 | 1,217 | 9.2% |
-| P ≥ 0.99 | 1,188 | 815 | 1,208 | 1,175 | **48%** |
-
-0.5–0.9 是穩定谷地，0.95 開始崩。**預設 0.7 的理由是它落在自己這份分布的
-穩定谷地正中間，與外部目錄無關。** Cantat-Gaudin 也用 0.7 是巧合 —— 他們的
-UPMASK 用的是重抽頻率（有硬上限、不會飽和），兩者機率構造不同、數值不可通約。
-
-不要用 F1 對照目錄去挑這個門檻。那是拿對照目錄調自己的超參數，而且會挑到
-方法最脆弱的點（0.99 的 F1 最高，卻是最不穩定的位置）。
-
----
-
-### `[step2_cmd]` — 色光圖與測光品質
-
-這一步的產出不只是圖，更重要的是第 3 步前向模型需要的**觀測特性**：
-每個星等的測光誤差多大。沒有這個，合成星團就無法生成得跟觀測同等品質。
-
-**`bp_rp_excess_sigma = 3.0`**
-BP/RP 流量超額因子的容許偏離（以 Riello et al. 2021 經驗關係的散布為單位）。
-
-BP/RP 用孔徑測光，在擁擠區或星雲區會被鄰近光源汙染。**對 M45 特別重要 ——
-顏色被汙染得最嚴重的正好是星雲裡的成員星。** 實測砍掉 85 顆。
-
-改小篩得更嚴（樣本更乾淨但可能有偏），設 0 表示不篩。
-
-**`min_flux_snr_g / bp / rp = 50 / 20 / 20`**
-測光訊噪比下限。BP 的門檻實測砍掉 130 顆 —— 紅色暗星的 BP 流量本來就低，
-這個切法會系統性偏向移除低質量端，**對 IMF 有直接影響**，改動時要留意。
-
-**`g_bright_limit = 4.0`**
-亮端飽和界線。M45 最亮成員 G=3.62，實測砍掉 2 顆。
-
-**`extinction_mode = "fit"`**
-`"fit"` 交給第 3 步當自由參數；`"uniform"` 用固定的 `extinction_av`。
-預設 fit，因為消光在不同星團差異極大，固定值無法通用。
-
-**`ext_coeff_g / bp / rp = 0.83 / 1.08 / 0.63`**
-消光係數 A_x/A_V，Cardelli 消光曲線下 Gaia 濾光片的近似值。
-顏色超量 E(BP-RP) = (1.08−0.63)·A_V = 0.45·A_V。
-
-**`binary_offset_mag = 0.753`**
-等質量雙星相對單星的亮度差，= 2.5·log₁₀(2)。這是理論值，不該改。
-
----
-
-### `[step3_age]` — 前向模型擬合年齡
-
-#### 方法
-
-**不是**「拿一條 isochrone 擬合主序中心線、把雙星當離群值剔除」，而是：
-
-給定參數 → 生成一整群合成星（依 IMF 抽質量、依雙星比例混入雙星、
-流量相加模擬未解析雙星、加上實測等級的測光誤差、套用與觀測相同的星等選擇）
-→ 把合成與觀測 CMD 都轉成二維直方圖（Hess 圖）→ 算 Poisson 概似 → 調參數重生成。
-
-好處是雙星成為模型參數而非雜訊，**年齡與雙星比例可同時求解、不需迭代**，
-而且同一個生成模型第 4、5 步都能用。
-
-#### isochrone 模型
-
-**`model = "PARSEC"`**
-統一流程用 PARSEC，理由：年齡/質量/金屬量涵蓋最廣、原生 Gaia 濾光片、
-**且 HR23 也用它**，所以年齡可直接與最大的 DR3 目錄比較。
-
-MIST（含自轉）與 BHAC15（低質量前主序）只在標竿星團跑，用來產生系統誤差項，
-不進入統一流程。
-
-**`photsys = "gaiaEDR3"`**
-Gaia DR3 沿用 EDR3 的濾光片定義，所以這是 DR3 資料的正確選項。
-
-**`logage_min/max/step = 7.0 / 9.5 / 0.05`、`mh_min/max/step = -0.2 / 0.2 / 0.1`**
-isochrone 網格範圍與步長。下載一次後快取在 `isochrones/`，之後不需網路。
-
-網格越密擬合解析度越高，但下載與記憶體成本上升（目前設定是 98 MB、132,348 列）。
-**注意 `logage_step` 是實際的年齡解析度上限** —— 擬合用的 `fit_logage_step`
-設得比它小也沒用，因為目前取最近格點而非內插。
-
-不做內插是刻意的：isochrone 在演化快速的階段形狀變化劇烈，逐點線性內插會
-產生非物理的假特徵。
-
-#### 距離與金屬量
-
-**`distance_mode = "parallax"`**
-由 Gaia 視差固定，不當自由參數。**理由是避免簡併** —— 距離模數與消光在 CMD
-上的效果高度相關，同時放自由會讓兩者互相吸收誤差。而 Gaia 對近距星團的
-視差精度遠優於 CMD 擬合。
-
-**`parallax_zero_point = -0.017`**
-Gaia 視差零點修正（mas）。對 M45（7.38 mas）只影響 0.2%，可忽略；
-**但遠方星團在 0.2 mas 時是 10% 以上的效應，是全銀河適用性的必要條件。**
-
-**`metallicity_mode = "fixed"` / `metallicity_mh = 0.0`**
-從 Gaia 測光單獨擬合金屬量與年齡、消光高度簡併。HR23 的作法是在寬先驗上
-邊際化（`"marginalize"`，尚未實作）。目前固定太陽金屬量。
-
-#### 前向模型參數
-
-**`n_synthetic = 20000`**
-合成星團生成幾顆星。太少則 Hess 圖統計雜訊大、概似函數不平滑；太多則變慢。
-20,000 對 1,078 顆觀測星是約 20 倍，足以讓模型密度平滑。
-
-**`binary_fraction = 0.35`**
-雙星比例。**目前是固定值，第 4 步會改成自由參數。** 0.35 是疏散星團的典型值
-（Cordoni et al. 2023 對 78 個疏散星團量到 15%–60%）。
-
-**`binary_q_gamma = 0.0` / `binary_q_min = 0.1`**
-質量比分布 f(q) ∝ q^γ 的冪次與下限。γ=0 是均勻分布。
-q 低於 0.1 的雙星在 CMD 上與單星幾乎無異，納入只是增加計算量。
-
-**`imf = "kroupa"`**
-生成合成星團用的初始質量函數。這裡的 IMF **只影響合成 CMD 沿主序的星數分布**，
-不是第 5 步要測量的那個 IMF。第 5 步會把它改成自由參數。
-
-#### 擬合設定
-
-**`hess_color_bins / hess_mag_bins = 40 / 50`**
-Hess 圖的網格數。太粗會失去分辨主序與雙星序的能力（兩者只差 0.753 星等），
-太細則每格星數太少、Poisson 雜訊主導。
-50 個星等分箱涵蓋 2–18 mag，即每格 0.32 mag，剛好能分開雙星序。
-
-**`hess_color_range / hess_mag_range`**
-Hess 圖範圍。**必須涵蓋觀測資料的實際範圍**，否則落在範圍外的星會被靜默丟棄。
-
-**`fit_logage_min/max/step`、`fit_av_min/max/step`**
-網格搜尋的範圍與解析度。目前是暴力網格（56×31 = 1,736 次生成），
-確認可行後可換 MCMC 取得完整後驗。
-
----
-
----
-
-### `[step4_binaries]` — 雙星比例與方法比較
-
-**`fit_logage_*` / `fit_av_*` / `fit_fbin_*`**
-三維網格（年齡 × 消光 × 雙星比例）的搜尋範圍與步長。三維比第 3 步的二維貴很多，
-所以年齡與消光的步長放寬到 0.05 —— 第 3 步已定出大致位置，這裡只需在附近精修。
-
-**`ruwe_threshold = 1.4`**
-社群慣例值。**只當雙星指標，絕不當品質切** —— 實測會誤刪 12% 的真成員（168/1369）。
-
-**`cmd_offset_threshold = 0.375`**
-比同顏色的單星序亮超過幾星等就判為雙星。等質量雙星是 0.753，取其一半可涵蓋
-質量比中等的組合。**改大**只抓到接近等質量的雙星（純度高、完整度低），
-**改小**會把測光誤差造成的散布誤判為雙星。
-
-**`forward_prob_threshold = 0.5`**
-前向模型逐星機率的判定門檻。注意這個機率是「先族群、後逐星」得到的 ——
-族群參數（f_bin、q 分布）先由整片 CMD 分布定出，再回頭問個別的星。
-順序反過來（先逐星標記再加總）會因為各方法的偵測盲區而漏算。
-
----
-
-### `[step5_imf]` — 質量函數與 IMF
-
-**`mass_min = 0.30` / `mass_max = 2.50`**
-冪律擬合的質量範圍。下限由星等切決定（G<18 在 135 pc 大約到這裡），
-上限由主序轉折點決定。**超出這個範圍資料不完整，硬擬合會得到假斜率** ——
-這是整個第 5 步最容易出錯的地方。
-
-**`fit_alpha_min/max/step = 1.5 / 3.2 / 0.05`**
-前向模型的 IMF 斜率搜尋範圍。α 定義為 dN/dm ∝ m^(−α)，
-Salpeter 是 2.35、Kroupa 高質量端是 2.30。
-
-**`radius_bins = [0.0, 1.0, 2.0, 3.0, 5.1]`**
-量質量分層用的環帶邊界（度）。M45 潮汐半徑 4.71°。
-分太細會讓每環的星數不足（最外環已只有 84 顆），分太粗看不出趨勢。
-
----
-
-## 兩個影響很大的數值陷阱
-
-這兩個都是我實際踩到、且會讓結果完全改變的問題，記在這裡以免重蹈。
-
-**共用亂數（common random numbers）。** 前向模型每個網格點都要生成一次合成星團。
-若每次都用新的隨機數，概似值的差異裡就混進了蒙地卡羅雜訊，「最佳解」可能只是
-挑到雜訊的高點。**而且光是每次重設種子還不夠** —— 改變 f_bin 會改變
-`rng.random(nb)` 抽取的數量，隨機串流仍會岔開。
-
-正確作法是 `draw_randoms()` **一次抽好所有亂數**（每顆星一個質量用的均勻數、
-一個雙星判定用的均勻數、一個質量比用的均勻數、三個測光誤差用的常態數），
-所有參數組合共用同一批；改變 f_bin 只是移動門檻，改變 α 只是改變同一個均勻數
-反解出的質量。修正前後 f_bin 從 0.60 變成 0.45，α 從 2.10 變成 2.35。
-
-**不要平滑模型的 Hess 圖。** Poisson 概似在「模型密度為零、觀測卻有星」的格子上
-會給巨大懲罰，讓概似曲面跳動。直覺的修法是平滑模型的 Hess 圖，**但這是錯的**：
-1 格 = 0.32 星等，跟雙星序的偏移 0.753 星等同量級，平滑等於把要測的特徵抹掉。
-實測開啟平滑後 f_bin 被壓到 0.00 —— 平滑取代了雙星造成的展寬，模型不再需要雙星。
-
-正確作法是提高 `n_synthetic`（20,000 → 100,000）讓模型密度本身取樣充足。
-`model_hess_smooth` 預設為 0，請保持。
-
----
-
-## 已知限制
-
-完整清單、嚴重度分級與最新進度統一維護在 [LIMITATIONS.md](LIMITATIONS.md)
-（唯一權威清單，這裡不重複列）。下面只保留兩段解釋「為什麼模型長這樣」
-的設計理由——不是限制條目本身，是理解 `config.toml` `[joint_fit]` 參數
-選擇的背景。
-
-### 固定參數會污染結果：輪廓測試（金屬量與質量比冪次為何是自由參數）
-
-`profile_test.py` 把待測參數固定在數個不同值，**每個值都重新擬合其他所有參數**，
-看目標參數移動多少。這回答的不是「正確值是多少」，而是「假設錯了代價多大」。
-
-固定 **[M/H]**（原本設為太陽值）：
-
-| [M/H] | 年齡 | A_V | f_bin | α | lnP |
-|---|---|---|---|---|---|
-| −0.20 | 79 Myr | 0.32 | 0.55 | 2.00 | 950.5 |
-| 0.00 | 100 Myr | 0.16 | 0.40 | 2.20 | 1076.5 |
-| +0.10 | 126 Myr | 0.08 | 0.50 | 2.20 | **1087.0** |
-| +0.20 | 126 Myr | 0.08 | 0.25 | 2.40 | 1008.4 |
-
-**α 跨度 0.40 = 統計誤差 0.003 的 133 倍**；年齡跨度 79–126 Myr。
-而且最佳 lnP 落在 +0.10，不在原本固定的 0.00。
-
-固定 **q_gamma**（原本設為均勻分布）：α 跨度 0.10（33 倍），
-最佳 lnP 在 −0.50 而非 0.00。
-
-**結論：兩者都必須升格為自由參數，現行 `config.toml` `[joint_fit]` 的
-`mh_min`/`mh_max`、`qgamma_min`/`qgamma_max` 就是這個結論的落實。** 固定
-在錯的值上不只是損失精度，而是系統性偏移其他參數 —— 這比誤差變大嚴重，
-因為它讓中心值錯掉卻看起來很精確。
-
-放開後（六參數）的實測相關矩陣證實了簡併有多強：
-
-| 參數對 | 相關係數 |
-|---|---|
-| 年齡 ↔ 金屬量 | **+0.98** |
-| 年齡 ↔ 消光 | **−0.96** |
-| 金屬量 ↔ 消光 | **−0.95** |
-| α ↔ 年齡 / 消光 | −0.66 / +0.66 |
-| f_bin ↔ q_gamma | −0.45 |
-
-年齡、金屬量、消光三者幾乎完全簡併。這與文獻一致（A&A 2014, aa23988-14）：
-純光學波段只有約 20% 的星團能得到正確的金屬量分類，加紅外 35%、加紫外才過 50%。
-我們用的正是純光學的 Gaia G/BP/RP。
-
-**方法學警告**：曾以「M45 金屬量接近太陽」為由固定金屬量 —— 那是基於對特定天體的
-知識而非資料的函數，違反本專案自己訂的分支準則。套用到全銀河更糟：全部固定太陽值
-會讓偏移量與銀心距離相關（金屬量有銀徑梯度），憑空製造出假的空間趨勢。
-
-### 為什麼不用 MCMC（`run_joint.py` 的四參數／六參數版）
-
-`config.toml` `[joint_fit]` 仍保留 MCMC 的設定欄位，但**現行 headline
-數字不是 MCMC 產出的**，改用網格搜尋＋精修（`multi_stage_best()`，
-`fit_real.py`）配合注入回收估計誤差棒（σ_α = 0.144，見
-`LIMITATIONS.md` C11、C12）。原因：MCMC 的中心值可信，但誤差棒與相關
-矩陣不可信且從未收斂過（Poisson-Hess 概似把每一格當獨立，在千顆星
-樣本上產生過度自信的窄峰，後驗成為又窄又崎嶇的稜線，走者沿之移動
-極慢），該問題家族的誤差棒因此**永遠不可引用**，完整診斷數字見
-`LIMITATIONS.md` C11。
-
----
-
-## PARSEC 憑證問題（為什麼需要 `setup/setup_ca.ps1`）
-
-`stev.oapd.inaf.it` 沒有送出中繼憑證。Windows 的 schannel 會自動下載缺少的
-中繼憑證（AIA chasing），所以瀏覽器與 PowerShell 連得上；OpenSSL（Python 用的）
-不會，於是 Python 報 `CERTIFICATE_VERIFY_FAILED`。
-
-`setup/setup_ca.ps1` 用 Windows 建立完整憑證鏈，存成 `certs/parsec_chain.pem`，
-再與 certifi 的根憑證合併成 bundle 給 Python 用。**這是為了讓憑證驗證能通過，
-不是關掉驗證。** 只需執行一次。
-
----
-
-## 檔案結構
-
-```
-config.toml                    所有可調參數（含 [joint_fit] 現行模型的先驗範圍）
-fit_real.py                    headline 數字的入口：網格搜尋＋精修（多次重複）
-injection_recovery.py          誤差棒來源：注入回收估計統計誤差與偏差地板
-profile_lowmass.py／profile_outlierfrac.py
-inject_lowmass.py／inject_massdep_fbin.py    各自對應一項敏感度／可辨識性測試
-run_queue.py／cloud_queue.py   本機／雲端 worker 佇列派工（見零之三、CLOUD_WORKERS.md）
-pipeline/
-  config.py                    設定檔讀取
-  net.py                       網路存取與 TLS bundle
-  isochrones.py／bhac.py／mist.py   PARSEC／BHAC15／MIST 等時線下載、快取、查詢
-  joint_fit.py                  現行聯合前向模型（JointModel，fit_real.py 的核心）
-  selection.py                  測光品質選擇函數
-  step2_cmd.py／step3_age.py／step4_binaries.py／step5_imf.py
-                                循序擬合（歷史路徑，headline 已改用 joint_fit.py）
-scripts/
-  data_prep/                   Gaia 資料擷取與前處理
-  drivers/                     run_pipeline.py（第 1–3 步）等驅動腳本
-  diagnostics/                 各項限制的查證腳本（見 LIMITATIONS.md 各條目引用）
-  tools/                       preflight.py／checkpoint.py／concat_radial_final.py 等共用工具
-  plotting/                    繪圖
-setup/
-  setup_ca.ps1                  一次性憑證修復
-  setup_arm64.bat                ARM64 原生 Python 安裝與效能比較
+- **做什麼**：只用自行與視差（**不看亮度與顏色**），找出在天空與運動
+  空間裡比背景更集中的星。重複 25 輪取平均，得到每顆星的成員機率。
+  不看顏色是關鍵：後面要用色光圖擬合，成員判定若先用了顏色，等於先
+  偷看答案。
+- **讀**：`config.toml` 的 `[step1_membership]`（輪數、PCA、亂數種子）。
+- **寫**：`results/baseline.dat`（每顆星一列，含成員機率）、`logs/baseline.log`。
+- **驗證**：跟 Hunt & Reffert（2023）的獨立成員目錄比對，見
+  `docs/reference/COMPARISON.md`。比對表 `data/comparison.csv` 由
+  `scripts/diagnostics/check_c20_disagree_set.py` 產生。
+
+### 第 4 步：測光品質篩選與測光誤差模型
+
+```bash
+python scripts/drivers/run_pipeline.py --steps 1 2
 ```
 
-治理／參考文件：`CONTRIBUTING.md`（協作規範）、`WORK_BOARD.md` /
-`WORK_BOARD_DONE.md`（待辦／已完成）、`LIMITATIONS.md`（唯一權威限制
-清單）、`RESOLVED.md`（已解決）、`CHANGELOG.md`（規則類文件的沿革與
-理由）、`PAPER_OUTLINE.md`（論文範圍凍結文件）、
-`docs/planning/PDMF_TO_IMF_PLAN.md`（PDMF→IMF 主線完整規劃）、
-`docs/reference/METHODS.md`（第 1 步成員判定方法）、
-`docs/reference/COMPARISON.md`（與前人方法逐項對照、完整參數表）。
+- **做什麼**：
+  - 第 1 部分：取成員機率 ≥ 0.7 的星，接回完整測光欄位。
+  - 第 2 部分：剔除測光不可靠的星（BP/RP 被星雲汙染、訊噪比太低、亮端
+    飽和），並量出「每個星等的測光誤差有多大」。前向模型要用這個誤差
+    模型，才能生成跟觀測同等品質的假星。
+- **讀**：`config.toml` 的 `[step2_cmd]`。
+- **寫**：`data/cmd_members.csv`（1,078 顆星，所有擬合的共同輸入）、
+  `data/errmodel.npz`。
+- **舊流程說明**：`run_pipeline.py` 的第 3–5 部分是早期的循序擬合，已由
+  下面的聯合前向模型取代，結果不再引用。
 
-（`_archive/` 底下是已完成階段性任務、不再主動維護的舊腳本，歷史脈絡見
-`_archive/README.md`，不列在上面的現役結構裡。）
+### 第 5 步：建立選擇函數
+
+```bash
+python scripts/diagnostics/check_c20_disagree_set.py   # 先產生 data/comparison.csv
+python scripts/data_prep/build_selection.py
+```
+
+`data/comparison.csv`（pyUPMASK 成員機率對照 Hunt & Reffert 成員表）不進
+版控，全新 checkout 要先跑第一行，從 `results/baseline.dat` 與
+`data/hr23_Melotte_22.csv` 重建。
+
+- **做什麼**：第 4 步的篩選砍得不平均，暗的紅星被砍得比暗的藍星多。
+  這支程式把「給定星等與顏色，這顆星會不會被留下」做成模型。前向模型
+  生成假星時用同一把刀砍，假星團才能跟觀測比。
+- **讀**：`data/m45_r5_g18_plx4.csv`、`data/cmd_members.csv`、`data/comparison.csv`。
+- **寫**：`data/selection.npz`。
+- **驗收**：建立之前就訂好三項標準，程式會自動檢查（見該檔開頭）。
+
+### 第 6 步：聯合前向模型擬合（頭條數字）
+
+```bash
+python scripts/core/fit_real.py --procs 4 --n-syn 40000 --repeats 1 --configs C \
+    --refines 3,3,3 --tag _p2final_v3_rep0 --repeat-offset 0
+```
+
+- **做什麼**：同時擬合 7 個參數：年齡、消光 A_V、雙星比例 f_bin、IMF
+  斜率 α、金屬量 [M/H]、雙星質量比分布 q_gamma、差異消光 dav。每試一組
+  參數，就生成 40,000 顆假星，算假星團與真星團色光圖的相似度。作法是
+  先在粗網格上找最好的點，再在附近用更細的格距重掃三輪。
+- **讀**：`data/cmd_members.csv`、`data/errmodel.npz`、`data/selection.npz`、
+  `isochrones/` 的網格、`config.toml` 的 `[joint_fit]`（參數範圍）。
+- **寫**：`results/fit_real_<tag>.npz`。
+- **模型設定**：`--configs` 有 A／B／C／D 四種，頭條用 C（含選擇函數與
+  差異消光）。四種的差別見 `fit_real.py` 開頭說明。
+- **頭條的實際跑法**：`--repeat-offset` 0 到 9 各跑一次，分散到不同機器
+  （見第 5 節派工）。跑完用下面這支把 10 份結果串起來，算 α 的平均與散布：
+  ```bash
+  python scripts/tools/concat_p2final_v3.py
+  ```
+- **開跑前檢查**：加 `--preflight` 只做檢查不擬合，確認網格範圍、輸入檔、
+  續傳設定都正確，見 `docs/reference/PREFLIGHT.md`。工作中途被中斷時，
+  重跑同一個指令會從上次存檔處接續。
+
+### 第 7 步：量誤差（注入回收）
+
+```bash
+python scripts/core/injection_recovery.py --scenarios S3F --trials 9
+```
+
+- **做什麼**：用模型生成一批「已知答案」的假觀測，顆數與真資料一樣
+  （1,078），再丟進整套擬合流程，看能不能找回答案。找回來的散布就是
+  統計誤差（0.144），系統性偏離就是方法偏差。
+- **為什麼不用擬合本身給的誤差**：色光圖的概似函數把每一格當成獨立，
+  會過度自信。實測 MCMC 給的誤差低估好幾倍，而且從未收斂（LIMITATIONS.md C11）。
+- **寫**：`results/injection_recovery_<tag>.npz`。
+- **注意**：注入回收用的是同一套模型，所以**看不到模型本身的錯**，例如
+  等時線的系統誤差。這類誤差要靠第 9 步的敏感度測試。
+
+### 第 8 步：傳統法對照
+
+```bash
+python scripts/diagnostics/traditional_accounting.py
+```
+
+- **做什麼**：用文獻最常見的「查等時線把每顆星換成質量，再擬合冪律」
+  做法，配五種雙星處理方式（全當單星、色光圖偏移剔除、RUWE 剔除、
+  Gaia 雙星目錄剔除、文獻公式修正）。用同一批星、同一把尺量誤差，
+  跟前向模型放在同一張表比較。
+- **寫**：`results/traditional_accounting*.npz`。
+
+### 第 9 步：敏感度與系統誤差測試
+
+每支程式回答「某個假設如果錯了，α 會移動多少」：
+
+| 程式 | 測試的假設 |
+|---|---|
+| `scripts/core/profile_lowmass.py` | 低質量段冪次（目前固定），最大的單一系統誤差來源 |
+| `scripts/core/profile_outlierfrac.py` | 均勻背景比例（模型沒描述到的星佔多少） |
+| `scripts/core/inject_lowmass.py` | 低質量段冪次放自由時，找不找得回真值 |
+| `scripts/core/inject_massdep_fbin.py` | 雙星比例若隨質量變化，α 會被推歪多少 |
+| `scripts/core/measure_overconfidence.py` | 概似函數過度自信的程度 |
+| `scripts/diagnostics/*.py` | 每支對應 LIMITATIONS.md 的一條限制，檔頭寫明是哪一條 |
+
+### 第 10 步：記錄結果
+
+每個新結果都要記：
+
+1. **`results/RESULTS_LOG.md`**：一行一筆，**只能新增、不能修改舊行**，
+   CI 會檢查。
+2. **`LIMITATIONS.md`**：結果若改變了某條限制的狀態，就更新那一條。
+   格式規則見 `CONTRIBUTING.md` 第五、六節。
+3. **`docs/paper/PAPER_OUTLINE.md`**：結果若會進論文，同步更新大綱。
+
+### 第 11 步：PDMF → IMF（目前主線）
+
+把「現在看到的質量函數」換算回「出生時的質量函數」。完整規劃見
+[docs/planning/PDMF_TO_IMF_PLAN.md](docs/planning/PDMF_TO_IMF_PLAN.md)，
+分成三條獨立的路線，彼此交叉驗證：
+
+**(1) 分半徑擬合**：只用某個半徑以內的星重跑第 6 步，看 α 怎麼隨半徑變。
+```bash
+python scripts/core/fit_real.py --radius-range 0,1 --configs C --repeats 1 --repeat-offset 0 --refines 3,3 --tag _radial_r1_final
+```
+每組半徑（`r1`=0–1°、`r2`=0–2°、`r3`=0–3°、`rall`=全樣本）跑 5 次重複
+（`--repeat-offset` 0–4，分散到不同 worker）。五個分片的輸出檔名都一樣，
+所以要放進各自的資料夾
+`kaggle_results/radial_<組>_final_rep<N>/results/fit_real_radial_<組>_final.npz`
+（N = 0–4），再合併：
+```bash
+python scripts/tools/concat_radial_final.py r1
+```
+合併前會逐項核對五片的設定，除了 `repeat_offset` 以外有任何不一致就中止。
+輸出 `results/fit_real_radial_r1_final.npz`。目前結果：核心
+（0–1°）α = 2.06，全樣本 2.38，核心偏平，與重星沉到中心的預期一致。
+
+**(2) LIMEPY 平衡模型**：用多質量動力平衡模型預測「只看 5° 以內」會讓
+α 偏多少。程式在 `scripts/diagnostics/limepy_*.py`、
+`scripts/nbody_petar/pdmf_limepy_*.py`，需要獨立環境 `.venv_limepy`
+（scipy 版本衝突）。
+
+**(3) N-body 模擬**：在電腦裡從 M45 出生時的狀態開始，用 PeTar 逐步算
+重力演化一億年，看現在的 PDMF 跟出生時的 IMF 差多少。
+
+- 環境：在 Linux worker 上跑 `bash setup/nbody/setup_linux_nbody.sh`，
+  編譯 PeTar 與 mcluster（外部專案，版本釘選見 `setup/nbody/README.md`）。
+- 方法 A，用正式網格直接量修正量：
+  1. `scripts/nbody_petar/petar_m45_grid.py`：驗證網格、產生可重現的指令。
+  2. `scripts/nbody_petar/run_nbody_case.py --run-id <id>`：跑一列網格。
+     流程是 mcluster 產生初始條件，PeTar 演化，最後存快照。
+  3. `petar_system_catalog.py`、`petar_pdmf_analysis.py`：從快照量 α 的變化。
+  4. `petar_pdmf_ensemble.py`：彙整多次模擬，給出修正量與不確定度。
+- 方法 B，用 GP 模擬器反推初始條件：
+  1. `generate_training_grid.py` 產生 430 組訓練網格。
+  2. `queue_training_batch.py` 排進雲端佇列。
+  3. `build_training_stats.py`、`summarize_training_runs.py` 整理每次模擬的觀測統計量。
+  4. `emulator_fit.py`、`emulator_holdout_check.py` 訓練模擬器並驗證。
+  5. `emulator_infer.py` 用 M45 的觀測反推初始條件。
+- 規則：模擬參數要在看結果之前登記，見
+  [docs/paper/NBODY_PREREGISTRATION.md](docs/paper/NBODY_PREREGISTRATION.md)。
+
+### 換一個星團
+
+`config.toml` 的 `[target]` 指定星團。但**目前還做不到「改名字就能跑」**：
+每個星團的測光誤差模型與選擇函數都要用自己的資料重新校準。完整前向模型
+在 NGC 3532 與 Praesepe 上都出現撞到參數邊界的解（LIMITATIONS.md D16、
+D17）。多星團流程分兩級：
+
+| 層級 | 程式 | 做什麼 |
+|---|---|---|
+| Tier 1 | `scripts/multicluster/cluster_imf_tier1.py` | 用 Hunt & Reffert 2023 現成的成員表與年齡，只跑傳統法 |
+| Tier 2 | `scripts/multicluster/prepare_cluster_tier2.py --hr23-name <名稱>` | 回 Gaia 補抓測光，建這個星團自己的誤差模型與選擇函數 |
+| Tier 2 | `scripts/multicluster/cluster_forward_validation.py --hr23-name <名稱> --grid <網格>` | 用 M45 的前向模型擬合這個星團，並做注入回收 |
+
+各星團目前通過與未通過的項目見
+[docs/paper/MULTICLUSTER_VALIDATION.md](docs/paper/MULTICLUSTER_VALIDATION.md)。
+
+---
+
+## 5. 算力怎麼派
+
+**2026-08-23 起本機不跑計算**，所有工作排進雲端佇列：
+
+1. 開分支，在 `cloud_queue.txt` 末端加一行：
+   ```
+   標籤|腳本路徑|參數|額外檔案（逗號分隔）|minimal|worker 名稱|最長小時數
+   p2_rep0|scripts/core/fit_real.py|--procs 4 --n-syn 40000 --repeats 1 --configs C --tag _rep0|scripts/core/measure_overconfidence.py,scripts/core/injection_recovery.py,scripts/tools/checkpoint.py,scripts/tools/preflight.py|false||60
+   ```
+   - **標籤**：唯一名稱。完成紀錄以標籤為準，同一個標籤不會重跑。
+   - **額外檔案**：Kaggle 會把腳本拍平到單一資料夾，所以腳本 import 的
+     其他檔案要列在這裡。SSH worker 有完整 repo，不需要列。
+   - **minimal**：`true` 表示不打包 `pipeline/`、資料與等時線網格。
+   - **worker**：留空表示給任何有空的 worker。
+2. 開 PR、合併。派工器下一輪就會撿到這個工作。
+3. 結果回傳到派工機器的 `cloud_results/` 或 `kaggle_results/`，經人工確認
+   後 commit 進 `results/`，並記進 `RESULTS_LOG.md`。
+
+派工器本體在 `ops/`：`cloud_queue.py`（主迴圈）、`ssh_sync.py`
+（SSH worker）、`kaggle_sync.py`（Kaggle）、`gcp_vm_lifecycle.py`（GCP 自動
+開關機）。設定方式見 [docs/reference/CLOUD_WORKERS.md](docs/reference/CLOUD_WORKERS.md)。
+進度可以在本機主控板看：雙擊 `status_dashboard/launch_dashboard.vbs`。
+
+---
+
+## 6. 結果放在哪裡
+
+所有結果都在 `results/`，檔名規則是「產生它的程式＋標籤」：
+
+| 檔名樣式 | 來源 |
+|---|---|
+| `fit_real_<tag>.npz` | 第 6 步聯合前向模型（`fit_real_p2final_v3*.npz` 是頭條） |
+| `injection_recovery_<tag>.npz` | 第 7 步注入回收 |
+| `traditional_accounting*.npz` | 第 8 步傳統法 |
+| `profile_*`、`inject_*` | 第 9 步敏感度測試 |
+| `m45_*_pdmf*.json`、`nbody_*` | 第 11 步 N-body |
+| `nbody_training_runs/` | N-body 方法 B 的 430 組訓練資料摘要 |
+| `cluster_*` | 多星團 |
+
+每個結果代表什麼、用什麼參數跑的，查 [results/RESULTS_LOG.md](results/RESULTS_LOG.md)。
+
+---
+
+## 7. 文件導覽
+
+| 想知道 | 看這裡 |
+|---|---|
+| 結果有哪些已知問題、可不可以引用 | [LIMITATIONS.md](LIMITATIONS.md) |
+| 論文會寫什麼、新穎性在哪 | [docs/paper/PAPER_OUTLINE.md](docs/paper/PAPER_OUTLINE.md) |
+| 已經解決的問題 | [docs/paper/RESOLVED.md](docs/paper/RESOLVED.md) |
+| 現在誰在做什麼、還有哪些待辦 | [docs/project/WORK_BOARD.md](docs/project/WORK_BOARD.md) |
+| 佇列的開跑前檢查或驗收沒過 | [docs/project/QUEUE_ALERTS.md](docs/project/QUEUE_ALERTS.md) |
+| 參數為什麼這樣設 | [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) |
+| 成員判定方法、與前人做法對照 | [docs/reference/METHODS.md](docs/reference/METHODS.md)、[docs/reference/COMPARISON.md](docs/reference/COMPARISON.md) |
+| 試過但被推翻的做法 | [docs/reference/REFUTED.md](docs/reference/REFUTED.md) |
+| 用高中程度從頭理解方法 | [docs/teaching/](docs/teaching/) |
+| 協作規則（開分支、PR、commit） | [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+---
+
+## 8. 2026-11 目錄重整對照表
+
+2026-11 把根目錄的檔案依用途分進資料夾。舊文件（`docs/planning/`、
+`docs/reports/`、`results/RESULTS_LOG.md` 等歷史紀錄）提到的舊路徑沒有
+改寫，用這張表對照：
+
+| 舊位置 | 新位置 |
+|---|---|
+| `fit_real.py`、`injection_recovery.py`、`inject_lowmass.py`、`inject_massdep_fbin.py`、`measure_overconfidence.py`、`profile_lowmass.py`、`profile_outlierfrac.py` | `scripts/core/` |
+| `cloud_queue.py`、`run_queue.py`、`kaggle_*.py`、`ssh_*.py`、`gcp_vm_lifecycle.py`、`iap_tunnel_manager.py`、`queue.txt`、`kaggle_queue.txt`、`*.json.example`、`restart_queue_on_boot.ps1`、`run_hidden.vbs` | `ops/` |
+| `PAPER_OUTLINE.md`、`MULTICLUSTER_VALIDATION.md`、`NBODY_PREREGISTRATION.md`、`RESOLVED.md` | `docs/paper/` |
+| `WORK_BOARD.md`、`WORK_BOARD_DONE.md`、`STATE.md`、`NEXT_PROMPT.md`、`QUEUE_ALERTS.md`、`CHANGELOG.md` | `docs/project/` |
+| `petar_m45_grid.csv`、`petar_m45_training_grid.csv` | `scripts/nbody_petar/grids/` |
+| `nbody_setup/` | `setup/nbody/`（`analyze_alpha_r.py` 移到 `scripts/nbody_petar/`） |
+| 舊 README 的參數說明 | `docs/reference/CONFIG_REFERENCE.md` |
+
+搬遷由 `scripts/tools/restructure_repo.py` 執行。`cloud_queue.txt`、
+`config.toml` 和憑證檔（`kaggle_accounts.json`、`ssh_workers.json`）
+刻意留在根目錄：派工器與既有機器的設定都寫死這些位置。

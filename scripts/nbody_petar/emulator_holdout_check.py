@@ -94,7 +94,7 @@ def run_self_test() -> dict:
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs_training")
-    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "petar_m45_training_grid.csv")
+    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv")
     ap.add_argument("--targets", type=Path, default=REPO_ROOT / "results" / "nbody_observed_targets.json")
     ap.add_argument("--binary-filter", choices=("all", "patched", "original"), default="all")
     ap.add_argument("--patched-marker", default="install_framefix",

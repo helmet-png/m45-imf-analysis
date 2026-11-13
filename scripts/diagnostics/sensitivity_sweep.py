@@ -45,6 +45,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE / "scripts" / "core"))  # injection_recovery 等主程式
 
 ALPHA_STAT_SIGMA = 0.144   # 注入回收量到的統計誤差（S3F），當比較尺度
 

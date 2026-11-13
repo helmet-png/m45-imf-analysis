@@ -52,7 +52,7 @@
           "name": "Step5 IMF 冪次律 / 質量分層",
           "scripts": [
             "pipeline/step5_imf.py",
-            "fit_real.py",
+            "scripts/core/fit_real.py",
             "scripts/diagnostics/summarize_free_lowmass_recovery.py",
             "pipeline/joint_fit.py"
           ],
@@ -72,7 +72,7 @@
         {
           "name": "第2步 前向模型逐半徑重跑 α(<r)",
           "scripts": [
-            "fit_real.py"
+            "scripts/core/fit_real.py"
           ],
           "queue_labels": [
             "radial_r1_final",
@@ -121,7 +121,7 @@
         {
           "name": "p6_lowmass_v3（A1、A3）低質量段冪次系統誤差",
           "scripts": [
-            "profile_lowmass.py"
+            "scripts/core/profile_lowmass.py"
           ],
           "queue_labels": [
             "p6_lowmass_v3"
@@ -130,7 +130,7 @@
         {
           "name": "p6b_inject_lowmass_v2（A1）低質量段可辨識性",
           "scripts": [
-            "inject_lowmass.py"
+            "scripts/core/inject_lowmass.py"
           ],
           "queue_labels": [
             "p6b_inject_lowmass_v2_t0",
@@ -162,7 +162,7 @@
           "name": "bhac15_isochrone_test（C1、D1）等時線模型效應分解",
           "scripts": [
             "pipeline/bhac.py",
-            "fit_real.py"
+            "scripts/core/fit_real.py"
           ],
           "queue_labels": [
             "bhac15_isochrone_test"
@@ -171,7 +171,7 @@
         {
           "name": "extinction_form_test（C5，現役缺陷）消光分布形式",
           "scripts": [
-            "fit_real.py"
+            "scripts/core/fit_real.py"
           ],
           "queue_labels": [
             "c5_davform_truncexp",
@@ -190,7 +190,7 @@
         {
           "name": "extra_scatter_sensitivity（C19）額外亮度散布敏感度",
           "scripts": [
-            "fit_real.py"
+            "scripts/core/fit_real.py"
           ],
           "queue_labels": [
             "extra_scatter_sensitivity"
@@ -199,7 +199,7 @@
         {
           "name": "configCD_real_data_compare（D10）dav 上界比較",
           "scripts": [
-            "fit_real.py"
+            "scripts/core/fit_real.py"
           ],
           "queue_labels": [
             "configcd_real_data_compare"
@@ -212,7 +212,7 @@
         {
           "name": "mass_dependent_fbin（D14 衍生）雙星比例對質量的相依性",
           "scripts": [
-            "inject_massdep_fbin.py"
+            "scripts/core/inject_massdep_fbin.py"
           ],
           "queue_labels": [
             "mass_dependent_fbin"
@@ -267,26 +267,26 @@
         {
           "name": "Kaggle 派工",
           "scripts": [
-            "kaggle_accounts.py",
-            "kaggle_queue.py",
-            "kaggle_smoketest.py",
-            "kaggle_sync.py"
+            "ops/kaggle_accounts.py",
+            "ops/kaggle_queue.py",
+            "ops/kaggle_smoketest.py",
+            "ops/kaggle_sync.py"
           ]
         },
         {
           "name": "GCP 資源管理",
           "scripts": [
-            "gcp_vm_lifecycle.py",
-            "iap_tunnel_manager.py"
+            "ops/gcp_vm_lifecycle.py",
+            "ops/iap_tunnel_manager.py"
           ]
         },
         {
           "name": "派工器核心（cloud_queue／SSH）",
           "scripts": [
-            "cloud_queue.py",
-            "run_queue.py",
-            "ssh_sync.py",
-            "ssh_workers.py"
+            "ops/cloud_queue.py",
+            "ops/run_queue.py",
+            "ops/ssh_sync.py",
+            "ops/ssh_workers.py"
           ]
         }
       ]
@@ -382,9 +382,9 @@
             "scripts/diagnostics/profile_test.py",
             "scripts/diagnostics/finalize_limepy_radial_crosscheck.py",
             "scripts/diagnostics/check_imf_form.py",
-            "profile_outlierfrac.py",
-            "measure_overconfidence.py",
-            "injection_recovery.py",
+            "scripts/core/profile_outlierfrac.py",
+            "scripts/core/measure_overconfidence.py",
+            "scripts/core/injection_recovery.py",
             "scripts/drivers/run_joint.py"
           ]
         },
@@ -402,7 +402,7 @@
         {
           "name": "N-body／PDMF 輔助工具",
           "scripts": [
-            "nbody_setup/analyze_alpha_r.py",
+            "scripts/nbody_petar/analyze_alpha_r.py",
             "scripts/nbody_petar/pdmf_limepy_bootstrap.py",
             "scripts/nbody_petar/pdmf_limepy_smoke.py",
             "scripts/nbody_petar/pdmf_system_definition_bridge.py",

@@ -204,7 +204,7 @@ def main():
                     help="要排在 PATH 最前面的目錄（需有能 import numpy/astropy 的 python3）")
     ap.add_argument("--limit", type=int, default=30, help="本批最多跑幾筆尚未完成的 run")
     ap.add_argument("--n-threads", type=int, default=24)
-    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "petar_m45_training_grid.csv")
+    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv")
     ap.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs_training")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()

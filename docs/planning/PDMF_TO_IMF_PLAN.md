@@ -226,7 +226,7 @@ definition_bridge.py` 的 `--final` 可以直接指到不同時間點的快照�
 「假設哪個年齡才是對的」當成 PDMF→IMF 修正量的一個敏感度測試維度，
 而不是只用單一年齡（125 Myr）算出的修正量代表全部。
 
-**正式模擬前必須先讀 [`NBODY_PREREGISTRATION.md`](../../NBODY_PREREGISTRATION.md)
+**正式模擬前必須先讀 [`NBODY_PREREGISTRATION.md`](../paper/NBODY_PREREGISTRATION.md)
 （H13，2026-09-05 凍結）**：主統計量、孔徑、質量段、驗收標準都已經
 在還沒有任何正式模擬結果之前寫死，避免像 A5 的徑向分析那樣事後才決定
 用什麼統計處理方式。`petar_m45_grid.csv` 任何一列從「校準／pilot」

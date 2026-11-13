@@ -184,7 +184,7 @@ def run_self_test() -> dict:
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "results" / "nbody_training_runs")
-    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "petar_m45_training_grid.csv")
+    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv")
     ap.add_argument("--targets", type=Path, default=REPO_ROOT / "results" / "nbody_observed_targets.json")
     ap.add_argument("--drop-prefix", default="fbin", help="逗號分隔；空字串 = 全部 26 個統計量都用")
     ap.add_argument("--max-energy-error", type=float, default=None)

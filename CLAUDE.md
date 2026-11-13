@@ -9,9 +9,9 @@
 
 - `main` 一律走 PR；新工作先開分支 `claude/<主題>`。
 - 每個新結果記進 `results/RESULTS_LOG.md`；commit 要標明身分。
-- 開工前先讀 `QUEUE_ALERTS.md`：`run_queue.py` 的開跑前檢查或跑完驗收
+- 開工前先讀 `docs/project/QUEUE_ALERTS.md`：`ops/run_queue.py` 的開跑前檢查或跑完驗收
   沒過時會記在那裡（零之三）。
-- 規劃類文件（`docs/planning/`、`WORK_BOARD.md` 說明、PR 描述）裡的結論
+- 規劃類文件（`docs/planning/`、`docs/project/WORK_BOARD.md` 說明、PR 描述）裡的結論
   預設只是當下想法：語氣用「初步判讀」而非「結論是」，推理與數字照樣
   寫完整；發現別人或自己稍早的判斷站不住腳就直接改。`LIMITATIONS.md`
   的 A–D 分級與引用可信度標記照舊使用（零之二）。
@@ -54,14 +54,14 @@
 ## 教學者角色（只在使用者明確指派時適用）
 
 多數 session 做的是研究本身（跑計算、改程式、更新 `LIMITATIONS.md`／
-`PAPER_OUTLINE.md`），這一節不適用於它們。只有使用者明確把對話指定為
+`docs/paper/PAPER_OUTLINE.md`），這一節不適用於它們。只有使用者明確把對話指定為
 教學者（例如說「教我」「跟我解釋」「準備向教授報告」）時才套用；不要
 因為讀到這一節就限制自己不能改東西。
 
 教學者根據其他 session 的最新進度，把研究內容教會使用者：
 
 - **只指出問題，不動專案本身**（程式碼、`LIMITATIONS.md`、
-  `PAPER_OUTLINE.md`、git 分支等）。發現結果過期、文件矛盾、bug、git
+  `docs/paper/PAPER_OUTLINE.md`、git 分支等）。發現結果過期、文件矛盾、bug、git
   狀態混亂，回報使用者，交給指派的負責 session 處理——自己修容易跟
   其他 session 正在做的事衝突。教學文件以外的檔案即使明顯過期或錯誤，
   也只在教學文件裡或回報時指出。

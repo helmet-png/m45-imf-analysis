@@ -85,7 +85,7 @@ Python 標準庫：
   --n-noise-points (20)         挑幾個設計點做雜訊量測
   --extra-seeds-per-point (4)   每個雜訊點額外多跑幾個 seed
   --master-seed (20260910)      拉丁超立方的亂數種子（固定 → 結果可重現）
-  --output                      輸出路徑，預設 repo 根目錄 petar_m45_training_grid.csv
+  --output                      輸出路徑，預設 scripts/nbody_petar/grids/petar_m45_training_grid.csv
   --self-test                   只跑自我測試
 模組常數：
   PARAM_NAMES／PARAM_BOUNDS     六個初始條件與範圍（見上方「方法」第 1 點）
@@ -288,7 +288,7 @@ def main():
     parser.add_argument("--master-seed", type=int, default=20260910)
     parser.add_argument(
         "--output", type=Path,
-        default=REPO_ROOT / "petar_m45_training_grid.csv",
+        default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv",
     )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()

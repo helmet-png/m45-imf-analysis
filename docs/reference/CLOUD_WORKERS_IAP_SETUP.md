@@ -9,13 +9,13 @@ GCP 免費試用帳號、各自的 VM，希望互相共用成一個資源池，�
 人有條件讓自己的筆電 24 小時常開常連網——集中派工需要**某台機器**
 一直開著，這台機器不能是任何一個人的筆電。
 
-**中控機是雲端 VM，不是任何人的筆電**：`cloud_queue.py`／
-`iap_tunnel_manager.py` 這兩支常駐程式，跑在 GCP **Always Free**
+**中控機是雲端 VM，不是任何人的筆電**：`ops/cloud_queue.py`／
+`ops/iap_tunnel_manager.py` 這兩支常駐程式，跑在 GCP **Always Free**
 方案送的一台 `e2-micro`（永久免費，不是 90 天試用額度，見「給中控機
 操作者做一次」第 0 步）上，用**服務帳戶**（service account）而不是
 某個人的 Google 帳號登入——這台 VM 24/7 開著完全不用錢，也不依賴
 任何人記得開電腦。**架構其餘部分沒有變**：仍然是
-[集中派工](../../cloud_queue.py)——只有這一台協調 VM 真正握有連線
+[集中派工](../../ops/cloud_queue.py)——只有這一台協調 VM 真正握有連線
 憑證跟派工邏輯，隊員完全不用碰任何憑證，一樣是對 `cloud_queue.txt`
 開 PR 加工作。傳統直連的既有 worker（例如 Oracle，沒有 IAP）不受
 影響，繼續看 [CLOUD_WORKERS.md](CLOUD_WORKERS.md)。
@@ -167,7 +167,7 @@ gcloud iam service-accounts add-iam-policy-binding WORKER_VM_SERVICE_ACCOUNT_EMA
 ## 給協調 VM 操作者做一次
 
 **這裡整個流程都在 Linux 上做**：本機（你的筆電）不再需要跑
-`cloud_queue.py`／`iap_tunnel_manager.py`，只需要一開始建立協調 VM
+`ops/cloud_queue.py`／`ops/iap_tunnel_manager.py`，只需要一開始建立協調 VM
 時連進去做初始設定，之後平常不用管它。下面的指令直接在協調 VM 的
 SSH 終端機（Debian／Ubuntu 的 bash，不是 Windows）裡執行。
 
@@ -221,15 +221,15 @@ gcloud init
 **這裡走的是一般 `ssh`／`scp` 指令連到 tunnel 開的 `localhost:<port>`，
 不是 `gcloud compute ssh`**——後者會自動幫你產生、註冊、管理金鑰，
 前者不會，OS Login 開了、IAM 也授權了，沒有這一步照樣會在
-`ssh_sync.py push` 卡 `Permission denied (publickey)`。用協調 VM
+`ops/ssh_sync.py push` 卡 `Permission denied (publickey)`。用協調 VM
 自己的服務帳戶身分建一把專用金鑰：
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/gcp_iap_operator -C "gcp-iap-coordinator" -N ""
 ```
 
-**這把金鑰沒有 passphrase**：`ssh_workers.py` 的 `_SSH_OPTS` 開了
-`BatchMode=yes`（不彈互動式 prompt），這是為了讓 `cloud_queue.py`
+**這把金鑰沒有 passphrase**：`ops/ssh_workers.py` 的 `_SSH_OPTS` 開了
+`BatchMode=yes`（不彈互動式 prompt），這是為了讓 `ops/cloud_queue.py`
 常駐無人值守運作，代價是沒辦法直接換成有 passphrase 的金鑰。這台
 協調 VM 本身就是服務帳戶專用、不是人類日常登入的機器，私鑰檔案的
 存取權限預設就只有這個 VM 上的使用者能讀（Linux 的 `ssh-keygen`
@@ -289,8 +289,8 @@ git clone https://github.com/helmet-png/m45-imf-analysis.git ~/m45_membership
 cd ~/m45_membership
 ```
 
-`cloud_queue.py`／`iap_tunnel_manager.py`／`ssh_workers.py`／
-`ssh_sync.py`／`gcp_vm_lifecycle.py` 這些常駐派工用到的模組全部只用
+`ops/cloud_queue.py`／`ops/iap_tunnel_manager.py`／`ops/ssh_workers.py`／
+`ops/ssh_sync.py`／`ops/gcp_vm_lifecycle.py` 這些常駐派工用到的模組全部只用
 Python 標準庫，**不需要 `pip install` 任何套件**——`e2-micro` 只有
 1GB 記憶體，不裝 numpy/scipy 這類重量級套件正好，這台機器本來就
 不做任何實際運算，只負責發指令、查狀態。
@@ -300,11 +300,11 @@ Python 標準庫，**不需要 `pip install` 任何套件**——`e2-micro` 只�
 還在 `~/m45_membership` 目錄下：
 
 ```bash
-cp ssh_workers.json.example ssh_workers.json
+cp ops/ssh_workers.json.example ssh_workers.json
 nano ssh_workers.json    # 或用你熟悉的編輯器
 ```
 
-照 [ssh_workers.json.example](../../ssh_workers.json.example) 裡
+照 [ssh_workers.json.example](../../ops/ssh_workers.json.example) 裡
 `gcp1`／`gcp2` 的範例格式，`host` 固定填 `"localhost"`、`key_path`
 填上面建立的私鑰路徑（`~/.ssh/gcp_iap_operator`，**不要留空**——
 留空會退回 ssh 預設身分，通常沒有註冊過 OS Login，會連不上）、
@@ -320,14 +320,14 @@ systemd 本身就是行程監督器，`Restart=always` 已經涵蓋「掛了自�
 ```bash
 sudo tee /etc/systemd/system/cloud-queue.service > /dev/null <<'EOF'
 [Unit]
-Description=M45 IMF cloud_queue.py dispatcher
+Description=M45 IMF ops/cloud_queue.py dispatcher
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/home/YOUR_LINUX_USER/m45_membership
-ExecStart=/usr/bin/python3 -u cloud_queue.py
+ExecStart=/usr/bin/python3 -u ops/cloud_queue.py
 Restart=always
 RestartSec=15
 User=YOUR_LINUX_USER
@@ -345,7 +345,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/YOUR_LINUX_USER/m45_membership
-ExecStart=/usr/bin/python3 -u iap_tunnel_manager.py
+ExecStart=/usr/bin/python3 -u ops/iap_tunnel_manager.py
 Restart=always
 RestartSec=15
 User=YOUR_LINUX_USER
@@ -374,22 +374,22 @@ journalctl -u cloud-queue.service -f
 即時看 log，正常應該會看到「雲端佇列執行器啟動」之類的訊息，過一輪
 （60 秒）看到嘗試對已登記的 worker 派工／查狀態。第一次連線如果
 worker VM 剛好是關機狀態，`push()` 會自動觸發開機（見
-[gcp_vm_lifecycle.py](../../gcp_vm_lifecycle.py)），這一輪失敗、
+[gcp_vm_lifecycle.py](../../ops/gcp_vm_lifecycle.py)），這一輪失敗、
 下一輪（60 秒後）自然接上，是正常現象，不代表設定錯誤。
 
 想手動測試單一 worker（不透過常駐服務），可以先
 `sudo systemctl stop cloud-queue.service` 暫停常駐派工，再手動跑
-`python3 ssh_sync.py push --worker gcp2`，測完別忘了
+`python3 ops/ssh_sync.py push --worker gcp2`，測完別忘了
 `sudo systemctl start cloud-queue.service` 恢復常駐。
 
 ## 自動開關機的行為
 
-- **開機**：`cloud_queue.py` 要派工給某個 worker 之前，`ssh_sync.push()`
+- **開機**：`ops/cloud_queue.py` 要派工給某個 worker 之前，`ssh_sync.push()`
   會先查那台 VM 是不是 `RUNNING`，不是就發開機指令，這一輪當作沒準備
   好、下一輪（60 秒後）再檢查——不會卡住其他 worker 同一輪的派工。
-- **關機**：`cloud_queue.py` 主迴圈每輪尾端檢查，某個 worker 連續閒置
+- **關機**：`ops/cloud_queue.py` 主迴圈每輪尾端檢查，某個 worker 連續閒置
   （沒有槽位在用）超過 15 分鐘就自動關機，見
-  [cloud_queue.py](../../cloud_queue.py) 的 `IDLE_STOP_SECS`。
+  [cloud_queue.py](../../ops/cloud_queue.py) 的 `IDLE_STOP_SECS`。
 - 這兩件事都只對填了 `gcp_project`／`gcp_zone`／`gcp_instance` 三個
   欄位的 worker 生效，沒填的 worker（例如固定開著的 Oracle VM）完全
   不受影響。
@@ -397,7 +397,7 @@ worker VM 剛好是關機狀態，`push()` 會自動觸發開機（見
 ## 已知限制（誠實列出，不是隱藏起來）
 
 - **單點故障減輕了，但沒有完全解決**：資源池還是靠協調 VM 那一台跑
-  `cloud_queue.py`，比起某個人的筆電，雲端 e2-micro 24/7 開著、不
+  `ops/cloud_queue.py`，比起某個人的筆電，雲端 e2-micro 24/7 開著、不
   依賴任何人記得開機，可靠度好很多；但協調 VM 所在的**那個 GCP
   專案**如果被停權、或那個帳戶的免費額度／Always Free 資格出問題，
   全隊還是會一起派不了工——沒有做「協調 VM 本身也有備援」這件事。

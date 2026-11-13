@@ -53,7 +53,7 @@ reviews:
     - "!logs/**"
     - "!kaggle_work/**"
   path_instructions:
-    - path: "injection_recovery.py"
+    - path: "scripts/core/injection_recovery.py"
       instructions: >
         multi_stage_best() 是這個專案共用的網格精修核心，被 fit_real.py／
         profile_lowmass.py／profile_outlierfrac.py／inject_lowmass.py 等

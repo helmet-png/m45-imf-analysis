@@ -175,7 +175,7 @@ def run_self_test() -> dict:
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs_training")
-    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "petar_m45_training_grid.csv")
+    ap.add_argument("--grid", type=Path, default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv")
     ap.add_argument("--out-csv", type=Path, default=REPO_ROOT / "results" / "nbody_training_runs_summary.csv")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
