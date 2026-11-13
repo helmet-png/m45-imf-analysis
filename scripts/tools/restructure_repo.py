@@ -124,9 +124,9 @@ def rewrite_commands(text: str) -> str:
     for old in _root_names():
         if not old.endswith(".py"):
             continue
-        text = re.sub(rf"(\b(?:python3?|py)(?:\s+-[a-zA-Z]+)*\s+){re.escape(old)}\b",
+        text = re.sub(rf"(\b(?:python3?|py)(?:\s+-[a-zA-Z]+)*\s+|--script[ =]){re.escape(old)}\b",
                       rf"\g<1>{MOVES[old]}", text)
-    return text
+    return text.replace("nbody_setup/", "setup/nbody/")
 
 
 def rewrite_mentions(text: str) -> str:
@@ -287,7 +287,6 @@ def rewrite_text_files(old_tree: set[str]) -> None:
                     text = rewrite_mentions(text)
         elif ext in {".py", ".sh", ".ps1"}:
             text = rewrite_commands(text)
-            text = text.replace("bash nbody_setup/", "bash setup/nbody/")
         if text != orig:
             p.write_text(text, encoding="utf-8", newline="")
 
