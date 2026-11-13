@@ -15,8 +15,9 @@
   預設只是當下想法：語氣用「初步判讀」而非「結論是」，推理與數字照樣
   寫完整；發現別人或自己稍早的判斷站不住腳就直接改。`LIMITATIONS.md`
   的 A–D 分級與引用可信度標記照舊使用（零之二）。
-- 你沒有 senior24／協調 VM 的 SSH 金鑰，只能請使用者在瀏覽器 SSH 分頁
-  貼指令、貼回結果；指令寫法見零之五。
+- 2026-11 起協調 VM 停用（GCP 試用期結束）。使用者授權 Albert 這台筆電
+  （含在上面執行的 agent）經 Tailscale＋專用金鑰直接 SSH 進 senior24，
+  見下一節與 `CONTRIBUTING.md` 零之五。其他電腦／agent 沒有這個權限。
 - 派工清單是公開 repo 根目錄的 `cloud_queue.txt`，修改走一般 PR 流程
   （零之六）。
 - 你判斷不需要 CodeRabbit 審的 PR（純派工、流程驗證、一次性驗證），標題
@@ -24,27 +25,24 @@
   程式／文件不可以帶（零之一）。
 - 編輯 `LIMITATIONS.md` 前讀 `CONTRIBUTING.md` 第五、六節。
 
-## 給使用者貼的遠端指令：一律以「協調 VM」為執行位置
+## senior24 存取（2026-11 起，協調 VM 停用後）
 
-使用者所有遠端操作都是在瀏覽器 SSH 分頁登入**協調 VM**（`control-center`，
-帳號 `yutunglan11_gmail_com`）執行，再從那裡連 senior24。所以：
-
-- 交給使用者貼的指令，**預設就是在協調 VM 上執行**，不要叫使用者「先
-  SSH 進 senior24 再貼」。
-- 要在 senior24 上跑的指令，**整條包成一行 ssh**，從協調 VM 直接貼：
-
-  ```
-  ssh -i ~/.ssh/senior24_key -o StrictHostKeyChecking=accept-new $(python3 -c "import json;w=json.load(open('$HOME/m45_membership/ssh_workers.json'))['senior24'];print('-p %s %s@%s'%(w.get('port',22),w['user'],w['host']))") '<要在 senior24 上跑的指令>'
-  ```
-
-  `<...>` 用單引號包住，所以裡面不能再出現單引號（要引號就用雙引號）；
-  變數與 `$(...)` 會在 senior24 上才展開。其餘格式限制（單行、`&&` 串接、
-  指令本身不夾中文）見 `CONTRIBUTING.md` 零之五。
-- 每次交指令前先在訊息裡標明「在協調 VM 貼」；若指令是要在協調 VM 自己
-  的 `~/m45_membership`（派工服務用的那份）上動作，先確認不會覆蓋
-  `cloud_queue.txt` 等即時狀態，**不要在那份上 `git checkout`／`reset --hard`**。
-- 協調 VM 上 `~/m45_membership` 只會同步 `cloud_queue.txt`，其餘檔案的
-  `git log` 停在舊 commit 是正常的。
+- **連線**：Albert 的筆電裝 Tailscale、加入 senior24 所在的 tailnet，
+  用本機專用金鑰 `~/.ssh/senior24_ed25519`（只在這台電腦，不進 repo、
+  不貼進任何訊息）：
+  `ssh -i ~/.ssh/senior24_ed25519 estopic@100.96.152.16`，專案在
+  `/home/estopic/m45_membership`。
+- **權限範圍**：只做本專案的工作——在 `~/m45_membership` 內 `git pull`、
+  跑計算、讀結果。不動 `estopic` 帳號的其他檔案、不改系統設定、不裝
+  系統套件（Python 套件裝在使用者層級或專案 venv），不碰別人正在跑的
+  行程；`pgrep` 看到不是自己啟動的工作就不要 kill。
+- **長時間工作**：`nohup ... > logs/<label>.out 2>&1 &`，輸出寫在
+  `results/`；跑完把要保留的結果拉回本機、開 PR 進版控（senior24 上沒有
+  可推送的 git 憑證，也不要放）。
+- **派工服務**：`cloud_queue.py` 依賴協調 VM，停用期間 `cloud_queue.txt`
+  不會自動派工；要跑的工作直接在 senior24 啟動，並在 PR 裡記錄指令。
+- 協調 VM 若恢復，舊規則（使用者在瀏覽器 SSH 分頁貼指令）見 git 歷史
+  中本節的前一版。
 
 ## 發現有未知修改時
 
