@@ -65,8 +65,13 @@ ensure_ini_value() {
     sed -i -E "s|^([[:space:]]*${key}[[:space:]]*=[[:space:]]*).*|\\1${value}|" "$ini"
 }
 
-# 這兩項不由 run_variant.py 覆寫，故每次 setup 都明確恢復成產線設定。
-ensure_ini_value "rnd_seed" "99"
+# 每次 setup 都明確恢復成產線設定。
+# rnd_seed：頭條成員表 results/baseline.dat（P>=0.7 共 1,297 顆）是種子 42 跑的，
+# 跟 config.toml [step1_membership] random_seed 一致。原本這裡寫 99，是擷取
+# 修補檔當下本機 params.ini 剛跑完 seed99 敏感度測試留下的值（seed99 只有
+# 1,292 顆），會讓新機器重現不出頭條。run_variant.py 現在每次都會依
+# config.toml 覆寫這個值，這裡只是讓手動直接跑 pyUPMASK 時也一致。
+ensure_ini_value "rnd_seed" "42"
 ensure_ini_value "ID" "source_id"
 
 if ! "$VENV_PY" -m pip --version >/dev/null 2>&1; then

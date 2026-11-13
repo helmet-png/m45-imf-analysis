@@ -51,7 +51,7 @@ pyUPMASK 怎麼判定成員（摘要，細節見 docs/reference/CONFIG_REFERENCE
   --resample        是否用天測誤差重抽，預設 True（pyUPMASK 原始預設是 False，
                     等於不用誤差，務必保持 True）
   --pca, --pca-dims 是否用 PCA 降維、降到幾維，預設 True、2
-  --seed            亂數種子；不給就沿用 params.ini 原本的值
+  --seed            亂數種子；不給就用 config.toml [step1_membership] random_seed（42）
   --kdep            True：機率用核密度後驗（預設）；False：用「25 輪中被判為
                     成員的比例」
   --indep-resample  重抽時三個維度各自獨立擾動（否則沿用 pyUPMASK 原本
@@ -125,7 +125,9 @@ def main():
     ap.add_argument("--pca", default="True", choices=["True", "False"])
     ap.add_argument("--pca-dims", type=int, default=2)
     ap.add_argument("--seed", default=None,
-                    help="亂數種子；換種子可量出純粹的 run-to-run 雜訊底線")
+                    help="亂數種子；不給就用 config.toml [step1_membership] "
+                         "random_seed（頭條 baseline 是 42）。換種子可量出純粹的 "
+                         "run-to-run 雜訊底線")
     ap.add_argument("--kdep", default="True", choices=["True", "False"],
                     help="False = 關掉 KDE 後驗，機率退回原始 UPMASK 的"
                          "「25 輪中被判為成員的次數比例」")
@@ -158,9 +160,14 @@ def main():
     params = [("OL_runs", a.ol_runs), ("resampleFlag", a.resample),
               ("PCAflag", a.pca), ("PCAdims", a.pca_dims),
               ("KDEP_flag", a.kdep)]
-    # ↓ 有給種子才改種子
-    if a.seed is not None:
-        params.append(("rnd_seed", a.seed))
+    # ↓ 種子一律寫入：沒給 --seed 就用 config.toml 的 random_seed。
+    #   原本沒給就沿用 params.ini 殘留的值，而那個值會隨上一次執行或
+    #   setup 腳本而變（曾經是 99），同一個指令在不同機器跑出不同成員表。
+    if a.seed is None:
+        sys.path.insert(0, str(HERE))
+        from pipeline import config as cfgmod
+        a.seed = cfgmod.load().step1_membership.random_seed
+    params.append(("rnd_seed", a.seed))
     # ↓ 逐一改寫，最後寫回 params.ini
     for k, v in params:
         text = set_param(text, k, v)
@@ -173,7 +180,7 @@ def main():
 
     # ═══════════════ 核心 3：執行 pyUPMASK 並收回結果 ═══════════════
     log = LOGS / f"{a.name}.log"
-    print(f"[{a.name}] 輸入={src.name} OL={a.ol_runs} resample={a.resample} "
+    print(f"[{a.name}] 輸入={src.name} seed={a.seed} OL={a.ol_runs} resample={a.resample} "
           f"PCA={a.pca}/{a.pca_dims} indep={a.indep_resample}")
     t0 = time.time()
     with open(log, "w", encoding="utf-8") as fh:
