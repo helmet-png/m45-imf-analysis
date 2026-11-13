@@ -133,7 +133,7 @@ def rewrite_mentions(text: str) -> str:
     """內文提到的檔名（含反引號內）改成新路徑。只用在常駐文件上。"""
     text = text.replace("nbody_setup/", "setup/nbody/")
     for old in _root_names():
-        text = re.sub(rf"(?<![\w/.\[-]){re.escape(old)}(?![\w-])", MOVES[old], text)
+        text = re.sub(rf"(?<![\w/.\[(-]){re.escape(old)}(?![\w-])", MOVES[old], text)
     return text
 
 
