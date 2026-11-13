@@ -270,7 +270,7 @@ def rewrite_text_files(old_tree: set[str]) -> None:
     new_of = {o: map_path(o) for o in old_tree}
     old_of = {n: o for o, n in new_of.items()}
     for new_rel in sorted(old_of):
-        if new_rel.startswith(SKIP_ENTIRELY):
+        if new_rel.startswith(SKIP_ENTIRELY) or new_rel == "scripts/tools/restructure_repo.py":
             continue
         old_rel = old_of[new_rel]
         p = ROOT / new_rel
