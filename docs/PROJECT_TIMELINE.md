@@ -23,18 +23,18 @@
 * MH 先驗敏感度掃描（`profile_mh.py`）
 
 ### 8/4
-* `measure_overconfidence.py`：證實 Poisson-Hess 概似曲率過度自信約 4 倍（切半法 0.106／注入回收 0.144 vs 曲率法只有 0.030）
+* `scripts/core/measure_overconfidence.py`：證實 Poisson-Hess 概似曲率過度自信約 4 倍（切半法 0.106／注入回收 0.144 vs 曲率法只有 0.030）
 * 分箱數敏感度測試：**推翻**「換格子數把中心值推動 24–30 倍統計誤差」的錯誤說法，正確結果是冪次 −0.18/−0.22，分箱只是有損壓縮不是資訊損失源
 * 切半實驗（前半＋後半兩組獨立擬合）
 
 ### 8/5
-* `fit_real.py` 第一版出現（item2 系列，config A/C 比較）——後來整個專案的核心擬合腳本
+* `scripts/core/fit_real.py` 第一版出現（item2 系列，config A/C 比較）——後來整個專案的核心擬合腳本
 
 ### 8/6
-* `fit_real.py --tag _parsec`：PARSEC 版 config A/C 重複結果，貢獻等時線比對的 PARSEC 基準
+* `scripts/core/fit_real.py --tag _parsec`：PARSEC 版 config A/C 重複結果，貢獻等時線比對的 PARSEC 基準
 
 ### 8/7
-* `fit_real.py --grid mist`：換 MIST 等時線量系統誤差，恆星演化模型效應：舊模型 0.240、修正模型 0.000
+* `scripts/core/fit_real.py --grid mist`：換 MIST 等時線量系統誤差，恆星演化模型效應：舊模型 0.240、修正模型 0.000
 
 ### 8/8
 * `traditional_accounting.py` 原始版本（全當單星／CMD 剔除兩變體）
@@ -49,8 +49,8 @@
 * 補推 `results/` 全部既有計算結果
 * **低質量段冪次系統誤差量化**：d(alpha)/d(p) = −0.495±0.111（4.5σ），傳播 Kroupa(2001) 不確定度得到 **0.248**——全專案最大單一誤差項
 * 新增 P9（MH 鎖定檢驗），修 P6b 貼牆問題
-* 修好 P9/P6b 撞到的三道從未測過的邊界；`inject_lowmass.py` 改成逐次試驗容錯
-* Kaggle 多帳號並行派工基礎建設（`kaggle_accounts.py`／`kaggle_sync.py`／`kaggle_queue.py`）
+* 修好 P9/P6b 撞到的三道從未測過的邊界；`scripts/core/inject_lowmass.py` 改成逐次試驗容錯
+* Kaggle 多帳號並行派工基礎建設（`ops/kaggle_accounts.py`／`ops/kaggle_sync.py`／`ops/kaggle_queue.py`）
 
 ### 8/10 —— 抓到「先驗根本沒被用到」的大 bug
 * **更正 P9 的 MIST 結論**：原本以為的異常其實是網格覆蓋不足造成的假象
@@ -71,11 +71,11 @@
 * 多星團 Tier 1 啟動：NGC 3532／Praesepe 的 HR23 成員表已抓取
 
 ### 8/12 —— PDMF→IMF 方向啟動，N-body 環境裝好（39 個 commit）
-* `WORK_BOARD.md` 建立（工作認領表，避免多 agent 重工）；CodeRabbit 自動審查設定上線
+* `docs/project/WORK_BOARD.md` 建立（工作認領表，避免多 agent 重工）；CodeRabbit 自動審查設定上線
 * Kaggle 掛載問題多輪交叉驗證，最終抓到真正根因：路徑寫死成舊格式，不是平台/帳號問題
 * 新協作者機器（x64，Yu Tung Lan）加入，完成 pipeline 端到端驗證
 * **PDMF→IMF 研究方向啟動**：方法調查、動力學年齡估計、alpha(r) 徑向診斷實驗、四條路線（A 觀測全域／B 經驗校準／C 自跑 N-body／D LIMEPY）規劃定案
-* **P10**：修好 `fit_real.py` 寫死均勻先驗的 bug，重新打開高斯 MH 先驗
+* **P10**：修好 `scripts/core/fit_real.py` 寫死均勻先驗的 bug，重新打開高斯 MH 先驗
 * `教學_PDMF轉IMF.md` 新增
 * `LIMITATIONS.md` 改版：依嚴重程度 A–D 排序、固定格式
 * `limepy` 套件名稱訂正（原本誤裝到 PyPI 上同名但完全無關的問卷調查工具）
@@ -87,7 +87,7 @@
 * **開機/登入自動重啟本機佇列機制建立**（防止重開機浪費算力，起因是曾經浪費 8.5 小時）
 * Kaggle 多帳號正式派工啟動（4 項重跑）
 * 文件與程式碼依主題重新整理成資料夾結構
-* `LIMITATIONS.md` 與 `WORK_BOARD.md` 雙向工作追蹤協議建立
+* `LIMITATIONS.md` 與 `docs/project/WORK_BOARD.md` 雙向工作追蹤協議建立
 * **PDMF→IMF 第 3 步：LIMEPY 多質量平衡模型**第一次擬合，CodeRabbit 抓到 `Sigmaj` 單位不一致的真 bug，修正後 reduced chi² 從 8.90 降到 **0.75**（擬合品質從差變好）
 * B/C/D 類待認領工作全面體檢：解決 2 項、升級 1 項（D7→A6 白矮星污染）、新增 8 項待辦
 * **A6**：`assign_masses()` 加顏色一致性檢查，量化白矮星混入影響；順藤查到第二顆高置信度非成員候選星
@@ -100,25 +100,25 @@
 * `selection_color_dependence_fix`（C18）量化，不需要升級
 * P9c v2、P9a-redo v2 乾淨重跑：**A4「表 4 等時線穩健性」正式定案不成立**（年齡差一倍、alpha 差 0.285，1.9 倍合併標準誤）
 * headline `p2_final2_v3` 在 Kaggle 上實測不可行（會超過免費 session 上限），改排本機佇列
-* `run_queue.py`：關螢幕時要求系統維持滿速運算（keep-awake 機制）
+* `ops/run_queue.py`：關螢幕時要求系統維持滿速運算（keep-awake 機制）
 * 推送 `verify_bprperr_off/on` 結果（B1 A/B 對照組）
 
 ### 8/15 —— 多星團普適性協定 + 續傳架構
 * **多星團普適性研究分層協定**寫進 `PDMF_TO_IMF_PLAN.md` 第八節（Tier 1／Tier 2 架構，為未來擴展到多星團定調）
-* `fit_real.py`：加上逐次重複即時存檔，支援中斷後續傳，不再整批重算（起因是 `p2_free_lowmass` 單次重複跑了 44 小時，中斷會全部白工）
+* `scripts/core/fit_real.py`：加上逐次重複即時存檔，支援中斷後續傳，不再整批重算（起因是 `p2_free_lowmass` 單次重複跑了 44 小時，中斷會全部白工）
 * 腳本整理歸類進 `scripts/` 子資料夾
-* PR #53：修正 `queue.txt` 漏帶 `--configs C` 的現役 bug（radial_r1 因此多跑 3 倍時間）＋ `fit_real.py` 續傳加設定 manifest 驗證與寫入鎖
-* `run_queue.py` 加卡死監看機制（CPU 時間長時間零增量自動偵測、砍掉重試）
+* PR #53：修正 `ops/queue.txt` 漏帶 `--configs C` 的現役 bug（radial_r1 因此多跑 3 倍時間）＋ `scripts/core/fit_real.py` 續傳加設定 manifest 驗證與寫入鎖
+* `ops/run_queue.py` 加卡死監看機制（CPU 時間長時間零增量自動偵測、砍掉重試）
 * 新的多星團規劃文件 `PLAN_多星團擴展.md`：候選星團挑選、統計檢定力估計、Pang+2024／Li+2026 文獻比對
 * 拉回 headline `p2_final2_v3` 已完成的 5/10 次 Kaggle 重複結果，避免資料遺失
 
-### 8/16 —— run_queue.py 卡死根因修好並驗證有效，PDMF→IMF 第 2 步四項全部跑完
+### 8/16 —— ops/run_queue.py 卡死根因修好並驗證有效，PDMF→IMF 第 2 步四項全部跑完
 * 修正 `stalled_giveup` 被誤判成「完成」的 bug——放棄重試後永久跳過，實際沒有產出結果
 * 卡死自動重試前加 30 秒緩衝
-* `measure_overconfidence.py`：Pool worker 自己宣告 keep-awake，補上真正燒 CPU 的行程沒被保護的缺口
+* `scripts/core/measure_overconfidence.py`：Pool worker 自己宣告 keep-awake，補上真正燒 CPU 的行程沒被保護的缺口
 * `PLAN_多星團擴展.md` 第十一節：MiMO 金屬量方法論查證 + 找到比 MiMO 更大的 Gaia XP 全天星表交叉比對路線
 * 新增 D10：config C/D 的 alpha 一致性只在假資料驗證過，真實資料還沒直接比較（教學問答中發現的缺口）
-* PR #59 CodeRabbit review 抓到並修好 `run_queue.py` **兩個真 bug**：CPU ticks 基準沒在下降時重設（`multi_stage_best()` 換 Pool 階段時 ticks 真的會暫時下降，舊邏輯誤判成卡死）、`proc.kill()` 在 Windows 上不會砍掉子孫行程（解釋了反覆出現的孤兒 worker BrokenPipeError）
+* PR #59 CodeRabbit review 抓到並修好 `ops/run_queue.py` **兩個真 bug**：CPU ticks 基準沒在下降時重設（`multi_stage_best()` 換 Pool 階段時 ticks 真的會暫時下降，舊邏輯誤判成卡死）、`proc.kill()` 在 Windows 上不會砍掉子孫行程（解釋了反覆出現的孤兒 worker BrokenPipeError）
 * **實測驗證修正有效**：套用修正後重跑，`radial_r3` 連續近 6 小時沒有再卡死一次（之前規律每 68–98 分鐘卡一次），最終乾淨完成
 * **PDMF→IMF 第 2 步徑向診斷四項全部跑完**（config C，單次重複、單階精修，會議前初步方向數字）：r1(0-1°)=2.10、r2(0-2°)=2.43、r3(0-3°)=2.50、rall(全樣本)=2.43——r1→r3 遞增支持核心到外圍的質量分層方向，但 rall 比 r3 低、不是單調，原因未解，需要正式 `--repeats 5 --refines 3,3` 重跑才能判斷是雜訊還是真訊號
 * 新增 `docs/PROJECT_TIMELINE.md`（本文件）+ `CONTRIBUTING.md` 五之三定期更新規則

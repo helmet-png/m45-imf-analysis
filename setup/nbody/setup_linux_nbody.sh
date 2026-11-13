@@ -18,14 +18,14 @@
 # Linux 的 glibc 本來就有這些，所以這裡完全不套用任何 patch。
 #
 # 用法：
-#   bash nbody_setup/setup_linux_nbody.sh
+#   bash setup/nbody/setup_linux_nbody.sh
 #
 # 冪等：外部專案 clone 到跟本 repo 平行的 nbody/ 目錄（不進版控），
 # 已存在就跳過 clone，只重新 checkout 釘選 commit 並重新 build。
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$HERE/.." && pwd)"
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"  # 本檔在 setup/nbody/
 NBODY_DIR="$(cd "$REPO_ROOT/.." && pwd)/nbody"
 
 # 跟 setup_windows_nbody.sh 逐字相同——兩個平台編出來的必須是同一份
@@ -264,4 +264,4 @@ echo "PeTar 安裝路徑： $NBODY_DIR/install/bin"
 echo "mcluster 執行檔：$NBODY_DIR/mcluster/mcluster_sse"
 echo
 echo "提醒：環境能編譯 ≠ 正式模擬可以跑。正式模擬還需要正確的初始條件"
-echo "參數與第 2 步的觀測基準線，見 nbody_setup/README.md 最後一節。"
+echo "參數與第 2 步的觀測基準線，見 setup/nbody/README.md 最後一節。"

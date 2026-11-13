@@ -25,9 +25,10 @@ import os
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
 ACCOUNTS_FILE = HERE / "kaggle_accounts.json"
-EXAMPLE_FILE = HERE / "kaggle_accounts.json.example"
+EXAMPLE_FILE = OPS_DIR / "kaggle_accounts.json.example"
 
 # kaggle CLI 只裝在 ARM64 版 Python 底下（這台機器是 Snapdragon X，`py`
 # 預設常解析到 x64 模擬版）。**這裡必須直接改當前行程的 os.environ**，

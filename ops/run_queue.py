@@ -41,10 +41,11 @@ from pathlib import Path
 # 這支跟 cloud_queue.py 當初漏掉了。
 _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-HERE = Path(__file__).resolve().parent
-QUEUE = HERE / "queue.txt"
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
+QUEUE = OPS_DIR / "queue.txt"
 DONE = HERE / "logs" / "queue_done.txt"
-ALERTS = HERE / "QUEUE_ALERTS.md"
+ALERTS = HERE / "docs" / "project" / "QUEUE_ALERTS.md"
 LOCK = HERE / "logs" / "run_queue.lock"
 STALL_RETRIES = HERE / "logs" / "stall_retries.txt"
 TICK_LOG = HERE / "logs" / "watchdog_ticks.log"
@@ -493,9 +494,9 @@ def _postflight(label: str, cmd: str) -> bool:
     ——五支腳本的輸出檔名規則完全一致（`results/{script 主檔名}{tag}.npz`），
     改成用 `cmd.split()[0]` 動態推導即可涵蓋全部。"""
     script = cmd.split()[0]
-    if script not in PREFLIGHT_AWARE_SCRIPTS:
+    if Path(script).name not in PREFLIGHT_AWARE_SCRIPTS:
         return True
-    stem = script[:-3] if script.endswith(".py") else script
+    stem = Path(script).stem
     # 同時吃 `--tag value` 與 `--tag=value` 兩種 argparse 都接受的形式，
     # 原本只吃空白分隔那種，`=` 形式會讓 m 是 None 而整支函式靜默 return——
     # 使用者會以為「這次沒有 Gate C 警告」，其實是驗收根本沒有跑

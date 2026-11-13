@@ -30,7 +30,7 @@
 找不到 kaggle_accounts.json 時退回單一帳號（原本的行為，不影響舊用法）。
 
 用法：
-    python kaggle_queue.py            # 前景跑，會一直印進度直到佇列清空
+    python ops/kaggle_queue.py            # 前景跑，會一直印進度直到佇列清空
 """
 from __future__ import annotations
 
@@ -66,8 +66,9 @@ def _safe_print(text: str) -> None:
     print(text.encode(enc, errors="replace").decode(enc), flush=True)
 
 
-HERE = Path(__file__).resolve().parent
-QUEUE = HERE / "kaggle_queue.txt"
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
+QUEUE = OPS_DIR / "kaggle_queue.txt"
 DONE = HERE / "logs" / "kaggle_queue_done.txt"
 LOCK = HERE / "logs" / "kaggle_queue.lock"
 # 逾時放棄槽位、但遠端 kernel 其實還活著的工作記在這裡，之後每輪回頭查一次。
@@ -308,7 +309,7 @@ def push(item: dict, account_name: str, username: str) -> tuple[bool, str, Path]
     也可能讓這裡算出的 kid 跟實際 push 出去的 kernel 對不上。
     """
     slug = item["label"].replace("_", "-")
-    cmd = [sys.executable, "kaggle_sync.py", "push",
+    cmd = [sys.executable, "ops/kaggle_sync.py", "push",
            "--script", item["script"], "--args", item["args"],
            "--account", account_name, "--slug", slug]
     if item["extra"]:

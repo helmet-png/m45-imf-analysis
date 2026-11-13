@@ -1,7 +1,7 @@
 # 已知限制與後果（唯一權威清單）
 
 所有已知限制集中在這裡，依嚴重程度排序，不依類型排序。沿革與已推翻的
-修正過程見 [CHANGELOG.md](CHANGELOG.md)。
+修正過程見 [CHANGELOG.md](docs/project/CHANGELOG.md)。
 
 **嚴重程度定義**
 

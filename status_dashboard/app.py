@@ -89,7 +89,7 @@ REPO_ROOT = HERE.parent
 # 收斂回 main 之後就是這樣），沒設環境變數、且這個 repo 自己也沒有
 # cloud_queue.py 時才需要手動指定。啟動當下就驗證路徑對不對，錯了直接
 # 印清楚的錯誤訊息，不要等 import 失敗才留一串看不懂的 traceback。
-CLOUD_QUEUE_ROOT = Path(os.environ.get("CLOUD_QUEUE_ROOT", str(REPO_ROOT)))
+CLOUD_QUEUE_ROOT = Path(os.environ.get("CLOUD_QUEUE_ROOT", str(REPO_ROOT / "ops")))
 if not (CLOUD_QUEUE_ROOT / "cloud_queue.py").is_file():
     raise RuntimeError(
         f"找不到 cloud_queue.py：{CLOUD_QUEUE_ROOT}\n"
@@ -935,7 +935,7 @@ def parse_work_board() -> list[dict]:
     定位用（連不到 stage_map.py 裡任何步驟的任務，退而求其次連到
     WORK_BOARD.md 原文那幾行，維持「一定點得進去」）。檔案不存在或格式
     跟預期不符時回傳空清單，不讓這個附加區塊拖垮整頁。"""
-    path = REPO_ROOT / "WORK_BOARD.md"
+    path = REPO_ROOT / "docs" / "project" / "WORK_BOARD.md"
     if not path.exists():
         return []
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -2224,7 +2224,7 @@ def _task_card_html(task: dict, idx: int, index: dict[str, dict]) -> str:
     步驟就連去「依步驟看」頁對應段落，找不到就退回 WORK_BOARD.md 原文
     那幾行，任何一筆都保證點得進去。"""
     cls = _task_badge_cls(task["status"])
-    link = _match_task_link(task["name"], index) or _doc_url("WORK_BOARD.md", task["line"])
+    link = _match_task_link(task["name"], index) or _doc_url("docs/project/WORK_BOARD.md", task["line"])
     note_html = "".join(f'<p class="doc-p">{html.escape(p)}</p>'
                         for p in task["note"].split("\n\n") if p.strip())
     return (
@@ -2303,7 +2303,7 @@ logs/cloud_queue_done.txt／queue_done.txt 的原始紀錄——跟依步驟看�
 </div>
 
 <h2>目前的進度規劃</h2>
-<p class="note">完整規劃見 <a href="{html.escape(_doc_url('WORK_BOARD.md'))}">WORK_BOARD.md</a>
+<p class="note">完整規劃見 <a href="{html.escape(_doc_url('docs/project/WORK_BOARD.md'))}">WORK_BOARD.md</a>
 （含算力池現況、未來規劃與分工建議等，這裡只列「待辦事項」表格的部分）。</p>
 """]
 

@@ -46,7 +46,7 @@
 執行環境：這支程式需要 `galpy`／`astropy`，本機（Windows ARM64）主環境
 （Python 3.14）裝不進去——galpy 1.10.2 沒有 win_arm64 wheel，win_amd64
 wheel 也只到 cp313。要另開一個獨立 venv，版本組合與走過的錯路記在
-`nbody_setup/requirements_orbit_init.txt`（astropy 太新、numpy 太新都會
+`setup/nbody/requirements_orbit_init.txt`（astropy 太新、numpy 太新都會
 在載入或初始化階段直接炸掉，不是隨便哪個新版都能用）。真正跑 N-body
 主鏈的 Linux 機器上 `setup_linux_nbody.sh` 會裝另一份 galpy venv，
 跟這裡互不影響。

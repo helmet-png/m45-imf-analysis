@@ -11,7 +11,7 @@ CodeRabbit review on PR #29 and confirmed by checking that the median
 position in a .single file is ~(0,0,0), not the core position). Needs one
 path that varies by machine:
   NBODY_INSTALL_PATH   PeTar install prefix (contains include/petar/), see
-                       nbody_setup/README.md. Default: sibling nbody/install
+                       setup/nbody/README.md. Default: sibling nbody/install
                        next to this repo (i.e. ../../nbody/install from
                        this file).
   (this repo's own path is found automatically via this file's location)
@@ -69,7 +69,7 @@ import os
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 NBODY_INSTALL = os.environ.get(
     "NBODY_INSTALL_PATH", str(REPO_ROOT.parent / "nbody" / "install"))
 sys.path.insert(0, str(Path(NBODY_INSTALL) / "include"))

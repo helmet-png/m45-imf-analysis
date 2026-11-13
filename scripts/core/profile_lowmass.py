@@ -25,7 +25,7 @@ injection_recovery.py 的 S3F，最乾淨的一次）。若固定低質量段冪
 依序固定在 0.9、1.1、1.3、1.5、1.7，每個值都用前向模型（config C）重新完整
 擬合一次，看 α 跟著變多少。α 變得越多，代表「把 p 固定在 1.3」這個假設對
 α 的影響越大。
-執行方式：python profile_lowmass.py [--refines 3,3,3] [--repeats 3]
+執行方式：python scripts/core/profile_lowmass.py [--refines 3,3,3] [--repeats 3]
 輸出：results/profile_lowmass<tag>.npz（每個 p、每次重複的最佳參數）
 ⚠ 這支程式只印出「α 的跨度」與「跨度是統計誤差 0.144 的幾倍」。
   LIMITATIONS.md A3 引用的斜率 dα/dp = −0.495 ± 0.111 與系統誤差 0.248
@@ -100,7 +100,10 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+# 本檔在 scripts/core/；Kaggle 會把腳本拍平到工作目錄根（config.toml 在同層），
+# 兩種擺法都以找得到 config.toml 的那層當 repo 根目錄。
+_SELF_DIR = Path(__file__).resolve().parent
+HERE = _SELF_DIR if (_SELF_DIR / "config.toml").is_file() else _SELF_DIR.parents[1]
 sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402

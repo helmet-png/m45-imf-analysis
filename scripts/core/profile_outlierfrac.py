@@ -25,7 +25,10 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+# 本檔在 scripts/core/；Kaggle 會把腳本拍平到工作目錄根（config.toml 在同層），
+# 兩種擺法都以找得到 config.toml 的那層當 repo 根目錄。
+_SELF_DIR = Path(__file__).resolve().parent
+HERE = _SELF_DIR if (_SELF_DIR / "config.toml").is_file() else _SELF_DIR.parents[1]
 sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402

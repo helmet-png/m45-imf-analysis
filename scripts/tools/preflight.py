@@ -63,6 +63,8 @@ def _find_repo_root() -> Path:
 
 HERE = _find_repo_root()
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE / "scripts" / "core"))  # injection_recovery 等主程式
+sys.path.insert(0, str(HERE / "ops"))               # run_queue（佇列工具）
 
 
 def _force_utf8_stdout() -> None:

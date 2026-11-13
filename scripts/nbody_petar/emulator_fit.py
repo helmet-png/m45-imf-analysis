@@ -39,7 +39,7 @@ p(θ_初始條件 | 觀測)。只有 smoke test（S0-S4）量出單次 run 時�
    對解析假模擬器做留出測試）。
 
 訓練資料狀態（2026-10-05）：訓練網格 430 筆中前 95 筆用原版 PeTar、其餘
-335 筆用能量記帳修補版（`nbody_setup/petar_moving_frame_energy.patch`）。
+335 筆用能量記帳修補版（`setup/nbody/petar_moving_frame_energy.patch`）。
 原版 run 在開潮汐＋恆星演化時沒有可用的逐筆積分品質指標，且「修補不改動力學」
 尚未直接驗證（`docs/planning/NBODY_PREREGISTRATION.md` 五節「待驗證」），
 混用兩組前先確認該項，或只用修補版訓練並比較差異。
@@ -426,7 +426,7 @@ def main():
     # 不是方法 A 的小網格（runs/、petar_m45_grid.csv）。
     parser.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs_training")
     parser.add_argument("--grid", type=Path,
-                        default=REPO_ROOT / "petar_m45_training_grid.csv")
+                        default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv")
     parser.add_argument("--targets", type=Path,
                         default=REPO_ROOT / "results" / "nbody_observed_targets.json")
     parser.add_argument("--output", type=Path,

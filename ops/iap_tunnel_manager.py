@@ -23,7 +23,7 @@ CHECK_SECS 秒檢查一次還活不活著，死了就重開。跟 cloud_queue.py
 重啟這支程式本身（見該檔案裡的 Restart-QueueIfNotRunning 呼叫）。
 
 用法：
-    python iap_tunnel_manager.py
+    python ops/iap_tunnel_manager.py
 """
 from __future__ import annotations
 
@@ -38,7 +38,8 @@ from pathlib import Path
 import ssh_workers
 from run_queue import _pid_alive
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
 LOCK = HERE / "logs" / "iap_tunnel_manager.lock"
 CHECK_SECS = 30
 # 斷線後不要馬上重連，給網路／VM 一點恢復時間，避免瘋狂重試灌爆

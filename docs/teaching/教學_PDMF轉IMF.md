@@ -738,7 +738,7 @@ pyUPMASK 成員判定與測光品質篩選有沒有間接排除掉它們（例�
 | α(r) 線性擬合斜率 | 0.155 ± 0.028/度（5.5σ） | 本文件對 `step5_mf_radial.csv` 的加權回歸 |
 | 核心-外圍 α 差 | 0.515 | 同上，第五節 |
 | Li+2026 公式估計的 Δα | 0.076 ⚠ 文獻公式代入值，非本專案實測 | 第六節 |
-| 路線 C（N-body）第一個 pilot：α(r) | 核心 0.879±0.158（r<6.5pc）→ 外圍 1.316±0.157（r 11–20pc），跟觀測同方向（核心較平） | `nbody_setup/analyze_alpha_r.py`，2026-08-13，**單次、N=400（270 系統）、Kroupa IMF、無潮汐場的示範跑，數值不可引用，只看方向**，完整記錄見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節與 `WORK_BOARD.md` |
+| 路線 C（N-body）第一個 pilot：α(r) | 核心 0.879±0.158（r<6.5pc）→ 外圍 1.316±0.157（r 11–20pc），跟觀測同方向（核心較平） | `setup/nbody/analyze_alpha_r.py`，2026-08-13，**單次、N=400（270 系統）、Kroupa IMF、無潮汐場的示範跑，數值不可引用，只看方向**，完整記錄見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節與 `docs/project/WORK_BOARD.md` |
 | 路線 D（LIMEPY）第一次擬合：潮汐半徑外質量 | 目前 Gaia 樣本邊緣（11.70 pc）到模型潮汐半徑（19.26 pc）之間，模型預測還有 14.4 M☉（模型總質量的 3.2%） | `scripts/diagnostics/limepy_multimass.py`，2026-08-13，**reduced chi^2=0.75（接近 1，代表模型跟資料在誤差範圍內相符，擬合品質好；CodeRabbit 抓到一個真的單位不一致 bug 修好後才有這個結果，見下方）、質量區間比例直接沿用觀測 PDMF、還沒有第 2 步觀測結果交叉驗證，數字方向可信但不宜過度解讀**，完整記錄見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節與 `LIMITATIONS.md` B5 |
 
 **CodeRabbit review 抓到一個真的 bug**：`limepy_multimass.py` 第一版
@@ -785,7 +785,7 @@ def mle_powerlaw(masses, m_lo, m_hi):
 三箱的來源，而不是把半徑本身平均切成三段。
 
 ```python
-# nbody_setup/analyze_alpha_r.py — 徑向分箱：把 t=125 Myr 快照的星
+# setup/nbody/analyze_alpha_r.py — 徑向分箱：把 t=125 Myr 快照的星
 # 依到密度中心的距離切三等分（三分位數），各自丟進 mle_powerlaw()。
 # 除最後一箱外用右開區間，避免剛好卡在百分位邊界的星被兩箱重複計數
 # （跟 pipeline/step5_imf.py:mass_function_by_radius() 用同一個慣例）
@@ -823,7 +823,7 @@ CodeRabbit 第二輪 review 又抓到分箱寫法的潛在問題：原本每一�
 的 `main.c`：`case 'b': fbin = atof(optarg);`（第 232 行）與
 `if (!nbin) nbin = 0.5*N*fbin;`（第 611 行）。跑法是
 `mcluster_sse ... -N 400 ... -b 0.65 ...` 產生初始條件，再用
-`python nbody_setup/analyze_alpha_r.py data.25` 分析快照。算式：
+`python setup/nbody/analyze_alpha_r.py data.25` 分析快照。算式：
 `0.65 × 400 = 260` 顆星在聯星裡、`260 ÷ 2 = 130` 組聯星、
 `400 − 260 = 140` 顆單星、共 `130 + 140 = 270` 個系統。分箱邊界命中數
 （真的有星剛好落在 `edges[1]`／`edges[2]` 上）為 `0`，所以修正前後
@@ -835,9 +835,9 @@ CodeRabbit 第二輪 review 又抓到分箱寫法的潛在問題：原本每一�
 
 ### 9.2 已排進佇列，還沒有結果（待重跑確認）
 
-四個前向模型徑向診斷（`radial_r1`/`r2`/`r3`/`rall`，`fit_real.py
+四個前向模型徑向診斷（`radial_r1`/`r2`/`r3`/`rall`，`scripts/core/fit_real.py
 --radius-range`），要回答「扣掉雙星建模後，α(<r) 的梯度還剩多少、有沒有
-收斂」。見 `docs/planning/PDMF_TO_IMF_PLAN.md` 與 `WORK_BOARD.md` 的待認領工作表，
+收斂」。見 `docs/planning/PDMF_TO_IMF_PLAN.md` 與 `docs/project/WORK_BOARD.md` 的待認領工作表，
 本機佇列正在跑，前面還有 `p2_free_lowmass`、`p6_lowmass_v2`、
 `p11_outlierfrac_v2` 排隊。**這個表格會在結果出來後更新，不要在結果
 出來前引用任何 α(<r) 的具體數字當成定案**。
@@ -845,7 +845,7 @@ CodeRabbit 第二輪 review 又抓到分箱寫法的潛在問題：原本每一�
 ### 9.3 還沒開始的
 
 路線 A 完整版（真的擴大搜尋半徑重抓資料）——開放認領，見
-`WORK_BOARD.md`。路線 C（N-body）環境已就緒且跑完第一個 pilot（見 9.1），
+`docs/project/WORK_BOARD.md`。路線 C（N-body）環境已就緒且跑完第一個 pilot（見 9.1），
 但**正式校準版**（等第 2 步基準線出來定初始條件、多次重複跑出統計誤差）
 還沒開始。路線 D（LIMEPY）已跑完第一次擬合（見 9.1，reduced chi^2=0.75，
 擬合品質好），但質量區間比例沿用觀測 PDMF 是已知簡化，且還沒有第 2 步

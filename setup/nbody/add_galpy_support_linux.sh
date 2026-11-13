@@ -17,21 +17,21 @@
 # install 的行為，不是我們自己選的），**呼叫時一律用完整檔名，不要
 # 依賴裸的 petar，避免每次重跑這支腳本後行為悄悄改變**。
 #
-# 用法（先跑過 nbody_setup/setup_linux_nbody.sh 之後）：
-#   micromamba run -n nbody bash nbody_setup/add_galpy_support_linux.sh
+# 用法（先跑過 setup/nbody/setup_linux_nbody.sh 之後）：
+#   micromamba run -n nbody bash setup/nbody/add_galpy_support_linux.sh
 # 或先 micromamba activate nbody 再直接跑。
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$HERE/.." && pwd)"
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"  # 本檔在 setup/nbody/
 NBODY_DIR="$(cd "$REPO_ROOT/.." && pwd)/nbody"
 
 if [ ! -d "$NBODY_DIR/PeTar/.git" ]; then
-    echo "找不到 $NBODY_DIR/PeTar，請先跑 nbody_setup/setup_linux_nbody.sh"
+    echo "找不到 $NBODY_DIR/PeTar，請先跑 setup/nbody/setup_linux_nbody.sh"
     exit 1
 fi
 if [ ! -x "$NBODY_DIR/install/bin/petar.omp.avx512.bse" ]; then
-    echo "找不到原始 PeTar 執行檔，請先成功完成 nbody_setup/setup_linux_nbody.sh"
+    echo "找不到原始 PeTar 執行檔，請先成功完成 setup/nbody/setup_linux_nbody.sh"
     exit 1
 fi
 

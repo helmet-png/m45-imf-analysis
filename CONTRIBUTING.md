@@ -5,26 +5,26 @@
 同時在這個 repo 工作，這些規則讓大家能找到彼此跑過的結果、改過的
 程式與對應版本。
 
-規則類文件（本檔、`AGENTS.md`、`README.md`、`WORK_BOARD.md`、
-`WORK_BOARD_DONE.md`、`LIMITATIONS.md`、`QUEUE_ALERTS.md`、`STATE.md`、
+規則類文件（本檔、`AGENTS.md`、`README.md`、`docs/project/WORK_BOARD.md`、
+`docs/project/WORK_BOARD_DONE.md`、`LIMITATIONS.md`、`docs/project/QUEUE_ALERTS.md`、`docs/project/STATE.md`、
 `docs/reference/*`）只寫現在的規則，不寫「哪一天、因為什麼事、改了
-什麼」。規則的沿革與起因在 [CHANGELOG.md](CHANGELOG.md)，依文件分節。
-新增規則時，需要記錄的理由寫進 `CHANGELOG.md`，不寫進規則本身。
+什麼」。規則的沿革與起因在 [CHANGELOG.md](docs/project/CHANGELOG.md)，依文件分節。
+新增規則時，需要記錄的理由寫進 `docs/project/CHANGELOG.md`，不寫進規則本身。
 
 ---
 
-## 零、開始新工作前——先查 `WORK_BOARD.md`
+## 零、開始新工作前——先查 `docs/project/WORK_BOARD.md`
 
-預期會跨多次對話、或會碰共用檔案（`pipeline/`、`injection_recovery.py`、
-`LIMITATIONS.md`、`PAPER_OUTLINE.md`、`queue.txt`）的工作，開始前先讀
-`WORK_BOARD.md`（進行中／尚未進行）與 `WORK_BOARD_DONE.md`（已完成），
+預期會跨多次對話、或會碰共用檔案（`pipeline/`、`scripts/core/injection_recovery.py`、
+`LIMITATIONS.md`、`docs/paper/PAPER_OUTLINE.md`、`ops/queue.txt`）的工作，開始前先讀
+`docs/project/WORK_BOARD.md`（進行中／尚未進行）與 `docs/project/WORK_BOARD_DONE.md`（已完成），
 確認沒有人正在做或已經做完。舊格式的行不一定寫明「已完成」，所以兩份
 都要查。看不出是否重複，就在文件裡直接寫下疑點，不要用猜的。開始時
-在 `WORK_BOARD.md` 認領一行，格式見零之四。
+在 `docs/project/WORK_BOARD.md` 認領一行，格式見零之四。
 
 **規則文件隨時可能被改，讀過一次不代表現在還適用。** 編輯受規則管控
-的檔案（`WORK_BOARD.md`、`WORK_BOARD_DONE.md`、`LIMITATIONS.md`、
-`QUEUE_ALERTS.md`）前，先確認 `CONTRIBUTING.md` 與 `AGENTS.md` 各自
+的檔案（`docs/project/WORK_BOARD.md`、`docs/project/WORK_BOARD_DONE.md`、`LIMITATIONS.md`、
+`docs/project/QUEUE_ALERTS.md`）前，先確認 `CONTRIBUTING.md` 與 `AGENTS.md` 各自
 是最新版：
 
 1. `git fetch origin main`，比對 `git log -1 --format=%H -- <檔名>`
@@ -43,12 +43,12 @@
 
 CodeRabbit 對公開 repo 免費，任何人開 PR 都會自動留一次審查。設定在
 `.coderabbit.yaml`（審查語言、排除 `results/`／`data/` 等資料檔、對
-`injection_recovery.py`／`pipeline/` 等共用核心的審查提示）。啟用要
+`scripts/core/injection_recovery.py`／`pipeline/` 等共用核心的審查提示）。啟用要
 repo 擁有者親自做一次：到 https://github.com/apps/coderabbitai 用
 GitHub 帳號安裝 App 並選這個 repo（帳號授權，agent 無法代勞），之後
 不需要金鑰或額外設定。
 
-- **它是輔助，不取代 PR 與 `WORK_BOARD.md` 流程。** 它抓程式面的問題
+- **它是輔助，不取代 PR 與 `docs/project/WORK_BOARD.md` 流程。** 它抓程式面的問題
   （bug、重複實作、效率），跑不動實際計算；數字對不對仍要靠
   `results/RESULTS_LOG.md` 與人／其他 agent 交叉核對。
 - **它不會自動修。** 每則留言要處理後回覆並 resolve，或說明站不住腳的
@@ -81,14 +81,14 @@ CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得
 
 **可以帶的情況**（判斷權在開 PR 的人，這幾類是常見例子）：
 
-- 只改派工清單（`cloud_queue.txt`、`kaggle_queue.txt`、`queue.txt`）。
+- 只改派工清單（`cloud_queue.txt`、`ops/kaggle_queue.txt`、`ops/queue.txt`）。
 - 只是驗證某個流程（派工機制、CI、部署）有沒有正常運作的 smoke test。
 - 為了取得某個驗證結果或理解某件事而做的一次性程式，不會被別的
   程式依賴、也不會產出被引用的結論。
 
 **不可以帶的情況**：這個 PR 的程式、設定或文件會留在主線、被別人或
 別的程式依賴，或改動了會被引用的結論（`results/`、`LIMITATIONS.md`、
-`PAPER_OUTLINE.md`、`pipeline/` 與各生產腳本）。不確定就不要帶。
+`docs/paper/PAPER_OUTLINE.md`、`pipeline/` 與各生產腳本）。不確定就不要帶。
 
 - 跟身分前綴並用時，`[免審]` 放在最前面：`[免審] [Claude] ...`。
 - PR 描述要用一句話寫明為什麼判斷不需要審。
@@ -101,7 +101,7 @@ CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得
 
 ## 零之二、文件裡的判斷預設是「當下的想法」，不是決議
 
-規劃類文件（`docs/planning/`、`WORK_BOARD.md` 說明文字、PR 描述，以及
+規劃類文件（`docs/planning/`、`docs/project/WORK_BOARD.md` 說明文字、PR 描述，以及
 對使用者的回覆）裡的「結論」「判斷」「建議」，預設只代表寫下當下的
 想法。這個 repo 由多人多 agent 共同維護，同一份規劃常在短時間內被修正
 或推翻。
@@ -121,28 +121,28 @@ CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得
 
 ---
 
-## 零之三、開始新工作前——也要查 `QUEUE_ALERTS.md`
+## 零之三、開始新工作前——也要查 `docs/project/QUEUE_ALERTS.md`
 
-`run_queue.py` 的 Gate B（開跑前檢查）或 Gate C（跑完驗收）沒過時，
-佇列會繼續跑下一項，但會寫進 `QUEUE_ALERTS.md`。任何 session 開始碰
+`ops/run_queue.py` 的 Gate B（開跑前檢查）或 Gate C（跑完驗收）沒過時，
+佇列會繼續跑下一項，但會寫進 `docs/project/QUEUE_ALERTS.md`。任何 session 開始碰
 這個 repo 前先讀一次，看有沒有「待處理」項目。處理完（或確認不是問題）
 把該列狀態改成「已處理」，不要刪掉。格式與 Gate B／C 的收尾方式寫在
-`QUEUE_ALERTS.md` 檔頭。
+`docs/project/QUEUE_ALERTS.md` 檔頭。
 
 ---
 
-## 零之四、`WORK_BOARD.md`（待辦）與 `WORK_BOARD_DONE.md`（已完成）
+## 零之四、`docs/project/WORK_BOARD.md`（待辦）與 `docs/project/WORK_BOARD_DONE.md`（已完成）
 
-- `WORK_BOARD.md` 只放進行中或尚未進行的工作，以及認領規則、疑義處理、
+- `docs/project/WORK_BOARD.md` 只放進行中或尚未進行的工作，以及認領規則、疑義處理、
   算力池歸屬等使用說明。
-- `WORK_BOARD_DONE.md` 只放完全完成的事。
+- `docs/project/WORK_BOARD_DONE.md` 只放完全完成的事。
 
 **何時算完成**：驗收標準已達成，或使用者／後續查證已明確結案。文字中
 「若要升級還可以做 X」這種選配延伸不影響判定；但寫著「仍待做」「目前
 阻塞」「還沒有」「等待交接」「等待驗收」就不算完成。判不出來就留在
 待辦——把沒做完的誤標成完成，代價遠大於反過來（別人會以為不用做了）。
 
-**`WORK_BOARD.md` 格式**：一個任務一張單列小表格，底下緊接一段說明
+**`docs/project/WORK_BOARD.md` 格式**：一個任務一張單列小表格，底下緊接一段說明
 文字，再接下一個任務；不要把所有任務塞進一張大表、說明集中寫在後面。
 欄位固定五個：
 
@@ -161,7 +161,7 @@ CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得
   「未查證」。
 - 表格與說明都不用粗體，重點寫進句子本身。
 
-**`WORK_BOARD_DONE.md` 格式**：同樣一個任務一張小表格加一段說明，欄位：
+**`docs/project/WORK_BOARD_DONE.md` 格式**：同樣一個任務一張小表格加一段說明，欄位：
 
 | 任務名稱 | 完成日期 | 輸入參數 | 輸出參數 |
 |---|---|---|---|
@@ -178,10 +178,10 @@ CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得
 
 **操作**：
 
-1. 任務做完：把 `WORK_BOARD.md` 那一段（表格＋說明）整段剪下，改寫成
-   `WORK_BOARD_DONE.md` 的四欄格式與純結論說明（這一步就精簡掉過程），
+1. 任務做完：把 `docs/project/WORK_BOARD.md` 那一段（表格＋說明）整段剪下，改寫成
+   `docs/project/WORK_BOARD_DONE.md` 的四欄格式與純結論說明（這一步就精簡掉過程），
    依完成順序貼到「完成事項」區尾端，原處刪乾淨。
-2. 只是狀態更新（開始、換人、卡住）：直接覆蓋 `WORK_BOARD.md` 的那一段。
+2. 只是狀態更新（開始、換人、卡住）：直接覆蓋 `docs/project/WORK_BOARD.md` 的那一段。
 3. 一批任務同時完成可歸在同一小節標題下，但每個任務仍各自一張表格＋
    一段說明。
 4. 兩份文件開頭互相指向對方。找不到某任務在哪一份，兩份都搜尋任務名稱。
@@ -211,7 +211,7 @@ CodeRabbit 的審查額度是全 repo 共用、有上限的。沒有東西值得
 
 派工清單是公開 repo 根目錄的 `cloud_queue.txt`。新增或修改工作時走一般
 PR 流程，且佇列項目引用的腳本必須已先合併進 `main`；協調 VM 同步最新
-`main` 後才會讀到新工作。格式見 `cloud_queue.py` 檔頭說明。
+`main` 後才會讀到新工作。格式見 `ops/cloud_queue.py` 檔頭說明。
 
 ---
 
@@ -235,7 +235,7 @@ git rebase origin/main`（或 `git merge origin/main`），逐段解決
 `<<<<<<< / ======= / >>>>>>>`，`git add`、commit、push 後繼續合併。
 
 **靜默語意衝突**（改到不同行，git 自動合併成功，但內容互相矛盾）是這個
-專案最容易踩的坑。PR 只要碰到 `LIMITATIONS.md` 或 `PAPER_OUTLINE.md`，
+專案最容易踩的坑。PR 只要碰到 `LIMITATIONS.md` 或 `docs/paper/PAPER_OUTLINE.md`，
 合併前要重讀 main 上這兩份的**完整版本**（不只看自己的 diff），確認
 新加的結論沒有跟別人剛合併的內容矛盾。PR 若推翻或修改既有結論，在 PR
 描述裡寫明改了什麼、為什麼。
@@ -289,14 +289,14 @@ git 逐行比對。修改段落中間幾個字卻同時重排整段換行，整�
 主控板把「傳統法／前向模型／PDMF→IMF／穩健性診斷」四大類的步驟、對應
 腳本與執行進度整理在同一頁。三個頁面共用一顆即時搜尋欄：「依步驟看」
 （`/`）、「依雲端服務看」（`/workers`）、「時間軸」（`/timeline`，上半部
-同步 `WORK_BOARD.md` 待辦，下半部是已完成工作，新到舊排序）。
+同步 `docs/project/WORK_BOARD.md` 待辦，下半部是已完成工作，新到舊排序）。
 
 「階段 → 步驟 → 腳本」對照表 `status_dashboard/stage_map.py` 是手動
-維護的索引，沒有來源能自動生成。**新增 `WORK_BOARD.md` 任務或新腳本時，
+維護的索引，沒有來源能自動生成。**新增 `docs/project/WORK_BOARD.md` 任務或新腳本時，
 回來 `stage_map.py` 加一筆**，道理跟「新結果要記進 `RESULTS_LOG.md`」
 相同。
 
-主控板只有一份，跟 `cloud_queue.py` 一樣常駐在協調 VM（見
+主控板只有一份，跟 `ops/cloud_queue.py` 一樣常駐在協調 VM（見
 `docs/reference/CLOUD_WORKERS_IAP_SETUP.md`），所有人看到同一份即時狀態。連線方式：
 
 ```bash
@@ -311,7 +311,7 @@ gcloud compute start-iap-tunnel control-center 8866 \
 `status_dashboard/open_dashboard.py` 的邏輯自己寫啟動器。
 
 **更新程式**：`app.py` 每次有人重新整理頁面都會自動 `git pull`，PR 合併
-進 `main` 後下一次整理頁面就套用新版。`cloud_queue.py` 沒有自動更新，
+進 `main` 後下一次整理頁面就套用新版。`ops/cloud_queue.py` 沒有自動更新，
 改了要 SSH 進協調 VM 跑 `git pull && sudo systemctl restart
 cloud-queue.service`。
 
@@ -357,12 +357,12 @@ Claude 版本。
 **不寫進 `LIMITATIONS.md`**：追查與修正過程、方法論心得（寫在本檔第六
 節）、基礎設施故障（`docs/reference/KAGGLE_DIAGNOSIS.md`）、已推翻的說法
 與作廢數值（`docs/reference/REFUTED.md`）。問題修好且對應工作全部跑完
-確認後，整條搬到 `RESOLVED.md`（見五之一）——不留在原處寫「已修正」，
+確認後，整條搬到 `docs/paper/RESOLVED.md`（見五之一）——不留在原處寫「已修正」，
 也不直接刪除，否則下次踩到同一問題時查不到做過的紀錄。
 
-## 五之一、`LIMITATIONS.md` 與 `WORK_BOARD.md` 雙向追蹤
+## 五之一、`LIMITATIONS.md` 與 `docs/project/WORK_BOARD.md` 雙向追蹤
 
-`LIMITATIONS.md` 記「哪裡有問題」，`WORK_BOARD.md` 記「誰在解決」，兩份
+`LIMITATIONS.md` 記「哪裡有問題」，`docs/project/WORK_BOARD.md` 記「誰在解決」，兩份
 要互相標註。
 
 **規則一**：`LIMITATIONS.md` 每條標題行後加括號，列出解決它需要的工作
@@ -382,11 +382,11 @@ D 類）寫 `（尚無認領工作）`，不要留白。
    的）。
 2. 括號空了代表所需工作全部做完。這時重讀 `**問題**`／`**後果**`，確認
    新結果真的解決了問題——工作跑完不等於問題解決。確認後整條搬到
-   `RESOLVED.md`（格式仿 `docs/reference/REFUTED.md`：曾經的問題／怎麼
+   `docs/paper/RESOLVED.md`（格式仿 `docs/reference/REFUTED.md`：曾經的問題／怎麼
    解決／解決時的結果／日期）。沒解決或只解決一部分，括號換成新的工作
    項目，不能清空了事。
 
-**規則三**：在 `WORK_BOARD.md` 開始或更新工作時，任務名稱後的括號列出
+**規則三**：在 `docs/project/WORK_BOARD.md` 開始或更新工作時，任務名稱後的括號列出
 它要解決的所有 `LIMITATIONS.md` 條目：
 
 ```
@@ -395,14 +395,14 @@ D 類）寫 `（尚無認領工作）`，不要留白。
 
 跟 `LIMITATIONS.md` 無關的工作（環境設定、文件整理、協作流程）不用加。
 
-**規則四**：改了 `WORK_BOARD.md` 就回頭更新 `LIMITATIONS.md` 對應括號：
+**規則四**：改了 `docs/project/WORK_BOARD.md` 就回頭更新 `LIMITATIONS.md` 對應括號：
 新認領 → 加上（填「否」，除非當場開跑）；開始跑 → 「否」改「是」；
 做完 → 套用規則二。兩邊都要改，否則兩份文件會各自漂移。
 
-## 五之二、新發現要順手同步 `PAPER_OUTLINE.md`
+## 五之二、新發現要順手同步 `docs/paper/PAPER_OUTLINE.md`
 
-每次因新發現編輯 `LIMITATIONS.md` 或 `WORK_BOARD.md`（新增限制、從括號
-刪掉工作、搬到 `RESOLVED.md`），**當場**讀 `PAPER_OUTLINE.md` 中邏輯上
+每次因新發現編輯 `LIMITATIONS.md` 或 `docs/project/WORK_BOARD.md`（新增限制、從括號
+刪掉工作、搬到 `docs/paper/RESOLVED.md`），**當場**讀 `docs/paper/PAPER_OUTLINE.md` 中邏輯上
 相關的章節，確認兩件事：
 
 1. **資訊是否過時**：引用的數字、方法描述、既有結論是否被推翻或需要
@@ -458,14 +458,14 @@ D 類）寫 `（尚無認領工作）`，不要留白。
       程式／文件不可以帶（見零之一）
 - [ ] 新結果檔案已在 `results/RESULTS_LOG.md` 加一行
 - [ ] commit message 有正確的身分標示
-- [ ] 碰到 `LIMITATIONS.md`／`PAPER_OUTLINE.md`：已重讀 main 上的完整
+- [ ] 碰到 `LIMITATIONS.md`／`docs/paper/PAPER_OUTLINE.md`：已重讀 main 上的完整
       版本，確認沒有跟別人的新內容矛盾
 - [ ] 編輯 `LIMITATIONS.md`：條目照第五節的格式與分級
-- [ ] 編輯 `WORK_BOARD.md`：任務名稱標了對應條目，且已同步
+- [ ] 編輯 `docs/project/WORK_BOARD.md`：任務名稱標了對應條目，且已同步
       `LIMITATIONS.md` 括號狀態（五之一）
-- [ ] 新增 `WORK_BOARD.md` 任務或 pipeline 相關腳本：已在
+- [ ] 新增 `docs/project/WORK_BOARD.md` 任務或 pipeline 相關腳本：已在
       `status_dashboard/stage_map.py` 加一筆（第二節）
-- [ ] 某條 `LIMITATIONS.md` 因這次工作完全解決：已搬到 `RESOLVED.md`
-- [ ] 有新發現或推翻舊說法：已檢查 `PAPER_OUTLINE.md` 相關章節（五之二）
+- [ ] 某條 `LIMITATIONS.md` 因這次工作完全解決：已搬到 `docs/paper/RESOLVED.md`
+- [ ] 有新發現或推翻舊說法：已檢查 `docs/paper/PAPER_OUTLINE.md` 相關章節（五之二）
 - [ ] 編輯了規則類文件：沒有加入帶日期的沿革敘事，理由寫在
-      `CHANGELOG.md`
+      `docs/project/CHANGELOG.md`

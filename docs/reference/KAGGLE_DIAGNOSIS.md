@@ -15,16 +15,16 @@ Kaggle 現在把 dataset 掛在：
 ```
 
 比舊格式 `/kaggle/input/<dataset-slug>/` **多兩層**（`datasets/` 加擁有者
-帳號）。`kaggle_sync.py` 的 `make_kernel()` 原本寫死舊格式，所以
+帳號）。`ops/kaggle_sync.py` 的 `make_kernel()` 原本寫死舊格式，所以
 `_wait_input()` 檢查的路徑從來不是真正掛載的位置。
 
-修正（`kaggle_sync.py:162`）：
+修正（`ops/kaggle_sync.py:162`）：
 
 ```python
 base = "/kaggle/input/datasets/" + username + "/m45-imf-" + slug + "/"
 ```
 
-`kaggle_queue.py` 的 `is_mount_race_failure()` 只比對子字串 `/kaggle/input/`，
+`ops/kaggle_queue.py` 的 `is_mount_race_failure()` 只比對子字串 `/kaggle/input/`，
 不受路徑深度影響，不需要改。
 
 驗證：修好前每次都等滿 280 秒才 `ERROR`；修好後 10.7 秒找到檔案、狀態
@@ -81,8 +81,8 @@ Kaggle 免費 CPU-only notebook 的單次 session 上限（約 9–12 小時）�
 
 **結論：這個特定設定（三階精修 + 10 次重複）在 Kaggle 上不可行**，
 不是掛載問題也不是 `results/` bug，是純粹的計算量超過單次 session
-能負擔的上限。這種等級的重跑應該在本機 8 核佇列（`queue.txt`，
-Windows ARM64 機器）上做，不要再排進 `kaggle_queue.txt`。
+能負擔的上限。這種等級的重跑應該在本機 8 核佇列（`ops/queue.txt`，
+Windows ARM64 機器）上做，不要再排進 `ops/kaggle_queue.txt`。
 
 **唯一拿到的資料**（不是完整結果，只有 1/10 次重複，不能引用當
 headline 數字）：logage=8.026（106.2 Myr）、A_V=0.359、f_bin=0.602、

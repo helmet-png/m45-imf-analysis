@@ -5,7 +5,7 @@
 # README.md 的步驟 1-2）。
 #
 # 用法（在 MSYS2 的 bash 裡跑，不是一般 Windows Git Bash）：
-#   bash nbody_setup/setup_windows_nbody.sh
+#   bash setup/nbody/setup_windows_nbody.sh
 #
 # 冪等：外部專案 clone 到跟本 repo 平行的 nbody/ 目錄（不進版控），
 # 已存在就跳過 clone，只重新套用 patch（patch 用 --forward 容忍
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$HERE/.." && pwd)"
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"  # 本檔在 setup/nbody/
 NBODY_DIR="$(cd "$REPO_ROOT/.." && pwd)/nbody"
 
 FDPS_COMMIT=6fedb4b8bd7a504598e83a4189a7a83c533a0848

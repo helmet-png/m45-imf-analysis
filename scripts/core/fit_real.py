@@ -45,7 +45,7 @@ system MF **陡**：f_bin=0.30 -> +0.046、0.45 -> +0.066、0.60 -> +0.085、
 logage = 8.026 ≈ 106 Myr）。上面說的 A／B／C／D 四套模型設定中，頭條用的是
 config C（選擇函數 + 差異消光）。頭條的實際跑法是 10 次獨立重複，分散到
 不同機器，每次換一組模型端亂數：
-  python fit_real.py --procs 4 --n-syn 40000 --repeats 1 --configs C \
+  python scripts/core/fit_real.py --procs 4 --n-syn 40000 --repeats 1 --configs C \
       --refines 3,3,3 --tag _p2final_v3_rep<k> --repeat-offset <k>   （k = 0…9）
 再把 10 個結果檔的 C 陣列串起來，α 的平均與散布就是頭條數字。
 ⚠ ±0.068 是「同一批真實資料、換 10 組模型端亂數」的重現性散布，**不是**
@@ -152,7 +152,10 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+# 本檔在 scripts/core/；Kaggle 會把腳本拍平到工作目錄根（config.toml 在同層），
+# 兩種擺法都以找得到 config.toml 的那層當 repo 根目錄。
+_SELF_DIR = Path(__file__).resolve().parent
+HERE = _SELF_DIR if (_SELF_DIR / "config.toml").is_file() else _SELF_DIR.parents[1]
 sys.path.insert(0, str(HERE / "scripts" / "tools"))
 import checkpoint                                                 # noqa: E402
 
@@ -550,7 +553,7 @@ def main():
     # **2026-08-20 改成無條件執行，不再只有 --preflight 才做**：這份檢查
     # 原本只在有人記得多打一個旗標時才會發生，但實際會呼叫這支腳本的
     # 地方不只 run_queue.py（那邊確實有記得先呼叫 --preflight）——Kaggle
-    # 筆記本、x64 協作機手動下指令，都是直接跑 `python fit_real.py ...`，
+    # 筆記本、x64 協作機手動下指令，都是直接跑 `python scripts/core/fit_real.py ...`，
     # 完全不經過任何會記得先檢查的中介層。讓檢查本身變成 main() 一部分，
     # 不管從哪台機器、哪種方式呼叫，都跑得到，不依賴呼叫端的記性。
     # 中止/繼續/--force 的判定都在 preflight.mandatory_gate() 裡（見

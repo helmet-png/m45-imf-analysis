@@ -184,7 +184,7 @@ def write_outputs(prefix, summary, rows):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inputs", nargs="+", help="JSON paths or glob patterns")
-    parser.add_argument("--grid", type=Path, default=HERE / "petar_m45_grid.csv")
+    parser.add_argument("--grid", type=Path, default=HERE / "scripts" / "nbody_petar" / "grids" / "petar_m45_grid.csv")
     parser.add_argument("--allow-synthetic", action="store_true")
     parser.add_argument(
         "--output-prefix",

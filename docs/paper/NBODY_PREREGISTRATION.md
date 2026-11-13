@@ -1,6 +1,6 @@
 # N-body（路線 C）正式模擬預先註冊
 
-**狀態**：預先註冊，2026-09-05 凍結，**在 `petar_m45_grid.csv` 任何一列
+**狀態**：預先註冊，2026-09-05 凍結，**在 `scripts/nbody_petar/grids/petar_m45_grid.csv` 任何一列
 從「校準／pilot」升格成「正式模擬」之前簽署**。
 
 **2026-09-18 修正（Codex review）——跟另一份文件的關係，尚待唯一化**：
@@ -95,7 +95,7 @@ A5 已經用過、且已知有效的做法（`radial_final_reruns` 的配對比�
 
 ## 四、初始條件（凍結，指向已查證的數字）
 
-`petar_m45_grid.csv` 的 `priority=1`（正式模擬）三列使用 Converse &
+`scripts/nbody_petar/grids/petar_m45_grid.csv` 的 `priority=1`（正式模擬）三列使用 Converse &
 Stahler (2010) Table 1 查證過的初始條件：`n_systems=1215`、
 `binary_system_fraction=0.95`、`half_mass_radius_pc` 圍繞 pilot 值
 （見網格檔本身），詳細數字與查證方式見 `PDMF_TO_IMF_PLAN.md`
@@ -144,5 +144,5 @@ Stahler (2010) Table 1 查證過的初始條件：`n_systems=1215`、
 
 | 日期 | 修改內容 | 修改時是否已有正式模擬結果 |
 |---|---|---|
-| 2026-09-05 | 初版凍結 | 否——`petar_m45_grid.csv` 仍在校準階段，尚無 `priority=1` 的完整輸出 |
+| 2026-09-05 | 初版凍結 | 否——`scripts/nbody_petar/grids/petar_m45_grid.csv` 仍在校準階段，尚無 `priority=1` 的完整輸出 |
 | 2026-09-18 | Codex review：第一節主統計量改為必須先透過 `observe_snapshot.py` 退化鏈才能跟觀測比較（不能直接比 component-star 真實質量斜率跟觀測前向模型 α）；第五節「system PDMF」用詞改成要求標明四種相容定義；文首加註跟另一分支（#198）`docs/planning/NBODY_PREREGISTRATION.md` 的孔徑／方法衝突尚未唯一化 | 否——同上，尚無 `priority=1` 的完整輸出，這次修正是在看到任何正式結果之前 |

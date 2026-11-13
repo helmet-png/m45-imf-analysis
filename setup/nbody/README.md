@@ -52,13 +52,13 @@ winget install --id MSYS2.MSYS2 --silent --accept-package-agreements --accept-so
 /c/msys64/usr/bin/bash.exe -lc "echo '' | pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-gsl mingw-w64-x86_64-gcc-fortran make autoconf automake libtool"
 
 # 3. 跑這個資料夾的 setup_windows_nbody.sh（clone 到 ~/../nbody，跟本 repo 平行、不進版控）
-bash nbody_setup/setup_windows_nbody.sh
+bash setup/nbody/setup_windows_nbody.sh
 ```
 
 ## 重現步驟（Linux 運算節點）
 
 **正式的 M45 模擬網格建議跑在這裡，不是 Windows 筆電**（2026-09-03）：
-`petar_m45_grid.csv` 每次要跑 2,369 顆星（1,215 個系統、1,154 對聯星），
+`scripts/nbody_petar/grids/petar_m45_grid.csv` 每次要跑 2,369 顆星（1,215 個系統、1,154 對聯星），
 比上面驗證用的 128／1024 顆星大一個量級；而筆電闔蓋睡眠會直接砍掉背景
 行程（2026-08-29～30 主控板就這樣掉了四次），長時間模擬跑不完。SSH 常駐
 運算節點沒有這個問題，也沒有 Kaggle 那種 12 小時 session 上限。
@@ -69,7 +69,7 @@ sudo apt update && sudo apt install -y build-essential gfortran \
      autoconf automake libtool libgsl-dev git
 
 # 2. 跑這個資料夾的 setup_linux_nbody.sh
-bash nbody_setup/setup_linux_nbody.sh
+bash setup/nbody/setup_linux_nbody.sh
 ```
 
 Linux 版**不套用任何 patch**——`petar_configure_mingw.patch` 與
@@ -87,7 +87,7 @@ Linux 版**不套用任何 patch**——`petar_configure_mingw.patch` 與
 `setup_linux_nbody.sh`／`setup_windows_nbody.sh` 已經做到 H14 真正要的
 東西——**釘選 commit（見上表）＋可重現的建置流程**，而且是實測跑過、
 真的編出可用執行檔的版本，不是紙上談兵。沒有另外包一層 Dockerfile：
-這批運算節點是隊友／學長借用的既有機器（見 `WORK_BOARD.md` 的
+這批運算節點是隊友／學長借用的既有機器（見 `docs/project/WORK_BOARD.md` 的
 `senior24`／`gcp1`），不是我們自己申請的乾淨容器環境，臨時要求對方
 先裝 Docker、把工作流程改成容器化，成本比維持現有 shell 腳本高，且
 腳本本身已經內建「先檢查、缺什麼列出來、不擅自 `sudo apt install`」
@@ -115,7 +115,7 @@ H3 真的把銀河潮汐場接上 PeTar 時，直接設這個環境變數重跑�
 不想整個重跑，可以用另一支腳本補裝：
 
 ```bash
-bash nbody_setup/add_galpy_support_linux.sh
+bash setup/nbody/add_galpy_support_linux.sh
 ```
 
 這支腳本會另外裝 Galpy（版本鎖在 <=1.10.2，PeTar 官方文件說更新版本不
@@ -142,4 +142,4 @@ Converse & Stahler (2010) 的正式模擬，還需要：
   未來工作，不要把兩者混為一談，見 `docs/planning/PDMF_TO_IMF_PLAN.md` 對這篇文獻的
   說明）
 - 第 2 步（`radial_r1/r2/r3/rall`）的觀測基準線結果，用來校準/比對
-  模擬輸出的 α(r)，這部分還沒跑完（見 `WORK_BOARD.md`）
+  模擬輸出的 α(r)，這部分還沒跑完（見 `docs/project/WORK_BOARD.md`）

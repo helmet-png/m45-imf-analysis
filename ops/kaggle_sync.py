@@ -27,9 +27,9 @@
 （`--work-dir`，預設用帳號名稱自動分開）與獨立的環境變數，互不干擾。
 
 **用法**：
-    python kaggle_sync.py push --script profile_lowmass.py --args "--procs 4 --repeats 5" --account helmetalbert
-    python kaggle_sync.py status --kernel <帳號>/m45-imf-run-<腳本名> --account helmetalbert
-    python kaggle_sync.py pull --kernel <帳號>/m45-imf-run-<腳本名> --account helmetalbert
+    python ops/kaggle_sync.py push --script scripts/core/profile_lowmass.py --args "--procs 4 --repeats 5" --account helmetalbert
+    python ops/kaggle_sync.py status --kernel <帳號>/m45-imf-run-<腳本名> --account helmetalbert
+    python ops/kaggle_sync.py pull --kernel <帳號>/m45-imf-run-<腳本名> --account helmetalbert
 
 **必要條件**：`kaggle_accounts.json`（見 `kaggle_accounts.json.example`），
 或單人使用時退回讀 `~/.kaggle/access_token`（`kaggle_accounts.py` 處理）。
@@ -50,7 +50,8 @@ from pathlib import Path
 
 import kaggle_accounts
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
 
 # 這些是跑計算腳本需要、但不必每次都重新展開的靜態資料。
 # isochrones/ 只挑目前實際用到的那幾個網格檔，不要整個資料夾都上傳
@@ -417,7 +418,7 @@ def cmd_push(a):
     run([*kaggle_accounts.KAGGLE_CMD, "kernels", "push", "-p", str(work_dir)], env=env)
     print(f"\nKERNEL_ID={kernel_id}", flush=True)
     print(f"追蹤：https://www.kaggle.com/code/{kernel_id.split('/')[-1]}")
-    print(f"查狀態：python kaggle_sync.py status --kernel {kernel_id} "
+    print(f"查狀態：python ops/kaggle_sync.py status --kernel {kernel_id} "
           f"--account {account_name}")
 
 

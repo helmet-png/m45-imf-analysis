@@ -4,7 +4,7 @@
 
 ## 資料清點
 
-- `petar_m45_training_grid.csv`：430 列，run ID 各對應一個資料目錄。
+- `scripts/nbody_petar/grids/petar_m45_training_grid.csv`：430 列，run ID 各對應一個資料目錄。
 - `results/nbody_training_runs/<run_id>/`：430 個目錄，每個都有非缺失的 `observed.stats.json` 與 `observed.provenance.json`。
 - 以 GP 的六個輸入參數（`n_systems`、`binary_system_fraction`、`half_mass_radius_pc`、`mcluster_S`、`imf_alpha_high`、`imf_alpha_low`）分組：350 組不同參數，其中 330 組各一筆，20 組各五筆。後者是不同種子的重複模擬。
 - 來源紀錄依既有程式使用的路徑標記分為修補版 PeTar 335 筆、原版 95 筆；這種路徑分類仍須以執行檔版本或雜湊核實。

@@ -1,7 +1,7 @@
-# 佇列自動警示（`run_queue.py` 寫、每個工作 agent 每次開始工作前都要讀）
+# 佇列自動警示（`ops/run_queue.py` 寫、每個工作 agent 每次開始工作前都要讀）
 
 這份文件是 Gate B（開跑前檢查）／Gate C（跑完後驗收）沒過時，
-`run_queue.py` 自動寫入的地方。兩道關卡沒過不會讓整條佇列停下來
+`ops/run_queue.py` 自動寫入的地方。兩道關卡沒過不會讓整條佇列停下來
 （機器會繼續跑下一項），但一定會寫進這裡，不會只印一行警告在
 `logs/queue_runner8.log` 裡等人翻。沿革見 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -15,7 +15,7 @@
    不算問題>」。**不要刪掉這一列**——刪掉會讓下一輪重新踩到同一個問題
    時查不到「這件事處理過了」（跟 `LIMITATIONS.md` 的維護原則一致）。
 3. Gate B 失敗（`preflight_fail`）：這一輪佇列不會反覆重試同一項，但
-   `read_done()` 不把它視為完成；處理完後**重新啟動 `run_queue.py` 就會
+   `read_done()` 不把它視為完成；處理完後**重新啟動 `ops/run_queue.py` 就會
    自動重新排進佇列**，不需要手動刪 `logs/queue_done.txt`。
 4. Gate C 失敗（`gate_c_fail`）：**跟 Gate B 不同，這個狀態不能單純「刪行重跑」
    了事**——工作已經真的算完、機時已經花下去了，重跑等於再花一次同樣的
@@ -27,4 +27,4 @@
 
 | 時間 | 標籤 | 腳本+參數 | 關卡 | 原因 | 狀態 |
 |---|---|---|---|---|---|
-| 2026-08-25 21:15:17 | d10_config_cd_real | `fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C,D --refines 3,3 --tag _d10_cd_compare` | B | 錯誤：`fit_real_d10_cd_compare.npz` 已有部分結果，但執行設定跟這次不同（`{'tag': (None, '_d10_cd_compare'), 'seed_scheme': (None, 'fit-real-offset-v1:2000+13*(rep+repeat_offset)')}`）。沿用會把兩種不可比的設定混進同一個檔案——換一個 `--tag`，或確認要不要刪掉舊檔重跑。 | **已處理，2026-08-25**：這則警報是 `run_queue.py` 被手動停止後、排程 watchdog 嘗試自動重啟 d10 時觸發的（本機決定改用 gcp1 執行同一件事，見 `WORK_BOARD.md`）。不重跑——本機這批 d10 已放棄，`results/fit_real_d10_cd_compare.npz` 只留 config C 2/5 次部分結果供參考，不能引用；正式結果等 `cloud_queue.txt` 的 `configcd_real_data_compare` 排到 gcp1 |
+| 2026-08-25 21:15:17 | d10_config_cd_real | `scripts/core/fit_real.py --procs 8 --n-syn 40000 --repeats 5 --configs C,D --refines 3,3 --tag _d10_cd_compare` | B | 錯誤：`fit_real_d10_cd_compare.npz` 已有部分結果，但執行設定跟這次不同（`{'tag': (None, '_d10_cd_compare'), 'seed_scheme': (None, 'fit-real-offset-v1:2000+13*(rep+repeat_offset)')}`）。沿用會把兩種不可比的設定混進同一個檔案——換一個 `--tag`，或確認要不要刪掉舊檔重跑。 | **已處理，2026-08-25**：這則警報是 `ops/run_queue.py` 被手動停止後、排程 watchdog 嘗試自動重啟 d10 時觸發的（本機決定改用 gcp1 執行同一件事，見 `docs/project/WORK_BOARD.md`）。不重跑——本機這批 d10 已放棄，`results/fit_real_d10_cd_compare.npz` 只留 config C 2/5 次部分結果供參考，不能引用；正式結果等 `cloud_queue.txt` 的 `configcd_real_data_compare` 排到 gcp1 |

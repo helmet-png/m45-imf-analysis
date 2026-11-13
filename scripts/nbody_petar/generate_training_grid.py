@@ -288,7 +288,7 @@ def main():
     parser.add_argument("--master-seed", type=int, default=20260910)
     parser.add_argument(
         "--output", type=Path,
-        default=REPO_ROOT / "petar_m45_training_grid.csv",
+        default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv",
     )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()

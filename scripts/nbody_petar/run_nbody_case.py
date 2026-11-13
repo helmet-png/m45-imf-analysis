@@ -474,7 +474,7 @@ def run_case(
 
 def run_self_test() -> dict:
     """乾跑模式核對 `<MCLUSTER_OUTPUT>` 解析與指令拆解，不需要真的裝 PeTar。"""
-    grid_path = REPO_ROOT / "petar_m45_grid.csv"
+    grid_path = REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_grid.csv"
     rows = load_grid(grid_path)
     row = next(r for r in rows if r["run_id"] == "m45_ref_s101")
     rendered = render_commands(row)
@@ -571,7 +571,7 @@ def run_self_test() -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id")
-    parser.add_argument("--grid", type=Path, default=REPO_ROOT / "petar_m45_grid.csv")
+    parser.add_argument("--grid", type=Path, default=REPO_ROOT / "scripts" / "nbody_petar" / "grids" / "petar_m45_grid.csv")
     parser.add_argument("--runs-dir", type=Path, default=REPO_ROOT / "runs")
     parser.add_argument("--energy-threshold", type=float, default=1e-3)
     parser.add_argument("--smoke", action="store_true")

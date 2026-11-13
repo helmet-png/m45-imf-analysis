@@ -288,7 +288,7 @@ def run_self_test() -> dict:
     """
     import re
 
-    grid_paths = [HERE / "petar_m45_grid.csv", HERE / "petar_m45_training_grid.csv"]
+    grid_paths = [HERE / "scripts" / "nbody_petar" / "grids" / "petar_m45_grid.csv", HERE / "scripts" / "nbody_petar" / "grids" / "petar_m45_training_grid.csv"]
     checked = 0
     mismatches = []
     for grid_path in grid_paths:
@@ -335,7 +335,7 @@ def run_self_test() -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--grid", type=Path, default=HERE / "petar_m45_grid.csv")
+    parser.add_argument("--grid", type=Path, default=HERE / "scripts" / "nbody_petar" / "grids" / "petar_m45_grid.csv")
     parser.add_argument("--run-id")
     parser.add_argument("--output-json", type=Path)
     parser.add_argument("--self-test", action="store_true")

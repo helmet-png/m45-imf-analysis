@@ -49,7 +49,7 @@ worker 名稱可以是 `kaggle_accounts.json` 裡的帳號、也可以是
 這個專案「先確認方法沒有邏輯問題再產出最終數據」的原則衝突。
 
 用法：
-    python cloud_queue.py
+    python ops/cloud_queue.py
 """
 from __future__ import annotations
 
@@ -85,7 +85,8 @@ if sys.platform == "win32":
     # 沿用本機現有內容）完全不受影響，只是不再需要人去點「確定」。
     ctypes.windll.kernel32.SetErrorMode(0x0002)  # SEM_NOGPFAULTERRORBOX
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
 QUEUE = HERE / "cloud_queue.txt"
 DONE = HERE / "logs" / "cloud_queue_done.txt"
 LOCK = HERE / "logs" / "cloud_queue.lock"

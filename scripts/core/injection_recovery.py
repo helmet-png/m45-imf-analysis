@@ -31,7 +31,7 @@
 ======================================================================
 【這支程式的兩個身分】
 ======================================================================
-1. **一支可以執行的測試程式**：python injection_recovery.py --scenarios S3F --trials 9
+1. **一支可以執行的測試程式**：python scripts/core/injection_recovery.py --scenarios S3F --trials 9
    輸出 results/injection_recovery<tag>.npz。α 的統計誤差 σ = 0.144
    就是 S3F 情境（注入與擬合都有選擇函數）量出來的回收散布。
 2. **一個被別人 import 的工具箱**：fit_real.py、profile_lowmass.py、
@@ -129,7 +129,10 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+# 本檔在 scripts/core/；Kaggle 會把腳本拍平到工作目錄根（config.toml 在同層），
+# 兩種擺法都以找得到 config.toml 的那層當 repo 根目錄。
+_SELF_DIR = Path(__file__).resolve().parent
+HERE = _SELF_DIR if (_SELF_DIR / "config.toml").is_file() else _SELF_DIR.parents[1]
 sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402

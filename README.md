@@ -10,7 +10,7 @@
 但**目前尚未達到「一套 M45 參數直接跑全銀河」**：誤差模型與選擇函數必須
 每團由資料重校準，完整聯合前向模型在 NGC 3532／Praesepe 都出現角落解
 （見 `LIMITATIONS.md` D16、D17）。哪些模組已通過、哪些仍失敗，見
-[MULTICLUSTER_VALIDATION.md](MULTICLUSTER_VALIDATION.md)。
+[MULTICLUSTER_VALIDATION.md](docs/paper/MULTICLUSTER_VALIDATION.md)。
 
 ---
 
@@ -87,14 +87,14 @@ python scripts/plotting/plot_step3.py       # 第 3 步的年齡擬合圖
 
 # 現行 headline 數字：聯合前向模型的網格搜尋＋精修（不是上面第 3–5 步
 # 的循序擬合，也不是 MCMC，見下方「目前的結果」與「已知限制」C11）
-python fit_real.py --n-syn 40000 --repeats 10 --refines 3,3,3 --configs C
+python scripts/core/fit_real.py --n-syn 40000 --repeats 10 --refines 3,3,3 --configs C
 ```
 
 ---
 
 ## 目前的結果（M45）
 
-headline 數字來自聯合前向模型的網格搜尋＋精修（`fit_real.py`，config C，
+headline 數字來自聯合前向模型的網格搜尋＋精修（`scripts/core/fit_real.py`，config C，
 10 次重複、三階精修），不是第 3–5 步的循序擬合，也不是 MCMC（MCMC 家族
 從未收斂過，誤差棒不可引用，見「已知限制」C11）：
 
@@ -553,7 +553,7 @@ Salpeter 是 2.35、Kroupa 高質量端是 2.30。
 
 `config.toml` `[joint_fit]` 仍保留 MCMC 的設定欄位，但**現行 headline
 數字不是 MCMC 產出的**，改用網格搜尋＋精修（`multi_stage_best()`，
-`fit_real.py`）配合注入回收估計誤差棒（σ_α = 0.144，見
+`scripts/core/fit_real.py`）配合注入回收估計誤差棒（σ_α = 0.144，見
 `LIMITATIONS.md` C11、C12）。原因：MCMC 的中心值可信，但誤差棒與相關
 矩陣不可信且從未收斂過（Poisson-Hess 概似把每一格當獨立，在千顆星
 樣本上產生過度自信的窄峰，後驗成為又窄又崎嶇的稜線，走者沿之移動
@@ -578,16 +578,16 @@ Salpeter 是 2.35、Kroupa 高質量端是 2.30。
 
 ```
 config.toml                    所有可調參數（含 [joint_fit] 現行模型的先驗範圍）
-fit_real.py                    headline 數字的入口：網格搜尋＋精修（多次重複）
-injection_recovery.py          誤差棒來源：注入回收估計統計誤差與偏差地板
-profile_lowmass.py／profile_outlierfrac.py
-inject_lowmass.py／inject_massdep_fbin.py    各自對應一項敏感度／可辨識性測試
-run_queue.py／cloud_queue.py   本機／雲端 worker 佇列派工（見零之三、CLOUD_WORKERS.md）
+scripts/core/fit_real.py                    headline 數字的入口：網格搜尋＋精修（多次重複）
+scripts/core/injection_recovery.py          誤差棒來源：注入回收估計統計誤差與偏差地板
+scripts/core/profile_lowmass.py／scripts/core/profile_outlierfrac.py
+scripts/core/inject_lowmass.py／scripts/core/inject_massdep_fbin.py    各自對應一項敏感度／可辨識性測試
+ops/run_queue.py／ops/cloud_queue.py   本機／雲端 worker 佇列派工（見零之三、CLOUD_WORKERS.md）
 pipeline/
   config.py                    設定檔讀取
   net.py                       網路存取與 TLS bundle
   isochrones.py／bhac.py／mist.py   PARSEC／BHAC15／MIST 等時線下載、快取、查詢
-  joint_fit.py                  現行聯合前向模型（JointModel，fit_real.py 的核心）
+  joint_fit.py                  現行聯合前向模型（JointModel，scripts/core/fit_real.py 的核心）
   selection.py                  測光品質選擇函數
   step2_cmd.py／step3_age.py／step4_binaries.py／step5_imf.py
                                 循序擬合（歷史路徑，headline 已改用 joint_fit.py）
@@ -602,10 +602,10 @@ setup/
   setup_arm64.bat                ARM64 原生 Python 安裝與效能比較
 ```
 
-治理／參考文件：`CONTRIBUTING.md`（協作規範）、`WORK_BOARD.md` /
-`WORK_BOARD_DONE.md`（待辦／已完成）、`LIMITATIONS.md`（唯一權威限制
-清單）、`RESOLVED.md`（已解決）、`CHANGELOG.md`（規則類文件的沿革與
-理由）、`PAPER_OUTLINE.md`（論文範圍凍結文件）、
+治理／參考文件：`CONTRIBUTING.md`（協作規範）、`docs/project/WORK_BOARD.md` /
+`docs/project/WORK_BOARD_DONE.md`（待辦／已完成）、`LIMITATIONS.md`（唯一權威限制
+清單）、`docs/paper/RESOLVED.md`（已解決）、`docs/project/CHANGELOG.md`（規則類文件的沿革與
+理由）、`docs/paper/PAPER_OUTLINE.md`（論文範圍凍結文件）、
 `docs/planning/PDMF_TO_IMF_PLAN.md`（PDMF→IMF 主線完整規劃）、
 `docs/reference/METHODS.md`（第 1 步成員判定方法）、
 `docs/reference/COMPARISON.md`（與前人方法逐項對照、完整參數表）。

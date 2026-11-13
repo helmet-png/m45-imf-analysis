@@ -21,8 +21,8 @@
   影響結論的程式／文件不可以帶（見 `CONTRIBUTING.md` 零之一）。
 - 碰 `LIMITATIONS.md`：先讀 `CONTRIBUTING.md` 第五、六節的格式與教訓，
   再讀 `LIMITATIONS.md` 目前的完整版本（不是只看自己這次的 diff）。
-- 開始新工作前先查 `WORK_BOARD.md`（正在做／還沒做）與
-  `WORK_BOARD_DONE.md`（已完成），避免跟其他 session／agent 重工或
+- 開始新工作前先查 `docs/project/WORK_BOARD.md`（正在做／還沒做）與
+  `docs/project/WORK_BOARD_DONE.md`（已完成），避免跟其他 session／agent 重工或
   重做已經結案的任務，見 `CONTRIBUTING.md` 零。
 - 規劃類文件裡寫的「結論」「判斷」，預設只代表寫下當下的想法、不是
   決議——語氣要保留（用「初步判讀」而非「結論是」），但推理過程跟

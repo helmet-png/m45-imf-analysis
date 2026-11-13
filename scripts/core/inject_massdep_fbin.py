@@ -26,7 +26,7 @@ dav 的教訓是「參數可以放進模型卻完全不被資料約束」）：
 不必升格成自由參數。
 
 用法（比照 inject_lowmass.py，可用 --trial-offset 拆片跑在 Kaggle）：
-  python inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3
+  python scripts/core/inject_massdep_fbin.py --procs 8 --n-syn 40000 --trials 3 --refines 3,3
 """
 import argparse
 import os
@@ -36,7 +36,10 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
+# 本檔在 scripts/core/；Kaggle 會把腳本拍平到工作目錄根（config.toml 在同層），
+# 兩種擺法都以找得到 config.toml 的那層當 repo 根目錄。
+_SELF_DIR = Path(__file__).resolve().parent
+HERE = _SELF_DIR if (_SELF_DIR / "config.toml").is_file() else _SELF_DIR.parents[1]
 sys.path.insert(0, str(HERE))
 
 from pipeline import config as cfgmod, isochrones as isomod   # noqa: E402

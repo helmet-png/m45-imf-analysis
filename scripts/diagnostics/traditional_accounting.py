@@ -149,6 +149,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE / "scripts" / "core"))  # injection_recovery 等主程式
 
 # step5_imf 開頭 import astropy，ARM64 上裝不起來；墊一個 table_compat 的替身。
 # ↓ 做法：先在 Python 的模組清單裡放一個假的 astropy.table（裡面的 Table 其實是

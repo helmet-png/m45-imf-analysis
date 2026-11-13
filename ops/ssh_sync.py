@@ -31,11 +31,11 @@ scp 拉回來，本機決定要不要 commit，VM 上不放任何能推送的 gi
 docs/reference/CLOUD_WORKERS.md，不在這支程式裡重複一份。
 
 **用法**（跟 kaggle_sync.py 對稱）：
-    python ssh_sync.py push  --worker gcp1
-    python ssh_sync.py run   --worker gcp1 --script profile_lowmass.py --args "--procs 8 --n-syn 40000" --label lowmass1
-    python ssh_sync.py status --worker gcp1 --label lowmass1
-    python ssh_sync.py pull  --worker gcp1 --label lowmass1
-    python ssh_sync.py kill  --worker gcp1 --label lowmass1
+    python ops/ssh_sync.py push  --worker gcp1
+    python ops/ssh_sync.py run   --worker gcp1 --script scripts/core/profile_lowmass.py --args "--procs 8 --n-syn 40000" --label lowmass1
+    python ops/ssh_sync.py status --worker gcp1 --label lowmass1
+    python ops/ssh_sync.py pull  --worker gcp1 --label lowmass1
+    python ops/ssh_sync.py kill  --worker gcp1 --label lowmass1
 """
 from __future__ import annotations
 
@@ -50,7 +50,8 @@ import gcp_vm_lifecycle       # GCP worker 派工前自動開機，見該模組�
 import kaggle_sync           # 重用既有的靜態資料白名單，不重複列一份
 import ssh_workers
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = HERE / "cloud_results"
 
 # git@github.com:... 形式的 URL 才吃得到 SSH Deploy Key；本機的 origin

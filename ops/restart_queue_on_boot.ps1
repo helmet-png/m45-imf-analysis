@@ -72,7 +72,7 @@
 # 呼叫這支腳本，才是真正零閃現的做法；本檔內容不受影響，只是啟動方式
 # 換了一層。
 
-$repo = $PSScriptRoot
+$repo = Split-Path -Parent $PSScriptRoot   # 本檔在 ops/，上一層才是 repo 根目錄
 $selfLog = Join-Path $repo "logs\autorestart.log"
 
 function Write-SelfLog {
@@ -91,7 +91,7 @@ function Restart-QueueIfNotRunning {
         [string]$ScriptName,   # 例如 "run_queue.py"
         [string]$LogFile       # 對應的輸出 log 檔名
     )
-    $scriptPath = Join-Path $repo $ScriptName
+    $scriptPath = Join-Path $PSScriptRoot $ScriptName
     $queueLog = Join-Path $repo "logs\$LogFile"
 
     # 第一優先：看單例鎖檔。這是跟 Python 端同一個真相來源——run_queue.py
@@ -100,7 +100,7 @@ function Restart-QueueIfNotRunning {
     #
     # **為什麼不能只靠命令列比對**（2026-08-21 實測到的問題）：下面那段
     # 比對要求命令列裡出現腳本的**完整絕對路徑**，但用相對路徑啟動
-    # （`Set-Location $repo; python -u kaggle_queue.py`）時命令列裡只有
+    # （`Set-Location $repo; python -u ops/kaggle_queue.py`）時命令列裡只有
     # 裸檔名，比對不到，於是這支腳本每 15 分鐘都誤判成「沒在跑」而多開
     # 一份。那些多開的行程雖然一啟動就被 Python 端的單例鎖擋掉、自己
     # 退出（所以沒造成真正的傷害），但等於每輪都白開一個行程、還把

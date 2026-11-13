@@ -29,6 +29,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE / "scripts" / "core"))  # injection_recovery 等主程式
 
 from pipeline.table_compat import Table as _CompatTable  # noqa: E402
 _a = types.ModuleType("astropy")

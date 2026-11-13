@@ -1,8 +1,8 @@
 # 專案現況與交接
 
 這份文件只放「現在能長期沿用」的環境備忘與交接 checklist，不放特定
-時間點的進度快照——**進度請讀 `WORK_BOARD.md`（待辦）、
-`WORK_BOARD_DONE.md`（已完成）、`LIMITATIONS.md`（已知限制）、
+時間點的進度快照——**進度請讀 `docs/project/WORK_BOARD.md`（待辦）、
+`docs/project/WORK_BOARD_DONE.md`（已完成）、`LIMITATIONS.md`（已知限制）、
 `results/RESULTS_LOG.md`（每次新結果）**。這份文件較舊版本記錄過某次
 機器交接（2026-08-13～15）的完整過程，該內容已因後續進度而過期，見
 [CHANGELOG.md](CHANGELOG.md)；需要回顧當時細節請直接看 git 歷史。
@@ -18,7 +18,7 @@
    或用同一組 token 重新建立這個檔案。
 2. **`isochrones/` 底下的等時線網格檔案**（不進版控，體積大）：本機
    Kaggle／雲端派工需要打包上傳，新機器第一次跑派工前要確認這些
-   檔案存在（沒有的話 `kaggle_sync.py`／`cloud_queue.py` 會告訴你
+   檔案存在（沒有的話 `ops/kaggle_sync.py`／`ops/cloud_queue.py` 會告訴你
    怎麼補）。
 3. **本機 git worktree**（只在該機器磁碟上，新機器不會有）：需要的話
    用 `git worktree add ../<新目錄> <分支>` 重新建立，不用複製。
@@ -26,7 +26,7 @@
    （N-body 外部工作目錄，在 repo 外面）：只有要跑 LIMEPY／N-body
    才需要，重新建置步驟見 `docs/planning/PDMF_TO_IMF_PLAN.md` 第七節。
 5. **開新機器／新協作者的第一步**：`git clone` 或 `git pull`，讀
-   `WORK_BOARD.md` 確認目前誰在做什麼，讀 `LIMITATIONS.md` 確認已知
+   `docs/project/WORK_BOARD.md` 確認目前誰在做什麼，讀 `LIMITATIONS.md` 確認已知
    限制，再讀 `results/RESULTS_LOG.md` 最新幾行確認最新結果。
 6. 這個 checkout 若還有其他 session／機器未 commit 的修改，先確認
    有沒有人要 commit，不要用 `git checkout --` 之類的指令清掉，除非
@@ -39,7 +39,7 @@
 - 先確定方法沒有邏輯問題，再產出最終數據，不要為了交出數字繞過問題。
 - 每次改動都要開分支 `<身分>/<主題>`，走 PR。
 - 每次算出新結果都要主動同步寫進 `results/RESULTS_LOG.md`／
-  `LIMITATIONS.md`／`WORK_BOARD.md`，不必等使用者要求。
+  `LIMITATIONS.md`／`docs/project/WORK_BOARD.md`，不必等使用者要求。
 - 發現任何跟自己無關、正在被其他 session 動的檔案，不要碰，回報就好。
 - 舊結論被推翻時，用附加寫入標記「已作廢，見下一行修正」，不要直接
   覆寫或刪除舊的行。
@@ -50,7 +50,7 @@
 ## 檔案地圖
 
 **必讀**
-- `WORK_BOARD.md` / `WORK_BOARD_DONE.md` —— 誰在做什麼、已經完成了什麼
+- `docs/project/WORK_BOARD.md` / `docs/project/WORK_BOARD_DONE.md` —— 誰在做什麼、已經完成了什麼
 - `LIMITATIONS.md` —— 全部已知限制，A/B/C/D 嚴重度分類
 - `docs/planning/PDMF_TO_IMF_PLAN.md` —— PDMF→IMF 主線完整規劃與第七節
   環境建置記錄（LIMEPY／N-body 在 Windows 上的坑都記在這裡）
@@ -59,7 +59,7 @@
   headline 在 Kaggle 上跑不完等基礎設施問題的專門紀錄
 
 **背景**
-- `PAPER_OUTLINE.md` —— 論文範圍凍結文件、誤差預算表
+- `docs/paper/PAPER_OUTLINE.md` —— 論文範圍凍結文件、誤差預算表
 - `docs/teaching/` —— 給高中生程度的完整方法論教學
 - `README.md` —— 環境建置、每個參數的作用
 

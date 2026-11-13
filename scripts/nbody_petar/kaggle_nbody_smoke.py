@@ -18,7 +18,7 @@ ephemeral (no persistent disk between runs) and therefore not a fit for
 the full multi-run matrix that comes after the smoke test passes.
 
 Method: shells out to plain apt/git/make/pip commands, mirroring the
-steps in nbody_setup/setup_linux_nbody.sh (reimplemented inline here,
+steps in setup/nbody/setup_linux_nbody.sh (reimplemented inline here,
 not by invoking that script, because a single self-contained Python
 script is much easier to debug over Kaggle's asynchronous push-run-pull
 cycle than a wrapped external .sh file whose failures would need a
@@ -38,7 +38,7 @@ partial JSON so the failure is visible without a second pull):
   1. Environment probe (OS, CPU count, free disk).
   2. apt-get install build dependencies.
   3. Clone FDPS/SDAR/PeTar/mcluster at the commits pinned in
-     nbody_setup/README.md.
+     setup/nbody/README.md.
   4. pip install galpy==1.10.2.
   5. Configure and build PeTar (--with-interrupt=bse --with-external=galpy).
   6. Build mcluster_sse.

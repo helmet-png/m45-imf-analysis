@@ -24,9 +24,10 @@ import json
 import subprocess
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # repo 根目錄（本檔在 ops/）
+OPS_DIR = Path(__file__).resolve().parent
 WORKERS_FILE = HERE / "ssh_workers.json"
-EXAMPLE_FILE = HERE / "ssh_workers.json.example"
+EXAMPLE_FILE = OPS_DIR / "ssh_workers.json.example"
 
 # 全新的雲端 VM 第一次連線時，本機的 known_hosts 裡不會有它的主機金鑰。
 # "accept-new" 只在完全沒有記錄時自動接受並記住，之後同一台主機再連線
