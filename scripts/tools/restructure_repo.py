@@ -312,27 +312,10 @@ def move_files() -> set[str]:
 
 
 def check() -> int:
-    """搬遷後的健檢：佇列裡的腳本與依賴、stage_map 路徑、常駐文件的連結。"""
-    problems = []
-    for rel in ("cloud_queue.txt", "ops/kaggle_queue.txt"):
-        for n, line in enumerate((ROOT / rel).read_text(encoding="utf-8").splitlines(), 1):
-            if not line.strip() or line.lstrip().startswith("#") or "|" not in line:
-                continue
-            f = line.split("|")
-            if len(f) < 4:
-                continue
-            for t in [f[1].strip()] + [x for x in f[3].split(",") if x.strip()]:
-                if t and not t.startswith("results/") and not (ROOT / t).exists():
-                    problems.append(f"{rel}:{n} 找不到 {t}")
-    for n, line in enumerate((ROOT / "ops/queue.txt").read_text(encoding="utf-8").splitlines(), 1):
-        if "|" in line and not line.lstrip().startswith("#"):
-            script = line.split("|", 1)[1].split()[0] if line.split("|", 1)[1].split() else ""
-            if script and not (ROOT / script).exists():
-                problems.append(f"ops/queue.txt:{n} 找不到 {script}")
-    for p in problems:
-        print(p)
-    print(f"共 {len(problems)} 個問題")
-    return 1 if problems else 0
+    """搬遷後的健檢：佇列裡的腳本與額外檔案都要存在。"""
+    sys.path.insert(0, str(ROOT / "scripts" / "tools"))
+    import check_queue_paths
+    return check_queue_paths.main()
 
 
 def main() -> int:
