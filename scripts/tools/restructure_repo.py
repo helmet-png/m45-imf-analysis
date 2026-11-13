@@ -126,12 +126,24 @@ def rewrite_commands(text: str) -> str:
             continue
         text = re.sub(rf"(\b(?:python3?|py)(?:\s+-[a-zA-Z]+)*\s+|--script[ =]){re.escape(old)}\b",
                       rf"\g<1>{MOVES[old]}", text)
-    return text.replace("nbody_setup/", "setup/nbody/")
+    return replace_dir_prefixes(text)
+
+
+def replace_dir_prefixes(text: str) -> str:
+    """資料夾前綴（nbody_setup/）的提及改新路徑。資料夾裡單獨搬去別處的檔案
+    （analyze_alpha_r.py）要先換，否則會被前綴規則帶到錯的資料夾。"""
+    for old, new in MOVES.items():
+        if "/" in old and not old.endswith("/"):
+            text = text.replace(old, new)
+    for old, new in MOVES.items():
+        if old.endswith("/"):
+            text = text.replace(old, new)
+    return text
 
 
 def rewrite_mentions(text: str) -> str:
     """內文提到的檔名（含反引號內）改成新路徑。只用在常駐文件上。"""
-    text = text.replace("nbody_setup/", "setup/nbody/")
+    text = replace_dir_prefixes(text)
     for old in _root_names():
         text = re.sub(rf"(?<![\w/.\[(-]){re.escape(old)}(?![\w-])", MOVES[old], text)
     return text
@@ -158,10 +170,18 @@ EDITS: list[tuple[str, str, str]] = [
     ("ops/run_queue.py", 'QUEUE = HERE / "queue.txt"', 'QUEUE = OPS_DIR / "queue.txt"'),
     ("ops/run_queue.py", 'ALERTS = HERE / "QUEUE_ALERTS.md"',
      'ALERTS = HERE / "docs" / "project" / "QUEUE_ALERTS.md"'),
-    ("ops/run_queue.py", "    if script not in PREFLIGHT_AWARE_SCRIPTS:\n        return True\n"
-     "    stem = script[:-3] if script.endswith(\".py\") else script\n",
-     "    if Path(script).name not in PREFLIGHT_AWARE_SCRIPTS:\n        return True\n"
-     "    stem = Path(script).stem\n"),
+    # 佇列裡的腳本現在帶資料夾（scripts/core/fit_real.py），名單比對一律用檔名；
+    # 執行子行程時仍傳完整路徑。_preflight_ok()、Gate C、preflight.gate_b()
+    # 三處都要改，漏一處開跑前檢查就會對搬家後的腳本靜默失效。
+    ("ops/run_queue.py", "if script not in PREFLIGHT_AWARE_SCRIPTS:",
+     "if Path(script).name not in PREFLIGHT_AWARE_SCRIPTS:"),
+    ("ops/run_queue.py", 'stem = script[:-3] if script.endswith(".py") else script',
+     "stem = Path(script).stem"),
+    ("scripts/tools/preflight.py", "if script in rq.PREFLIGHT_AWARE_SCRIPTS:",
+     "if Path(script).name in rq.PREFLIGHT_AWARE_SCRIPTS:"),
+    ("scripts/nbody_petar/generate_training_grid.py",
+     "預設 repo 根目錄 petar_m45_training_grid.csv",
+     "預設 scripts/nbody_petar/grids/petar_m45_training_grid.csv"),
     ("ops/kaggle_queue.py", 'QUEUE = HERE / "kaggle_queue.txt"', 'QUEUE = OPS_DIR / "kaggle_queue.txt"'),
     ("ops/kaggle_queue.py", '[sys.executable, "kaggle_sync.py", "push",',
      '[sys.executable, "ops/kaggle_sync.py", "push",'),
@@ -244,10 +264,13 @@ def rewrite_queues() -> None:
                 out.append(line)
                 continue
             f = body.split("|")
-            if kind == "pipe" and len(f) >= 4:
+            if kind == "pipe":
+                # 派工器會把省略的選填欄位補成空字串，欄位不足的工作一樣要改
                 f[1] = tok(f[1].strip()) if f[1].strip() else f[1]
-                f[2] = " ".join(tok(t) for t in f[2].split(" "))
-                f[3] = ",".join(tok(t) for t in f[3].split(",")) if f[3] else f[3]
+                if len(f) > 2:
+                    f[2] = " ".join(tok(t) for t in f[2].split(" "))
+                if len(f) > 3 and f[3]:
+                    f[3] = ",".join(tok(t) for t in f[3].split(","))
             elif kind == "cmd":
                 f[1] = " ".join(tok(t) for t in f[1].split(" "))
             out.append("|".join(f) + nl)

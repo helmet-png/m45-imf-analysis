@@ -174,10 +174,14 @@ Gaia DR3 ──抓資料──> 原始星表 ──前處理──> pyUPMASK 輸
 ### 第 1 步：從 Gaia 抓星團天區的資料
 
 ```bash
-python scripts/data_prep/fetch_gaia.py --ra 56.60083 --dec 24.11389 --radius 5 --gmax 18 --plxmin 4
+python scripts/data_prep/fetch_gaia.py --ra 56.60083 --dec 24.11389 --radius 5 --gmax 18 --plxmin 4 --top 20000
 ```
 
 - **做什麼**：查詢 M45 中心 5° 內、G < 18、視差 > 4 mas 的所有星。
+- **`--top 20000`**：不給的話，程式會先請 ESA 精確計算符合條件的星數，
+  這個查詢對 M45 實測會逾時。給一個遠大於預期數量（約 7,000）的上限
+  就能跳過計數；若取回的列數剛好頂到上限，程式會報錯不寫檔，避免資料被
+  截斷而不自知。
 - **讀**：`config.toml` 的 `[target]`、`[step1_membership]` 決定預設值。
   要重現既有樣本，一定要手動給 `--ra/--dec`。
 - **寫**：`data/m45_r5_g18_plx4.csv`，約 7,000 顆星。
@@ -228,8 +232,13 @@ python scripts/drivers/run_pipeline.py --steps 1 2
 ### 第 5 步：建立選擇函數
 
 ```bash
+python scripts/diagnostics/check_c20_disagree_set.py   # 先產生 data/comparison.csv
 python scripts/data_prep/build_selection.py
 ```
+
+`data/comparison.csv`（pyUPMASK 成員機率對照 Hunt & Reffert 成員表）不進
+版控，全新 checkout 要先跑第一行，從 `results/baseline.dat` 與
+`data/hr23_Melotte_22.csv` 重建。
 
 - **做什麼**：第 4 步的篩選砍得不平均，暗的紅星被砍得比暗的藍星多。
   這支程式把「給定星等與顏色，這顆星會不會被留下」做成模型。前向模型
@@ -323,8 +332,16 @@ python scripts/diagnostics/traditional_accounting.py
 ```bash
 python scripts/core/fit_real.py --radius-range 0,1 --configs C --repeats 1 --repeat-offset 0 --refines 3,3 --tag _radial_r1_final
 ```
-每組半徑跑 5 次重複（`--repeat-offset` 0–4，分散到不同 worker），再用
-`scripts/tools/concat_radial_final.py` 合併。目前結果：核心
+每組半徑（`r1`=0–1°、`r2`=0–2°、`r3`=0–3°、`rall`=全樣本）跑 5 次重複
+（`--repeat-offset` 0–4，分散到不同 worker）。五個分片的輸出檔名都一樣，
+所以要放進各自的資料夾
+`kaggle_results/radial_<組>_final_rep<N>/results/fit_real_radial_<組>_final.npz`
+（N = 0–4），再合併：
+```bash
+python scripts/tools/concat_radial_final.py r1
+```
+合併前會逐項核對五片的設定，除了 `repeat_offset` 以外有任何不一致就中止。
+輸出 `results/fit_real_radial_r1_final.npz`。目前結果：核心
 （0–1°）α = 2.06，全樣本 2.38，核心偏平，與重星沉到中心的預期一致。
 
 **(2) LIMEPY 平衡模型**：用多質量動力平衡模型預測「只看 5° 以內」會讓

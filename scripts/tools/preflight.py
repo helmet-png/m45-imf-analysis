@@ -486,7 +486,7 @@ def gate_b(only_pending=True, verbose=True) -> list[str]:
                 f"{label}（{script}）沒有逐次存檔／續傳機制，中途被砍就得"
                 f"從頭重算。這台機器過去四天被 Windows 強制重開機至少 4 次，"
                 f"p6_lowmass_v2 因此空轉了四天一次都沒跑完")
-        if script in rq.PREFLIGHT_AWARE_SCRIPTS:
+        if Path(script).name in rq.PREFLIGHT_AWARE_SCRIPTS:
             # 見 run_queue.py 的 _preflight_ok() 同一段註解：子行程要用
             # UTF-8 輸出，否則中文 Windows 下寫 cp950、這邊解出來是亂碼，
             # 下面挑警告行的字串比對會全部挑不到。

@@ -27,8 +27,7 @@ def find_problems() -> list[str]:
     problems = []
     for rel in PIPE_QUEUES:
         for n, f in _active_lines(rel):
-            if len(f) < 4:
-                continue
+            f = f + [""] * (4 - len(f))   # 派工器會補齊省略的選填欄位
             for t in [f[1].strip()] + [x.strip() for x in f[3].split(",")]:
                 if t and not t.startswith("results/") and not (ROOT / t).exists():
                     problems.append(f"{rel}:{n} 找不到 {t}")

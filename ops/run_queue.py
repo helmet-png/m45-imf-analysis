@@ -437,7 +437,7 @@ def _preflight_ok(label: str, cmd: str) -> bool:
         print(f"  注意：{script} 沒有續傳機制，中途被砍（重開機／卡死"
               f"重試）就得從頭重算——這台機器有非預期重開機的前科",
               flush=True)
-    if script not in PREFLIGHT_AWARE_SCRIPTS:
+    if Path(script).name not in PREFLIGHT_AWARE_SCRIPTS:
         return True
     try:
         # 子行程要用 UTF-8 輸出，否則中文 Windows 下它會寫 cp950 到管線，
